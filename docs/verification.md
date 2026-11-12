@@ -353,3 +353,15 @@ Bun formatting, typecheck, lint, all 50 unit tests, and the SDK/dashboard produc
 ## Seven-day default — 2026-11-02
 
 Changed the initial reporting range and project-switch reset to Last 7 days, including server-rendered controls. Explicit date links and saved date preferences remain supported. Bun formatting, typecheck, lint, all 50 unit tests, and the production build pass. All 22 focused browser tests pass, covering SSR/hydration, keyboard date selection, persistence, URL state, project resets, and Back/Forward. Test apps and databases were cleaned up. Backend tests were not rerun for this dashboard-only change.
+
+## Optional Compose deployment — 2026-11-13
+
+Added `tako.compose.toml` alongside the two native configs, with a separate development hostname and direct Tako CLI commands. Container setup starts with `docker compose up --build -d` and requires no local Bun wrapper or toolchain. The shared Compose stack explicitly keeps one API replica with stop-first replacement and adds dashboard health checks. The deployment guides cover both choices, automatic polling versus native channel hints, private API networking, stopped-data migration, and named-volume backup limitations. Native application code and configs are unchanged.
+
+`bun fmt`, `bun typecheck`, `bun lint`, all **50 Bun tests / 291 assertions**, and the SDK/dashboard production build pass. The socket-based Bun tests required running outside the filesystem/network sandbox. Docker Compose validates the configuration. Both Docker targets built on Linux ARM64 with Docker Engine 29.8.2 and Compose 5.5.0; the first bundled DuckDB release compilation took about 16.5 minutes.
+
+A separate Compose project, disposable volume, and random loopback port verified service health, private API access through the dashboard, tracker delivery, disabled channel capability, management/key creation, committed ingestion, typed numeric/boolean/string properties, duplicate suppression, and ingestion rejection without a key. A browser verified that a second committed event appeared through automatic polling without a reload or browser errors. A stopped `/data` copy succeeded; recreating both containers retained events, the existing ingestion key, typed query results, and duplicate suppression.
+
+Tako CLI `0.0.0-4b587df` also started the same services through a disposable config using those prebuilt images. Trusted local HTTPS returned the dashboard health/runtime responses and proxied the private API successfully. That routing check did not repeat the full source build under Tako. Local DNS was bypassed with curl's `--resolve` while CA and hostname verification remained enabled. Test apps, containers, volumes, and fixtures were removed afterward.
+
+No production deployment, external Access configuration, backup restoration into a separate stack, full browser suite, or Rust test/Clippy rerun was performed for this configuration/documentation change. Production rollout and rollback behavior follow Tako's documented Compose contract and were not exercised against a remote server.

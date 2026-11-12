@@ -12,6 +12,11 @@ services:
       - "3001"
     restart: unless-stopped
     stop_grace_period: 30s
+    # SQLite/DuckDB require exactly one owner of the persistent directory.
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3001/health"]
       interval: 10s
@@ -29,5 +34,20 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "if (!(await fetch('http://127.0.0.1:3000/health')).ok) process.exit(1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 volumes:
   piko-data:

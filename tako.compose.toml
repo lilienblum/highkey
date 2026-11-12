@@ -1,0 +1,10 @@
+name = "piko-compose"
+
+[compose]
+file = "compose.yaml"
+service = "dashboard"
+port = 3000
+health_path = "/health"
+
+[envs.development]
+route = "piko-compose.test"

@@ -1,4 +1,6 @@
-# Two Tako applications
+# Native Tako applications
+
+Piko supports native Tako and [Docker Compose](compose.md). This guide covers the two native apps. Compose can run standalone or as one Tako-managed stack; it uses automatic polling instead of channel hints.
 
 Piko uses the published Rust SDK for the API and the JavaScript SDK for TanStack Start. Tako itself is unchanged. The API has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints into an ephemeral Tako channel. Use CLI/server release `0.0.0-9ae824f` or later with ephemeral support; the JavaScript SDK is pinned to that release.
 
@@ -20,7 +22,7 @@ The development runner creates a random shared `PIKO_CHANGE_TOKEN` through the C
 
 The API stores its catalog and product databases under `$TAKO_DATA_DIR`, locally `.tako/data/app`. Only the API uses those files. Existing standalone data can be migrated by stopping every API process and copying the **entire** `data/` directory to an empty managed data directory. Preserve the original until counts and retry behavior have been checked. Never copy active DuckDB/WAL files or start old and new binaries against the same directory.
 
-`bun run dev:standalone` retains the localhost development mode. The compiled standalone server remains supported by Docker Compose. Those modes have manual refresh and no channel connection.
+`bun run dev:standalone` retains the localhost development mode. The compiled standalone server also runs through [Docker Compose](compose.md). Those modes refresh automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
 
 ## Realtime semantics
 

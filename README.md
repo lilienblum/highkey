@@ -9,7 +9,17 @@ Piko has two independent applications, deployed together:
 
 This two-process layout supersedes the original single-process concept. There is still one deployment, one persistent data volume, and no external database. You can run the API on its own.
 
-## Run locally with Tako
+## Run with Docker Compose
+
+Requires Docker with the Compose plugin. From this checkout:
+
+```sh
+docker compose up --build -d
+```
+
+Open **http://127.0.0.1:3000**. Both applications build inside Linux containers; no local Bun, Rust, or Tako installation is needed. Stop with `docker compose down`, which retains your data. See the [Compose guide](docs/compose.md) for updates, backups, and optional Tako hosting.
+
+## Develop locally with Tako
 
 Requires [Tako](https://tako.sh/) `0.0.0-9ae824f` or a later release with ephemeral channels, Bun 1.4+, a current stable Rust toolchain (tested with 1.95.0), a C++17 compiler, and local disk. DuckDB is compiled into the API; the first build takes several minutes. No npm or Node runtime is required.
 
@@ -32,21 +42,21 @@ See [Tako setup, deployment, and realtime delivery](docs/tako.md). Development u
 
 ## Deployment
 
-The primary deployment consists of **two native Tako apps** described by `tako.api.toml` and `tako.dashboard.toml`. Configure separate production hostnames, a shared notification secret, external access control, and exactly one API instance. Ephemeral channels require one Tako server without a shared Postgres credential. The API uses Tako's persistent data directory. DuckDB requires a **stop-before-start API update**, including an ingress gate to prevent cold starts; see the [deployment procedure](docs/tako.md#production-and-updates).
+Choose either native Tako or Docker Compose. Both run the same independent Rust API and Bun dashboard with one API data directory and external access control.
 
-A standalone alternative remains available, without live channels:
+| Option                                                    | Configuration                           | Automatic updates                                                 | API storage and releases                                         |
+| --------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [Docker Compose](docs/compose.md#run-with-docker-compose) | `compose.yaml`                          | Visible/online polling every 30 seconds, plus focus and reconnect | Named volume at `/data`; one API container                       |
+| [Native Tako](docs/tako.md)                               | `tako.api.toml` + `tako.dashboard.toml` | Immediate ephemeral channel hints, with polling recovery          | `$TAKO_DATA_DIR`; gate ingress and stop the API before updates   |
+| [Tako-managed Compose](docs/compose.md#deploy-with-tako)  | `tako.compose.toml` + `compose.yaml`    | Visible/online polling every 30 seconds, plus focus and reconnect | Named volume at `/data`; one API replica with stop-first updates |
 
-```sh
-bun run dev:standalone
-# Or build and run the two container services:
-docker compose up --build -d
-```
+Native Tako uses separate production hostnames and a shared notification secret. Ephemeral channels require one Tako server without a shared Postgres credential. Compose exposes only the dashboard, with the API private on the container network. Tako-managed Compose adds Tako's HTTPS routing, service updates, status, logs, and application rollback. See the guides for prerequisites, deployment, updates, and backups.
 
-Standalone URLs are http://127.0.0.1:3000 (dashboard) and http://127.0.0.1:3001 (API). Docker builds separate targets from [Dockerfile](Dockerfile); only the dashboard is published on loopback. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Piko does not validate Access JWTs or provide fallback authentication.
+Docker builds separate targets from [Dockerfile](Dockerfile). Compose does not publish the API port. Stop it with `docker compose down` (without `--volumes`). Each mode has separate data; changing deployment mode does not migrate it. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Piko does not validate Access JWTs or provide fallback authentication.
 
-Without Docker, build with `bun run build` and `cargo build --locked --release -p piko`, then run `./target/release/piko` and `bun run --cwd apps/dashboard start` in separate terminals.
+Without Tako or Docker, use `bun run dev:standalone`, or build with `bun run build` and `cargo build --locked --release -p piko`, then run `./target/release/piko` and `bun run --cwd apps/dashboard start` in separate terminals. The standalone API listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
 
-Under Tako, data lives in `$TAKO_DATA_DIR` (locally `.tako/data/app`); standalone data lives in `./data` by default (`state.sqlite`, SQLite WAL files, and `products/<product-id>.duckdb` with their WAL files). Mount `PIKO_DATA_DIR` on durable local storage. Run exactly **one API process per data directory**. Stop the API before copying the entire directory for backup; restore the whole directory together. Do not share the files over a network filesystem. Cleanup logically deletes rows; disk files need not shrink immediately. An eight-instance LRU cache bounds open product databases; active connections pin their instance against eviction. Each instance has a 64 MB DuckDB buffer limit. Query concurrency is bounded globally. Early shared-database MVP data is imported idempotently at startup; the original `events.duckdb` remains as a backup, outside active retention, and can be removed after verifying the import.
+Under native Tako, data lives in `$TAKO_DATA_DIR` (locally `.tako/data/app`); Compose uses the `piko-data` named volume at `/data`; standalone binaries use `./data` by default (`state.sqlite`, SQLite WAL files, and `products/<product-id>.duckdb` with their WAL files). Mount `PIKO_DATA_DIR` on durable local storage. Run exactly **one API process per data directory**. Stop the API before copying the entire directory for backup; restore the whole directory together. Tako app-data backups do not include Compose named volumes; see [Compose backups and migration](docs/compose.md#backups-and-migration). Do not share the files over a network filesystem. Cleanup logically deletes rows; disk files need not shrink immediately. An eight-instance LRU cache bounds open product databases; active connections pin their instance against eviction. Each instance has a 64 MB DuckDB buffer limit. Query concurrency is bounded globally. Early shared-database MVP data is imported idempotently at startup; the original `events.duckdb` remains as a backup, outside active retention, and can be removed after verifying the import.
 
 | Setting                  | Default                    | Purpose                                                    |
 | ------------------------ | -------------------------- | ---------------------------------------------------------- |
@@ -116,7 +126,7 @@ See [the verification record](docs/verification.md) for measured checks and thei
 
 ## Scope and limitations
 
-- External access control, one local API process, one disk. Tako API updates require a brief maintenance window; normal rolling overlap is unsupported. No replication, multi-user permissions, automatic backups, or online schema migration framework yet.
+- External access control, one local API process, one disk. API updates briefly interrupt requests: native Tako requires an ingress gate and maintenance window; Compose uses stop-first replacement. Overlapping API processes are unsupported. No replication, multi-user permissions, automatic backups, or online schema migration framework yet.
 - Browser ingestion keys are intentionally public and write-only. They are not anti-abuse credentials; a key holder can submit fabricated events. There is global capacity backpressure, but no per-key fairness or bot detection.
 - Identity is explicit, optional, and project-scoped. There is no IP/user-agent fingerprinting. The browser tracker defaults to unidentified events and always honors Do Not Track and Global Privacy Control. Installations are distinct from website visitors and sessions.
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.

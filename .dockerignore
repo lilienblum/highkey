@@ -3,9 +3,9 @@
 .git
 target
 data
-.env
+**/.env*
 **/.tanstack
 test-results
 playwright-report
 
-.tako
+.tako*
