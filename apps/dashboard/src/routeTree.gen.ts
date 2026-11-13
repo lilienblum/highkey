@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as LogsRouteImport } from './routes/logs'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
 import { Route as PikoChangesRouteImport } from './routes/[_]piko.changes'
@@ -19,6 +20,7 @@ import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as ProjectsProjectSlugRouteImport } from './routes/projects.$projectSlug'
 import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.$projectSlug.index'
 import { Route as ProjectsProjectSlugExploreRouteImport } from './routes/projects.$projectSlug.explore'
+import { Route as ProjectsProjectSlugLogsRouteImport } from './routes/projects.$projectSlug.logs'
 import { Route as ProjectsProjectSlugSettingsRouteImport } from './routes/projects.$projectSlug.settings'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -73,6 +80,11 @@ const ProjectsProjectSlugExploreRoute =
     path: '/explore',
     getParentRoute: () => ProjectsProjectSlugRoute,
   } as any)
+const ProjectsProjectSlugLogsRoute = ProjectsProjectSlugLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => ProjectsProjectSlugRoute,
+} as any)
 const ProjectsProjectSlugSettingsRoute =
   ProjectsProjectSlugSettingsRouteImport.update({
     id: '/settings',
@@ -83,6 +95,7 @@ const ProjectsProjectSlugSettingsRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
+  '/logs': typeof LogsRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
@@ -90,18 +103,21 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
+  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
+  '/logs': typeof LogsRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
   '/_piko/runtime': typeof PikoRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
+  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugIndexRoute
 }
@@ -109,6 +125,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
+  '/logs': typeof LogsRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
@@ -116,6 +133,7 @@ export interface FileRoutesById {
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
+  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
 }
@@ -124,6 +142,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/explore'
+    | '/logs'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
@@ -131,24 +150,28 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/projects/$projectSlug'
     | '/projects/$projectSlug/explore'
+    | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/explore'
+    | '/logs'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
     | '/_piko/runtime'
     | '/api/$'
     | '/projects/$projectSlug/explore'
+    | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug'
   id:
     | '__root__'
     | '/'
     | '/explore'
+    | '/logs'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
@@ -156,6 +179,7 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/projects/$projectSlug'
     | '/projects/$projectSlug/explore'
+    | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug/'
   fileRoutesById: FileRoutesById
@@ -163,6 +187,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ExploreRoute: typeof ExploreRoute
+  LogsRoute: typeof LogsRoute
   SettingsRoute: typeof SettingsRoute
   TrackerDotjsRoute: typeof TrackerDotjsRoute
   PikoChangesRoute: typeof PikoChangesRoute
@@ -185,6 +210,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -243,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectSlugExploreRouteImport
       parentRoute: typeof ProjectsProjectSlugRoute
     }
+    '/projects/$projectSlug/logs': {
+      id: '/projects/$projectSlug/logs'
+      path: '/logs'
+      fullPath: '/projects/$projectSlug/logs'
+      preLoaderRoute: typeof ProjectsProjectSlugLogsRouteImport
+      parentRoute: typeof ProjectsProjectSlugRoute
+    }
     '/projects/$projectSlug/settings': {
       id: '/projects/$projectSlug/settings'
       path: '/settings'
@@ -255,12 +294,14 @@ declare module '@tanstack/react-router' {
 
 interface ProjectsProjectSlugRouteChildren {
   ProjectsProjectSlugExploreRoute: typeof ProjectsProjectSlugExploreRoute
+  ProjectsProjectSlugLogsRoute: typeof ProjectsProjectSlugLogsRoute
   ProjectsProjectSlugSettingsRoute: typeof ProjectsProjectSlugSettingsRoute
   ProjectsProjectSlugIndexRoute: typeof ProjectsProjectSlugIndexRoute
 }
 
 const ProjectsProjectSlugRouteChildren: ProjectsProjectSlugRouteChildren = {
   ProjectsProjectSlugExploreRoute: ProjectsProjectSlugExploreRoute,
+  ProjectsProjectSlugLogsRoute: ProjectsProjectSlugLogsRoute,
   ProjectsProjectSlugSettingsRoute: ProjectsProjectSlugSettingsRoute,
   ProjectsProjectSlugIndexRoute: ProjectsProjectSlugIndexRoute,
 }
@@ -271,6 +312,7 @@ const ProjectsProjectSlugRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ExploreRoute: ExploreRoute,
+  LogsRoute: LogsRoute,
   SettingsRoute: SettingsRoute,
   TrackerDotjsRoute: TrackerDotjsRoute,
   PikoChangesRoute: PikoChangesRoute,

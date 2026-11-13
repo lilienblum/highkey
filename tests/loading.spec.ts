@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 
 const apiUrl = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
-let product: { id: string; name: string };
+let product: { id: string; name: string; slug: string };
 let other: { id: string; name: string };
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${apiUrl}/api${path}`, {
@@ -64,26 +64,18 @@ test.beforeEach(async ({ page }) => {
   }, product.id);
 });
 
-test("workspace bootstrap keeps navigation visible with honest pending product selection", async ({
+test("project pages render the catalog on the server without a workspace placeholder", async ({
   page,
+  request,
 }) => {
-  const release = await hold(page, "**/api/products");
-  try {
-    await page.goto("/");
-    await expect(
-      page.getByRole("status", { name: "Loading workspace", exact: true }),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Overview", exact: true })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Select project" })).toBeDisabled();
-    await expect(page.getByText("No projects yet", { exact: true })).not.toBeVisible();
-    await page.screenshot({ path: test.info().outputPath("workspace-loading.png") });
-  } finally {
-    release();
-  }
+  const html = await (await request.get(`/projects/${product.slug}`)).text();
+  expect(html).toContain(product.name);
+  expect(html).toContain('aria-label="Main navigation"');
+  expect(html).not.toContain('aria-label="Loading workspace"');
+  expect(html).not.toContain("No projects yet");
+  await page.goto(`/projects/${product.slug}`);
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(product.name);
-  await expect(
-    page.getByRole("status", { name: "Loading workspace", exact: true }),
-  ).not.toBeVisible();
+  await expect(page.getByRole("status", { name: "Loading workspace", exact: true })).toHaveCount(0);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("8");
 });
 
@@ -95,7 +87,7 @@ test("date changes use stable placeholders and breakdown loading stays local", a
   const release = await hold(page, "**/api/products/*/query");
   try {
     await page.getByRole("button", { name: "Choose date range", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Last 7 days", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Last 30 days", exact: true }).click();
     const pending = page.locator(".overview-grid");
     await expect(pending).toHaveAttribute("aria-busy", "true");
     await expect(pending).toBeVisible();

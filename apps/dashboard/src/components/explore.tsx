@@ -1,3 +1,5 @@
+import { displayMinute } from "@/lib/display-time";
+import { displayGroups } from "@/lib/display-values";
 import { reportLink } from "@/lib/report-link";
 import { automaticBucket } from "@/lib/time-buckets";
 import { workspaceTarget } from "@/lib/workspace-route";
@@ -145,19 +147,11 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             <strong>Overview selection</strong>
             <p className="drilldown-range">
               <time dateTime={range.from} title={range.from}>
-                {new Date(range.from).toLocaleString("en-GB", {
-                  timeZone: "UTC",
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {displayMinute(Date.parse(range.from), "UTC")}
               </time>
               {" to "}
               <time dateTime={range.to} title={range.to}>
-                {new Date(range.to).toLocaleString("en-GB", {
-                  timeZone: "UTC",
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {displayMinute(Date.parse(range.to), "UTC")}
               </time>
               {" UTC"}
             </p>
@@ -424,7 +418,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                     groups={
                       applied.group === "source_id"
                         ? sourceGroups(data.groups, product?.sources)
-                        : data.groups
+                        : displayGroups(data.groups, applied.group)
                     }
                     unit="Value"
                   />

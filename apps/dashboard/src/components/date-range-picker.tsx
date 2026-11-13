@@ -10,6 +10,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuGroup,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { useDisplayPreferences } from "./display-preferences";
@@ -41,26 +42,39 @@ import {
 } from "@/lib/date-range";
 
 const presetGroups = [
-  [
-    { value: "today", key: "d" },
-    { value: "yesterday", key: "e" },
-  ],
-  [
-    { value: "24h", key: "h" },
-    { value: 7, key: "w" },
-    { value: 30, key: "f" },
-    { value: 90, key: "n" },
-  ],
-  [
-    { value: "month", key: "m" },
-    { value: "last-month", key: "p" },
-  ],
-  [
-    { value: "year", key: "y" },
-    { value: "12months", key: "l" },
-  ],
+  {
+    label: "Days",
+    items: [
+      { value: "today", key: "d" },
+      { value: "yesterday", key: "e" },
+    ],
+  },
+  {
+    label: "Rolling",
+    items: [
+      { value: "24h", key: "h" },
+      { value: 7, key: "w" },
+      { value: 30, key: "f" },
+      { value: 90, key: "n" },
+    ],
+  },
+  {
+    label: "Months",
+    items: [
+      { value: "month", key: "m" },
+      { value: "last-month", key: "p" },
+    ],
+  },
+  {
+    label: "Years",
+    items: [
+      { value: "year", key: "y" },
+      { value: "12months", key: "l" },
+    ],
+  },
 ] as const;
-const presets = presetGroups.flat();
+type Preset = (typeof presetGroups)[number]["items"][number];
+const presets = presetGroups.flatMap((group): readonly Preset[] => group.items);
 
 export function DateRangePicker({
   range,
@@ -238,10 +252,11 @@ export function DateRangePicker({
         >
           <DropdownMenuRadioGroup value={fixed ? "custom" : (period ?? days)}>
             {presetGroups.map((group, index) => (
-              <Fragment key={group[0].value}>
-                {index > 0 && <DropdownMenuSeparator />}
+              <Fragment key={group.label}>
+                {index > 0 && <DropdownMenuSeparator className="date-period-gap" />}
                 <DropdownMenuGroup>
-                  {group.map(({ value, key }) => (
+                  <DropdownMenuLabel className="date-period-label">{group.label}</DropdownMenuLabel>
+                  {group.items.map(({ value, key }) => (
                     <DropdownMenuRadioItem
                       key={value}
                       value={value}

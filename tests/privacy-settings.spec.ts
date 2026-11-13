@@ -17,7 +17,7 @@ test("Settings defaults to one year without changing existing retention or colle
   const existing = await response.json();
   await page.addInitScript((id) => localStorage.setItem("piko:product", id), existing.id);
   await page.goto("/settings");
-  await expect(page.getByLabel("Retention (days)")).toHaveValue("90");
+  await expect(page.getByLabel("Retention (days)", { exact: true })).toHaveValue("90");
   await expect(page.locator('[data-slot="sidebar-footer"]')).not.toContainText("retention");
   await page.getByRole("button", { name: "New project", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Create a project" });
@@ -30,7 +30,7 @@ test("Settings defaults to one year without changing existing retention or colle
   await dialog.getByRole("button", { name: "Create project", exact: true }).click();
   expect((await (await created).json()).retention_days).toBe(365);
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByLabel("Retention (days)")).toHaveValue("365");
+  await expect(page.getByLabel("Retention (days)", { exact: true })).toHaveValue("365");
   await page.getByRole("button", { name: "New project", exact: true }).click();
   await expect(dialog.getByLabel("Retention (days)")).toHaveValue("365");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
@@ -49,5 +49,5 @@ test("Settings defaults to one year without changing existing retention or colle
   await expect(snippet).not.toContainText("PIKO_INSTALLATION_ID");
   await page.getByRole("combobox", { name: "Select project", exact: true }).click();
   await page.getByRole("option", { name: existing.name, exact: true }).click();
-  await expect(page.getByLabel("Retention (days)")).toHaveValue("90");
+  await expect(page.getByLabel("Retention (days)", { exact: true })).toHaveValue("90");
 });

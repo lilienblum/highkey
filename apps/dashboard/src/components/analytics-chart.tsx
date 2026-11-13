@@ -4,9 +4,22 @@ import { decorative } from "@tanstack/charts/mark/decorative";
 import { Chart } from "@tanstack/charts/react";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { number, type QueryResult } from "@/lib/api";
 import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
+
+// Bayer 4×4 screen tones at 2px per dither pixel (8px tiles), from the line down to the baseline.
+// `from`/`to` are offsets below each value as a share of the series peak.
+const TONE_BANDS = [
+  {
+    density: 50,
+    from: 0,
+    to: 0.08,
+    path: "M0 0h2v2H0zM4 0h2v2H4zM2 2h2v2H2zM6 2h2v2H6zM0 4h2v2H0zM4 4h2v2H4zM2 6h2v2H2zM6 6h2v2H6z",
+  },
+  { density: 25, from: 0.08, to: 0.22, path: "M0 0h2v2H0zM4 0h2v2H4zM0 4h2v2H0zM4 4h2v2H4z" },
+  { density: 12, from: 0.22, to: Number.POSITIVE_INFINITY, path: "M0 0h2v2H0zM4 4h2v2H4z" },
+] as const;
 
 function formatDate(time: number, bucket: TimeBucket, full = false) {
   return new Date(time).toLocaleString("en-US", {
@@ -37,9 +50,12 @@ export function AnalyticsChart({
 }) {
   const from = range?.from;
   const to = range?.to;
+  // Area fills use an ordered-dither screen tone instead of translucency; ids must be URL-safe.
+  const toneId = `piko-tone-${useId().replace(/[^\w-]/g, "")}`;
   const definition = useMemo(() => {
     const markers =
       (!compact && Boolean(unit)) || series.filter((point) => point.value !== null).length === 1;
+    const peak = Math.max(0, ...series.map((point) => point.value ?? 0));
     return defineChart({
       svgAnimation: false,
       focus: "nearest-x",
@@ -77,15 +93,19 @@ export function AnalyticsChart({
         );
         return {
           marks: [
-            decorative(
-              areaY(series, {
-                id: "values-area",
-                x: "time",
-                y1: 0,
-                y2: "value",
-                fill: "var(--data)",
-                fillOpacity: 0.07,
-              }),
+            // Dithered falloff: dense under the line, thinning toward the baseline.
+            ...TONE_BANDS.map((band, index) =>
+              decorative(
+                areaY(series, {
+                  id: `values-area-${index}`,
+                  x: "time",
+                  y1: (point) =>
+                    point.value === null ? null : Math.max(0, point.value - band.to * peak),
+                  y2: (point) =>
+                    point.value === null ? null : Math.max(0, point.value - band.from * peak),
+                  fill: `url(#${toneId}-${band.density})`,
+                }),
+              ),
             ),
             decorative(
               lineY(series, {
@@ -147,7 +167,7 @@ export function AnalyticsChart({
         };
       },
     });
-  }, [series, label, bucket, unit, from, to, compact]);
+  }, [series, label, bucket, unit, from, to, compact, toneId]);
   return (
     <div className="series-chart" data-slot="chart" data-chart-library="tanstack">
       <Chart
@@ -163,6 +183,20 @@ export function AnalyticsChart({
         ariaLabel={`${label} by UTC ${bucket === "day" ? "date" : bucket}`}
         ariaDescription="Use Left and Right arrows to inspect values, Home and End for the first and last bucket, and Escape to dismiss."
       />
+      {/* Pattern definitions follow the plot so the chart stays the container's first SVG. */}
+      <svg className="dither-defs" aria-hidden="true" focusable="false" width="0" height="0">
+        {TONE_BANDS.map((band) => (
+          <pattern
+            key={band.density}
+            id={`${toneId}-${band.density}`}
+            width="8"
+            height="8"
+            patternUnits="userSpaceOnUse"
+          >
+            <path d={band.path} />
+          </pattern>
+        ))}
+      </svg>
     </div>
   );
 }

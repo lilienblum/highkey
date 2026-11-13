@@ -9,14 +9,14 @@ Piko uses the published Rust SDK for the API and the JavaScript SDK for TanStack
 ```sh
 bun install --frozen-lockfile
 bun dev
-SSL_CERT_FILE=.tako/dev-ca.pem PIKO_API_URL=https://piko-api.test bun seed
+NODE_USE_SYSTEM_CA=0 SSL_CERT_FILE=.tako/dev-ca.pem PIKO_API_URL=https://piko-api.test bun seed
 # Stop only these two apps:
 bun run dev:stop
 ```
 
 After upgrading Tako, restart any existing dev daemon as well as the apps. An app-only `tako dev --restart` does not replace an older daemon. Stop Piko’s apps before restarting it so database owners close cleanly.
 
-The root configs select independent app identities and hosts: `tako.api.toml` is `piko-api` at `https://piko-api.test`; `tako.dashboard.toml` is `piko` at `https://piko.test`. The dashboard's same-origin `/api/*` route forwards requests to the API. The returned Tako HTTPS URLs are the supported development entrypoints. The runner links the public local Tako CA at `.tako/dev-ca.pem`; development-only `SSL_CERT_FILE` settings let Bun and Rust verify it even when their default trust stores differ from macOS. Certificate verification stays enabled.
+The root configs select independent app identities and hosts: `tako.api.toml` is `piko-api` at `https://piko-api.test`; `tako.dashboard.toml` is `piko` at `https://piko.test`. The dashboard's same-origin `/api/*` route forwards requests to the API. The returned Tako HTTPS URLs are the supported development entrypoints. The runner links the public local Tako CA at `.tako/dev-ca.pem`; development-only `SSL_CERT_FILE` settings let Bun and Rust verify it even when their default trust stores differ from macOS. The dashboard also sets `NODE_USE_SYSTEM_CA=0` so Bun trusts only that file: stale certificates with the same "Tako Development CA" name in the system keychain otherwise cause `CERT_SIGNATURE_FAILURE`. Use the same variable for `bun seed` and other local Bun clients, or delete the stale keychain entries. Certificate verification stays enabled.
 
 The development runner creates a random shared `PIKO_CHANGE_TOKEN` through the CLI's stdin interface if absent. Both configs share the repository's encrypted `.tako/secrets.json`. Never commit that directory or print the secret. Runtime code obtains it from SDK secrets, not browser environment variables. A token rotation requires restarting both apps.
 

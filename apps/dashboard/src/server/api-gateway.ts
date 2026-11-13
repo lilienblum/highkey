@@ -7,7 +7,7 @@ let pendingIngestions = 0;
 
 export async function proxyApi(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const isIngest = url.pathname === "/api/ingest";
+  const isIngest = ["/api/ingest", "/api/logs/ingest", "/api/logs/v1/logs"].includes(url.pathname);
   const isUpload = isIngest && request.method === "POST";
   const unavailable = (message: string) =>
     Response.json(
@@ -17,10 +17,7 @@ export async function proxyApi(request: Request): Promise<Response> {
         headers: {
           "Retry-After": "1",
           ...(isIngest
-            ? {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Expose-Headers": "Retry-After",
-              }
+            ? { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "Retry-After" }
             : {}),
         },
       },
@@ -35,6 +32,7 @@ export async function proxyApi(request: Request): Promise<Response> {
   for (const name of [
     "accept",
     "content-type",
+    "content-encoding",
     "x-piko-admin",
     "origin",
     "access-control-request-method",

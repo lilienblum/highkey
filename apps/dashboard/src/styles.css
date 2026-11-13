@@ -1,10 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/geist-pixel/index.css";
+@import "@fontsource-variable/geist-mono/index.css";
+@import "./logs.css";
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {
   --font-sans: "Geist Variable", sans-serif;
+  /* Literal identifiers, keys, snippets, and raw JSON: the third cut of the Geist family. */
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -66,6 +71,21 @@
   --secondary-foreground: var(--foreground);
   --muted: #363646;
   --muted-foreground: #c8c093;
+  /* Placeholders sit clearly below entered text while keeping about 5:1 on inset fields. */
+  --placeholder: #8f8b76;
+  /* Kanagawa Wave syntax roles for snippets and structured values. Comments use supporting text
+     instead of fujiGray so they keep 4.5:1 on the inset code surface. */
+  --syntax-string: #98bb6c;
+  --syntax-number: #d27e99;
+  --syntax-constant: #ffa066;
+  --syntax-keyword: #957fb8;
+  --syntax-function: #7e9cd8;
+  --syntax-type: #7aa89f;
+  --syntax-property: #e6c384;
+  --syntax-variable: #e6c384;
+  --syntax-flag: #7fb4ca;
+  --syntax-tag: #7fb4ca;
+  --syntax-punct: #9cabca;
   --accent: #49443c;
   --accent-foreground: var(--foreground);
   --selection: #49443c;
@@ -84,6 +104,14 @@
   --data-secondary: #957fb8;
   --data-tertiary: #7aa89f;
   --radius: 12px;
+  --font-pixel: "Geist Pixel Variable", "Geist Variable", sans-serif;
+  /* The chosen option everywhere: a lit sumi pill read with warm-yellow text. */
+  --selection-face: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--selection) 82%, var(--foreground)) 0%,
+    var(--selection) 55%,
+    color-mix(in oklab, var(--selection) 85%, var(--background)) 100%
+  );
   --elevation-control: 0 1px 2px rgb(0 0 0 / 16%);
   --elevation-menu: 0 8px 24px rgb(0 0 0 / 28%);
   --elevation-dialog: 0 20px 60px rgb(0 0 0 / 40%);
@@ -99,6 +127,31 @@
 
 * {
   box-sizing: border-box;
+}
+/*
+ * Ordered-dither screen tones: Bayer 4×4 densities drawn with 2px pixels on a 4px tile.
+ * Wherever the interface used a translucent tint, it uses one of these at the matching density.
+ * Declared on the elements that use them so each resolves its own --tone-ink.
+ */
+:is(
+  .breakdown-fill,
+  .breakdown-row,
+  [data-slot="sidebar-menu-button"],
+  [data-slot="button"],
+  [data-slot$="-trigger"][data-variant],
+  .date-period-control > button,
+  [data-slot="dialog-close"],
+  [data-slot="select-item"],
+  [data-slot^="dropdown-menu-"][data-slot$="item"],
+  [data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  [data-slot="alert-dialog-overlay"],
+  .log-row,
+  .logs-volume-bar
+) {
+  --tone-25: conic-gradient(at 2px 2px, #0000 75%, var(--tone-ink) 0);
+  --tone-50: repeating-conic-gradient(var(--tone-ink) 0 25%, #0000 0 50%);
+  --tone-75: conic-gradient(at 2px 2px, var(--tone-ink) 75%, #0000 0);
 }
 @layer base {
   * {
@@ -184,6 +237,198 @@ h3,
 [data-slot="button"] {
   font-weight: 550;
 }
+/*
+ * Pill buttons. Each layer is a variable so variants and states only swap values: a dither tone
+ * over a gradient face, with a lit top edge (inset bevel) and an outer ring/drop. Filled actions
+ * are glossy Surimi Orange; quiet actions are dark sumi-ink pills. Hover, open, and press add 50%
+ * and 75% screen tones over the face.
+ */
+:is(
+  :is([data-slot="button"], [data-slot$="-trigger"]):is(
+    [data-variant="default"],
+    [data-variant="destructive"],
+    [data-variant="outline"],
+    [data-variant="secondary"],
+    [data-variant="ghost"]
+  ),
+  .date-period-control > button
+) {
+  --tone-ink: var(--surface-pressed);
+  border-radius: 999px;
+  background:
+    var(--button-tone, none) 0 0 / 4px 4px,
+    var(--button-face, transparent);
+  box-shadow: var(--button-drop, 0 0 #0000), var(--button-bevel, 0 0 #0000);
+}
+:is([data-slot="button"], [data-slot$="-trigger"]):is(
+  [data-variant="default"],
+  [data-variant="destructive"]
+) {
+  --button-base: var(--primary);
+  --button-lit: var(--primary-hover);
+  --button-deep: var(--primary-active);
+  --tone-ink: color-mix(in oklab, var(--button-deep) 70%, #000);
+  --button-face: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--button-lit) 72%, #fff) 0%,
+    var(--button-base) 46%,
+    color-mix(in oklab, var(--button-deep) 88%, #000) 100%
+  );
+  --button-bevel:
+    inset 0 1px 0 rgb(255 255 255 / 52%), inset 0 -1px 0 rgb(0 0 0 / 22%),
+    inset 0 0 0 1px rgb(0 0 0 / 10%);
+  --button-drop:
+    0 0 0 1px color-mix(in oklab, var(--button-deep) 45%, #000), 0 1px 2px rgb(0 0 0 / 40%),
+    0 4px 12px -4px color-mix(in oklab, var(--button-base) 45%, transparent);
+}
+:is([data-slot="button"], [data-slot$="-trigger"])[data-variant="destructive"] {
+  --button-base: var(--destructive);
+  --button-lit: color-mix(in oklab, var(--destructive) 80%, #fff);
+  --button-deep: color-mix(in oklab, var(--destructive) 92%, #000);
+}
+:is([data-slot="button"], [data-slot$="-trigger"]):is(
+  [data-variant="default"],
+  [data-variant="destructive"]
+):hover {
+  --button-face: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--button-lit) 60%, #fff) 0%,
+    var(--button-lit) 50%,
+    var(--button-base) 100%
+  );
+}
+:is([data-slot="button"], [data-slot$="-trigger"]):is(
+  [data-variant="default"],
+  [data-variant="destructive"]
+):active {
+  --button-face: linear-gradient(180deg, var(--button-deep) 0%, var(--button-base) 100%);
+  --button-bevel: inset 0 1px 3px rgb(0 0 0 / 30%), inset 0 0 0 1px rgb(0 0 0 / 12%);
+  --button-tone: var(--tone-25);
+}
+:is([data-slot="button"], [data-slot$="-trigger"]):is(
+  [data-variant="outline"],
+  [data-variant="secondary"]
+) {
+  --button-face: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface-hover) 90%, var(--foreground)) 0%,
+    var(--surface-hover) 55%,
+    color-mix(in oklab, var(--surface-hover) 70%, var(--background)) 100%
+  );
+  --button-bevel: inset 0 1px 0 rgb(255 255 255 / 8%), inset 0 -1px 0 rgb(0 0 0 / 20%);
+  --button-drop: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 35%);
+  border-color: transparent;
+  color: var(--foreground);
+}
+/* The date frame owns the border, so its controls draw focus inside their own pill. */
+.date-period-control > button:focus-visible {
+  outline-offset: -2px;
+}
+/*
+ * Quiet hover, open, and press: the face lifts to the pressed surface and a tone of darker dots
+ * prints over it, so the label always sits on pixels darker than itself (4.5:1 or better).
+ */
+:is(
+  :is([data-slot="button"], [data-slot$="-trigger"]):is(
+    [data-variant="outline"],
+    [data-variant="ghost"],
+    [data-variant="secondary"]
+  ),
+  .date-period-control > button
+):is(:hover, [aria-expanded="true"], :active) {
+  --button-face: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface-pressed) 88%, var(--foreground)) 0%,
+    var(--surface-pressed) 100%
+  );
+  --tone-ink: var(--surface-hover);
+  --button-tone: var(--tone-50);
+}
+:is(
+  :is([data-slot="button"], [data-slot$="-trigger"]):is(
+    [data-variant="outline"],
+    [data-variant="ghost"],
+    [data-variant="secondary"]
+  ),
+  .date-period-control > button
+):active {
+  --button-tone: var(--tone-75);
+}
+/*
+ * Overlays: the one place a tone sits over translucency. A sparse 25% dot screen over a sumi dim
+ * keeps the printed texture without a full-screen high-frequency checker.
+ */
+:is([data-slot="dialog-overlay"], [data-slot="sheet-overlay"], [data-slot="alert-dialog-overlay"]) {
+  --tone-ink: #000;
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    rgb(22 22 29 / 45%);
+}
+@media (prefers-contrast: more) {
+  :is(
+    [data-slot="dialog-overlay"],
+    [data-slot="sheet-overlay"],
+    [data-slot="alert-dialog-overlay"]
+  ) {
+    background: rgb(0 0 0 / 60%);
+  }
+}
+.dither-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.dither-defs path {
+  fill: var(--data);
+  shape-rendering: crispEdges;
+}
+/* Surfaces catch a little light along their top edge instead of sitting perfectly flat. */
+:root {
+  --surface-sheen: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 93%, var(--foreground)) 0,
+    var(--card) 64px
+  );
+  --surface-highlight: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+[data-slot="card"] {
+  background: var(--surface-sheen);
+  box-shadow: var(--surface-highlight);
+}
+/* Dotted leaders run from a label to the edge of its region, drawn as 2px dither dots. */
+:is(
+  .metric-label,
+  .workspace-section-label,
+  .workspace-sources [data-slot="sidebar-group-label"],
+  .widget-header h2,
+  .date-period-label
+)::after {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 2px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
+      transparent 0
+    )
+    0 0 / 4px 2px repeat-x;
+}
+.widget-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.widget-header h2 {
+  flex: 1;
+  min-width: 0;
+}
+/* Compact report selects are small controls, so they take the pill shape; form fields stay squared. */
+:is(.overview-widget, .chart-controls, .query-actions) [data-slot="select-trigger"] {
+  border-radius: 999px;
+}
 :is([data-slot="input"], [data-slot="select-trigger"]):not(:disabled):hover {
   border-color: var(--muted-foreground);
 }
@@ -205,11 +450,227 @@ h3,
   color: var(--muted-foreground);
   pointer-events: none;
 }
-[data-slot="select-item"][data-selected] {
+/*
+ * Menus and select popups share one lit panel with pill rows. The pointer/keyboard row takes the
+ * quiet-control hover (lifted face, darker 50% dots); the applied row is the selection pill.
+ */
+:is([data-slot="select-content"], [data-slot="dropdown-menu-content"]) {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--popover) 92%, var(--foreground)) 0,
+    var(--popover) 48px
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 7%),
+    var(--elevation-menu);
+}
+:is(
+  [data-slot="select-item"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-checkbox-item"]
+) {
+  --tone-ink: var(--popover);
+  padding-left: 12px;
+  border-radius: 999px;
+}
+:is(
+  [data-slot="select-item"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-checkbox-item"]
+)[data-highlighted] {
+  background:
+    var(--tone-50) 0 0 / 4px 4px,
+    var(--surface-pressed);
+  color: var(--foreground);
+}
+:is(
+  [data-slot="select-item"][data-selected],
+  [data-slot="dropdown-menu-radio-item"][data-checked],
+  [data-slot="dropdown-menu-checkbox-item"][data-checked]
+) {
+  --tone-ink: color-mix(in oklab, var(--selection) 70%, var(--background));
+  background: var(--selection-face);
+  color: var(--selection-foreground);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
+}
+:is(
+  [data-slot="select-item"][data-selected],
+  [data-slot="dropdown-menu-radio-item"][data-checked],
+  [data-slot="dropdown-menu-checkbox-item"][data-checked]
+)[data-highlighted] {
+  background:
+    var(--tone-50) 0 0 / 4px 4px,
+    var(--selection-face);
   color: var(--selection-foreground);
 }
-[data-slot="select-item"][data-selected]:not([data-highlighted]) {
-  background: var(--selection);
+:is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+  height: 2px;
+  margin: 6px 12px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
+      transparent 0
+    )
+    0 0 / 4px 2px repeat-x;
+}
+/* Exit animations hold their last frame until the element unmounts, so nothing flashes back. */
+[data-closed] {
+  --tw-animation-fill-mode: forwards;
+}
+/*
+ * Menus open with a short fade and a scale from the trigger (origin-aware), or a plain fade when a
+ * select opens over its own trigger, and close faster than they open. Reduced motion removes both.
+ */
+@keyframes piko-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes piko-menu-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes piko-menu-out {
+  to {
+    opacity: 0;
+  }
+}
+:is(
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="popover-content"]
+)[data-open] {
+  animation: piko-menu-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+:is(
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="popover-content"]
+)[data-closed] {
+  animation: piko-menu-out 100ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+[data-slot="select-content"][data-side="none"][data-open] {
+  animation: piko-menu-fade-in 120ms ease-out;
+}
+/* Highlighted code: tokens from lib/highlight.tsx. */
+.tok-string {
+  color: var(--syntax-string);
+}
+.tok-number {
+  color: var(--syntax-number);
+}
+.tok-constant {
+  color: var(--syntax-constant);
+}
+.tok-keyword {
+  color: var(--syntax-keyword);
+}
+.tok-function {
+  color: var(--syntax-function);
+}
+.tok-type {
+  color: var(--syntax-type);
+}
+.tok-property {
+  color: var(--syntax-property);
+}
+.tok-variable {
+  color: var(--syntax-variable);
+}
+.tok-flag {
+  color: var(--syntax-flag);
+}
+.tok-tag {
+  color: var(--syntax-tag);
+}
+.tok-punct {
+  color: var(--syntax-punct);
+}
+.tok-comment {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.typed-value {
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Searchable picker: a pill search field over a short list that scrolls on its own. */
+.time-zone-popup {
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, var(--available-height));
+  overflow: hidden;
+}
+.time-zone-search {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  height: 36px;
+  margin: 2px 2px 6px;
+  padding: 0 12px;
+  border: 1px solid var(--input);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  color: var(--muted-foreground);
+}
+.time-zone-search:focus-within {
+  border-color: var(--ring);
+}
+.time-zone-search svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.time-zone-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.time-zone-search input::placeholder {
+  color: var(--muted-foreground);
+}
+.time-zone-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.time-zone-offset {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+[data-selected] > .time-zone-offset {
+  color: inherit;
+}
+.time-zone-empty:not(:empty) {
+  padding: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+@media (max-width: 767px) {
+  .time-zone-search input {
+    font-size: 16px;
+  }
 }
 [data-slot="select-item-indicator"] {
   color: var(--primary);
@@ -248,15 +709,28 @@ h3,
   padding: 3px;
   gap: 2px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 999px;
   background: var(--surface-inset);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
 }
 [data-slot="toggle-group"][data-spacing="0"] [data-slot="toggle-group-item"] {
   height: 28px;
   min-width: 28px;
   border: 0;
-  border-radius: var(--radius-sm);
-  padding-inline: 10px;
+  border-radius: 999px;
+  padding-inline: 12px;
+}
+/* The chosen segment is a lit sumi pill with warm-yellow text; gloss belongs to actions only. */
+[data-slot="toggle-group-item"][aria-pressed="true"] {
+  color: var(--selection-foreground);
+  background: var(--selection-face);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    0 1px 2px rgb(0 0 0 / 40%);
+}
+::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 ::selection {
   background: var(--primary);
@@ -266,12 +740,22 @@ h3,
   border: 1px solid transparent;
 }
 [data-slot="sidebar-menu-button"][data-active] {
-  background: color-mix(in oklab, var(--primary) 12%, var(--sidebar));
+  --tone-ink: color-mix(in oklab, var(--primary) 30%, var(--sidebar));
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    var(--sidebar);
   color: var(--sidebar-primary);
   font-weight: 600;
 }
 [data-slot="sidebar-menu-button"][data-active]:hover {
-  background: color-mix(in oklab, var(--primary) 17%, var(--sidebar));
+  --tone-ink: color-mix(in oklab, var(--primary) 38%, var(--sidebar));
+}
+/* One state language across the rail: 25% screens, orange for the page, neutral for scope and hover. */
+[data-slot="sidebar-menu-button"]:not([data-active]):is(:hover, [data-popup-open]) {
+  --tone-ink: color-mix(in oklab, var(--sidebar-foreground) 14%, var(--sidebar));
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    var(--sidebar);
 }
 [data-slot="sidebar-group-label"] {
   color: var(--muted-foreground);
@@ -280,11 +764,23 @@ h3,
   gap: 4px;
 }
 [data-slot="dialog-close"] {
+  --tone-ink: var(--surface-pressed);
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
+  border-radius: 999px;
   background: var(--secondary);
+}
+[data-slot="dialog-close"]:hover {
+  background:
+    var(--tone-50) 0 0 / 4px 4px,
+    var(--secondary);
+}
+[data-slot="dialog-close"]:active {
+  background:
+    var(--tone-75) 0 0 / 4px 4px,
+    var(--secondary);
 }
 .stream-table tr:hover {
   background: var(--subtle);
@@ -377,10 +873,13 @@ h3,
   gap: 20px;
   margin-bottom: 22px;
 }
+/* Page titles and single measurements use Geist Pixel at its only weight; Geist carries the rest. */
 h1 {
+  font-family: var(--font-pixel);
   font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
+  font-weight: 400;
+  font-synthesis-weight: none;
+  letter-spacing: 0;
   line-height: 1.3;
   text-wrap: balance;
 }
@@ -438,8 +937,10 @@ h1 {
   color: var(--muted-foreground);
 }
 .metric-value {
-  font-weight: 650;
-  letter-spacing: -0.035em;
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  font-synthesis-weight: none;
+  letter-spacing: 0;
   font-size: 32px;
   line-height: 1.2;
   margin: 8px 0 6px;
@@ -571,14 +1072,35 @@ h1 {
   overflow: hidden;
   border-radius: 0;
 }
+/*
+ * Bars stay solid to their exact value. Only the last 8px step down through a 50% and a 25% tone,
+ * so the leading edge reads as printed without blurring where the measurement ends.
+ */
 .breakdown-fill {
+  --tone-ink: var(--accent);
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  background: var(--accent);
+  background: linear-gradient(var(--tone-ink) 0 0) 0 0 / max(0px, calc(100% - 8px)) 100% no-repeat;
   min-width: 0;
   border-radius: 0;
+}
+.breakdown-fill::before,
+.breakdown-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.breakdown-fill::before {
+  right: 4px;
+  background: var(--tone-50) 0 0 / 4px 4px;
+}
+.breakdown-fill::after {
+  right: 0;
+  background: var(--tone-25) 0 0 / 4px 4px;
 }
 .breakdown-label {
   position: relative;
@@ -708,9 +1230,10 @@ h1 {
   gap: 6px 12px;
 }
 .explore-summary strong {
+  font-family: var(--font-pixel);
   font-size: 22px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  font-synthesis-weight: none;
   color: var(--foreground);
 }
 .explore-charts {
@@ -957,7 +1480,9 @@ h1 {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  ::before,
+  ::after {
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component animations. */
     animation: none !important;
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component transitions. */
@@ -977,8 +1502,16 @@ h1 {
   min-height: 36px;
   text-decoration: none;
 }
-.breakdown-row:has(.breakdown-filter):hover {
-  background: var(--accent);
+/*
+ * Hovering a filterable row must never look like a longer bar: the empty track takes a sparse
+ * dot screen and the bar itself warms toward Carp Yellow, keeping its exact length.
+ */
+.breakdown-row:has(.breakdown-filter):is(:hover, :focus-within) {
+  --tone-ink: color-mix(in oklab, var(--border) 75%, var(--muted-foreground));
+  background: var(--tone-25) 0 0 / 4px 4px;
+}
+.breakdown-row:has(.breakdown-filter):is(:hover, :focus-within) .breakdown-fill {
+  --tone-ink: color-mix(in oklab, var(--accent) 82%, var(--data));
 }
 .breakdown-row:has(.breakdown-filter):focus-visible {
   outline: 2px solid var(--ring);
@@ -1091,10 +1624,12 @@ h1 {
   min-width: 0;
   gap: 5px;
 }
+/* The pill keeps its own padding; a matching negative margin keeps the label on the column edge. */
 .stream-inspect {
   justify-content: flex-start;
-  width: 100%;
-  padding-inline: 0;
+  width: calc(100% + 10px);
+  margin-inline-start: -10px;
+  padding-inline: 10px;
 }
 .stream-inspect span {
   overflow: hidden;
@@ -1356,6 +1891,11 @@ h1 {
   background: transparent;
   padding-block: 0;
 }
+/* Open analytical fields carry no card highlight: a second light rule would double their seam. */
+:is(.explore-charts, .breakdowns) [data-slot="card"],
+:is(.event-stream, .chart-card)[data-slot="card"] {
+  box-shadow: none;
+}
 .explore-charts > .chart-card {
   padding-right: 24px;
 }
@@ -1440,9 +1980,13 @@ h1 {
 }
 @media (max-width: 640px) {
   [data-slot="button"],
+  [data-slot$="-trigger"][data-variant],
   [data-slot="select-trigger"],
   [data-slot="input"] {
     min-height: 40px;
+  }
+  :is([data-slot="button"], [data-slot$="-trigger"])[data-size^="icon"] {
+    min-width: 40px;
   }
   .page-content {
     padding: 22px 16px;
@@ -1572,16 +2116,29 @@ h1 {
 
 /* Compact workspace: scope lives in the rail; dates remain beside the report. */
 .workspace-identity {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   flex-shrink: 0;
   gap: 0;
   padding: 0;
   background-color: var(--sidebar);
-  background-image:
-    linear-gradient(180deg, transparent 45%, var(--sidebar) 100%),
-    url("/images/sidebar-gradient.webp");
-  background-position: center top;
-  background-size: cover;
-  background-repeat: no-repeat;
+}
+.dither-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.dither-field canvas {
+  display: block;
+  image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity 600ms ease-out;
+}
+.dither-field canvas[data-ready] {
+  opacity: 1;
 }
 .workspace-brand-row {
   display: flex;
@@ -1599,7 +2156,9 @@ h1 {
   width: 100%;
 }
 .workspace-section-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 8px;
   color: var(--sidebar-foreground);
   font-size: 12px;
@@ -1623,28 +2182,23 @@ h1 {
   overflow-y: auto;
   scrollbar-width: thin;
   scroll-padding-block: 8px;
-  border-top: 1px solid var(--sidebar-border);
 }
 .workspace-sources [data-slot="sidebar-group-label"] {
+  gap: 10px;
   overflow: hidden;
 }
 .workspace-sources [data-slot="sidebar-menu-button"] {
   box-shadow: none;
 }
 .workspace-sources [data-slot="sidebar-menu-button"][data-active] {
-  background: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
-  border-color: var(--sidebar-border);
+  --tone-ink: color-mix(in oklab, var(--sidebar-foreground) 22%, var(--sidebar));
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    var(--sidebar);
+  color: var(--sidebar-foreground);
 }
-.source-selected-mark {
-  margin-left: auto;
-}
-.workspace-source-placeholder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 8px;
+.workspace-sources [data-slot="sidebar-menu-button"][data-active]:hover {
+  --tone-ink: color-mix(in oklab, var(--sidebar-foreground) 30%, var(--sidebar));
 }
 .workspace-source-empty {
   padding: 12px 8px;
@@ -1676,10 +2230,6 @@ h1 {
 :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"])
   .workspace-project
   [data-slot="select-icon"],
-:where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .source-selected-mark,
-:where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"])
-  .workspace-source-placeholder
-  > :last-child,
 :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .workspace-source-empty {
   display: none;
 }
@@ -1844,6 +2394,78 @@ html {
     padding-block: 4px;
   }
 }
+.query-draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--data);
+}
+/* Settings → Logs: key creation and the collapsible collector guide. */
+.log-settings {
+  margin-block: 24px;
+}
+.log-key-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) auto;
+  align-items: end;
+  gap: 12px;
+}
+.log-setup-guide {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  font-size: 13px;
+}
+.log-setup-guide summary {
+  color: var(--primary);
+  cursor: pointer;
+}
+.log-setup-guide summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.log-setup-guide h3 {
+  margin: 24px 0 10px;
+  font-weight: 600;
+}
+.log-setup-guide p {
+  color: var(--muted-foreground);
+  margin-block: 12px;
+}
+.log-setup-guide pre {
+  max-width: 100%;
+  padding: 16px;
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 767px) {
+  .log-key-form {
+    grid-template-columns: 1fr;
+  }
+}
+/* Full-screen workspace failure: the server could not load the project catalog. */
+.workspace-error {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px;
+  text-align: center;
+}
+.workspace-error > p {
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
 .display-settings {
   margin-bottom: 24px;
 }
@@ -1910,7 +2532,8 @@ html {
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: var(--card);
+  background: var(--surface-sheen);
+  box-shadow: var(--surface-highlight);
 }
 .metric-label {
   display: flex;
@@ -1944,16 +2567,12 @@ html {
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  background: var(--card);
+  background: var(--surface-sheen);
+  box-shadow: var(--surface-highlight);
 }
 .overview-grid .activity-widget {
   grid-column: 1 / -1;
   height: 430px;
-}
-.duration-explanation {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted-foreground);
 }
 .widget-header {
   display: flex;
@@ -2002,11 +2621,12 @@ html {
 }
 .widget-value {
   color: var(--heading);
+  font-family: var(--font-pixel);
   font-size: 32px;
-  font-weight: 600;
-  letter-spacing: -0.035em;
+  font-weight: 400;
+  font-synthesis-weight: none;
+  letter-spacing: 0;
   line-height: 1.15;
-  font-variant-numeric: tabular-nums;
 }
 .widget-measure-label {
   color: var(--muted-foreground);
@@ -2071,7 +2691,12 @@ html {
   flex: 1;
 }
 .widget-ranking .breakdown-head {
-  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 0;
+  padding-bottom: 10px;
+  background: var(--card);
 }
 .widget-ranking .breakdown-row {
   height: 30px;
@@ -2091,10 +2716,18 @@ html {
 .audience-bars .breakdown-head {
   display: none;
 }
-.audience-bars .breakdown-row {
+.audience-bars .breakdown-row,
+.outcomes-widget .breakdown-row,
+.duration-widget .breakdown-row {
   height: 30px;
   min-height: 30px;
+  flex-shrink: 0;
   margin-bottom: 4px;
+}
+/* Fixed-content reports never scroll; if narrow text wraps, the card grows instead. */
+.overview-widget:is(.outcomes-widget, .duration-widget, .audience-widget) {
+  height: auto;
+  min-height: 300px;
 }
 .widget-error {
   display: flex;
@@ -2154,15 +2787,10 @@ html {
   overscroll-behavior: contain;
   scrollbar-width: thin;
   padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--card);
-  box-shadow: var(--elevation-menu);
 }
 .date-period-item {
   min-height: 40px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
+  padding: 8px 8px 8px 12px;
   font-weight: 450;
   gap: 12px;
 }
@@ -2175,32 +2803,45 @@ html {
   width: 16px;
   height: 16px;
 }
+/* Shortcut keys are small physical caps: a lit top edge and a 2px lip below. */
 .date-period-item [data-slot="kbd"] {
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: 1px solid var(--input);
-  color: var(--muted-foreground);
-  font-weight: 400;
-  line-height: 1;
-}
-.date-period-item[data-checked] {
-  background: var(--selection);
-  color: var(--selection-foreground);
-}
-.date-period-item[data-highlighted] {
-  background: var(--surface-hover);
+  width: 22px;
+  height: 22px;
+  margin-bottom: 2px;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, var(--input));
+  border-radius: 6px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--surface-pressed) 85%, var(--foreground)) 0%,
+    var(--surface-hover) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    0 2px 0 var(--surface-inset);
   color: var(--foreground);
-}
-.date-period-item[data-checked][data-highlighted] {
-  background: var(--selection);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1;
 }
 .date-period-item:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.date-period-menu [data-slot="dropdown-menu-separator"] {
-  margin: 6px -6px;
+/* Named groups carry their own dotted leader; the separator before them is spacing only. */
+.date-period-menu .date-period-gap {
+  height: 0;
+  margin: 2px 0;
+  background: none;
+}
+.date-period-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.4;
 }
 .date-range-back {
   align-self: flex-start;
@@ -2294,17 +2935,21 @@ html {
   min-width: 0;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 90%, var(--foreground)) 0%,
+    var(--card) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 7%),
+    0 1px 2px rgb(0 0 0 / 35%);
 }
 .date-period-control[data-open] {
   border-color: var(--input);
 }
 .date-period-control .date-range-trigger {
   color: var(--foreground);
-}
-.date-period-control > button {
-  border-radius: var(--radius-md);
 }
 .date-period-arrow {
   flex-shrink: 0;
@@ -2383,4 +3028,22 @@ html {
 
 .metric-label {
   justify-content: flex-start;
+}
+
+/* Forced colors drop gradients and tones, so pills, segments, and the active page need real edges. */
+@media (forced-colors: active) {
+  :is([data-slot="button"], [data-slot$="-trigger"])[data-variant]:not([data-variant="link"]),
+  .date-period-control,
+  [data-slot="dialog-close"] {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+  :is(
+    [data-slot="toggle-group-item"][aria-pressed="true"],
+    [data-slot="sidebar-menu-button"][data-active]
+  ) {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
 }

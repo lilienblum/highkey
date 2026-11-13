@@ -1,3 +1,4 @@
+import { displayGroups, displayValue } from "@/lib/display-values";
 import { reportLink } from "@/lib/report-link";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -100,9 +101,10 @@ function ProductOverview() {
     measure: "count",
     group_by: "name",
   };
+  // Rolling ranges keep one scope while their end time advances; fixed ranges include their end.
   const scope = JSON.stringify([
     range.from,
-    search.from ? range.to : undefined,
+    search.from || search.snapshot ? range.to : undefined,
     sourceId,
     selectedFilter,
   ]);
@@ -218,7 +220,8 @@ function ProductOverview() {
             onClick={() => update({ filter: undefined })}
             aria-label="Remove filter"
           >
-            {selectedFilter.field.replace("property:", "")}: {String(selectedFilter.value)} ×
+            {selectedFilter.field.replace("property:", "")}:{" "}
+            {displayValue(selectedFilter.field, selectedFilter.value)} ×
           </Button>
           <Link
             to="/projects/$projectSlug/explore"
@@ -355,7 +358,7 @@ function ProductOverview() {
                   groups={
                     dimension === "source_id"
                       ? sourceGroups(breakdown.data?.groups ?? [], product.sources)
-                      : (breakdown.data?.groups ?? [])
+                      : displayGroups(breakdown.data?.groups ?? [], dimension)
                   }
                   total={breakdown.data?.summary.total}
                   drilldown={(group) => drilldown(dimension, group)}
@@ -487,9 +490,11 @@ function ProductOverview() {
             error={query.error}
             retry={refresh}
             footer={
-              hasDuration
-                ? `${durationMetric === "avg" ? `p95 · ${number(s?.p95_duration)} ms` : `Average · ${number(s?.avg_duration)} ms`}`
-                : "Only numeric duration_ms values are included"
+              !hasDuration
+                ? "Only numeric duration_ms values are included"
+                : durationMetric === "avg"
+                  ? "Among events reporting a numeric duration"
+                  : "95% of recorded durations were at or below this"
             }
           >
             <WidgetValue
@@ -509,11 +514,6 @@ function ProductOverview() {
                 (!hasDuration ? "No numeric durations received in this range." : undefined)
               }
             >
-              <p className="duration-explanation">
-                {durationMetric === "avg"
-                  ? "The average across all events reporting a numeric duration."
-                  : "95% of recorded durations were at or below this value."}
-              </p>
               <BreakdownRows
                 title="Measure"
                 unit="Milliseconds"

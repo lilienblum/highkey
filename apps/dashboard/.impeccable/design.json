@@ -603,16 +603,66 @@
           "oklch(83.57% 0.0899 81.64)",
           "oklch(95.00% 0.0899 81.64)"
         ]
+      },
+      "placeholder": {
+        "role": "neutral",
+        "displayName": "Placeholder",
+        "canonical": "#8f8b76"
+      },
+      "syntax-string": {
+        "role": "syntax",
+        "displayName": "Syntax string (springGreen)",
+        "canonical": "#98bb6c"
+      },
+      "syntax-number": {
+        "role": "syntax",
+        "displayName": "Syntax number (sakuraPink)",
+        "canonical": "#d27e99"
+      },
+      "syntax-constant": {
+        "role": "syntax",
+        "displayName": "Syntax boolean and null (surimiOrange)",
+        "canonical": "#ffa066"
+      },
+      "syntax-keyword": {
+        "role": "syntax",
+        "displayName": "Syntax keyword (oniViolet)",
+        "canonical": "#957fb8"
+      },
+      "syntax-function": {
+        "role": "syntax",
+        "displayName": "Syntax function (crystalBlue)",
+        "canonical": "#7e9cd8"
+      },
+      "syntax-type": {
+        "role": "syntax",
+        "displayName": "Syntax type (waveAqua2)",
+        "canonical": "#7aa89f"
+      },
+      "syntax-property": {
+        "role": "syntax",
+        "displayName": "Syntax key, property, variable (carpYellow)",
+        "canonical": "#e6c384"
+      },
+      "syntax-flag": {
+        "role": "syntax",
+        "displayName": "Syntax flag and tag (springBlue)",
+        "canonical": "#7fb4ca"
+      },
+      "syntax-punct": {
+        "role": "syntax",
+        "displayName": "Syntax punctuation (springViolet2)",
+        "canonical": "#9cabca"
       }
     },
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Metric values."
+        "purpose": "Metric values, set in Geist Pixel."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Page headings."
+        "purpose": "Page headings, set in Geist Pixel."
       },
       "title": {
         "displayName": "Title",
@@ -639,12 +689,22 @@
       {
         "name": "flat",
         "value": "none",
-        "purpose": "Cards, analytical fields, navigation, grouped choices, and unfilled actions."
+        "purpose": "Analytical fields, navigation, and ghost actions. Cards keep only an inset top highlight."
+      },
+      {
+        "name": "pill-drop",
+        "value": "0 0 0 1px color-mix(in oklab, var(--primary-active) 45%, #000), 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px -4px color-mix(in oklab, var(--primary) 45%, transparent)",
+        "purpose": "Filled pill actions, combined with an inset lit top edge (rgb(255 255 255 / 52%)) and shaded bottom edge."
+      },
+      {
+        "name": "card-highlight",
+        "value": "inset 0 1px 0 rgb(255 255 255 / 5%)",
+        "purpose": "Cards, Overview widgets, and metric tiles; paired with a sheen fading to the card surface within 64px."
       },
       {
         "name": "elevation-control",
         "value": "0 1px 2px rgb(0 0 0 / 16%)",
-        "purpose": "Filled primary and destructive actions."
+        "purpose": "Only for elements that borrow button classes without the Button slot, such as calendar navigation; Button pills use pill-drop."
       },
       {
         "name": "elevation-menu",
@@ -661,7 +721,17 @@
       {
         "name": "control-state",
         "value": "160ms ease-out",
-        "purpose": "Background, text, and border-color changes; no control translation."
+        "purpose": "Background, text, and border-color changes and tone-density swaps; no control translation."
+      },
+      {
+        "name": "dither-field",
+        "value": "12fps timer drift for 6s after arrival and while hovered; 600ms fade-in once drawn",
+        "purpose": "The sidebar identity field, the one ambient motion. Holds a still frame otherwise, pauses in background tabs, and never animates under reduced motion."
+      },
+      {
+        "name": "menu-open",
+        "value": "160ms cubic-bezier(0.23, 1, 0.32, 1) fade + scale from 0.96 at the trigger origin; 120ms fade for selects aligned over their trigger; 100ms fade out",
+        "purpose": "Menus, select popups, and popovers. Exits are faster than entries. Skipped under reduced motion."
       },
       {
         "name": "rail",
@@ -671,11 +741,11 @@
       {
         "name": "overlay",
         "value": "200ms",
-        "purpose": "Dialog transition duration."
+        "purpose": "Dialog transition duration. Exit animations hold their last frame (animation-fill-mode: forwards) until unmount."
       },
       {
         "name": "reduced-motion",
-        "value": "animation: none; transition: none; scroll-behavior: auto",
+        "value": "animation: none; transition: none; scroll-behavior: auto (elements and their ::before/::after)",
         "purpose": "Applied under prefers-reduced-motion: reduce."
       }
     ],
@@ -728,41 +798,41 @@
       "name": "Primary button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Shared Base UI action styling with stable geometry and one keyboard outline.",
+      "description": "Glossy or dark pill action with stable geometry, tone-density states, and one keyboard outline.",
       "html": "<button class=\"ds-button-primary\">Save changes</button>",
-      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:var(--radius-md);font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:var(--primary);color:var(--primary-foreground);box-shadow:var(--elevation-control);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-primary:hover{background:var(--primary-hover);}.ds-button-primary:active{background:var(--primary-active);}.ds-button-primary:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-primary:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-primary{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none;}}"
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:999px;font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:linear-gradient(180deg,color-mix(in oklab,var(--primary-hover) 72%,#fff) 0%,var(--primary) 46%,color-mix(in oklab,var(--primary-active) 88%,#000) 100%);color:var(--primary-foreground);box-shadow:0 0 0 1px color-mix(in oklab,var(--primary-active) 45%,#000),0 1px 2px rgb(0 0 0 / 40%),0 4px 12px -4px color-mix(in oklab,var(--primary) 45%,transparent),inset 0 1px 0 rgb(255 255 255 / 52%),inset 0 -1px 0 rgb(0 0 0 / 22%);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-primary:hover{background:linear-gradient(180deg,color-mix(in oklab,var(--primary-hover) 60%,#fff) 0%,var(--primary-hover) 50%,var(--primary) 100%);}.ds-button-primary:active{background:conic-gradient(at 2px 2px,#0000 75%,color-mix(in oklab,var(--primary-active) 70%,#000) 0) 0 0/4px 4px,linear-gradient(180deg,var(--primary-active) 0%,var(--primary) 100%);}.ds-button-primary:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-primary:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-primary{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none;}}"
     },
     {
       "name": "Destructive button",
       "kind": "button",
       "refersTo": "button-destructive",
-      "description": "Shared Base UI action styling with stable geometry and one keyboard outline.",
+      "description": "Glossy or dark pill action with stable geometry, tone-density states, and one keyboard outline.",
       "html": "<button class=\"ds-button-destructive\">Delete source</button>",
-      "css": ".ds-button-destructive{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:var(--radius-md);font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:var(--destructive);color:var(--destructive-foreground);box-shadow:var(--elevation-control);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-destructive:hover{background:color-mix(in oklab,var(--destructive) 90%,transparent);}.ds-button-destructive:active{background:color-mix(in oklab,var(--destructive) 80%,transparent);}.ds-button-destructive:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-destructive:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-destructive{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-destructive{transition:none;}}"
+      "css": ".ds-button-destructive{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:999px;font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:linear-gradient(180deg,color-mix(in oklab,var(--destructive) 58%,#fff) 0%,var(--destructive) 46%,color-mix(in oklab,var(--destructive) 72%,#000) 100%);color:var(--destructive-foreground);box-shadow:0 0 0 1px color-mix(in oklab,var(--destructive) 37%,#000),0 1px 2px rgb(0 0 0 / 40%),0 4px 12px -4px color-mix(in oklab,var(--destructive) 45%,transparent),inset 0 1px 0 rgb(255 255 255 / 52%),inset 0 -1px 0 rgb(0 0 0 / 22%);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-destructive:hover{background:linear-gradient(180deg,color-mix(in oklab,var(--destructive) 48%,#fff) 0%,color-mix(in oklab,var(--destructive) 80%,#fff) 50%,var(--destructive) 100%);}.ds-button-destructive:active{background:linear-gradient(180deg,color-mix(in oklab,var(--destructive) 82%,#000) 0%,var(--destructive) 100%);}.ds-button-destructive:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-destructive:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-destructive{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-destructive{transition:none;}}"
     },
     {
       "name": "Outline button",
       "kind": "button",
       "refersTo": "button-outline",
-      "description": "Shared Base UI action styling with stable geometry and one keyboard outline.",
+      "description": "Glossy or dark pill action with stable geometry, tone-density states, and one keyboard outline.",
       "html": "<button class=\"ds-button-outline\">Add source</button>",
-      "css": ".ds-button-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:var(--radius-md);font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;border:1px solid var(--input);background:transparent;color:var(--foreground);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-outline:hover{background:var(--surface-hover);}.ds-button-outline:active{background:var(--surface-pressed);}.ds-button-outline:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-outline:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-outline{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-outline{transition:none;}}"
+      "css": ".ds-button-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:999px;font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;border:1px solid transparent;background:linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);color:var(--foreground);box-shadow:0 0 0 1px var(--border),0 1px 2px rgb(0 0 0 / 35%),inset 0 1px 0 rgb(255 255 255 / 8%),inset 0 -1px 0 rgb(0 0 0 / 20%);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-outline:hover{background:repeating-conic-gradient(var(--surface-pressed) 0 25%,#0000 0 50%) 0 0/4px 4px,linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);}.ds-button-outline:active{background:conic-gradient(at 2px 2px,var(--surface-pressed) 75%,#0000 0) 0 0/4px 4px,linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);}.ds-button-outline:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-outline:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-outline{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-outline{transition:none;}}"
     },
     {
       "name": "Secondary button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Shared Base UI action styling with stable geometry and one keyboard outline.",
+      "description": "Glossy or dark pill action with stable geometry, tone-density states, and one keyboard outline.",
       "html": "<button class=\"ds-button-secondary\">Cancel</button>",
-      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:var(--radius-md);font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:var(--secondary);color:var(--secondary-foreground);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-secondary:hover{background:var(--surface-pressed);}.ds-button-secondary:active{background:var(--surface-inset);}.ds-button-secondary:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-secondary:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-secondary{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none;}}"
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:999px;font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);color:var(--foreground);box-shadow:0 0 0 1px var(--border),0 1px 2px rgb(0 0 0 / 35%),inset 0 1px 0 rgb(255 255 255 / 8%),inset 0 -1px 0 rgb(0 0 0 / 20%);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-secondary:hover{background:repeating-conic-gradient(var(--surface-pressed) 0 25%,#0000 0 50%) 0 0/4px 4px,linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);}.ds-button-secondary:active{background:conic-gradient(at 2px 2px,var(--surface-pressed) 75%,#0000 0) 0 0/4px 4px,linear-gradient(180deg,color-mix(in oklab,var(--surface-hover) 90%,var(--foreground)) 0%,var(--surface-hover) 55%,color-mix(in oklab,var(--surface-hover) 70%,var(--background)) 100%);}.ds-button-secondary:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-secondary:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-secondary{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none;}}"
     },
     {
       "name": "Ghost button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "Shared Base UI action styling with stable geometry and one keyboard outline.",
+      "description": "Glossy or dark pill action with stable geometry, tone-density states, and one keyboard outline.",
       "html": "<button class=\"ds-button-ghost\">Refresh</button>",
-      "css": ".ds-button-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:var(--radius-md);font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:transparent;color:var(--muted-foreground);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-ghost:hover{background:var(--surface-hover);color:var(--foreground);}.ds-button-ghost:active{background:var(--surface-pressed);}.ds-button-ghost:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-ghost:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-ghost{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-ghost{transition:none;}}"
+      "css": ".ds-button-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:0;border-radius:999px;font:550 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;background:transparent;color:var(--muted-foreground);transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-button-ghost:hover{background:repeating-conic-gradient(var(--surface-pressed) 0 25%,#0000 0 50%) 0 0/4px 4px;color:var(--foreground);}.ds-button-ghost:active{background:conic-gradient(at 2px 2px,var(--surface-pressed) 75%,#0000 0) 0 0/4px 4px;}.ds-button-ghost:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}.ds-button-ghost:disabled{opacity:.5;pointer-events:none;}@media(max-width:640px){.ds-button-ghost{min-height:40px;}}@media(prefers-reduced-motion:reduce){.ds-button-ghost{transition:none;}}"
     },
     {
       "name": "Link button",
@@ -784,9 +854,9 @@
       "name": "Workspace navigation",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "Flat destination navigation with warm orange text on a tinted rail.",
+      "description": "Flat destination navigation with warm orange text on a dithered orange tone.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Workspace\"><a class=\"ds-nav-item\" href=\"#overview\" aria-current=\"page\">Overview</a><a class=\"ds-nav-item\" href=\"#explore\">Explore</a><a class=\"ds-nav-item\" href=\"#settings\">Settings</a></nav>",
-      "css": ".ds-nav{display:grid;gap:4px;width:208px;padding:8px;background:var(--sidebar);}.ds-nav-item{display:flex;align-items:center;height:36px;padding:8px;border:1px solid transparent;border-radius:var(--radius-md);color:var(--sidebar-foreground);text-decoration:none;font:400 14px/20px \"Geist Variable\",sans-serif;transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-nav-item:hover{background:var(--sidebar-accent);}.ds-nav-item[aria-current=page]{background:color-mix(in oklab,var(--primary) 12%,var(--sidebar));color:var(--sidebar-primary);font-weight:650;}.ds-nav-item[aria-current=page]:hover{background:color-mix(in oklab,var(--primary) 17%,var(--sidebar));}.ds-nav-item:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}"
+      "css": ".ds-nav{display:grid;gap:4px;width:208px;padding:8px;background:var(--sidebar);}.ds-nav-item{display:flex;align-items:center;height:36px;padding:8px;border:1px solid transparent;border-radius:var(--radius-md);color:var(--sidebar-foreground);text-decoration:none;font:400 14px/20px \"Geist Variable\",sans-serif;transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-nav-item:hover{background:var(--sidebar-accent);}.ds-nav-item[aria-current=page]{background:conic-gradient(at 2px 2px,#0000 75%,color-mix(in oklab,var(--primary) 30%,var(--sidebar)) 0) 0 0/4px 4px,var(--sidebar);color:var(--sidebar-primary);font-weight:650;}.ds-nav-item[aria-current=page]:hover{background:conic-gradient(at 2px 2px,#0000 75%,color-mix(in oklab,var(--primary) 38%,var(--sidebar)) 0) 0 0/4px 4px,var(--sidebar);}.ds-nav-item:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}"
     },
     {
       "name": "Source badge",
@@ -800,17 +870,17 @@
       "name": "Contained card",
       "kind": "card",
       "refersTo": "card-contained",
-      "description": "A bounded editing region; no resting shadow.",
+      "description": "A bounded editing region with a faint lit top edge; no drop shadow.",
       "html": "<section class=\"ds-card\"><h2 class=\"ds-card-title\">Product details</h2><p class=\"ds-card-description\">Give this product a name and set its defaults.</p><div class=\"ds-card-content\">Product settings</div></section>",
-      "css": ".ds-card{padding:20px 24px;border:1px solid var(--border);border-radius:var(--radius-xl);background:var(--card);color:var(--card-foreground);box-shadow:none;font-family:\"Geist Variable\",sans-serif;font-size:14px;}.ds-card-title{margin:0;font-size:15px;font-weight:650;line-height:1.5;letter-spacing:-.01em;}.ds-card-description{margin:3px 0 0;color:var(--muted-foreground);font-size:12px;line-height:1.6;}.ds-card-content{margin-top:16px;}"
+      "css": ".ds-card{padding:20px 24px;border:1px solid var(--border);border-radius:var(--radius-xl);background:linear-gradient(180deg,color-mix(in oklab,var(--card) 93%,var(--foreground)) 0,var(--card) 64px);box-shadow:inset 0 1px 0 rgb(255 255 255 / 5%);color:var(--card-foreground);font-family:\"Geist Variable\",sans-serif;font-size:14px;}.ds-card-title{margin:0;font-size:15px;font-weight:650;line-height:1.5;letter-spacing:-.01em;}.ds-card-description{margin:3px 0 0;color:var(--muted-foreground);font-size:12px;line-height:1.6;}.ds-card-content{margin-top:16px;}"
     },
     {
       "name": "Overview widget",
       "kind": "card",
       "refersTo": "overview-widget",
-      "description": "A flat rectangular report with a steady header, flexible body, and reserved footer.",
+      "description": "A near-flat report with a lit top edge, a steady header, flexible body, reserved footer, and Geist Pixel measurement.",
       "html": "<section class=\"ds-overview-widget\"><h2 class=\"ds-widget-title\">Activity over time</h2><div class=\"ds-widget-body\"><strong class=\"ds-widget-value\">1,248</strong><span class=\"ds-widget-label\">Events</span></div><footer class=\"ds-widget-footer\">Example measurement</footer></section>",
-      "css": ".ds-overview-widget{display:flex;flex-direction:column;gap:16px;width:320px;height:300px;padding:20px;border:1px solid var(--border);border-radius:var(--radius-xl);background:var(--card);color:var(--foreground);font-family:\"Geist Variable\",sans-serif;}.ds-widget-title{margin:0;min-height:32px;font-size:14px;font-weight:600;letter-spacing:-.01em;}.ds-widget-body{display:flex;flex:1;flex-direction:column;gap:10px;min-height:0;}.ds-widget-value{font-size:32px;font-weight:600;letter-spacing:-.035em;line-height:1.15;font-variant-numeric:tabular-nums;}.ds-widget-label{font-size:12px;color:var(--muted-foreground);}.ds-widget-footer{min-height:24px;font-size:11px;line-height:1.5;color:var(--muted-foreground);}"
+      "css": ".ds-overview-widget{display:flex;flex-direction:column;gap:16px;width:320px;height:300px;padding:20px;border:1px solid var(--border);border-radius:var(--radius-xl);background:linear-gradient(180deg,color-mix(in oklab,var(--card) 93%,var(--foreground)) 0,var(--card) 64px);box-shadow:inset 0 1px 0 rgb(255 255 255 / 5%);color:var(--foreground);font-family:\"Geist Variable\",sans-serif;}.ds-widget-title{margin:0;min-height:32px;font-size:14px;font-weight:600;letter-spacing:-.01em;}.ds-widget-body{display:flex;flex:1;flex-direction:column;gap:10px;min-height:0;}.ds-widget-value{font-family:\"Geist Pixel Variable\",\"Geist Variable\",sans-serif;font-size:32px;font-weight:400;letter-spacing:0;line-height:1.15;font-variant-numeric:tabular-nums;}.ds-widget-label{font-size:12px;color:var(--muted-foreground);}.ds-widget-footer{min-height:24px;font-size:11px;line-height:1.5;color:var(--muted-foreground);}"
     },
     {
       "name": "Select trigger",
@@ -824,9 +894,9 @@
       "name": "Segmented choices",
       "kind": "custom",
       "refersTo": "segmented-group",
-      "description": "One frame groups related measure choices; selected text is warm yellow.",
+      "description": "One inset pill frame groups related measure choices; the chosen option is a lit sumi pill with warm-yellow text.",
       "html": "<div class=\"ds-segments\" role=\"group\" aria-label=\"Duration measure\"><button class=\"ds-segment\" aria-pressed=\"true\">Average</button><button class=\"ds-segment\" aria-pressed=\"false\">p95</button></div>",
-      "css": ".ds-segments{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface-inset);}.ds-segment{height:28px;min-width:28px;padding:0 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted-foreground);font:500 12px/18px \"Geist Variable\",sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-segment:hover{background:var(--surface-hover);color:var(--foreground);}.ds-segment[aria-pressed=true]{background:var(--selection);color:var(--selection-foreground);}.ds-segment:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-segment{transition:none;}}"
+      "css": ".ds-segments{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:999px;background:var(--surface-inset);box-shadow:inset 0 1px 2px rgb(0 0 0 / 30%);}.ds-segment{height:28px;min-width:28px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--muted-foreground);font:500 12px/18px \"Geist Variable\",sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-segment:hover{background:var(--surface-hover);color:var(--foreground);}.ds-segment[aria-pressed=true]{background:linear-gradient(180deg,color-mix(in oklab,var(--selection) 82%,var(--foreground)) 0%,var(--selection) 55%,color-mix(in oklab,var(--selection) 85%,var(--background)) 100%);color:var(--selection-foreground);box-shadow:inset 0 1px 0 rgb(255 255 255 / 10%),0 1px 2px rgb(0 0 0 / 40%);}.ds-segment:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-segment{transition:none;}}"
     },
     {
       "name": "Line tabs",
@@ -835,16 +905,24 @@
       "description": "Flat tabs with one shared seam and an orange active underline.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Breakdown\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Events</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Properties</button></div>",
       "css": ".ds-tabs{display:inline-flex;gap:20px;height:36px;border-bottom:1px solid var(--border);}.ds-tab{position:relative;height:100%;padding:4px 0;border:0;border-radius:0;background:transparent;color:var(--muted-foreground);font:500 14px/20px \"Geist Variable\",sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out;}.ds-tab:hover{color:var(--foreground);}.ds-tab[aria-selected=true]{color:var(--primary);}.ds-tab[aria-selected=true]::after{content:\"\";position:absolute;inset-inline:0;bottom:-1px;height:2px;background:var(--primary);}.ds-tab:focus-visible{outline:2px solid var(--ring);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-tab{transition:none;}}"
+    },
+    {
+      "name": "Log stream row",
+      "kind": "custom",
+      "description": "Dense evidence with tabular time, labeled severity, service context, and a literal message; mobile rows place time and severity above a full-width two-line message. Full context opens in inspection. Hover and keyboard focus lift the row with a 25% dither tone in darker ink.",
+      "html": "<button class=\"ds-log-row\" aria-label=\"Inspect example log\"><time class=\"ds-log-time\"><span class=\"ds-log-date\">2026-11-13T</span>16:45:52.793</time><span class=\"ds-log-level\">INFO</span><span class=\"ds-log-service\">api</span><span class=\"ds-log-message\">Example: request completed</span></button>",
+      "css": ".ds-log-row{display:grid;grid-template-columns:190px 65px 125px minmax(0,1fr);align-items:center;gap:14px;width:100%;min-height:35px;padding:0 12px;text-align:left;border:0;border-bottom:1px solid color-mix(in oklab,var(--border) 48%,transparent);background:transparent;color:var(--foreground);font:400 12px/1.5 \"Geist Variable\",sans-serif;cursor:pointer;}.ds-log-row:hover{background:var(--surface-hover);}.ds-log-row:focus-visible{outline:2px solid var(--ring);outline-offset:-2px;background:var(--surface-hover);}.ds-log-time{color:var(--muted-foreground);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap;}.ds-log-level{color:var(--data-tertiary);font:400 10px/1.5 ui-monospace,monospace;letter-spacing:.015em;}.ds-log-service{color:var(--muted-foreground);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.ds-log-message{font:400 11.5px/1.5 ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:pre;}@media(max-width:900px){.ds-log-row{grid-template-columns:155px 54px 90px minmax(0,1fr);gap:10px;}}@media(max-width:600px){.ds-log-row{grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:10px 8px;min-height:60px;}.ds-log-service,.ds-log-date{display:none;}.ds-log-time,.ds-log-level{font-size:11px;}.ds-log-message{grid-column:1/-1;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere;font-size:12px;line-height:1.6;}}"
     }
   ],
   "narrative": {
     "northStar": "Kanagawa Wave",
-    "overview": "Piko is a compact measurement tool using the user-selected Kanagawa palette. Sumi-ink surfaces and warm Fuji text frame Surimi Orange actions, Carp Yellow measurements, violet/aqua source categories, and green outcomes. Self-hosted Geist, softly squared controls, inset fields, single-frame segmented choices, and the upright three-bar mark give the interface its precise, quiet character. Accessible shadcn Base UI primitives and Hugeicons provide the shared component language.\n\nAnalytical regions use flat surfaces, fine seams, aligned labels, and tabular values. Overview presents small square metrics, one wide activity chart, and paired reports; Explore retains its open analytical field. Editing and inspection use contained surfaces where boundaries clarify the task. Density serves reading: supporting context remains visible, and loading states preserve the geometry of the result they will replace. One palette is present in server-rendered HTML and CSS. There is no appearance selector, theme preference, or system-theme listener.",
+    "overview": "Piko is a compact measurement tool using the user-selected Kanagawa palette. Sumi-ink surfaces and warm Fuji text frame Surimi Orange actions, Carp Yellow measurements, violet/aqua source categories, and green outcomes. Self-hosted Geist with Geist Pixel measurements, glossy pill controls, inset fields, single-frame segmented choices, ordered-dither screen tones, and the upright three-bar mark give the interface a precise character with a printed, 1-bit texture. Accessible shadcn Base UI primitives and Hugeicons provide the shared component language.\n\nAnalytical regions use flat surfaces, fine seams, aligned labels, and tabular values. Overview presents small square metrics, one wide activity chart, and paired reports; Explore retains its open analytical field. Editing and inspection use contained surfaces where boundaries clarify the task. Density serves reading: supporting context remains visible, and loading states preserve the geometry of the result they will replace. One palette is present in server-rendered HTML and CSS. There is no appearance selector, theme preference, or system-theme listener.",
     "keyCharacteristics": [
       "Sumi-ink surfaces, warm text, orange actions, and yellow/violet/aqua data accents.",
-      "Geist typography with restrained headings and prominent measurements.",
+      "Geist typography: Geist for interface text, Geist Mono for literal code and identifiers, and Geist Pixel for page titles and measurements.",
+      "Ordered-dither (Bayer 4×4, 2px pixel) screen tones wherever the interface would otherwise use a translucent tint.",
       "Flat analytical fields, small square metrics, and rectangular reports; contained forms and inspection.",
-      "Softly squared controls, inset fields, warm selection, one focus outline, and stable geometry."
+      "Glossy pill actions and segmented choices, inset fields, one focus outline, and stable geometry."
     ],
     "rules": [
       {
@@ -854,12 +932,17 @@
       },
       {
         "name": "The Value Alignment Rule",
-        "body": "Use tabular numerals for measurements, percentages, durations, and times that readers compare across rows.",
+        "body": "Use tabular numerals for measurements, percentages, durations, and times that readers compare across rows. Geist Pixel has proportional digits only, so it is reserved for single headline values; anything compared down a column stays in Geist with tabular numerals.",
         "section": "typography"
       },
       {
         "name": "The Shared Ground Rule",
-        "body": "Keep analytical regions flat and aligned. Fine boundaries group related measurements; reserve soft elevation for filled actions and temporary overlays.",
+        "body": "Keep analytical regions flat and aligned. Fine boundaries group related measurements; reserve gloss for actions and soft elevation for temporary overlays.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Screen Tone Rule",
+        "body": "Where the interface would use a translucent tint, it uses an ordered-dither tone at the matching density instead. Dither is the only texture: don't combine it with blur or grain. Behind text, a tone is drawn in an ink darker than the face beneath it, so labels keep at least 4.5:1 on every pixel; lighter inks stay at 25% or sparser. The one exception is the modal backdrop, which puts a sparse dot screen over a translucent dim so a full-screen pattern never flickers. Under forced colors, controls gain a system outline and selected segments and the active page use the system highlight.",
         "section": "elevation"
       }
     ],
@@ -867,7 +950,8 @@
       "Do reuse semantic theme variables to preserve one consistent palette from the first server paint.",
       "Do preserve the shared upright three-bar logo/favicon, Geist, and the Kanagawa sumi-ink/orange/yellow relationship.",
       "Do align measurements and use fine dividers to connect analytical regions.",
-      "Do use inset fields, single-frame segmented choices, and semantic hover/pressed/selection states.",
+      "Do use inset fields, pill segmented choices, and semantic hover/pressed/selection states.",
+      "Do express tints, fills, and state density with the shared ordered-dither tones at 2px pixels, keeping data marks exact.",
       "Do keep visible labels, one ring-colored focus outline, readable metadata, and touch-sized controls on narrow screens.",
       "Do preserve chart and table geometry while data loads or refreshes.",
       "Do use TanStack charts, actual event identity kinds, and truthful empty or error states.",
@@ -876,8 +960,8 @@
     "donts": [
       "Don't return to a corporate blue card grid or a black neon terminal identity.",
       "Don't wrap every measurement in a raised, rounded card.",
-      "Don't reintroduce beveled button faces, split-arrow compartments, individual segment frames, or filled orange destination navigation.",
-      "Don't add decorative botanical imagery, faux paper textures, or ornamental glow.",
+      "Don't reintroduce split-arrow compartments, individual segment frames, or filled orange destination navigation. Gloss belongs to pill actions only.",
+      "Don't add decorative botanical imagery, faux paper textures, grain, blur, or ornamental glow; dither is the only texture.",
       "Don't replace useful event context with decoration or hide an actual loading failure behind a skeleton.",
       "Don't turn either the Explore composition or the Overview report composition into a mandatory layout for every page."
     ]

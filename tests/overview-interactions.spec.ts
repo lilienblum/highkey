@@ -18,6 +18,8 @@ test("live identity widget, in-place filters, and independent external row links
   const project = await post("/products", {
     name: `Plausible flow ${Date.now()}`,
     retention_days: 365,
+    // A nonstandard port is never fetched for a favicon, so the fixture needs no external network.
+    website_url: "https://example.com:8443",
   });
   const { key } = await post(`/products/${project.id}/keys`, { label: "Flow test" });
   const events = [
@@ -41,15 +43,6 @@ test("live identity widget, in-place filters, and independent external row links
   });
   expect(ingested.ok).toBe(true);
   await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
-  await page.route("**/api/products", async (route) => {
-    const response = await route.fetch();
-    const products = await response.json();
-    await route.fulfill({
-      json: products.map((p: { id: string }) =>
-        p.id === project.id ? { ...p, website_url: "https://example.com" } : p,
-      ),
-    });
-  });
   await page.goto(`/projects/${project.slug}?source=all&days=30`);
   await expect(page.locator(".live-metric .widget-value")).toHaveText("2");
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("5");
@@ -57,7 +50,7 @@ test("live identity widget, in-place filters, and independent external row links
   await page.getByRole("option", { name: "Pages", exact: true }).click();
   const filter = page.getByRole("link", { name: "Filter by /docs", exact: true });
   const external = page.getByRole("link", { name: "Open /docs in a new tab", exact: true });
-  await expect(external).toHaveAttribute("href", "https://example.com/docs");
+  await expect(external).toHaveAttribute("href", "https://example.com:8443/docs");
   await expect(external).toHaveAttribute("target", "_blank");
   await expect(external).toHaveAttribute("rel", "noopener noreferrer");
   await expect(external).toHaveCSS("opacity", "0");
@@ -66,13 +59,13 @@ test("live identity widget, in-place filters, and independent external row links
   await page.mouse.move(0, 0);
   await external.focus();
   await expect(external).toHaveCSS("opacity", "1");
-  await context.route("https://example.com/docs", (route) =>
+  await context.route("https://example.com:8443/docs", (route) =>
     route.fulfill({ body: "Example documentation" }),
   );
   const popup = page.waitForEvent("popup");
   await external.click();
   const opened = await popup;
-  await expect(opened).toHaveURL("https://example.com/docs");
+  await expect(opened).toHaveURL("https://example.com:8443/docs");
   await opened.close();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("5");
   await filter.click();

@@ -59,16 +59,22 @@ export function useAnalyticsPending(pending: boolean) {
     return () => setAnalyticsPending(false);
   }, [pending, setAnalyticsPending]);
 }
-export function AppShell() {
+export function AppShell({
+  initialProducts,
+  serverNow,
+}: {
+  initialProducts: Product[];
+  serverNow: number;
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [analyticsPending, setAnalyticsPending] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [selected, setSelected] = useState("");
   const [sourceSelection, setSourceSelection] = useState<Record<string, string>>({});
   const [savedDays, setSavedDays] = useState<7 | 30 | 90>(7);
-  const [now, setNow] = useState(Date.now());
+  // Starting from the server's clock keeps rolling ranges identical through hydration.
+  const [now, setNow] = useState(serverNow);
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshBackground = useCallback(() => {
     setNow(Date.now());
@@ -91,29 +97,19 @@ export function AppShell() {
     const saved = Number(readPreference("piko:days"));
     if ([7, 30, 90].includes(saved)) setSavedDays(saved as 7 | 30 | 90);
     setPreferencesReady(true);
-    const controller = new AbortController();
-    api<Product[]>("/products", "GET", undefined, controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) {
-          setProducts(result);
-          setSourceSelection(
-            Object.fromEntries(
-              result.map((product) => [
-                product.id,
-                readPreference(`piko:source:${product.id}`) ?? "",
-              ]),
-            ),
-          );
-        }
-      })
-      .catch((e) => {
-        if (e.name !== "AbortError") setError(e.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
   }, []);
+  // The catalog arrives with the server render and later refreshes through reload(); only the
+  // browser-saved source choices need restoring here. A workspace retry remounts the shell.
+  useEffect(() => {
+    setSourceSelection(
+      Object.fromEntries(
+        initialProducts.map((product) => [
+          product.id,
+          readPreference(`piko:source:${product.id}`) ?? "",
+        ]),
+      ),
+    );
+  }, [initialProducts]);
   useLayoutEffect(() => {
     if (preferencesReady) delete document.documentElement.dataset.sidebarInitial;
   }, [preferencesReady]);
@@ -157,16 +153,14 @@ export function AppShell() {
   const sourceId = source?.id;
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
-    !loading &&
-    (search.invalidWorkspace ||
-      (requestedProject && !product) ||
-      (product && drilldown?.productId && product.id !== drilldown.productId) ||
-      (!drilldown && search.source && missingSource));
+    search.invalidWorkspace ||
+    (requestedProject && !product) ||
+    (product && drilldown?.productId && product.id !== drilldown.productId) ||
+    (!drilldown && search.source && missingSource);
   const resolvingProject =
     !!product && !projectSlug && !selectionError && !(drilldown && missingSource);
   useEffect(() => {
-    if (!preferencesReady || loading || !product || selectionError || (drilldown && missingSource))
-      return;
+    if (!preferencesReady || !product || selectionError || (drilldown && missingSource)) return;
     savePreference("piko:product", product.id);
     savePreference("piko:days", String(days));
     savePreference(`piko:source:${product.id}`, sourceId ?? "");
@@ -189,7 +183,6 @@ export function AppShell() {
       });
   }, [
     preferencesReady,
-    loading,
     product,
     selectionError,
     drilldown,
@@ -234,18 +227,16 @@ export function AppShell() {
     refreshBackground();
     if (error) void reload().catch((e) => setError(e.message));
   };
-  const label = view === "/explore" ? "Explore" : view === "/settings" ? "Settings" : "Overview";
+  const label = (
+    { "/": "Overview", "/explore": "Explore", "/logs": "Logs", "/settings": "Settings" } as const
+  )[view];
   const projectPicker = (
     <ValueSelect
       label="Select project"
       value={product?.id ?? ""}
       disabled={!products.length}
       placeholder={
-        loading
-          ? "Loading projects…"
-          : drilldown || requestedProject || selectionError
-            ? "Project unavailable"
-            : "No projects yet"
+        drilldown || requestedProject || selectionError ? "Project unavailable" : "No projects yet"
       }
       className="product-select"
       contentClassName="min-w-56 max-w-[calc(100vw-32px)]"
@@ -282,13 +273,17 @@ export function AppShell() {
           savePreference("piko:sidebar", open ? "expanded" : "collapsed");
         }}
         style={{ "--sidebar-width": "15rem", "--sidebar-width-icon": "3.5rem" } as CSSProperties}
+        // Server-rendered pages are visible before hydration; until then they ignore input, so an
+        // early click or form submit cannot half-work or reload the page. aria-disabled also makes
+        // automation (which can set values without focus) wait for the interactive page.
+        inert={!preferencesReady}
+        aria-disabled={preferencesReady ? undefined : true}
       >
         <WorkspaceSidebar
           path={view}
           product={product}
           sourceId={sourceId}
           picker={projectPicker}
-          loading={loading}
           navigationReady={preferencesReady}
           onSourceChange={(id) => {
             if (!product) return;
@@ -322,20 +317,20 @@ export function AppShell() {
               search.to,
               view,
             ])}
-            busy={loading || resolvingProject || analyticsPending}
+            busy={resolvingProject || analyticsPending}
             onRefresh={refreshBackground}
           />
           <div
             className="page-content"
             data-page={label.toLowerCase()}
-            aria-busy={loading || resolvingProject || analyticsPending}
+            aria-busy={resolvingProject || analyticsPending}
           >
             <div className="workspace-toolbar-navigation">
               <SidebarTrigger disabled={!preferencesReady} />
               <div className="mobile-project-picker">{projectPicker}</div>
               <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
             </div>
-            {view !== "/settings" && (
+            {view !== "/settings" && view !== "/logs" && (
               <div className="workspace-toolbar">
                 <div className="workspace-toolbar-actions">
                   <DateRangePicker
@@ -383,7 +378,7 @@ export function AppShell() {
               </div>
             )}
             {error && <ErrorState message={error} retry={refresh} />}
-            {loading || resolvingProject ? (
+            {resolvingProject ? (
               <>
                 <PageHeader title={label} description="Your project analytics" />
                 <PageLoading label="Loading workspace" />

@@ -36,14 +36,17 @@ test("project icons load only from Piko and failed images fall back without shif
   });
   const project = await response.json();
   await page.addInitScript((id) => localStorage.setItem("piko:product", id), project.id);
-  // The real download/cache boundary is covered by Rust tests; UI fixtures avoid external network dependencies.
+  // The real download/cache boundary is covered by Rust tests. The first catalog renders on the
+  // server; the refresh after each Settings save comes from the browser, so it carries the fixture.
+  let iconVersion = "cached-test-icon";
   await page.route("**/api/products", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
     const response = await route.fetch();
     const products = await response.json();
     await route.fulfill({
       json: products.map((p: { id: string }) =>
         p.id === project.id
-          ? { ...p, website_url: "https://example.com", favicon_version: "cached-test-icon" }
+          ? { ...p, website_url: "https://example.com", favicon_version: iconVersion }
           : p,
       ),
     });
@@ -66,6 +69,8 @@ test("project icons load only from Piko and failed images fall back without shif
       remote.push(request.url());
   });
   await page.goto("/settings");
+  const save = page.getByRole("button", { name: "Save changes", exact: true });
+  await save.click();
   const picker = page.getByRole("combobox", { name: "Select project", exact: true }).first();
   const image = picker.locator("img");
   await expect(image).toBeVisible();
@@ -77,7 +82,8 @@ test("project icons load only from Piko and failed images fall back without shif
   ).toBeVisible();
   await page.keyboard.press("Escape");
   fail = true;
-  await page.reload();
+  iconVersion = "cached-test-icon-2";
+  await save.click();
   await expect(picker).toContainText(project.name);
   await expect(picker.locator("img")).toHaveCount(0);
   const after = await picker.boundingBox();

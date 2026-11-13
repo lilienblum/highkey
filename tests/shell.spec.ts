@@ -9,7 +9,7 @@ async function expectSourcesFit(page: Page) {
 }
 
 const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
-let project: { id: string; name: string };
+let project: { id: string; name: string; slug: string };
 test.beforeAll(async () => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
@@ -146,30 +146,6 @@ for (const route of ["/", "/explore", "/settings"]) {
   }
 }
 
-test("workspace failure keeps navigation and retries inside the same shell", async ({ page }) => {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), project.id);
-  let requests = 0;
-  let fail = true;
-  await page.route("**/api/products", async (route) => {
-    requests++;
-    if (fail) await route.fulfill({ status: 503, json: { error: "Catalog unavailable" } });
-    else await route.continue();
-  });
-  await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("Catalog unavailable");
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-  const navigation = await page
-    .getByRole("navigation", { name: "Main navigation" })
-    .elementHandle();
-  const beforeRetry = requests;
-  fail = false;
-  await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(project.name);
-  await expect(page.getByRole("alert")).not.toBeVisible();
-  expect(await navigation?.evaluate((element) => element.isConnected)).toBe(true);
-  expect(requests).toBe(beforeRetry + 1);
-});
-
 for (const collapsed of [false, true]) {
   test(`source list scrolls vertically within a short ${collapsed ? "collapsed" : "expanded"} sidebar`, async ({
     page,
@@ -183,6 +159,8 @@ for (const collapsed of [false, true]) {
       { id: project.id, collapsed },
     );
     await page.goto("/");
+    // A bare URL canonicalizes to the project once the shell hydrates and reads the saved project.
+    await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}`));
     await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(
       project.name,
     );

@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { number, type EventRow, type Properties } from "@/lib/api";
+import { highlight, TypedValue } from "@/lib/highlight";
 import { ErrorState } from "./shared";
 import { ValueSelect } from "./value-select";
 import { useWorkspace } from "./app-shell";
@@ -593,7 +594,9 @@ function EventInspector({
                     </Button>
                   </div>
                 </div>
-                <pre>{JSON.stringify(value)}</pre>
+                <pre>
+                  <TypedValue value={value} />
+                </pre>
               </div>
             ))}
           </div>
@@ -656,7 +659,9 @@ function EventInspector({
             Copy JSON
           </Button>
         </div>
-        <pre className="inspector-json">{JSON.stringify(event, null, 2)}</pre>
+        <pre className="inspector-json">
+          <code>{highlight(JSON.stringify(event, null, 2), "json")}</code>
+        </pre>
       </TabsContent>
     </Tabs>
   );

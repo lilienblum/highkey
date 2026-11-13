@@ -58,6 +58,16 @@ declare module "tako.sh" {
    */
   export interface TakoStorages {}
 
+  /**
+   * Project-specific channel metadata discovered from `<app_root>/channels/`.
+   *
+   * Used by `tako.sh/client` and `tako.sh/react` to type route params, messages, and transports.
+   */
+  export interface TakoChannels {
+    /** Channel `"analytics-changes"` route params, message metadata, and transport. */
+    "analytics-changes": import("tako.sh").InferChannel<typeof import("./channels/analytics-changes").default>;
+  }
+
 }
 
 interface TakoUserEnv {}

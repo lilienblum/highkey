@@ -29,6 +29,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { ValueSelect } from "./value-select";
+import { TimeZoneSelect } from "./time-zone-select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -41,10 +42,12 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { api, type Product } from "@/lib/api";
+import { highlight } from "@/lib/highlight";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
+import { LogSettings } from "./log-settings";
 type KeyInfo = {
   allowed_origins: string[];
   source_id: string;
@@ -116,7 +119,7 @@ function ProductFields({
   );
 }
 export function Settings() {
-  const { product, reload } = useWorkspace();
+  const { product, reload, sourceId } = useWorkspace();
   const { timeZone, setTimeZone, dateShortcuts, setDateShortcuts } = useDisplayPreferences();
   const timeZones = Array.from(new Set(["UTC", timeZone, ...Intl.supportedValuesOf("timeZone")]));
   const [open, setOpen] = useState(false);
@@ -206,16 +209,16 @@ export function Settings() {
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="event-timezone">Event timezone</FieldLabel>
-              <ValueSelect
+              <TimeZoneSelect
                 id="event-timezone"
                 label="Event timezone"
                 value={timeZone}
+                zones={timeZones}
                 onValueChange={setTimeZone}
-                options={timeZones.map((zone) => [zone, zone.replaceAll("_", " ")])}
               />
               <FieldDescription>
-                Used for event times and inspection. Charts and date ranges use UTC calendar
-                buckets; stored timestamps and exports remain UTC.
+                Used for every displayed time: event and log rows, inspectors, and log volume.
+                Charts and date ranges still use UTC calendar buckets; raw JSON stays UTC.
               </FieldDescription>
             </Field>
             <Field orientation="horizontal">
@@ -237,7 +240,10 @@ export function Settings() {
         </CardContent>
       </Card>
       {product ? (
-        <ProductSettings key={product.id} product={product} />
+        <>
+          <ProductSettings key={product.id} product={product} />
+          <LogSettings key={`logs-${product.id}`} product={product} sourceId={sourceId} />
+        </>
       ) : (
         <Alert>
           <AlertTitle>Create your first project</AlertTitle>
@@ -450,7 +456,7 @@ function ProductSettings({ product }: { product: Product }) {
                         {product.sources?.find((source) => source.id === k.source_id)?.name ??
                           "Initial source"}
                       </span>
-                      <span className="quiet break-all">
+                      <span className="quiet [overflow-wrap:anywhere]">
                         {k.allowed_origins?.length
                           ? k.allowed_origins.join(", ")
                           : "Any origin · CLI and mobile allowed"}
@@ -629,7 +635,18 @@ function ProductSettings({ product }: { product: Product }) {
                 </Button>
               </div>
               <pre className="integration-code">
-                <code>{snippet}</code>
+                <code>
+                  {highlight(
+                    snippet,
+                    integration === "browser"
+                      ? "html"
+                      : integration === "http"
+                        ? "http"
+                        : integration === "typescript"
+                          ? "js"
+                          : "shell",
+                  )}
+                </code>
               </pre>
               <p className="quiet">
                 {integration === "browser"

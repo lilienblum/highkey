@@ -1,3 +1,4 @@
+import { displayTimestamp } from "../apps/dashboard/src/lib/display-time";
 import { expect, test, type Page } from "@playwright/test";
 const apiUrl = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
 const dashboard = process.env.PIKO_DASHBOARD_URL ?? "http://127.0.0.1:3000";
@@ -163,7 +164,7 @@ test("create product, edit retention, create and revoke a key", async ({ page })
   await dialog.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByLabel("Project name")).toHaveValue(name);
-  await page.getByLabel("Retention (days)").fill("14");
+  await page.getByLabel("Retention (days)", { exact: true }).fill("14");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Project changes saved.")).toBeVisible();
   await page.getByLabel("New key label").fill("Temporary key");
@@ -630,8 +631,9 @@ test("event inspector exposes context, metadata and JSON with keyboard and clipb
     event.event_id,
     event.actor_id,
     event.session_id,
-    new Date(event.timestamp).toISOString(),
-    new Date(event.received_at).toISOString(),
+    // Metadata reads in the display timezone (UTC here) rather than as raw ISO strings.
+    displayTimestamp(new Date(event.timestamp).getTime(), "UTC"),
+    displayTimestamp(new Date(event.received_at).getTime(), "UTC"),
   ]) {
     await expect(inspector.getByRole("tabpanel")).toContainText(value);
   }

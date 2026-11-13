@@ -45,6 +45,16 @@ export function ErrorState({ message, retry }: { message: string; retry?: () => 
     </Alert>
   );
 }
+export function QueryDraftNotice({ onDiscard }: { onDiscard: () => void }) {
+  return (
+    <div className="query-draft-notice" role="status">
+      <span>Changes not applied</span>
+      <Button type="button" variant="ghost" size="sm" onClick={onDiscard}>
+        Discard changes
+      </Button>
+    </div>
+  );
+}
 export function NoEvents() {
   const { projectSlug } = useParams({ strict: false });
   return (

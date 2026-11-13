@@ -89,19 +89,28 @@ export async function api<T>(
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
-// Analytical queries are read-only; retry one short server-requested capacity delay.
-export async function queryProduct(
-  product: string,
+// Read-only queries retry one short server-requested capacity delay; mutations never do.
+// `busyMessage` replaces a capacity (503) error's text for callers that want a generic message.
+export async function queryReadOnly<T>(
+  path: string,
   body: Record<string, unknown>,
   signal: AbortSignal,
+  busyMessage?: string,
 ) {
-  const request = () =>
-    api<QueryResult>(
-      `/products/${product}/query`,
-      "POST",
-      body,
-      AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-    );
+  const request = async () => {
+    try {
+      return await api<T>(
+        path,
+        "POST",
+        body,
+        AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      );
+    } catch (error) {
+      if (busyMessage && error instanceof ApiError && error.status === 503)
+        error.message = busyMessage;
+      throw error;
+    }
+  };
   try {
     return await request();
   } catch (error) {
@@ -122,6 +131,9 @@ export async function queryProduct(
     signal.throwIfAborted();
     return request();
   }
+}
+export function queryProduct(product: string, body: Record<string, unknown>, signal: AbortSignal) {
+  return queryReadOnly<QueryResult>(`/products/${product}/query`, body, signal);
 }
 
 export const number = (n: number | null | undefined, digits = 0) =>
