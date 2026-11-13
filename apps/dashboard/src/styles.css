@@ -147,7 +147,9 @@
   [data-slot="sheet-overlay"],
   [data-slot="alert-dialog-overlay"],
   .log-row,
-  .logs-volume-bar
+  .logs-volume-bar,
+  .logs-volume-brush,
+  .chart-brush
 ) {
   --tone-25: conic-gradient(at 2px 2px, #0000 75%, var(--tone-ink) 0);
   --tone-50: repeating-conic-gradient(var(--tone-ink) 0 25%, #0000 0 50%);
@@ -559,6 +561,24 @@ h3,
 }
 [data-slot="select-content"][data-side="none"][data-open] {
   animation: piko-menu-fade-in 120ms ease-out;
+}
+/* Chart zoom: drag across a plot; the pending range is a 25% orange screen between solid edges. */
+.series-chart {
+  position: relative;
+  cursor: crosshair;
+  touch-action: pan-y;
+  user-select: none;
+}
+.chart-brush {
+  --tone-ink: color-mix(in oklab, var(--primary) 70%, transparent);
+  position: absolute;
+  inset-block: 0 24px;
+  z-index: 1;
+  background: var(--tone-25) 0 0 / 4px 4px;
+  box-shadow:
+    inset 1px 0 0 var(--primary),
+    inset -1px 0 0 var(--primary);
+  pointer-events: none;
 }
 /* Highlighted code: tokens from lib/highlight.tsx. */
 .tok-string {

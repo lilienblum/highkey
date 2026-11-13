@@ -103,11 +103,27 @@
 }
 /* One dithered column per bucket with a solid cap, like the report chart; errors fill from the base. */
 .logs-volume-bars {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 3px;
   width: 100%;
   height: 64px;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+/* The pending zoom range: a 25% orange screen between solid edges. */
+.logs-volume-brush {
+  --tone-ink: color-mix(in oklab, var(--primary) 70%, transparent);
+  position: absolute;
+  inset-block: 0;
+  z-index: 1;
+  background: var(--tone-25) 0 0 / 4px 4px;
+  box-shadow:
+    inset 1px 0 0 var(--primary),
+    inset -1px 0 0 var(--primary);
+  pointer-events: none;
 }
 .logs-volume-bar {
   --tone-ink: var(--data-tertiary);

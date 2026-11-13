@@ -4,7 +4,8 @@ import { decorative } from "@tanstack/charts/mark/decorative";
 import { Chart } from "@tanstack/charts/react";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
-import { useId, useMemo } from "react";
+import { useId, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useWorkspace } from "./app-shell";
 import { number, type QueryResult } from "@/lib/api";
 import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
 
@@ -168,8 +169,81 @@ export function AnalyticsChart({
       },
     });
   }, [series, label, bucket, unit, from, to, compact, toneId]);
+  // Drag across the plot (or click one bucket) to zoom the workspace range to those buckets.
+  const { selectRange } = useWorkspace();
+  const container = useRef<HTMLDivElement>(null);
+  const [brush, setBrush] = useState<{ start: number; end: number }>();
+  const buckets = () =>
+    [
+      ...(container.current?.querySelectorAll<SVGCircleElement>(
+        'circle[data-ts-key^="buckets:"]',
+      ) ?? []),
+    ]
+      .map((dot) => {
+        const box = dot.getBoundingClientRect();
+        return { time: Number(dot.dataset.tsKey?.split(":").pop()), x: box.left + box.width / 2 };
+      })
+      .filter((point) => Number.isFinite(point.time))
+      .sort((a, b) => a.time - b.time);
+  const nearest = (event: PointerEvent, points: { x: number }[]) =>
+    points.reduce(
+      (best, point, index) =>
+        Math.abs(point.x - event.clientX) < Math.abs(points[best].x - event.clientX) ? index : best,
+      0,
+    );
+  const points = brush ? buckets() : [];
+  const edge = (index: number, side: -1 | 1) => {
+    const point = points[index];
+    const neighbour = points[index + side] ?? points[index - side];
+    const half = neighbour ? Math.abs(neighbour.x - point.x) / 2 : 8;
+    const left = container.current?.getBoundingClientRect().left ?? 0;
+    return point.x - left + side * half;
+  };
   return (
-    <div className="series-chart" data-slot="chart" data-chart-library="tanstack">
+    <div
+      ref={container}
+      className="series-chart"
+      data-slot="chart"
+      data-chart-library="tanstack"
+      data-zooming={brush ? "" : undefined}
+      onPointerDown={(event) => {
+        if (event.button !== 0 || series.length < 2) return;
+        const all = buckets();
+        if (!all.length) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const index = nearest(event, all);
+        setBrush({ start: index, end: index });
+      }}
+      onPointerMove={(event) => {
+        if (brush) setBrush({ ...brush, end: nearest(event, buckets()) });
+      }}
+      onPointerUp={() => {
+        if (!brush) return;
+        const all = buckets();
+        setBrush(undefined);
+        const first = all[Math.min(brush.start, brush.end)];
+        const last = all[Math.max(brush.start, brush.end)];
+        if (!first || !last) return;
+        const end = Math.min(
+          nextBucket(last.time, bucket),
+          to ? Date.parse(to) : Number.POSITIVE_INFINITY,
+        );
+        selectRange({ from: new Date(first.time).toISOString(), to: new Date(end).toISOString() });
+      }}
+      onPointerCancel={() => setBrush(undefined)}
+    >
+      {brush && points.length > 0 && (
+        <span
+          className="chart-brush"
+          aria-hidden="true"
+          style={{
+            left: edge(Math.min(brush.start, brush.end), -1),
+            width:
+              edge(Math.max(brush.start, brush.end), 1) -
+              edge(Math.min(brush.start, brush.end), -1),
+          }}
+        />
+      )}
       <Chart
         definition={definition}
         onRender={({ svg, interaction }) => {

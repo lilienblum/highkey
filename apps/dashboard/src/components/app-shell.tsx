@@ -45,6 +45,8 @@ type Context = {
   refreshKey: number;
   now: number;
   setAnalyticsPending: (pending: boolean) => void;
+  /** Applies an explicit range, as the date picker's custom range does (charts use it to zoom). */
+  selectRange: (range: { from: string; to: string }) => void;
 };
 const Workspace = createContext<Context | null>(null);
 export function useWorkspace() {
@@ -227,6 +229,20 @@ export function AppShell({
     refreshBackground();
     if (error) void reload().catch((e) => setError(e.message));
   };
+  const selectRange = (next: { from: string; to: string }) =>
+    void navigate({
+      ...workspaceTarget(view, product?.slug),
+      search: (previous) => ({
+        ...previous,
+        period: undefined,
+        from: next.from,
+        to: next.to,
+        snapshot: undefined,
+        drilldown: previous.drilldown ? { ...previous.drilldown, ...next } : undefined,
+        page: undefined,
+      }),
+      resetScroll: false,
+    });
   const label = (
     { "/": "Overview", "/explore": "Explore", "/logs": "Logs", "/settings": "Settings" } as const
   )[view];
@@ -261,6 +277,7 @@ export function AppShell({
         refreshKey,
         now,
         setAnalyticsPending,
+        selectRange,
       }}
     >
       <a className="skip-link" href="#main-content">
@@ -356,23 +373,7 @@ export function AppShell({
                     range={range}
                     fixed={!!(drilldown || search.snapshot || search.from)}
                     disabled={!preferencesReady || !product || !!selectionError}
-                    onApply={(next) => {
-                      void navigate({
-                        ...workspaceTarget(view, product?.slug),
-                        search: (previous) => ({
-                          ...previous,
-                          period: undefined,
-                          from: next.from,
-                          to: next.to,
-                          snapshot: undefined,
-                          drilldown: previous.drilldown
-                            ? { ...previous.drilldown, ...next }
-                            : undefined,
-                          page: undefined,
-                        }),
-                        resetScroll: false,
-                      });
-                    }}
+                    onApply={selectRange}
                   />
                 </div>
               </div>

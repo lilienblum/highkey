@@ -92,6 +92,8 @@ function LogExplorer() {
   const from = query.body.from as string;
   const to = query.body.to as string;
   const atLimit = (data?.logs.length ?? 0) >= MAX_BUFFERED_LOGS;
+  // Bucket indices under a drag on the volume histogram.
+  const [brush, setBrush] = useState<{ start: number; end: number } | null>(null);
   useEffect(() => setDraft(search.logq ?? ""), [search.logq]);
   function loadOlder() {
     if (pending || query.olderPending || !data?.next_cursor || atLimit) return;
@@ -177,9 +179,12 @@ function LogExplorer() {
           <ValueSelect
             label="Log time range"
             className="logs-window"
-            value={window}
-            onValueChange={(value) => apply({ logWindow: value as LogsSearch["logWindow"] })}
+            value={search.logFrom ? "custom" : window}
+            onValueChange={(value) => {
+              if (value !== "custom") apply({ logWindow: value as LogsSearch["logWindow"] });
+            }}
             options={[
+              ...(search.logFrom ? ([["custom", "Selected range"]] as [string, string][]) : []),
               ["15m", "Last 15 minutes"],
               ["1h", "Last hour"],
               ["6h", "Last 6 hours"],
@@ -286,7 +291,47 @@ function LogExplorer() {
             <Skeleton className="h-full w-full" />
           ) : (
             // HTML columns rather than a stretched SVG, so the dither tone keeps square 2px pixels.
-            <div className="logs-volume-bars" aria-hidden="true">
+            // Dragging across them (or clicking one) narrows the query to those buckets.
+            <div
+              className="logs-volume-bars"
+              aria-hidden="true"
+              onPointerDown={(event) => {
+                if (event.button !== 0 || !data?.series.length) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                const index = bucketAt(event, data.series.length);
+                setBrush({ start: index, end: index });
+              }}
+              onPointerMove={(event) => {
+                if (brush && data) setBrush({ ...brush, end: bucketAt(event, data.series.length) });
+              }}
+              onPointerUp={() => {
+                if (!brush || !data?.series.length) return;
+                const series = data.series;
+                const step =
+                  series.length > 1
+                    ? series[1].time - series[0].time
+                    : Date.parse(to) - Date.parse(from);
+                const first = Math.min(brush.start, brush.end);
+                const last = Math.max(brush.start, brush.end);
+                setBrush(null);
+                setFollow(false);
+                apply({
+                  logWindow: search.logWindow,
+                  logFrom: new Date(series[first].time).toISOString(),
+                  logTo: new Date(Math.min(series[last].time + step, Date.parse(to))).toISOString(),
+                });
+              }}
+              onPointerCancel={() => setBrush(null)}
+            >
+              {brush && data && (
+                <span
+                  className="logs-volume-brush"
+                  style={{
+                    left: `${(Math.min(brush.start, brush.end) / data.series.length) * 100}%`,
+                    width: `${((Math.abs(brush.end - brush.start) + 1) / data.series.length) * 100}%`,
+                  }}
+                />
+              )}
               {data?.series.map((bucket) => (
                 <span
                   key={bucket.time}
@@ -310,7 +355,7 @@ function LogExplorer() {
           <time dateTime={from} title={displayTimestamp(Date.parse(from), timeZone)}>
             {axisTime.format(Date.parse(from))}
           </time>
-          <span>Log volume · {timeZone}</span>
+          <span>Log volume · {timeZone} · drag to zoom</span>
           <time dateTime={to} title={displayTimestamp(Date.parse(to), timeZone)}>
             {axisTime.format(Date.parse(to))}
           </time>
@@ -416,6 +461,14 @@ function LogExplorer() {
         />
       </section>
     </>
+  );
+}
+/** The histogram bucket under the pointer. */
+function bucketAt(event: { clientX: number; currentTarget: HTMLElement }, count: number) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return Math.max(
+    0,
+    Math.min(count - 1, Math.floor(((event.clientX - rect.left) / rect.width) * count)),
   );
 }
 /** Known values first, keeping an applied value that is no longer in the window. */

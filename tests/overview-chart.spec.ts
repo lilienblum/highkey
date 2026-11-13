@@ -394,3 +394,35 @@ test("source discovery keeps the main chart and breakdown in their original posi
     release();
   }
 });
+
+test("dragging across the activity chart zooms the workspace to those buckets", async ({
+  page,
+}) => {
+  await page.goto(`/projects/${products.website.slug}?source=all&days=7`);
+  const dots = page.locator('.activity-widget circle[data-ts-key^="buckets:"]');
+  await expect(dots).toHaveCount(7);
+  const bucket = async (index: number) => {
+    const dot = dots.nth(index);
+    const time = Number((await dot.getAttribute("data-ts-key"))?.split(":").pop());
+    const box = await dot.boundingBox();
+    if (!box) throw new Error("Expected a rendered bucket");
+    return { time, x: box.x + box.width / 2, y: box.y };
+  };
+  // The fixture's events are in today's bucket, so zoom into the last three days.
+  const start = await bucket(4);
+  const end = await bucket(6);
+  const plot = await page.locator(".activity-widget .series-chart").boundingBox();
+  if (!plot) throw new Error("Expected the activity chart");
+  const y = plot.y + plot.height / 2;
+  await page.mouse.move(start.x, y);
+  await page.mouse.down();
+  await page.mouse.move((start.x + end.x) / 2, y, { steps: 4 });
+  await expect(page.locator(".activity-widget .chart-brush")).toBeVisible();
+  await page.mouse.move(end.x, y, { steps: 4 });
+  await page.mouse.up();
+  // Day buckets: the range starts at the first selected bucket; the end is clamped to now.
+  await expect(page).toHaveURL(
+    new RegExp(`from=${encodeURIComponent(new Date(start.time).toISOString())}&to=`),
+  );
+  await expect(dots).toHaveCount(3);
+});

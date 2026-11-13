@@ -407,3 +407,36 @@ test("failed queries can retry and context-only empty queries show matching feed
   await expect(page.getByRole("heading", { name: "No matching logs" })).toBeVisible();
   await expect(page.getByText("Connect a service in Settings.", { exact: false })).toHaveCount(0);
 });
+
+test("dragging across the log volume histogram narrows the query to those buckets", async ({
+  page,
+}) => {
+  await page.goto(`/projects/${project.slug}/logs?logWindow=1h`);
+  await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
+  const bars = await page.locator(".logs-volume-bars").boundingBox();
+  if (!bars) throw new Error("Expected the volume histogram");
+  const y = bars.y + bars.height / 2;
+  await page.mouse.move(bars.x + bars.width * 0.5, y);
+  await page.mouse.down();
+  await page.mouse.move(bars.x + bars.width * 0.75, y, { steps: 4 });
+  await expect(page.locator(".logs-volume-brush")).toBeVisible();
+  await page.mouse.move(bars.x + bars.width * 0.99, y, { steps: 4 });
+  await page.mouse.up();
+  await expect(page).toHaveURL(/logFrom=.*logTo=/);
+  await expect(page.getByRole("combobox", { name: "Log time range" })).toContainText(
+    "Selected range",
+  );
+  await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  const url = new URL(page.url());
+  const from = Date.parse(url.searchParams.get("logFrom") ?? "");
+  const to = Date.parse(url.searchParams.get("logTo") ?? "");
+  expect(to - from).toBeGreaterThan(0);
+  expect(to - from).toBeLessThanOrEqual(31 * 60_000);
+  // Choosing a preset returns to a rolling window.
+  await page.getByRole("combobox", { name: "Log time range" }).click();
+  await page.getByRole("option", { name: "Last hour", exact: true }).click();
+  await expect(page).not.toHaveURL(/logFrom=/);
+});

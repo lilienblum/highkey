@@ -67,6 +67,10 @@ Choose 15, 30, or 50 rows per page. Filtering and pagination happen on the serve
 
 The [PostHog Activity interface](https://posthog.com/docs/activity) informed the useful event context and separate property, metadata, and JSON views. Piko uses its existing event model and bounded server queries.
 
+## Zooming from charts
+
+Drag across the Overview activity chart or an Explore chart to zoom the workspace to those buckets (click one bucket to zoom to just that one). The selection becomes an ordinary custom range: the date picker shows it, the URL keeps it, and its previous/next arrows and presets work as usual. On Logs, drag across the volume histogram the same way; the time control shows **Selected range**, Follow pauses, and choosing a preset returns to a rolling window.
+
 ## Display formatting
 
 Every displayed time uses the timezone chosen in Settings → Display, in one readable format such as `13 Nov 2026, 15:03:37.602`; UTC reads the same way. Chart buckets, calendar ranges, and raw JSON stay UTC. Reports and filter chips show well-known values with their proper names: operating systems (`macos` → macOS, `ios` → iOS), architectures (`aarch64` → ARM64, `x86_64` → x86-64), browsers, device types, and identity kinds. Unknown values appear as sent. Inspectors, raw JSON, and filters always keep the stored value.
