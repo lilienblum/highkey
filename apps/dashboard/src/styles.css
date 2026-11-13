@@ -405,28 +405,28 @@ h3,
 }
 /*
  * The workspace horizon: a dotted rule along the top of the main area that falls off through
- * sparser dither rows, tinted from the sidebar field's orange (left) through neutral to violet.
+ * sparser dither rows. It fades in away from the sidebar so the sidebar's own field keeps the
+ * corner, stays neutral through the middle, and warms to a faint violet at the far edge.
  */
 [data-slot="sidebar-inset"]::before {
   content: "";
   position: absolute;
   inset-inline: 0;
   top: 0;
-  height: 14px;
+  height: 10px;
   z-index: 0;
   pointer-events: none;
   background: linear-gradient(
     90deg,
-    color-mix(in oklab, var(--primary) 60%, var(--background)) 0,
-    var(--rule-ink) 36%,
-    var(--rule-ink) 64%,
-    color-mix(in oklab, var(--data-secondary) 70%, var(--background)) 100%
+    transparent 0,
+    var(--rule-ink) 240px,
+    var(--rule-ink) 60%,
+    color-mix(in oklab, var(--data-secondary) 55%, var(--background)) 100%
   );
   mask:
     linear-gradient(90deg, #000 2px, #0000 0) 0 0 / 4px 2px repeat-x,
-    linear-gradient(90deg, #000 2px, #0000 0) 2px 4px / 4px 2px repeat-x,
-    linear-gradient(90deg, #000 2px, #0000 0) 0 8px / 8px 2px repeat-x,
-    linear-gradient(90deg, #000 2px, #0000 0) 4px 12px / 16px 2px repeat-x;
+    linear-gradient(90deg, #000 2px, #0000 0) 2px 4px / 8px 2px repeat-x,
+    linear-gradient(90deg, #000 2px, #0000 0) 4px 8px / 16px 2px repeat-x;
 }
 /* Surfaces catch a little light along their top edge instead of sitting perfectly flat. */
 :root {
