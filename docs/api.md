@@ -18,7 +18,9 @@ Management mutations require `X-Piko-Admin: 1`. This public request marker preve
 
 ## Projects and sources
 
-A project owns one DuckDB database, shared retention, and any number of sources. A source is a named integration such as Website, iOS app, or CLI. All sources have the same analytics capabilities; there is no project or source type. Source names are unique within a project (ASCII case-insensitive). Creating a project automatically creates an initial source named **Events**, which can be renamed. Project responses include a stable, unique `slug` and `sources` with `id`, `product_id`, `name`, `icon`, and `created_at`.
+A project owns one analytics DuckDB database, a separate log database, independent retention for each, and any number of sources. A source is a named integration such as Website, iOS app, or CLI. All sources have the same analytics capabilities; there is no project or source type. Source names are unique within a project (ASCII case-insensitive). Creating a project automatically creates an initial source named **Events**, which can be renamed. Project responses include a stable, unique `slug` and `sources` with `id`, `product_id`, `name`, `icon`, and `created_at`.
+
+Application logs use separate source-scoped keys, ingestion endpoints, queries, and retention. See [application logs](logs.md) for the JSON/OTLP collection and management contracts.
 
 - `GET /api/products/:id/sources`: list sources.
 - `POST /api/products/:id/sources` with `{ "name": "iOS app" }`: create a source with an automatic icon.

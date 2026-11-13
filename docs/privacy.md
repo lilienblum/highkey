@@ -14,6 +14,7 @@ Piko is built to minimize collection by default. It does not add IP addresses, u
 | CLI example           | Telemetry off; no installation ID            | `PIKO_TELEMETRY=1`; optional random installation ID   |
 | CLI opt-out           | `DO_NOT_TRACK=1` takes precedence            | Host application owns its persistent preference       |
 | Retention             | New Settings products start at 30 days       | Set a product-specific window between 1 and 3650 days |
+| Log retention         | Seven days, independently of events          | Set 1–365 days in Settings → Logs                     |
 
 Persistent random IDs are pseudonymous, not anonymous. Piko separates visitor/session identities from CLI installations, and all identities are scoped to a product in queries. Do not use emails, account names, machine names, or credentials as IDs or properties.
 
@@ -42,6 +43,8 @@ Changing identity to `none` stops using IDs but does not itself erase IDs from a
 ## Retention and deletion
 
 Retention is configured per project in Settings and applies to all its sources; the internal cleanup job runs hourly. New projects created in Settings default to one year (365 days). Changing the default for new products does not shorten existing products' configured retention. Cleanup logically removes expired rows from the active databases; it is not a secure disk erase. Old backups, snapshots, and migration files require their own retention policy. The original shared `events.duckdb` file retained during migration is outside active cleanup.
+
+Application logs contain the messages, trace/request IDs, and typed attributes supplied by your services or OTLP collector. Piko does not automatically redact or anonymize them. Apply redaction and sampling in the sending application or collector, and keep `pl_` log keys in server configuration. Logs live in separate project database files and follow their own retention policy. Existing backups retain data until you remove them independently.
 
 There is no automatic personal-data classification or per-person erasure workflow in v1. Minimize collection up front, keep retention short, and verify the stored events in Explore before rolling out a collector broadly.
 

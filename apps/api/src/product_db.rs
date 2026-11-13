@@ -10,6 +10,11 @@ use std::{
 };
 const MAX_OPEN: usize = 8;
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS events(product_id VARCHAR NOT NULL, event_id VARCHAR NOT NULL, name VARCHAR NOT NULL, source VARCHAR NOT NULL, event_time BIGINT NOT NULL, received_at BIGINT NOT NULL, actor_id VARCHAR, identity_kind VARCHAR, session_id VARCHAR, properties JSON NOT NULL, PRIMARY KEY(product_id,event_id));";
+const LOG_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS logs(log_id VARCHAR PRIMARY KEY, source_id VARCHAR NOT NULL, timestamp BIGINT NOT NULL, received_at BIGINT NOT NULL, level VARCHAR NOT NULL, message VARCHAR NOT NULL, service VARCHAR NOT NULL, environment VARCHAR, trace_id VARCHAR, span_id VARCHAR, request_id VARCHAR, attributes JSON NOT NULL);";
+enum DatabaseKind {
+    Events,
+    Logs,
+}
 struct Database {
     root: Mutex<Connection>,
 }
@@ -20,6 +25,7 @@ struct Entry {
 pub struct ProductDatabases {
     directory: PathBuf,
     cache: Mutex<HashMap<String, Entry>>,
+    kind: DatabaseKind,
 }
 // Field order drops the clone before releasing the pin on its root instance.
 pub struct Lease {
@@ -28,10 +34,17 @@ pub struct Lease {
 }
 impl ProductDatabases {
     pub fn new(directory: PathBuf) -> Result<Self> {
+        Self::create(directory, DatabaseKind::Events)
+    }
+    pub fn for_logs(directory: PathBuf) -> Result<Self> {
+        Self::create(directory, DatabaseKind::Logs)
+    }
+    fn create(directory: PathBuf, kind: DatabaseKind) -> Result<Self> {
         std::fs::create_dir_all(&directory)?;
         Ok(Self {
             directory,
             cache: Mutex::new(HashMap::new()),
+            kind,
         })
     }
     pub fn path(&self, id: &str) -> Result<PathBuf> {
@@ -45,7 +58,11 @@ impl ProductDatabases {
             .lock()
             .map_err(|_| anyhow::anyhow!("Database cache poisoned"))?;
         if !cache.contains_key(id) {
-            if cache.len() >= MAX_OPEN {
+            let capacity = match self.kind {
+                DatabaseKind::Events => MAX_OPEN,
+                DatabaseKind::Logs => 4,
+            };
+            if cache.len() >= capacity {
                 let victim = cache
                     .iter()
                     .filter(|(_, e)| Arc::strong_count(&e.database) == 1)
@@ -55,16 +72,24 @@ impl ProductDatabases {
                 cache.remove(&victim);
             }
             let db = Connection::open(path).map_err(anyhow::Error::from)?;
-            db.execute_batch(
-                "SET threads=2; SET memory_limit='64MB'; SET enable_external_access=false;",
-            )
-            .map_err(anyhow::Error::from)?;
-            db.execute_batch(SCHEMA).map_err(anyhow::Error::from)?;
-            // IDs are UUID-validated by path(); existing rows belong to the initial source.
-            db.execute_batch(&format!(
-                "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_id VARCHAR DEFAULT '{id}';"
-            ))
-            .map_err(anyhow::Error::from)?;
+            match self.kind {
+                DatabaseKind::Events => {
+                    db.execute_batch(
+                        "SET threads=2; SET memory_limit='64MB'; SET enable_external_access=false;",
+                    )
+                    .map_err(anyhow::Error::from)?;
+                    db.execute_batch(SCHEMA).map_err(anyhow::Error::from)?;
+                    // IDs are UUID-validated by path(); existing rows belong to the initial source.
+                    db.execute_batch(&format!("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_id VARCHAR DEFAULT '{id}';")).map_err(anyhow::Error::from)?;
+                }
+                DatabaseKind::Logs => {
+                    db.execute_batch(
+                        "SET threads=1; SET memory_limit='32MB'; SET enable_external_access=false;",
+                    )
+                    .map_err(anyhow::Error::from)?;
+                    db.execute_batch(LOG_SCHEMA).map_err(anyhow::Error::from)?;
+                }
+            }
             cache.insert(
                 id.into(),
                 Entry {

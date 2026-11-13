@@ -4,11 +4,13 @@ Piko intentionally has **no built-in authentication**. Its API does not validate
 
 For a deployment at `piko.example.com`:
 
-| Access application path       | Policy                              | Purpose                                                   |
-| ----------------------------- | ----------------------------------- | --------------------------------------------------------- |
-| `piko.example.com`            | Allow only your chosen users/groups | Dashboard and all management endpoints                    |
-| `piko.example.com/api/ingest` | Bypass / Everyone                   | Public write-only collectors and their OPTIONS preflights |
-| `piko.example.com/tracker.js` | Bypass / Everyone                   | Public standalone browser module                          |
+| Access application path             | Policy                                      | Purpose                                                   |
+| ----------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
+| `piko.example.com`                  | Allow only your chosen users/groups         | Dashboard and all management endpoints                    |
+| `piko.example.com/api/ingest`       | Bypass / Everyone                           | Public write-only collectors and their OPTIONS preflights |
+| `piko.example.com/api/logs/ingest`  | Bypass / Everyone (if collecting logs)      | Service logs authorized by separate `pl_` log keys        |
+| `piko.example.com/api/logs/v1/logs` | Bypass / Everyone (if collecting OTLP logs) | OTLP/HTTP exporters authorized by log keys                |
+| `piko.example.com/tracker.js`       | Bypass / Everyone                           | Public standalone browser module                          |
 
 Create separate path-specific self-hosted Access applications for the two public endpoints. Cloudflare applies more-specific application paths ahead of broader paths; those policies are not inherited from the parent. This is documented in [application path precedence](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) and [bypassing public endpoints](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/common-policies/).
 

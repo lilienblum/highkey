@@ -1,0 +1,51 @@
+{
+  "measured_at": "2026-11-13T04:50:25.309Z",
+  "hardware": {
+    "cpu": "Apple M1 Pro",
+    "logical_cpus": 10,
+    "memory_bytes": 17179869184,
+    "os": "darwin 27.2.0",
+    "architecture": "arm64"
+  },
+  "runtime": {
+    "binary": "/private/tmp/piko-log-optimization.lyvXWe/piko-before",
+    "bun": "1.4.4",
+    "profile": "release",
+    "duckdb": "2.0.0 (duckdb-rs 1.20000.1)",
+    "log_query_slots": 2,
+    "log_queue_requests": 16,
+    "duckdb_threads": 1,
+    "duckdb_memory_limit_per_project": "32MB"
+  },
+  "workload": {
+    "preload_logs": 100000,
+    "projects": 2,
+    "batch_size": 100,
+    "ingest_workers": 4,
+    "query_workers": 2,
+    "requested_seconds": 15,
+    "actual_seconds": 15.03300675,
+    "notes": "Closed-loop localhost HTTP; six-day out-of-order timestamps, 64 services, message substring and typed JSON filters. Includes request drain; retries every ten batches. Preload is excluded. No retention sweep, network transport, or production capacity claim."
+  },
+  "results": {
+    "accepted_logs": 184900,
+    "duplicate_logs": 18400,
+    "verified_stored_logs": 284900,
+    "logs_per_second": 12299.60200742942,
+    "successful_queries": 915,
+    "queries_per_second": 60.86606726229269,
+    "ingestion_ms": {
+      "p50": 28.040334000001167,
+      "p95": 40.75654200000099,
+      "p99": 46.27016700000058
+    },
+    "query_ms": {
+      "p50": 32.34658399999989,
+      "p95": 58.642916000000696,
+      "p99": 63.36329200000182
+    },
+    "baseline_rss_bytes": 124354560,
+    "peak_rss_bytes": 199294976,
+    "errors": {}
+  }
+}

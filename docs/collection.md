@@ -2,6 +2,8 @@
 
 A project can combine multiple collectors: for example, Website, iOS app, and CLI. Each source gets separate write-only keys; the key sets both project and source on the server. Do not send `product_id` or `source_id` in the event envelope. The existing `source` string describes the client/transport and does not change attribution. UUID event IDs must be unique across all sources in a project.
 
+For service logs, use [structured JSON or OTLP/HTTP collection](logs.md). Logs use separate `pl_` keys and storage; the SDKs below collect analytics events.
+
 Identity remains optional and scoped to the project and identity kind. No person is automatically linked across web/mobile/tool sources. If you explicitly send the same opaque actor ID and identity kind from two sources, combined distinct-actor queries count it once. Use source-specific random IDs if that linkage is not intended. Visitor and installation identities remain distinct.
 
 ## JavaScript and TypeScript SDK

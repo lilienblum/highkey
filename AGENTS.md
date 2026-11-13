@@ -1,7 +1,7 @@
 # Piko
 
 - Use Bun for JavaScript commands, including `bun fmt`, `bun typecheck`, `bun lint`, and `bun test`. Do not use npm or Node.
-- `apps/api` is the independent Rust HTTP API. `apps/dashboard` is TanStack Start on Bun and proxies /api requests. The API knows nothing about the dashboard. SQLite owns management state; each product has its own DuckDB file under data/products/. Authentication belongs to Cloudflare Access; never add a built-in login or admin token. Keep public ingestion keys. Keep blocking database work off Tokio HTTP workers.
+- `apps/api` is the independent Rust HTTP API. `apps/dashboard` is TanStack Start on Bun and proxies /api requests. The API knows nothing about the dashboard. SQLite owns management state; each product has its own DuckDB file under data/products/, and its application logs a separate DuckDB file under data/logs/. Events and logs are separate signals with separate keys, storage, and retention. Authentication belongs to Cloudflare Access; never add a built-in login or admin token. Keep public ingestion keys. Keep blocking database work off Tokio HTTP workers.
 - Keep ingestion acknowledgments after commit, bounded queues, product-scoped deduplication, and typed properties intact.
 - Run `bun fmt`, `bun typecheck`, `bun lint`, `bun test`, `bun run build`, `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings` for relevant changes.
 - Dashboard primitives use shadcn/ui on Base UI (`@base-ui/react`), with Hugeicons and the local single-theme Kanagawa Wave styles (orange primary, yellow/violet/aqua data accents). Keep `components.json` on `base-vega`; use `render` composition, not Radix or `asChild`. Preserve keyboard/focus behavior, SSR labels, and stable refresh geometry.

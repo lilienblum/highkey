@@ -26,6 +26,8 @@ pub struct Store {
     pub changes: crate::changes::Changes,
     pub sqlite_path: PathBuf,
     pub analytics: crate::product_db::ProductDatabases,
+    pub logs: crate::product_db::ProductDatabases,
+    pub log_query_slots: Arc<tokio::sync::Semaphore>,
     pub query_slots: Arc<tokio::sync::Semaphore>,
     pub state_slots: Arc<tokio::sync::Semaphore>,
 }
@@ -40,6 +42,7 @@ impl Store {
           DROP TABLE IF EXISTS sessions; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
           ")?;
         crate::sources::migrate(&mut sql)?;
+        crate::logs::keys::migrate(&sql)?;
         let analytics = crate::product_db::ProductDatabases::new(path.join("products"))?;
         let migrated = sql
             .query_row(
@@ -63,6 +66,8 @@ impl Store {
             changes: crate::changes::Changes::default(),
             sqlite_path,
             analytics,
+            logs: crate::product_db::ProductDatabases::for_logs(path.join("logs"))?,
+            log_query_slots: Arc::new(tokio::sync::Semaphore::new(2)),
             query_slots: Arc::new(tokio::sync::Semaphore::new(queries)),
             state_slots: Arc::new(tokio::sync::Semaphore::new(16)),
         }))

@@ -64,7 +64,7 @@ Application rollback restores earlier images and configuration against the same 
 
 Native Tako, local Tako Compose, deployed Tako Compose, and standalone Compose have separate storage. Selecting another config does not copy or share existing data. Tako scopes Compose projects and volumes by app/environment; local development additionally isolates checkouts and variants. Keep the app name, environment, and server stable when retaining a deployed volume.
 
-Tako's app-data backups **do not include Docker named volumes**. Back up the API's entire `/data` directory while its API container is stopped, including `state.sqlite`, any SQLite WAL files, all `products/` databases and WAL files, and cached metadata. Restore the whole directory into an empty destination with the API stopped. The image runs as UID 10001; restored files must remain writable by that user. Never copy active database files or share a data directory between deployments.
+Tako's app-data backups **do not include Docker named volumes**. Back up the API's entire `/data` directory while its API container is stopped, including `state.sqlite`, any SQLite WAL files, all `products/` and `logs/` databases and WAL files, and cached metadata. Restore the whole directory into an empty destination with the API stopped. The image runs as UID 10001; restored files must remain writable by that user. Never copy active database files or share a data directory between deployments.
 
 For a standalone backup, stop the API, copy its directory, and restart it:
 

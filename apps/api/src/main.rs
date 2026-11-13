@@ -51,12 +51,16 @@ async fn run(managed: bool) -> anyhow::Result<()> {
         .map(|config| state.changes.start_delivery(config))
         .transpose()?;
     let cleanup_writer = state.writer.clone();
+    let log_cleanup = state.log_writer.clone();
     let cleanup = tokio::spawn(async move {
         let mut timer = tokio::time::interval(Duration::from_secs(3600));
         loop {
             timer.tick().await;
             if let Err(e) = cleanup_writer.cleanup().await {
                 tracing::warn!(error=?e,"Retention cleanup failed; will retry next hour");
+            }
+            if let Err(e) = log_cleanup.cleanup().await {
+                tracing::warn!(error=?e,"Log retention cleanup failed; will retry next hour");
             }
         }
     });
@@ -78,6 +82,7 @@ async fn run(managed: bool) -> anyhow::Result<()> {
         .await;
     cleanup.abort();
     state.writer.stop().await;
+    state.log_writer.stop().await;
     if let Some(notifications) = notifications {
         notifications.abort();
     }

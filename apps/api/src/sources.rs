@@ -1,6 +1,6 @@
 use crate::{
     error::{ApiError, ApiResult},
-    model::{Source, SourceInput},
+    model::{Product, Source, SourceInput},
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -97,6 +97,22 @@ pub fn get(db: &rusqlite::Connection, product_id: &str, id: &str) -> ApiResult<S
     .optional()
     .map_err(anyhow::Error::from)?
     .ok_or_else(ApiError::missing)
+}
+pub fn key_source<'a>(product: &'a Product, id: Option<&str>) -> ApiResult<&'a Source> {
+    if let Some(id) = id {
+        return product
+            .sources
+            .iter()
+            .find(|source| source.id == id)
+            .ok_or_else(ApiError::missing);
+    }
+    // Preserve the historical initial source for existing clients; new projects use their first named source.
+    product
+        .sources
+        .iter()
+        .find(|source| source.id == product.id)
+        .or_else(|| product.sources.first())
+        .ok_or_else(|| ApiError::bad("Create a source before creating a key"))
 }
 pub fn save(
     db: &rusqlite::Connection,

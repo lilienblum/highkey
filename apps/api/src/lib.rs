@@ -1,6 +1,7 @@
 pub mod changes;
 pub mod error;
 pub mod ingest;
+pub mod logs;
 pub mod model;
 pub mod origins;
 pub mod product_db;
@@ -34,6 +35,8 @@ pub struct AppState {
     pub store: Arc<Store>,
     pub writer: Writer,
     pub changes: changes::Changes,
+    pub log_writer: logs::writer::Writer,
+    log_ingest_slots: Arc<tokio::sync::Semaphore>,
     ingest_slots: Arc<tokio::sync::Semaphore>,
     favicon_slots: Arc<tokio::sync::Semaphore>,
 }
@@ -51,10 +54,13 @@ impl AppState {
         );
         let store = Store::open(&config.data_dir, config.query_concurrency)?;
         let writer = Writer::start(store.clone(), config.queue_capacity);
+        let log_writer = logs::writer::Writer::start(store.clone())?;
         Ok(Self {
             changes: store.changes.clone(),
             store,
             writer,
+            log_writer,
+            log_ingest_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             ingest_slots: Arc::new(tokio::sync::Semaphore::new(config.queue_capacity)),
             favicon_slots: Arc::new(tokio::sync::Semaphore::new(2)),
         })
@@ -76,6 +82,19 @@ pub fn router(state: AppState) -> Router {
             delete(revoke_key).patch(update_key_origins),
         )
         .route("/api/products/{id}/query", post(query_product))
+        .route("/api/products/{id}/logs/query", post(logs::query))
+        .route(
+            "/api/products/{id}/logs/settings",
+            get(logs::settings).patch(logs::update_settings),
+        )
+        .route(
+            "/api/products/{id}/logs/keys",
+            get(logs::list_keys).post(logs::create_key),
+        )
+        .route(
+            "/api/products/{id}/logs/keys/{key}",
+            delete(logs::revoke_key),
+        )
         .route("/api/cleanup", post(run_cleanup))
         .route_layer(middleware::from_fn(management_request));
     let ingest = Router::new()
@@ -89,6 +108,12 @@ pub fn router(state: AppState) -> Router {
                 .expose_headers([header::RETRY_AFTER]),
         );
     Router::new()
+        .merge(
+            Router::new()
+                .route("/api/logs/ingest", post(logs::ingest))
+                .route("/api/logs/v1/logs", post(logs::ingest_otlp))
+                .layer(middleware::from_fn_with_state(state.clone(), logs::limit)),
+        )
         .merge(admin)
         .merge(ingest)
         .route("/api/{*path}", get(|| async { ApiError::missing() }))
@@ -345,7 +370,9 @@ async fn query_product(
     ))
 }
 async fn run_cleanup(State(s): State<AppState>) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({"removed":s.writer.cleanup().await?})))
+    Ok(Json(
+        json!({"removed":s.writer.cleanup().await?,"logs_removed":s.log_writer.cleanup().await?}),
+    ))
 }
 
 async fn list_sources(
