@@ -309,6 +309,8 @@ Ordered dither uses the 4×4 Bayer matrix with 2px pixels on a 4px (CSS) or 8px 
 - **50%:** a checkerboard; quiet-action hover and open states, the highlighted menu or select row, the 4px before a bar's last step, the chart band under the line, and log volume columns (aqua ink under a solid 2px cap, with error volume solid red from the base).
 - **75%:** an inverse dot grid; quiet actions while pressed.
 - **Leaders:** a row of 2px dots every 4px runs from metric labels, sidebar section labels, and widget headings to the edge of their region.
+- **Seams:** structural rules are dotted in the same unit: 2px pixels on a 4px pitch in `--rule-ink` (border 70%, supporting text 30%). That covers the sidebar edge and nested sidebar rails, open analytical regions and their dividers, column headers, line tabs, and popover and sheet section rules. They are drawn with `border-image`, so layout and backgrounds hold. Field and card frames stay solid, and fine row hairlines stay continuous for scanning. Under forced colors seams fall back to plain system borders.
+- **Horizon:** the main area's top edge carries a 14px falloff: a dotted rule, then rows at half, quarter, and eighth density. It is tinted from the sidebar field's orange at the left, through neutral, to violet at the right. It is decorative, ignores the pointer, and is hidden under forced colors.
 
 ### Shadow Vocabulary
 

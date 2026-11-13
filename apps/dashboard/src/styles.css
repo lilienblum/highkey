@@ -385,6 +385,49 @@ h3,
   fill: var(--data);
   shape-rendering: crispEdges;
 }
+/*
+ * Seams are dotted rules: 2px dither pixels on a 4px pitch, the leaders' unit in a quieter ink.
+ * border-image keeps each element's layout and background. Field and card frames stay solid, and
+ * fine row hairlines stay continuous for scanning.
+ */
+:root {
+  --rule-ink: color-mix(in oklab, var(--border) 70%, var(--muted-foreground));
+  --rule-x: repeating-linear-gradient(90deg, var(--rule-ink) 0 2px, transparent 2px 4px);
+  --rule-y: repeating-linear-gradient(180deg, var(--rule-ink) 0 2px, transparent 2px 4px);
+}
+[data-slot="sidebar-container"] {
+  border-right: 2px solid var(--border);
+  border-image: var(--rule-y) 0 2 0 0 / 0 2px 0 0;
+}
+[data-slot="sidebar-menu-sub"] {
+  border-left: 2px solid var(--border);
+  border-image: var(--rule-y) 0 0 0 2 / 0 0 0 2px;
+}
+/*
+ * The workspace horizon: a dotted rule along the top of the main area that falls off through
+ * sparser dither rows, tinted from the sidebar field's orange (left) through neutral to violet.
+ */
+[data-slot="sidebar-inset"]::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 14px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--primary) 60%, var(--background)) 0,
+    var(--rule-ink) 36%,
+    var(--rule-ink) 64%,
+    color-mix(in oklab, var(--data-secondary) 70%, var(--background)) 100%
+  );
+  mask:
+    linear-gradient(90deg, #000 2px, #0000 0) 0 0 / 4px 2px repeat-x,
+    linear-gradient(90deg, #000 2px, #0000 0) 2px 4px / 4px 2px repeat-x,
+    linear-gradient(90deg, #000 2px, #0000 0) 0 8px / 8px 2px repeat-x,
+    linear-gradient(90deg, #000 2px, #0000 0) 4px 12px / 16px 2px repeat-x;
+}
 /* Surfaces catch a little light along their top edge instead of sitting perfectly flat. */
 :root {
   --surface-sheen: linear-gradient(
@@ -698,7 +741,8 @@ h3,
 [data-slot="tabs-list"][data-variant="line"] {
   padding: 0;
   gap: 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-image: var(--rule-x) 0 0 2 / 0 0 2px;
 }
 [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"] {
   padding-inline: 0;
@@ -713,7 +757,7 @@ h3,
   content: "";
   position: absolute;
   inset-inline: 0;
-  bottom: -1px;
+  bottom: -2px;
   height: 2px;
   background: var(--primary);
   opacity: 0;
@@ -977,7 +1021,8 @@ h1 {
 .chart-card {
   margin-bottom: 24px;
   border: 0;
-  border-block: 1px solid var(--border);
+  border-block: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 / 2px 0;
   border-radius: 0;
   background: transparent;
   padding: 20px 0;
@@ -1196,7 +1241,8 @@ h1 {
   margin-bottom: 0;
   padding: 12px 0 18px;
   border: 0;
-  border-block: 1px solid var(--border);
+  border-block: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 / 2px 0;
   border-radius: 0;
   background: transparent;
   gap: 10px;
@@ -1261,7 +1307,8 @@ h1 {
   grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
   gap: 0;
   padding-block: 18px;
-  border-block: 1px solid var(--border);
+  border-block: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 / 2px 0;
   margin-bottom: 22px;
 }
 .explore-charts .chart-card {
@@ -1607,7 +1654,8 @@ h1 {
   background: var(--subtle);
   color: var(--foreground);
   font-weight: 550;
-  border-block: 1px solid var(--border);
+  border-block: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 / 2px 0;
   height: 40px;
   font-size: 12px;
 }
@@ -1701,7 +1749,8 @@ h1 {
   flex-wrap: wrap;
   gap: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 0 / 2px 0 0;
 }
 .stream-page-info {
   display: flex;
@@ -1927,14 +1976,16 @@ h1 {
   padding-top: 0;
 }
 .explore-charts > [data-slot="card"] + [data-slot="card"] {
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-image: var(--rule-y) 0 0 0 2 / 0 0 0 2px;
 }
 .breakdowns > [data-slot="card"] > [data-slot="card-header"],
 .breakdowns > [data-slot="card"] > [data-slot="card-content"] {
   padding-left: 0;
 }
 .breakdowns > [data-slot="tabs"] {
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-image: var(--rule-y) 0 0 0 2 / 0 0 0 2px;
 }
 
 .metric-card:first-child [data-slot="card-content"] {
@@ -1966,7 +2017,8 @@ h1 {
   }
   .explore-charts > [data-slot="card"] + [data-slot="card"] {
     border-left: 0;
-    border-top: 1px solid var(--border);
+    border-top: 2px solid var(--border);
+    border-image: var(--rule-x) 2 0 0 / 2px 0 0;
     padding-top: 18px;
   }
   .explore-charts [data-slot="card-header"],
@@ -1994,7 +2046,8 @@ h1 {
   }
   .breakdowns > [data-slot="tabs"] {
     border-left: 0;
-    border-top: 1px solid var(--border);
+    border-top: 2px solid var(--border);
+    border-image: var(--rule-x) 2 0 0 / 2px 0 0;
     padding-top: 20px;
   }
 }
@@ -2434,7 +2487,8 @@ html {
   gap: 12px;
 }
 .log-setup-guide {
-  border-top: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 0 / 2px 0 0;
   padding-top: 16px;
   font-size: 13px;
 }
@@ -2920,7 +2974,8 @@ html {
   flex-wrap: wrap;
   gap: 12px;
   padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 0 / 2px 0 0;
 }
 .date-range-footer [role="status"] {
   color: var(--muted-foreground);
@@ -3052,6 +3107,29 @@ html {
 
 /* Forced colors drop gradients and tones, so pills, segments, and the active page need real edges. */
 @media (forced-colors: active) {
+  /* Dotted seams become plain system borders; the decorative horizon is dropped. */
+  :is(
+    [data-slot="sidebar-container"],
+    [data-slot="sidebar-menu-sub"],
+    [data-slot="tabs-list"][data-variant="line"],
+    .chart-card,
+    .query-builder,
+    .explore-charts,
+    .explore-charts > [data-slot="card"] + [data-slot="card"],
+    .breakdowns > [data-slot="tabs"],
+    .stream-table th,
+    .stream-footer,
+    .date-range-footer,
+    .log-setup-guide,
+    .logs-stream,
+    .logs-columns,
+    .log-inspector [data-slot="sheet-header"]
+  ) {
+    border-image: none;
+  }
+  [data-slot="sidebar-inset"]::before {
+    display: none;
+  }
   :is([data-slot="button"], [data-slot$="-trigger"])[data-variant]:not([data-variant="link"]),
   .date-period-control,
   [data-slot="dialog-close"] {

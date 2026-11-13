@@ -154,7 +154,8 @@
   font-variant-numeric: tabular-nums;
 }
 .logs-stream {
-  border-block: 1px solid var(--border);
+  border-block: 2px solid var(--border);
+  border-image: var(--rule-x) 2 0 / 2px 0;
 }
 /* The page scrolls the stream; only the column header stays put. */
 .logs-viewport {
@@ -201,7 +202,8 @@
   font-size: 11px;
   color: var(--muted-foreground);
   background: var(--surface-inset);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-image: var(--rule-x) 0 0 2 / 0 0 2px;
 }
 .log-row {
   width: 100%;
@@ -314,7 +316,8 @@
 }
 .log-inspector [data-slot="sheet-header"] {
   padding: 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-image: var(--rule-x) 0 0 2 / 0 0 2px;
 }
 .log-inspector-body {
   min-width: 0;
