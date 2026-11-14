@@ -48,9 +48,20 @@ pub const TABLE_FUNCTIONS: [&str; 5] = [
     "json_each",
     "json_tree",
 ];
-/// Scalar functions refused by name: they change state, or hold a query slot doing nothing.
-/// File and network scalars already fail with external access off.
-pub const BLOCKED_FUNCTIONS: [&str; 5] = ["nextval", "currval", "setseed", "write_log", "sleep_ms"];
+/// Scalar functions refused by name: they change state, hold a query slot doing nothing, or
+/// read the server's settings and variables (such as its temp and home paths). File and
+/// network scalars already fail with external access off.
+pub const BLOCKED_FUNCTIONS: [&str; 7] = [
+    "nextval",
+    "currval",
+    "setseed",
+    "write_log",
+    "sleep_ms",
+    "current_setting",
+    "getvariable",
+];
+/// The most cell data one result returns; a larger one stops there with a warning.
+pub const MAX_RESULT_BYTES: usize = 4 * 1024 * 1024;
 /// The warning on a result cut at `MAX_SQL_ROWS`.
 pub const TRUNCATED: &str = "Showing the first 10,000 rows";
 
@@ -78,6 +89,13 @@ fn issue(message: impl Into<String>, hint: impl Into<String>) -> Issue {
         message: message.into(),
         hint: Some(hint.into()),
     }
+}
+
+fn too_deep() -> Issue {
+    issue(
+        "The query nests too deeply to run",
+        "Nest less: flatten subqueries, function calls, joins or chains of WITH tables, for example by naming steps in one WITH clause",
+    )
 }
 
 fn unavailable() -> Issue {
@@ -115,23 +133,33 @@ impl Parser {
             ));
         }
         let serialized = self.serialize(sql)?;
-        let nodes = scan(&serialized).ok_or_else(|| {
-            tracing::error!("Could not read DuckDB's serialized statement");
-            unavailable()
-        })?;
+        let nodes = match scan(&serialized, &FIELDS, MAX_TREE_DEPTH) {
+            Ok(nodes) => nodes,
+            Err(Unscanned::TooDeep) => return Err(too_deep()),
+            Err(Unscanned::Malformed) => {
+                tracing::error!("Could not read DuckDB's serialized statement");
+                return Err(unavailable());
+            }
+        };
         check_statement(sql, &nodes)?;
         check_tree(sql, &nodes, database)
     }
 
     fn serialize(&self, sql: &str) -> Result<String, Issue> {
-        let db = self.connection.lock().map_err(|_| unavailable())?;
-        db.query_row(
-            "SELECT json_serialize_sql(?::VARCHAR)::VARCHAR",
-            [sql],
-            |r| r.get::<_, String>(0),
-        )
-        .map_err(|e| {
-            tracing::error!(error = %e, "The SQL parser failed");
+        let serialized = on_sql_stack(|| {
+            let db = self
+                .connection
+                .lock()
+                .map_err(|_| ApiError::from(anyhow::anyhow!("The SQL parser is poisoned")))?;
+            db.query_row(
+                "SELECT json_serialize_sql(?::VARCHAR)::VARCHAR",
+                [sql],
+                |r| r.get::<_, String>(0),
+            )
+            .map_err(internal)
+        });
+        serialized.map_err(|e| {
+            tracing::error!(error = %e.1, "The SQL parser failed");
             unavailable()
         })
     }
@@ -278,13 +306,13 @@ fn check_statement(sql: &str, nodes: &[Node]) -> Result<(), Issue> {
         let message = root.get("error_message").unwrap_or("Invalid SQL");
         if root.get("error_type") == Some("parser") {
             let offset = root.get("position").and_then(|p| p.parse().ok());
-            return Err(issue(
-                format!("{message}{}", position(sql, offset)),
-                match offset {
-                    Some(o) => format!("Fix the SQL near {}", at(sql, o)),
-                    None => "Fix the SQL syntax".into(),
-                },
-            ));
+            let message = tidy(message);
+            let hint = match offset {
+                _ if deep(&message) => too_deep().hint.unwrap_or_default(),
+                Some(o) => format!("Fix the SQL near {}", at(sql, o)),
+                None => "Fix the SQL syntax".into(),
+            };
+            return Err(issue(format!("{message}{}", position(sql, offset)), hint));
         }
         if message.contains("Only SELECT statements") {
             let found = statements(sql)
@@ -338,8 +366,8 @@ fn check_statement(sql: &str, nodes: &[Node]) -> Result<(), Issue> {
 // ---------------------------------------------------------------------------------------------
 // Step 2: the tree
 
-/// One JSON object of the serialized statement: the scalar members the checks read, and where
-/// it sits. The scan is iterative, so any nesting depth DuckDB accepts can be verified.
+/// One JSON object of a serialized statement or plan: the scalar members the checks read, and
+/// where it sits. The scan is iterative, so nesting never costs Rust stack.
 #[derive(Debug, Default)]
 struct Node {
     /// The member this object (or the array holding it) is the value of.
@@ -351,8 +379,10 @@ struct Node {
     table_functions: Vec<(String, Option<String>)>,
     /// For a query: the WITH tables it defines, as each definition closes.
     ctes: Vec<String>,
-    /// For a table ref: it names a WITH table of an enclosing query, so it reads no table.
+    /// For a table ref: it names a WITH table in scope, so it reads no table.
     with_table: bool,
+    /// For a plan operator: how many `children` it has.
+    children: Option<usize>,
 }
 impl Node {
     fn get(&self, key: &str) -> Option<&str> {
@@ -371,8 +401,9 @@ fn location(raw: Option<&str>, sql: &str) -> Option<usize> {
         .filter(|&o| o < sql.len())
 }
 
-/// The members the checks read; everything else is skipped (but still walked).
-const FIELDS: [&str; 16] = [
+/// The members of a serialized statement the checks read; everything else is skipped (but
+/// still walked).
+const FIELDS: [&str; 17] = [
     "class",
     "type",
     "function_name",
@@ -385,11 +416,28 @@ const FIELDS: [&str; 16] = [
     "query_location",
     "key",
     "show_type",
+    "cte_name",
     "error",
     "error_type",
     "error_message",
     "position",
 ];
+/// The members of a physical plan the checks read. An operator's `extra_info` members are
+/// read as the operator's own.
+const PLAN_FIELDS: [&str; 3] = ["name", "Function", "Table"];
+
+/// How deeply a serialized statement may nest. On a 2 MiB thread DuckDB's binder overflows the
+/// stack on trees from about 2,800 levels (nested subqueries); `max_expression_depth` (250, see
+/// `product_db`) refuses most deep queries first, and this bound refuses the rest well before
+/// DuckDB binds them. Ordinary queries nest 10–60 levels.
+pub const MAX_TREE_DEPTH: usize = 400;
+
+/// How many joins and subqueries one statement may hold. DuckDB's planner takes time that grows
+/// steeply with them (correlated subqueries and LATERAL joins most: in a debug build, 30
+/// correlated scalar subqueries plan in 2 s and 40 in 9 s), and planning cannot be
+/// interrupted, so the widget deadline cannot stop it. At 32 the worst case plans in about
+/// 2.5 s in a debug build.
+pub const MAX_JOINS_AND_SUBQUERIES: usize = 32;
 
 enum Frame {
     Object {
@@ -399,36 +447,57 @@ enum Frame {
     },
     Array {
         member: String,
+        items: usize,
     },
+}
+
+/// Why a document could not be scanned.
+#[derive(Debug, PartialEq)]
+enum Unscanned {
+    /// Nested beyond the bound the scan was given.
+    TooDeep,
+    /// Not JSON.
+    Malformed,
 }
 
 /// Whether an object pushed at `stack[at]` (or about to close there) is a WITH definition: an
 /// entry of the `map` array inside a `cte_map` object.
 fn cte_entry(stack: &[Frame], at: usize) -> bool {
     at >= 2
-        && matches!(&stack[at - 1], Frame::Array { member } if member == "map")
+        && matches!(&stack[at - 1], Frame::Array { member, .. } if member == "map")
         && matches!(&stack[at - 2], Frame::Object { node, .. } if node.member == "cte_map")
 }
 
-/// Whether `name` is a WITH table in scope: defined by an enclosing query, or the definition
-/// being read (so a recursive WITH may name itself). This relies on DuckDB writing a query's
-/// `cte_map` before its body and a definition's `key` before its `value`; were that to change,
-/// references would only be refused, never let through.
+/// Whether `name` is a WITH table in scope: one an enclosing query defined before this point,
+/// or, inside the recursive branch (`right`) of a `WITH RECURSIVE … UNION`, that WITH table
+/// itself. Anywhere else a WITH naming itself reads the catalog object of that name, so it is
+/// not in scope. This relies on DuckDB writing a query's `cte_map` before its body, and a
+/// recursive node's `cte_name` before its branches; were that to change, references would
+/// only be refused, never let through.
 fn in_scope(stack: &[Frame], name: &str) -> bool {
     stack.iter().enumerate().any(|(at, frame)| {
         let Frame::Object { node, .. } = frame else {
             return false;
         };
-        node.ctes.iter().any(|c| c == name)
-            || (cte_entry(stack, at)
-                && node
-                    .get("key")
-                    .is_some_and(|k| k.eq_ignore_ascii_case(name)))
+        let recursive_branch = node.get("type") == Some("RECURSIVE_CTE_NODE")
+            && node
+                .get("cte_name")
+                .is_some_and(|c| c.eq_ignore_ascii_case(name))
+            && matches!(stack.get(at + 1), Some(Frame::Object { node, .. }) if node.member == "right");
+        recursive_branch || node.ctes.iter().any(|c| c == name)
     })
 }
 
-/// Every object of a JSON document, children before parents. `None` when it is not JSON.
-fn scan(json: &str) -> Option<Vec<Node>> {
+/// Counts a value starting inside the innermost array, if that is where it is.
+fn count_item(stack: &mut [Frame]) {
+    if let Some(Frame::Array { items, .. }) = stack.last_mut() {
+        *items += 1;
+    }
+}
+
+/// Every object of a JSON document, children before parents, keeping the members in `fields`.
+fn scan(json: &str, fields: &[&str], max_depth: usize) -> Result<Vec<Node>, Unscanned> {
+    use Unscanned::Malformed;
     let b = json.as_bytes();
     let mut stack: Vec<Frame> = Vec::new();
     let mut out = Vec::new();
@@ -437,9 +506,13 @@ fn scan(json: &str) -> Option<Vec<Node>> {
         match b[i] {
             c if c.is_ascii_whitespace() || c == b',' || c == b':' => i += 1,
             open @ (b'{' | b'[') => {
+                if stack.len() >= max_depth {
+                    return Err(Unscanned::TooDeep);
+                }
+                count_item(&mut stack);
                 let member = match stack.last_mut() {
-                    Some(Frame::Object { key, .. }) => key.take()?,
-                    Some(Frame::Array { member }) => member.clone(),
+                    Some(Frame::Object { key, .. }) => key.take().ok_or(Malformed)?,
+                    Some(Frame::Array { member, .. }) => member.clone(),
                     None => String::new(),
                 };
                 stack.push(if open == b'{' {
@@ -452,13 +525,13 @@ fn scan(json: &str) -> Option<Vec<Node>> {
                         key: None,
                     }
                 } else {
-                    Frame::Array { member }
+                    Frame::Array { member, items: 0 }
                 });
                 i += 1;
             }
             b'}' => {
                 let Some(Frame::Object { mut node, .. }) = stack.pop() else {
-                    return None;
+                    return Err(Malformed);
                 };
                 // A WITH definition is an entry of the `map` array of the `cte_map` of a query,
                 // which it is in scope for from here on.
@@ -486,26 +559,38 @@ fn scan(json: &str) -> Option<Vec<Node>> {
                         node.get("query_location").map(str::to_string),
                     ));
                 }
+                // A plan operator's details belong to the operator.
+                if node.member == "extra_info"
+                    && let Some(Frame::Object { node: parent, .. }) = stack.last_mut()
+                {
+                    parent.fields.append(&mut node.fields);
+                }
                 out.push(node);
                 i += 1;
             }
             b']' => {
-                let Some(Frame::Array { .. }) = stack.pop() else {
-                    return None;
+                let Some(Frame::Array { member, items }) = stack.pop() else {
+                    return Err(Malformed);
                 };
+                if member == "children"
+                    && let Some(Frame::Object { node, .. }) = stack.last_mut()
+                {
+                    node.children = Some(items);
+                }
                 i += 1;
             }
             b'"' => {
-                let (text, next) = string(b, i)?;
+                let (text, next) = string(b, i).ok_or(Malformed)?;
                 i = next;
-                if let Some(Frame::Object { node, key }) = stack.last_mut() {
-                    match key.take() {
+                match stack.last_mut() {
+                    Some(Frame::Object { node, key }) => match key.take() {
                         None => *key = Some(text),
-                        Some(name) if FIELDS.contains(&name.as_str()) => {
+                        Some(name) if fields.contains(&name.as_str()) => {
                             node.fields.push((name, text))
                         }
                         Some(_) => {}
-                    }
+                    },
+                    _ => count_item(&mut stack),
                 }
             }
             _ => {
@@ -517,18 +602,25 @@ fn scan(json: &str) -> Option<Vec<Node>> {
                     i += 1;
                 }
                 if start == i {
-                    return None;
+                    return Err(Malformed);
                 }
-                if let Some(Frame::Object { node, key }) = stack.last_mut() {
-                    let name = key.take()?;
-                    if FIELDS.contains(&name.as_str()) {
-                        node.fields.push((name, json[start..i].to_string()));
+                match stack.last_mut() {
+                    Some(Frame::Object { node, key }) => {
+                        let name = key.take().ok_or(Malformed)?;
+                        if fields.contains(&name.as_str()) {
+                            node.fields.push((name, json[start..i].to_string()));
+                        }
                     }
+                    _ => count_item(&mut stack),
                 }
             }
         }
     }
-    stack.is_empty().then_some(out)
+    if stack.is_empty() {
+        Ok(out)
+    } else {
+        Err(Malformed)
+    }
 }
 
 /// A JSON string starting at `b[start]` (a quote), unescaped, and the offset after it.
@@ -619,6 +711,22 @@ fn table_function(
 fn check_tree(sql: &str, nodes: &[Node], database: Option<SqlDatabase>) -> Result<Verified, Issue> {
     let mut verified = Verified::default();
     let mut names = Vec::new();
+    let joins = nodes
+        .iter()
+        .filter(|node| match (node.get("class"), node.get("type")) {
+            (Some(class), _) => class == "SUBQUERY",
+            (None, Some(kind)) => kind == "SUBQUERY" || kind == "JOIN",
+            (None, None) => false,
+        })
+        .count();
+    if joins > MAX_JOINS_AND_SUBQUERIES {
+        return Err(issue(
+            format!(
+                "This query has {joins} joins and subqueries; the limit is {MAX_JOINS_AND_SUBQUERIES}"
+            ),
+            "Planning time grows steeply with joins and correlated subqueries: compute each step once in a WITH table and join fewer times",
+        ));
+    }
     for node in nodes {
         let offset = node.location(sql);
         let catalog = node
@@ -778,13 +886,28 @@ fn refused(sql: &str, e: duckdb::Error) -> ApiError {
     ApiError::bad(duckdb_message(sql, &e.to_string()))
 }
 
+/// A DuckDB message on one line, without its advice to change a setting (settings are locked).
+fn tidy(message: &str) -> String {
+    let mut text = message.split_whitespace().collect::<Vec<_>>().join(" ");
+    if let Some(at) = text.find("Use \"SET ") {
+        let end = text[at..].find(". ").map_or(text.len(), |e| at + e + 2);
+        text.replace_range(at..end, "");
+    }
+    text.trim().to_string()
+}
+
+/// Whether DuckDB refused a query for nesting too deeply.
+fn deep(message: &str) -> bool {
+    message.contains("Max expression depth")
+}
+
 /// DuckDB's message on one line, ending with the line and column its caret points at.
 fn duckdb_message(sql: &str, message: &str) -> String {
     let (head, context) = match message.split_once("\n\nLINE ") {
         Some((head, context)) => (head, Some(context)),
         None => (message, None),
     };
-    let head = head.split_whitespace().collect::<Vec<_>>().join(" ");
+    let head = tidy(head);
     match context.and_then(|c| caret(sql, c)) {
         Some((line, column)) => format!("{head} (line {line}, column {column})"),
         None => head,
@@ -857,19 +980,44 @@ fn stream<T>(
     read(&statement)
 }
 
-/// Runs `f` in a transaction that is rolled back whatever happens. After a failed query DuckDB
-/// may have ended the transaction already, so then the query's own error is what is returned.
-fn rolled_back<T>(
+/// The stack DuckDB's recursive parser, binder and planner get for dashboard SQL. Callers run
+/// on Tokio's 2 MiB blocking threads, and a query within the 8,000-character limit can recurse
+/// past that (a chain of LATERAL joins or WITH tables needs 15–20 KiB per level in a debug
+/// build), which aborts the whole process. `max_expression_depth` and `MAX_TREE_DEPTH` bound
+/// the recursion; this stack holds whatever they allow with room to spare. It is reserved
+/// virtually and only touched as deep as a query goes.
+const SQL_STACK_BYTES: usize = 64 * 1024 * 1024;
+
+/// Runs `f` on a thread with `SQL_STACK_BYTES` of stack, and waits for it.
+fn on_sql_stack<T: Send>(f: impl FnOnce() -> ApiResult<T> + Send) -> ApiResult<T> {
+    std::thread::scope(|scope| {
+        let thread = std::thread::Builder::new()
+            .name("piko-sql".into())
+            .stack_size(SQL_STACK_BYTES)
+            .spawn_scoped(scope, f)
+            .map_err(|e| ApiError::from(anyhow::Error::from(e)))?;
+        thread
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    })
+}
+
+/// Runs `f` in a transaction that is rolled back whatever happens, on the SQL stack. After a
+/// failed query DuckDB may have ended the transaction already, so then the query's own error
+/// is what is returned.
+fn rolled_back<T: Send>(
     db: &mut Connection,
-    f: impl FnOnce(&Transaction<'_>) -> ApiResult<T>,
+    f: impl FnOnce(&Transaction<'_>) -> ApiResult<T> + Send,
 ) -> ApiResult<T> {
-    let tx = db.transaction().map_err(internal)?;
-    let result = f(&tx);
-    let rollback = tx.rollback();
-    match (result, rollback) {
-        (Ok(_), Err(e)) => Err(internal(e)),
-        (result, _) => result,
-    }
+    on_sql_stack(move || {
+        let tx = db.transaction().map_err(internal)?;
+        let result = f(&tx);
+        let rollback = tx.rollback();
+        match (result, rollback) {
+            (Ok(_), Err(e)) => Err(internal(e)),
+            (result, _) => result,
+        }
+    })
 }
 
 /// DuckDB's name for a type, with `JSON` for JSON columns.
@@ -952,6 +1100,103 @@ pub fn describe(
 ) -> ApiResult<Vec<(String, String)>> {
     rolled_back(db, |tx| {
         stream(tx, sql, params, |statement| Ok(result_columns(statement)))
+    })
+}
+
+/// Plan operators without children that read nothing beyond the query itself: constants,
+/// VALUES, empty results, and scans of its own WITH tables and intermediate results.
+const PLAN_LEAVES: [&str; 9] = [
+    "DUMMY_SCAN",
+    "EMPTY_RESULT",
+    "COLUMN_DATA_SCAN",
+    "CHUNK_SCAN",
+    "DELIM_SCAN",
+    "EXPRESSION_SCAN",
+    "CTE_SCAN",
+    "REC_CTE_SCAN",
+    "REC_REC_CTE_SCAN",
+];
+
+/// The parts of a dotted name as DuckDB prints it, unquoted: `"a-b".main.events`.
+fn name_parts(name: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut quoted = false;
+    let mut chars = name.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                chars.next();
+                parts.last_mut().unwrap().push('"');
+            }
+            '"' => quoted = !quoted,
+            '.' if !quoted => parts.push(String::new()),
+            c => parts.last_mut().unwrap().push(c),
+        }
+    }
+    parts
+}
+
+/// What a plan operator reads that the query may not, if anything.
+fn plan_refusal(node: &Node, catalog: &str, database: SqlDatabase) -> Option<String> {
+    let name = node.get("name")?;
+    let own = database.table();
+    if let Some(table) = node.get("Table") {
+        let parts = name_parts(table);
+        let is_own = match parts.as_slice() {
+            [t] => t.eq_ignore_ascii_case(own),
+            [c, s, t] => {
+                c == catalog && s.eq_ignore_ascii_case("main") && t.eq_ignore_ascii_case(own)
+            }
+            _ => false,
+        };
+        if !is_own {
+            return Some(table.to_string());
+        }
+    }
+    if let Some(function) = node.get("Function") {
+        let function = function.to_ascii_lowercase();
+        return (!TABLE_FUNCTIONS.contains(&function.as_str())).then_some(function);
+    }
+    let leaf = node.children.unwrap_or(0) == 0;
+    (leaf && node.get("Table").is_none() && !PLAN_LEAVES.contains(&name))
+        .then(|| name.to_ascii_lowercase())
+}
+
+/// The other half of step 3: DuckDB's physical plan for the query, with its parameters bound,
+/// may read only the database's own table, the query's WITH tables and the allowed table
+/// functions. The plan shows what the tree cannot, such as a catalog macro (`pg_get_viewdef`)
+/// that calls a system table function. Returns what else the query would read.
+pub fn check_plan(
+    db: &mut Connection,
+    sql: &str,
+    params: &SqlParams,
+    database: SqlDatabase,
+) -> ApiResult<Option<String>> {
+    rolled_back(db, |tx| {
+        let catalog: String = tx
+            .query_row("SELECT current_database()", [], |r| r.get(0))
+            .map_err(internal)?;
+        // EXPLAIN plans the verified statement without running it.
+        let explain = format!("EXPLAIN (FORMAT JSON)\n{sql}");
+        let plans = stream(tx, &explain, params, |statement| {
+            let mut plans = Vec::new();
+            let mut rows = statement.raw_query();
+            while let Some(row) = rows.next().map_err(|e| refused(sql, e))? {
+                plans.push(row.get::<_, String>(1).map_err(internal)?);
+            }
+            Ok(plans)
+        })?;
+        for plan in plans {
+            let nodes = scan(&plan, &PLAN_FIELDS, usize::MAX)
+                .map_err(|_| ApiError::from(anyhow::anyhow!("DuckDB's plan is not JSON")))?;
+            if let Some(read) = nodes
+                .iter()
+                .find_map(|node| plan_refusal(node, &catalog, database))
+            {
+                return Ok(Some(read));
+            }
+        }
+        Ok(None)
     })
 }
 
@@ -1085,6 +1330,37 @@ pub struct SqlResult {
     pub columns: Vec<(String, String)>,
     pub rows: Vec<Vec<Value>>,
     pub truncated: bool,
+    /// The rows were cut at `MAX_RESULT_BYTES` rather than at the row cap.
+    pub byte_limited: bool,
+}
+impl SqlResult {
+    /// The warning a cut result carries.
+    pub fn warning(&self) -> Option<String> {
+        match (self.truncated, self.byte_limited) {
+            (false, _) => None,
+            (true, false) => Some(TRUNCATED.into()),
+            (true, true) => Some(format!(
+                "Showing the first {} rows (4 MB limit)",
+                self.rows.len()
+            )),
+        }
+    }
+}
+
+/// About how many bytes `value` takes as JSON.
+fn json_size(value: &Value) -> usize {
+    match value {
+        Value::Null | Value::Bool(_) => 5,
+        Value::Number(_) => 8,
+        Value::String(s) => s.len() + 2,
+        Value::Array(items) => 2 + items.iter().map(|v| json_size(v) + 1).sum::<usize>(),
+        Value::Object(fields) => {
+            2 + fields
+                .iter()
+                .map(|(k, v)| k.len() + 4 + json_size(v))
+                .sum::<usize>()
+        }
+    }
 }
 
 fn number(value: f64) -> Value {
@@ -1204,8 +1480,9 @@ fn cell(row: &duckdb::Row<'_>, i: usize, kind: &str) -> Option<Value> {
     })
 }
 
-/// Runs a verified query and fetches at most `max_rows` rows, in a transaction that is always
-/// rolled back. Rows stream from DuckDB, and fetching stops after `max_rows`.
+/// Runs a verified query and fetches at most `max_rows` rows and `MAX_RESULT_BYTES` of cell
+/// data, in a transaction that is always rolled back. Rows stream from DuckDB, and fetching
+/// stops at either limit.
 pub fn execute(
     db: &mut Connection,
     sql: &str,
@@ -1216,7 +1493,7 @@ pub fn execute(
         stream(tx, sql, params, |statement| {
             let columns = result_columns(statement);
             let mut rows = Vec::new();
-            let mut truncated = false;
+            let (mut truncated, mut byte_limited, mut bytes) = (false, false, 0);
             let mut cursor = statement.raw_query();
             while let Some(row) = cursor.next().map_err(|e| refused(sql, e))? {
                 if rows.len() == max_rows {
@@ -1231,12 +1508,18 @@ pub fn execute(
                         ))
                     })?);
                 }
+                bytes += values.iter().map(json_size).sum::<usize>();
+                if bytes > MAX_RESULT_BYTES {
+                    (truncated, byte_limited) = (true, true);
+                    break;
+                }
                 rows.push(values);
             }
             Ok(SqlResult {
                 columns,
                 rows,
                 truncated,
+                byte_limited,
             })
         })
     })
@@ -1324,19 +1607,53 @@ pub fn verify_widget(
         let columns = match describe(db, &q.sql, params) {
             Ok(columns) => columns,
             Err(ApiError(StatusCode::BAD_REQUEST, message)) => {
-                check.errors.push(Issue {
-                    path,
-                    message,
-                    hint: Some(format!(
+                let hint = if deep(&message) {
+                    too_deep().hint.unwrap_or_default()
+                } else {
+                    format!(
                         "Names must match the {} table's columns, listed in the catalog's sql.{}",
                         q.database.table(),
                         q.database.table()
-                    )),
+                    )
+                };
+                check.errors.push(Issue {
+                    path,
+                    message,
+                    hint: Some(hint),
                 });
                 continue;
             }
             Err(e) => return Err(e),
         };
+        match check_plan(db, &q.sql, params, q.database) {
+            Ok(None) => {}
+            Ok(Some(read)) => {
+                check.errors.push(Issue {
+                    path,
+                    message: format!(
+                        "This query reads {read}, which is outside this project's {} table",
+                        q.database.table()
+                    ),
+                    hint: Some(format!(
+                        "SQL may only read the {} table, its own WITH tables and the table functions {}; system views and catalog functions (such as pg_get_viewdef) are not available",
+                        q.database.table(),
+                        TABLE_FUNCTIONS.join(", ")
+                    )),
+                });
+                continue;
+            }
+            Err(ApiError(StatusCode::BAD_REQUEST, message)) => {
+                check.errors.push(Issue {
+                    path,
+                    message,
+                    hint: Some(
+                        "DuckDB could not plan this query; fix what the message names".into(),
+                    ),
+                });
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
         if let Some(message) = check_shape(widget.view.kind, &columns) {
             check.errors.push(Issue {
                 path,
@@ -1640,6 +1957,41 @@ mod tests {
                 "WITH a AS (SELECT * FROM b), b AS (SELECT 1) SELECT * FROM a",
                 "b",
             ),
+            // A WITH naming itself reads the catalog object of that name, recursive or not,
+            // unless it is the recursive branch of a WITH RECURSIVE … UNION.
+            (
+                "WITH duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT database_name, path FROM duckdb_databases",
+                "duckdb_databases",
+            ),
+            (
+                "WITH RECURSIVE duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT path FROM duckdb_databases",
+                "duckdb_databases",
+            ),
+            (
+                "WITH pg_settings AS (SELECT * FROM pg_settings) SELECT * FROM pg_settings",
+                "pg_settings",
+            ),
+            (
+                "WITH RECURSIVE pg_settings AS (SELECT * FROM pg_settings) SELECT * FROM pg_settings",
+                "pg_settings",
+            ),
+            (
+                "WITH sqlite_master AS (SELECT * FROM sqlite_master) SELECT sql FROM sqlite_master",
+                "sqlite_master",
+            ),
+            (
+                "WITH RECURSIVE sqlite_master AS (SELECT * FROM sqlite_master UNION ALL SELECT * FROM sqlite_master) SELECT 1",
+                "sqlite_master",
+            ),
+            (
+                "WITH RECURSIVE r AS (SELECT * FROM sqlite_master UNION ALL SELECT * FROM r) SELECT * FROM r",
+                "sqlite_master",
+            ),
+            (
+                "SELECT current_setting('temp_directory')",
+                "current_setting",
+            ),
+            ("SELECT getvariable('x')", "getvariable"),
             ("DESCRIBE events", "DESCRIBE"),
             ("SUMMARIZE events", "SUMMARIZE"),
             ("SHOW TABLES", "SHOW"),
@@ -1663,12 +2015,14 @@ mod tests {
 
     #[test]
     fn accepts_read_only_selects() {
-        let deep = format!("SELECT {} AS value", vec!["1"; 400].join(" + "));
+        // Deeper than serde_json's 128 levels, within `MAX_TREE_DEPTH`.
+        let deep = format!("SELECT {} AS value", vec!["1"; 120].join(" + "));
         for sql in [
             "SELECT epoch_ms(date_trunc($bucket, epoch_ms(event_time))) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1",
             "SELECT count(*) AS value FROM main.events WHERE ($source IS NULL OR source_id = $source)",
             "FROM events SELECT name",
             "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) SELECT * FROM r",
+            "WITH RECURSIVE duckdb_databases AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM (SELECT * FROM duckdb_databases) d WHERE n < 3) SELECT * FROM duckdb_databases",
             "WITH a AS (SELECT name FROM events), b AS (SELECT * FROM a) SELECT * FROM b",
             "SELECT * FROM range(3) r(x), generate_series(1, 2), unnest([1, 2]), json_each('[1]'), json_tree('{}')",
             "SELECT name, sum(1) OVER (PARTITION BY source ORDER BY event_time) FROM events QUALIFY row_number() OVER () = 1",
@@ -1776,6 +2130,8 @@ mod tests {
                 .unwrap()
             };
             assert_eq!(setting("lock_configuration"), "true");
+            // Set GLOBAL, so the cloned connection a lease uses has it too.
+            assert_eq!(setting("max_expression_depth"), "250");
             assert_eq!(setting("enable_external_access"), "false");
             assert_eq!(setting("autoload_known_extensions"), "false");
             assert_eq!(setting("autoinstall_known_extensions"), "false");
@@ -1785,6 +2141,14 @@ mod tests {
         }
         let p = parser();
         let parser_db = p.connection.lock().unwrap();
+        let depth: String = parser_db
+            .query_row(
+                "SELECT current_setting('max_expression_depth')::VARCHAR",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(depth, "250");
         assert!(
             parser_db
                 .execute_batch("SET enable_external_access=true")
@@ -1920,6 +2284,235 @@ mod tests {
         assert!(error.1.contains("Conversion Error"), "{}", error.1);
         let result = execute(db, "SELECT count(*) AS n FROM events", &params(), 10).unwrap();
         assert_eq!(result.rows, vec![vec![Value::from(3)]]);
+    }
+
+    #[test]
+    fn plan_names_are_unquoted() {
+        assert_eq!(name_parts("events"), ["events"]);
+        assert_eq!(
+            name_parts("\"01a-b\".main.events"),
+            ["01a-b", "main", "events"]
+        );
+        assert_eq!(name_parts("\"a\"\"b.c\".main.x"), ["a\"b.c", "main", "x"]);
+    }
+
+    #[test]
+    fn plan_reads_only_the_database_table() {
+        let (dir, dbs, id) = events_db();
+        let mut lease = dbs.connection(&id).unwrap();
+        let db = &mut lease.connection;
+        let plan = |db: &mut Connection, sql: &str, database| {
+            check_plan(db, sql, &params(), database).unwrap_or_else(|e| panic!("{sql}: {}", e.1))
+        };
+        use SqlDatabase::{Events, Logs};
+        // What the tree cannot see: catalog macros, and (were step 2 passed) self-named WITHs.
+        for (sql, read, database) in [
+            ("SELECT pg_get_viewdef(1) AS value", "duckdb_views", Events),
+            ("SELECT format_type(23, 0) AS value", "duckdb_types", Events),
+            (
+                "SELECT pg_get_constraintdef(1) AS value",
+                "duckdb_constraints",
+                Events,
+            ),
+            (
+                "WITH duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT path FROM duckdb_databases",
+                "duckdb_databases",
+                Events,
+            ),
+            (
+                "WITH pg_settings AS (SELECT * FROM pg_settings) SELECT * FROM pg_settings",
+                "duckdb_settings",
+                Events,
+            ),
+            (
+                "WITH sqlite_master AS (SELECT * FROM sqlite_master) SELECT * FROM sqlite_master",
+                "",
+                Events,
+            ),
+            (
+                "WITH d AS (SELECT * FROM duckdb_databases) SELECT count(*) FROM d",
+                "duckdb_databases",
+                Events,
+            ),
+            ("SELECT name FROM events", "events", Logs),
+        ] {
+            let found = plan(db, sql, database).unwrap_or_else(|| panic!("allowed: {sql}"));
+            assert!(found.contains(read), "{sql}: {found}");
+        }
+        for sql in [
+            "SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to AND ($source IS NULL OR source_id = $source)",
+            "SELECT name, sum(1) OVER (PARTITION BY name) FROM events QUALIFY row_number() OVER () = 1",
+            "WITH a AS MATERIALIZED (SELECT name FROM events), b AS (SELECT * FROM a) SELECT * FROM a, b",
+            "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) SELECT * FROM r",
+            "SELECT * FROM range(3), generate_series(1, 2), unnest([1, 2]), json_each('[1]'), json_tree('{}')",
+            "SELECT e.name, j.key FROM events e, json_each(e.properties) j",
+            "SELECT * FROM events PIVOT (count(*) FOR name IN ('visit'))",
+            "SELECT 1 UNION ALL SELECT 2",
+            "SELECT * FROM (VALUES (1), (2)) v(x) WHERE x > 0",
+            "SELECT 1 WHERE false",
+            "SELECT name FROM events WHERE name IN (SELECT name FROM events WHERE event_time > $from)",
+        ] {
+            assert_eq!(plan(db, sql, Events), None, "{sql}");
+        }
+        let logs = ProductDatabases::for_logs(dir.path().join("logs")).unwrap();
+        let mut lease = logs.connection(&id).unwrap();
+        let db = &mut lease.connection;
+        let recent = "SELECT count(*) FROM logs WHERE timestamp >= $from";
+        assert_eq!(plan(db, recent, Logs), None);
+        assert!(plan(db, "SELECT count(*) FROM logs", Events).is_some());
+    }
+
+    fn nested(kind: &str, n: usize) -> String {
+        match kind {
+            "subquery" => format!("SELECT {}1{} AS value", "(SELECT ".repeat(n), ")".repeat(n)),
+            "function" => format!("SELECT {}1{} AS value", "abs(".repeat(n), ")".repeat(n)),
+            "plus" => format!("SELECT {} AS value", vec!["1"; n].join(" + ")),
+            "case" => format!(
+                "SELECT {}1{} AS value",
+                "CASE WHEN true THEN ".repeat(n),
+                " END".repeat(n)
+            ),
+            "list" => format!("SELECT {}1{} AS value", "[".repeat(n), "]".repeat(n)),
+            "in" => format!(
+                "SELECT 1 AS value WHERE {}1{}",
+                "1 IN (SELECT ".repeat(n),
+                ")".repeat(n)
+            ),
+            "from" => format!(
+                "SELECT 1 AS value FROM {}(SELECT 1){}",
+                "(SELECT * FROM ".repeat(n),
+                " t)".repeat(n)
+            ),
+            "union" => format!("SELECT 1 AS value{}", " UNION ALL SELECT 1".repeat(n)),
+            "join" => format!(
+                "SELECT 1 AS value FROM range(1) t0{}",
+                (1..n)
+                    .map(|i| format!(" JOIN range(1) t{i} ON true"))
+                    .collect::<String>()
+            ),
+            "lateral" => format!(
+                "SELECT 1 AS value FROM range(1) t0{}",
+                (1..n)
+                    .map(|i| format!(", LATERAL (SELECT t{}.*) t{i}", i - 1))
+                    .collect::<String>()
+            ),
+            "with" => {
+                let chain: String = (1..n)
+                    .map(|i| format!(", t{i} AS (SELECT v FROM t{})", i - 1))
+                    .collect();
+                format!(
+                    "WITH t0 AS (SELECT 1 AS v){chain} SELECT v AS value FROM t{}",
+                    n - 1
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn deep_nesting_is_refused_before_duckdb_binds_it() {
+        // Widget runs use Tokio's blocking threads, whose stacks are 2 MiB. A stack overflow
+        // aborts the process, so a regression here takes the whole test binary down.
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                let (_dir, dbs, id) = events_db();
+                let mut lease = dbs.connection(&id).unwrap();
+                let db = &mut lease.connection;
+                let p = parser();
+                let kinds = [
+                    "subquery", "function", "plus", "case", "list", "in", "from", "union", "join",
+                    "with", "lateral",
+                ];
+                for kind in kinds {
+                    for n in [10, 60, 120, 135, 250, 400, 600, 880, 990] {
+                        let sql = nested(kind, n);
+                        if sql.chars().count() > MAX_SQL_CHARS {
+                            continue;
+                        }
+                        // What verification accepts is described and planned, without crashing.
+                        if p.verify(&sql, Some(SqlDatabase::Events)).is_ok() {
+                            for result in [
+                                describe(db, &sql, &params()).map(|_| ()),
+                                check_plan(db, &sql, &params(), SqlDatabase::Events).map(|_| ()),
+                            ] {
+                                if let Err(e) = result {
+                                    assert_eq!(e.0, 400, "{kind} {n}: {}", e.1);
+                                }
+                            }
+                        }
+                    }
+                }
+                // Just under and just over the tree bound (nested calls serialize 3 levels each),
+                // below DuckDB's own expression depth limit.
+                assert!(p.verify(&nested("function", 125), None).is_ok());
+                let issue = p.verify(&nested("function", 140), None).unwrap_err();
+                assert_eq!(issue.message, "The query nests too deeply to run");
+                assert!(issue.hint.unwrap().starts_with("Nest less"));
+                // Joins and subqueries are capped, since planning them cannot be interrupted.
+                for kind in ["subquery", "in", "from", "join", "lateral"] {
+                    let issue = p.verify(&nested(kind, 40), None).unwrap_err();
+                    assert!(
+                        issue.message.contains("joins and subqueries"),
+                        "{kind}: {issue:?}"
+                    );
+                }
+                let siblings = (0..33)
+                    .map(|i| format!("(SELECT t.x + {i})"))
+                    .collect::<Vec<_>>();
+                let sql = format!(
+                    "SELECT {} AS value FROM range(3) t(x)",
+                    siblings.join(" + ")
+                );
+                let issue = p.verify(&sql, None).unwrap_err();
+                assert_eq!(
+                    issue.message,
+                    "This query has 33 joins and subqueries; the limit is 32"
+                );
+                let sql = format!(
+                    "SELECT {} AS value FROM range(3) t(x)",
+                    siblings[..32].join(" + ")
+                );
+                assert!(p.verify(&sql, None).is_ok());
+                // The reported crashes: nested scalar subqueries and nested calls stop in the
+                // parser, and a WITH chain (no subqueries) in the binder.
+                for sql in [nested("subquery", 880), nested("function", 990)] {
+                    let issue = p.verify(&sql, None).unwrap_err();
+                    assert!(issue.message.contains("Max expression depth"), "{issue:?}");
+                    assert!(!issue.message.contains("SET"), "{issue:?}");
+                    assert!(issue.hint.unwrap().starts_with("Nest less"));
+                }
+                // A WITH chain overflowed 2 MiB at about 135 levels; on the SQL stack it binds,
+                // and past 250 levels DuckDB's binder refuses it.
+                let chain = nested("with", 200);
+                assert!(p.verify(&chain, None).is_ok());
+                assert!(describe(db, &chain, &params()).is_ok());
+                let chain = nested("with", 270);
+                assert!(chain.chars().count() <= MAX_SQL_CHARS);
+                let error = describe(db, &chain, &params()).unwrap_err();
+                assert!(error.1.contains("Max expression depth"), "{}", error.1);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn results_stop_at_the_byte_budget() {
+        let (_dir, dbs, id) = events_db();
+        let mut lease = dbs.connection(&id).unwrap();
+        let sql = "SELECT repeat('x', 100000) AS big FROM range(100)";
+        let result = execute(&mut lease.connection, sql, &params(), MAX_SQL_ROWS).unwrap();
+        let n = result.rows.len();
+        assert!((1..100).contains(&n), "{n}");
+        assert!(n * 100_002 <= MAX_RESULT_BYTES && (n + 1) * 100_002 > MAX_RESULT_BYTES);
+        assert!(result.truncated && result.byte_limited);
+        assert_eq!(
+            result.warning().unwrap(),
+            format!("Showing the first {n} rows (4 MB limit)")
+        );
+        let small = execute(&mut lease.connection, "SELECT 1 AS one", &params(), 10).unwrap();
+        assert_eq!(small.warning(), None);
     }
 
     #[test]

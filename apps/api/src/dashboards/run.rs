@@ -383,8 +383,8 @@ struct Measurer<'a> {
     events: Option<&'a mut Connection>,
     logs: Option<&'a mut Connection>,
     issues: Vec<Issue>,
-    /// SQL queries whose result was cut at `MAX_SQL_ROWS`.
-    truncated: Vec<String>,
+    /// SQL queries whose result was cut, with the warning that says where.
+    truncated: Vec<(String, String)>,
 }
 
 impl Measurer<'_> {
@@ -413,8 +413,10 @@ impl Measurer<'_> {
         };
         match sql::execute(db, &q.sql, &params, MAX_SQL_ROWS) {
             Ok(result) => {
-                if result.truncated && !self.truncated.iter().any(|t| t == id) {
-                    self.truncated.push(id.to_string());
+                if let Some(warning) = result.warning()
+                    && !self.truncated.iter().any(|(t, _)| t == id)
+                {
+                    self.truncated.push((id.to_string(), warning));
                 }
                 Ok(Some(result))
             }
@@ -874,9 +876,9 @@ pub async fn run_widget(
                         warnings: Vec::new(),
                     }));
                 }
-                let truncated = measurer.truncated.iter().map(|id| Issue {
+                let truncated = measurer.truncated.into_iter().map(|(id, message)| Issue {
                     path: format!("/queries/{id}/sql"),
-                    message: sql::TRUNCATED.into(),
+                    message,
                     hint: None,
                 });
                 outcome.ran = truncated.chain(outcome.ran).collect();
@@ -1464,6 +1466,7 @@ mod tests {
                 .map(|r| r.as_array().unwrap().clone())
                 .collect(),
             truncated: false,
+            byte_limited: false,
         }
     }
 

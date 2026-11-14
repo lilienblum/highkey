@@ -65,7 +65,7 @@ impl Test {
             .unwrap();
         let status = response.status();
         let headers = response.headers().clone();
-        let body = to_bytes(response.into_body(), 4 * 1024 * 1024)
+        let body = to_bytes(response.into_body(), 16 * 1024 * 1024)
             .await
             .unwrap();
         (
@@ -2040,5 +2040,159 @@ async fn catalog_describes_the_sql_schemas_and_parameters() {
     assert_eq!(body["limits"]["max_sql_chars"], 8_000);
     assert_eq!(body["limits"]["max_sql_rows"], 10_000);
     assert_eq!(body["limits"]["max_table_columns"], 50);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_cannot_reach_system_catalogs_or_settings() {
+    let test = Test::new();
+    let project = test.project("Catalog escape").await;
+    test.seed_events(&project, None, "checkout", 2).await;
+    // A WITH that names itself reads the system view of that name; recursive or not, it is
+    // refused in the tree. Catalog macros pass the tree and are refused by the plan.
+    for (sql, needle) in [
+        (
+            "WITH duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT count(path) AS value FROM duckdb_databases",
+            "duckdb_databases",
+        ),
+        (
+            "WITH RECURSIVE duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT count(path) AS value FROM duckdb_databases",
+            "duckdb_databases",
+        ),
+        (
+            "WITH pg_settings AS (SELECT * FROM pg_settings) SELECT count(*) AS value FROM pg_settings",
+            "pg_settings",
+        ),
+        (
+            "WITH RECURSIVE pg_settings AS (SELECT * FROM pg_settings) SELECT count(*) AS value FROM pg_settings",
+            "pg_settings",
+        ),
+        (
+            "WITH sqlite_master AS (SELECT * FROM sqlite_master) SELECT count(sql) AS value FROM sqlite_master",
+            "sqlite_master",
+        ),
+        (
+            "WITH RECURSIVE sqlite_master AS (SELECT * FROM sqlite_master) SELECT count(sql) AS value FROM sqlite_master",
+            "sqlite_master",
+        ),
+        ("SELECT length(pg_get_viewdef(1)) AS value", "duckdb_views"),
+        ("SELECT length(format_type(23, 0)) AS value", "duckdb_types"),
+        (
+            "SELECT length(current_setting('temp_directory')) AS value",
+            "current_setting",
+        ),
+        (
+            "SELECT length(current_setting('secret_directory')) AS value",
+            "current_setting",
+        ),
+        ("SELECT length(getvariable('x')) AS value", "getvariable"),
+    ] {
+        let issue = refused(&test, &project, "stat", sql).await;
+        assert!(format!("{issue}").contains(needle), "{sql}: {issue}");
+    }
+    let issue = refused(&test, &project, "table", "SELECT pg_get_viewdef(1) AS def").await;
+    assert!(
+        issue["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("This query reads duckdb_views"),
+        "{issue}"
+    );
+    // A real recursive WITH may reuse such a name for itself.
+    let sql = "WITH RECURSIVE duckdb_databases(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM duckdb_databases WHERE n < 4)
+        SELECT count(*) AS value FROM duckdb_databases";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", sql), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 4.0);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn deeply_nested_or_costly_sql_is_refused_not_fatal() {
+    // Widget runs and validation use Tokio's 2 MiB blocking threads; each of these overflowed
+    // one (aborting the process) or planned for minutes before the fix.
+    let test = Test::new();
+    let project = test.project("Deep").await;
+    let validate = format!("/api/read/products/{}/dashboards/validate", id(&project));
+    let nested = |open: &str, close: &str, n: usize| {
+        format!("SELECT {}1{} AS value", open.repeat(n), close.repeat(n))
+    };
+    let siblings = (0..40)
+        .map(|i| format!("(SELECT t.x + {i})"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    let lateral: String = (1..60)
+        .map(|i| format!(", LATERAL (SELECT t{}.*) t{i}", i - 1))
+        .collect();
+    let with = |n: usize| {
+        let chain: String = (1..n)
+            .map(|i| format!(", t{i} AS (SELECT v FROM t{})", i - 1))
+            .collect();
+        format!(
+            "WITH t0 AS (SELECT 1 AS v){chain} SELECT v AS value FROM t{}",
+            n - 1
+        )
+    };
+    for (sql, needle) in [
+        (nested("(SELECT ", ")", 880), "Max expression depth"),
+        (nested("abs(", ")", 990), "Max expression depth"),
+        (nested("abs(", ")", 140), "nests too deeply"),
+        (
+            format!("SELECT {siblings} AS value FROM range(3) t(x)"),
+            "joins and subqueries",
+        ),
+        (
+            format!("SELECT 1 AS value FROM range(1) t0{lateral}"),
+            "joins and subqueries",
+        ),
+        (with(270), "Max expression depth"),
+    ] {
+        assert!(sql.chars().count() <= 8_000);
+        let started = std::time::Instant::now();
+        let issue = refused(&test, &project, "stat", &sql).await;
+        assert!(
+            issue["message"].as_str().unwrap().contains(needle),
+            "{issue}"
+        );
+        assert!(
+            !issue["message"].as_str().unwrap().contains("SET"),
+            "{issue}"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        let widget = sql_widget("stat", &sql);
+        let doc = json!({"version": 1, "name": "Deep", "widgets": [widget]});
+        let (status, body) = test.read("POST", &validate, json!({"document": doc})).await;
+        assert_eq!(status, 200, "{body}");
+        assert_eq!(
+            body["errors"][0]["path"], "/widgets/0/queries/q/sql",
+            "{body}"
+        );
+    }
+    // A long WITH chain within the limits runs, and the API is still up afterwards.
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", &with(200)), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 1.0);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_results_stop_at_four_megabytes() {
+    let test = Test::new();
+    let project = test.project("Wide").await;
+    let sql = "SELECT repeat('x', 100000) AS big FROM range(100) WHERE $from > 0";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("table", sql), 7))
+        .await;
+    assert_eq!(status, 200);
+    let n = body["rows"].as_array().unwrap().len();
+    assert!((1..100).contains(&n), "{n}");
+    assert_eq!(
+        body["warnings"],
+        json!([{"path": "/queries/q/sql", "message": format!("Showing the first {n} rows (4 MB limit)"), "hint": null}])
+    );
     test.close().await;
 }
