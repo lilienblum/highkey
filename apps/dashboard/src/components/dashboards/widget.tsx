@@ -15,6 +15,7 @@ import { groupLabel, number, type EventRow, type Group, type Product } from "@/l
 import {
   cellKind,
   formatCell,
+  parseJsonCell,
   formatMeasure,
   hasSeriesLabel,
   resolvedSize,
@@ -23,6 +24,7 @@ import {
   TABLE_ROW_LIMIT,
   tableColumns,
   tableNotes,
+  validTime,
   thresholdColor,
   type CellKind,
   type EventsQuery,
@@ -490,9 +492,20 @@ function SqlTableBody({ widget, result, loading }: BodyProps) {
               // biome-ignore lint/suspicious/noArrayIndexKey: result rows have no identity
               <TableRow key={rowIndex}>
                 {kinds.map((kind, index) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
-                  <TableCell key={index} data-kind={kind}>
-                    <CellValue value={row[index]} kind={kind} timeZone={timeZone} />
+                  <TableCell
+                    // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
+                    key={index}
+                    data-kind={kind}
+                    title={
+                      typeof row[index] === "string" && kind !== "json" ? row[index] : undefined
+                    }
+                  >
+                    <CellValue
+                      value={row[index]}
+                      kind={kind}
+                      column={columns[index].name}
+                      timeZone={timeZone}
+                    />
                   </TableCell>
                 ))}
               </TableRow>
@@ -507,24 +520,29 @@ function SqlTableBody({ widget, result, loading }: BodyProps) {
 function CellValue({
   value,
   kind,
+  column,
   timeZone,
 }: {
   value: unknown;
   kind: CellKind;
+  column: string;
   timeZone: string;
 }) {
   if (value === null || value === undefined) return <span className="dashboard-cell-null">—</span>;
-  if (kind === "timestamp" && typeof value === "number" && Number.isFinite(value)) {
-    const full = displayTimestamp(value, timeZone);
+  const time = kind === "timestamp" ? validTime(value) : null;
+  if (time !== null) {
+    const full = displayTimestamp(time, timeZone);
     return (
-      <time dateTime={new Date(value).toISOString()} title={full}>
+      <time dateTime={new Date(time).toISOString()} title={full}>
         {full}
       </time>
     );
   }
-  if (kind === "json" || (typeof value === "object" && value !== null))
-    return <TypedValue value={value} />;
-  return <>{formatCell(value, kind)}</>;
+  if (kind === "json") {
+    const parsed = parseJsonCell(value);
+    if (parsed !== null && typeof parsed === "object") return <TypedValue value={parsed} />;
+  }
+  return <>{formatCell(value, kind, column)}</>;
 }
 
 function EventRowsBody({ widget, product, result, loading }: BodyProps) {

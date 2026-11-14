@@ -1386,6 +1386,43 @@ fn number(value: f64) -> Value {
     serde_json::Number::from_f64(value).map_or(Value::Null, Value::Number)
 }
 
+/// The largest integer JSON consumers read exactly (2^53 - 1).
+const SAFE_INTEGER: i128 = 9_007_199_254_740_991;
+/// The widest epoch-millisecond span a JavaScript `Date` represents.
+const DATE_RANGE_MS: i64 = 8_640_000_000_000_000;
+
+/// An integer as a JSON number, or as a string beyond ±(2^53 - 1) so it keeps every digit.
+fn integer(value: i128) -> Value {
+    if value.abs() <= SAFE_INTEGER {
+        Value::from(value as i64)
+    } else {
+        Value::String(value.to_string())
+    }
+}
+
+/// An epoch-millisecond time, or its digits as a string when a `Date` cannot hold it.
+fn instant(ms: i64) -> Value {
+    if ms.abs() <= DATE_RANGE_MS {
+        ms.into()
+    } else {
+        Value::String(ms.to_string())
+    }
+}
+
+/// An exact decimal string with the column's scale: `(-1234, 3)` is `-1.234`.
+fn decimal(value: i128, scale: u32) -> String {
+    let digits = value.unsigned_abs().to_string();
+    let scale = scale as usize;
+    let padded = format!("{digits:0>width$}", width = scale + 1);
+    let (whole, fraction) = padded.split_at(padded.len() - scale);
+    let sign = if value < 0 { "-" } else { "" };
+    if scale == 0 {
+        format!("{sign}{whole}")
+    } else {
+        format!("{sign}{whole}.{fraction}")
+    }
+}
+
 fn clock(micros: i64) -> String {
     let (sign, micros) = if micros < 0 {
         ("-", -micros)
@@ -1435,18 +1472,20 @@ fn json(value: DbValue) -> Value {
         DbValue::TinyInt(i) => i.into(),
         DbValue::SmallInt(i) => i.into(),
         DbValue::Int(i) => i.into(),
-        DbValue::BigInt(i) => i.into(),
+        DbValue::BigInt(i) => integer(i128::from(i)),
         DbValue::UTinyInt(i) => i.into(),
         DbValue::USmallInt(i) => i.into(),
         DbValue::UInt(i) => i.into(),
-        DbValue::UBigInt(i) => i.into(),
-        DbValue::HugeInt(i) => i64::try_from(i).map_or_else(|_| number(i as f64), Value::from),
-        DbValue::UHugeInt(i) => u64::try_from(i).map_or_else(|_| number(i as f64), Value::from),
+        DbValue::UBigInt(i) => integer(i128::from(i)),
+        DbValue::HugeInt(i) => integer(i),
+        DbValue::UHugeInt(i) => {
+            i128::try_from(i).map_or_else(|_| Value::String(i.to_string()), integer)
+        }
         DbValue::Float(f) => number(f64::from(f)),
         DbValue::Double(f) => number(f),
-        DbValue::Decimal(d) => number(d.value() as f64 / 10f64.powi(i32::from(d.scale()))),
-        DbValue::Timestamp(unit, t) => unit.to_micros(t).div_euclid(1000).into(),
-        DbValue::Date32(days) => (i64::from(days) * 86_400_000).into(),
+        DbValue::Decimal(d) => decimal(d.value(), u32::from(d.scale())).into(),
+        DbValue::Timestamp(unit, t) => instant(unit.to_micros(t).div_euclid(1000)),
+        DbValue::Date32(days) => instant(i64::from(days) * 86_400_000),
         DbValue::Time64(unit, t) => clock(unit.to_micros(t)).into(),
         DbValue::Interval {
             months,
@@ -1830,6 +1869,34 @@ pub async fn verify_document(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn exact_values_survive_json() {
+        assert_eq!(
+            integer(9_007_199_254_740_991),
+            serde_json::json!(9_007_199_254_740_991i64)
+        );
+        assert_eq!(
+            integer(9_007_199_254_740_993),
+            serde_json::json!("9007199254740993")
+        );
+        assert_eq!(
+            integer(-9_007_199_254_740_993),
+            serde_json::json!("-9007199254740993")
+        );
+        assert_eq!(decimal(-1234, 3), "-1.234");
+        assert_eq!(decimal(1, 5), "0.00001");
+        assert_eq!(decimal(42, 0), "42");
+        assert_eq!(
+            decimal(12345678901234567890123, 2),
+            "123456789012345678901.23"
+        );
+        assert_eq!(instant(1_000), serde_json::json!(1000));
+        assert_eq!(
+            instant(253_402_300_800_000_000),
+            serde_json::json!("253402300800000000")
+        );
+    }
+
     use super::*;
     use crate::product_db::ProductDatabases;
 
@@ -2294,8 +2361,8 @@ mod tests {
         assert_eq!(
             Value::Array(result.rows[0].clone()),
             serde_json::json!([
-                {"plan": "pro"}, 1000, 86_400_000, 2.5, [1, 2], {"a": "b"}, null, "eA==", true,
-                null, 1.7014118346046923e38, "01:30:00", true
+                {"plan": "pro"}, 1000, 86_400_000, "2.50", [1, 2], {"a": "b"}, null, "eA==", true,
+                null, "170141183460469231731687303715884105727", "01:30:00", true
             ])
         );
         // Nothing is left open: the next transaction starts cleanly.

@@ -628,7 +628,11 @@ fn sql_measured(
     let Some(value) = column("value") else {
         return Ok(out);
     };
-    let number = |row: &[Value]| row[value].as_f64();
+    // Exact decimals and integers beyond 2^53 arrive as strings.
+    let number = |row: &[Value]| match &row[value] {
+        Value::String(text) => text.parse::<f64>().ok().filter(|n| n.is_finite()),
+        other => other.as_f64(),
+    };
     if let Some(time) = column("time") {
         let grid = bucket_starts(w);
         let rows = || {

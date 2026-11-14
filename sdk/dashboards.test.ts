@@ -11,6 +11,8 @@ import {
   formatCell,
   tableColumns,
   tableNotes,
+  validTime,
+  parseJsonCell,
   TABLE_ROW_LIMIT,
   removeWidget,
   resolvedSize,
@@ -298,4 +300,36 @@ test("tableNotes says when rows were cut", () => {
       { path: "/x", message: "Something else" },
     ]),
   ).toEqual(["The first row is larger than the 4 MB limit"]);
+});
+
+test("formatCell keeps large integers, decimals and identifiers exact", () => {
+  expect(formatCell("9007199254740993", "number")).toBe("9007199254740993");
+  expect(formatCell("0.00001", "number")).toBe("0.00001");
+  expect(formatCell("-1.230", "number")).toBe("-1.230");
+  expect(formatCell(0.00001, "number")).toBe("0.00001");
+  expect(formatCell(0.123456789, "number")).toBe("0.123457");
+  expect(formatCell(0, "number")).toBe("0");
+  expect(formatCell(1234567, "number", "events")).toBe("1,234,567");
+  expect(formatCell(1234567, "number", "user_id")).toBe("1234567");
+  expect(formatCell(1234567, "number", "id")).toBe("1234567");
+  expect(formatCell(NaN, "number")).toBe("NaN");
+  expect(formatCell(Infinity, "number")).toBe("Infinity");
+  expect(formatCell(-Infinity, "number")).toBe("-Infinity");
+});
+
+test("times beyond the Date range fall back to text", () => {
+  const nineK = Date.UTC(9999, 11, 31);
+  expect(validTime(nineK)).toBe(nineK);
+  expect(validTime(8.64e15)).toBe(8.64e15);
+  expect(validTime(8.64e15 + 1)).toBeNull();
+  expect(validTime("253402300800000000")).toBeNull();
+  expect(formatCell(nineK, "date")).toBe("9999-12-31");
+  expect(formatCell(8.7e15, "date")).toBe("8700000000000000");
+  expect(formatCell("253402300800000000", "timestamp")).toBe("253402300800000000");
+});
+
+test("JSON columns parse their text", () => {
+  expect(parseJsonCell('{"a":1}')).toEqual({ a: 1 });
+  expect(parseJsonCell("not json")).toBe("not json");
+  expect(parseJsonCell({ a: 1 })).toEqual({ a: 1 });
 });

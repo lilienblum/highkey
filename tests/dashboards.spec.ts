@@ -635,7 +635,9 @@ test("SQL table and line widgets render with a truncation note", async ({ page }
   await expect(first.getByRole("cell").nth(2)).toContainText(/\d{4}/);
   await expect(first.getByRole("cell").nth(3)).toHaveText("true");
   await expect(first.getByRole("cell").nth(4)).toHaveText("—");
-  await expect(first.getByRole("cell").nth(5)).toContainText("checkout_request");
+  const meta = first.getByRole("cell").nth(5);
+  await expect(meta.locator(".typed-value .tok-property")).toHaveText('"kind"');
+  await expect(meta.locator(".typed-value .tok-string")).toHaveText('"checkout_request"');
   await expect(table.getByRole("columnheader").first()).toHaveCSS("position", "sticky");
 
   const many = widget(page, "many");

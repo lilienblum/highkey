@@ -361,13 +361,41 @@ export function cellKind(type: string): CellKind {
 }
 
 const cellNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
-/** Text for a cell, except timestamps (the viewer's timezone) and JSON (highlighted). */
-export function formatCell(value: unknown, kind: CellKind): string {
+const cellSmall = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 6 });
+const identifier = /(^|_)id$/i;
+
+/** A time the Date object can hold, or null (DuckDB's range is wider than JavaScript's). */
+export function validTime(value: unknown): number | null {
+  return typeof value === "number" && !Number.isNaN(new Date(value).getTime()) ? value : null;
+}
+
+/** A JSON column's value: DuckDB sends JSON as text, so it is parsed when it is a string. */
+export function parseJsonCell(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Text for a cell, except timestamps (the viewer's timezone) and JSON (highlighted). Numbers the
+ * API sent as strings (exact decimals, integers beyond 2^53) and identifier columns are shown
+ * verbatim; other integers are grouped, and small fractions keep significant digits.
+ */
+export function formatCell(value: unknown, kind: CellKind, column = ""): string {
   if (value === null || value === undefined) return "—";
-  if (kind === "number" && typeof value === "number")
-    return Number.isFinite(value) ? cellNumber.format(value) : String(value);
-  if (kind === "date" && typeof value === "number" && Number.isFinite(value))
-    return new Date(value).toISOString().slice(0, 10);
+  if (kind === "number" && typeof value === "number") {
+    if (!Number.isFinite(value)) return String(value);
+    if (identifier.test(column)) return String(value);
+    if (Number.isInteger(value) || Math.abs(value) >= 1) return cellNumber.format(value);
+    return value === 0 ? "0" : cellSmall.format(value);
+  }
+  if (kind === "date" && typeof value === "number") {
+    const time = validTime(value);
+    return time === null ? String(value) : new Date(time).toISOString().slice(0, 10);
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

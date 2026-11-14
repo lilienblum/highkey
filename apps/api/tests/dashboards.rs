@@ -1808,7 +1808,7 @@ async fn sql_table_view_returns_rows_and_columns() {
     );
     assert_eq!(rows[0][3], json!({"plan": "pro"}));
     assert_eq!(rows[0][4], true);
-    assert_eq!(rows[0][5], 1.5);
+    assert_eq!(rows[0][5], "1.50");
     assert_eq!(rows[0][6], Value::Null);
     assert_eq!(rows[1][0], "signup");
     assert_eq!(rows[1][4], false);
