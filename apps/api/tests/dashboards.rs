@@ -15,12 +15,17 @@ struct Test {
 impl Test {
     fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
-        let state = AppState::open(&Config {
+        let mut state = AppState::open(&Config {
             data_dir: directory.path().into(),
             query_concurrency: 4,
             queue_capacity: 16,
         })
         .unwrap();
+        // Most tests write far more than 30 dashboards a minute; one test pins the real limit.
+        state.write_limit = std::sync::Arc::new(piko::dashboards::limit::WriteLimit::new(
+            100_000,
+            std::time::Duration::from_secs(60),
+        ));
         Self {
             _directory: directory,
             state,
@@ -2194,5 +2199,153 @@ async fn sql_results_stop_at_four_megabytes() {
         body["warnings"],
         json!([{"path": "/queries/q/sql", "message": format!("Showing the first {n} rows (4 MB limit)"), "hint": null}])
     );
+    test.close().await;
+}
+
+// Benchmarks before saving, and the write rate limit.
+
+fn views_widget(id: &str, event: &str) -> Value {
+    json!({
+        "id": id, "title": id, "view": {"type": "stat"},
+        "queries": {"q": {"signal": "events", "event": event, "measure": "count"}},
+        "series": [{"expr": "q"}]
+    })
+}
+fn board(name: &str, widgets: Vec<Value>) -> Value {
+    json!({"version": 1, "name": name, "widgets": widgets})
+}
+
+#[tokio::test]
+async fn a_fast_widget_saves_and_reports_its_bench() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": document("Board")}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["revision"], 1);
+    let bench = body["bench"].as_array().unwrap();
+    assert_eq!(bench.len(), 1, "{body}");
+    assert_eq!(bench[0]["widget"], "views");
+    assert!(bench[0]["elapsed_ms"].as_u64().unwrap() < 1_000, "{body}");
+    assert_eq!(body["warnings"], json!([]));
+    test.close().await;
+}
+
+#[tokio::test]
+async fn a_slow_sql_cross_join_is_refused_and_nothing_is_saved() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    bulk_events(&test, &project, "hit", 3_000);
+    let mut slow = sql_widget(
+        "stat",
+        "SELECT count(*) AS value FROM events a, events b, events c, events d",
+    );
+    slow["timeout_ms"] = json!(1_000);
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board("Slow", vec![views_widget("ok", "hit"), slow])}),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["code"], "too_slow", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/widgets/1", "{body}");
+    assert_eq!(
+        body["errors"][0]["hint"],
+        "This widget took over 3 s on the last 7 days of data. Narrow it with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins."
+    );
+    let (_, list) = test
+        .read(
+            "GET",
+            &format!("/api/read/products/{}/dashboards", id(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(list, json!([]));
+    test.close().await;
+}
+
+#[tokio::test]
+async fn unchanged_widgets_are_not_benched_again() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let first = board(
+        "Board",
+        vec![views_widget("a", "x"), views_widget("b", "y")],
+    );
+    let (status, created) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": first}),
+        )
+        .await;
+    assert_eq!(status, 200, "{created}");
+    assert_eq!(created["bench"].as_array().unwrap().len(), 2);
+
+    // Renaming the dashboard changes no widget.
+    let renamed = board(
+        "Renamed",
+        vec![views_widget("a", "x"), views_widget("b", "y")],
+    );
+    let (status, body) = put(&test, &project, "board", 1, renamed, &[]).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["bench"], json!([]));
+
+    // Changing one widget benches only that one.
+    let edited = board(
+        "Renamed",
+        vec![views_widget("a", "x"), views_widget("b", "z")],
+    );
+    let (status, body) = put(&test, &project, "board", 2, edited, &[]).await;
+    assert_eq!(status, 200, "{body}");
+    let bench = body["bench"].as_array().unwrap();
+    assert_eq!(bench.len(), 1, "{body}");
+    assert_eq!(bench[0]["widget"], "b");
+
+    // Restoring revision 1 changes widget b back, and a is untouched.
+    let (status, body) = test
+        .manage(
+            "POST",
+            &format!("{}/board/revisions/1/restore", dashboards_path(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let bench = body["bench"].as_array().unwrap();
+    assert_eq!(bench.len(), 1, "{body}");
+    assert_eq!(bench[0]["widget"], "b");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn the_thirty_first_write_in_a_minute_is_rate_limited() {
+    let mut test = Test::new();
+    test.state.write_limit = std::sync::Arc::new(piko::dashboards::limit::WriteLimit::default());
+    let project = test.project("Shop").await;
+    let other = test.project("Other").await;
+    for n in 0..30 {
+        create_dashboard(&test, &project, &format!("Board {n}")).await;
+    }
+    let (status, headers, body) = test
+        .send_full(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": document("One too many")}),
+            &[("x-piko-admin", "1")],
+        )
+        .await;
+    assert_eq!(status, 429, "{body}");
+    assert_eq!(body["code"], "rate_limited");
+    let wait: u64 = headers["retry-after"].to_str().unwrap().parse().unwrap();
+    assert!((1..=60).contains(&wait), "{wait}");
+    // Another project has its own allowance.
+    create_dashboard(&test, &other, "Fine").await;
     test.close().await;
 }

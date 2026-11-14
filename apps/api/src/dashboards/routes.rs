@@ -1,6 +1,7 @@
 //! Routes for dashboards. Everything under `/api/read` is non-mutating whatever its method,
 //! so it carries no `X-Piko-Admin` guard and a read-only token can be scoped to the prefix.
 use super::{
+    bench::{Bench, bench_document},
     error::DashboardError,
     run::{RunRequest, run_widget},
     spec, sql,
@@ -185,6 +186,34 @@ async fn verify_sql(
     }
 }
 
+/// Counts a write against the project's allowance of dashboard writes per minute.
+fn throttle(state: &AppState, product: &str) -> Result<(), DashboardError> {
+    state
+        .write_limit
+        .take(product)
+        .map_err(|retry_after| DashboardError::RateLimited { retry_after })
+}
+/// The dashboard's current document, which unchanged widgets are compared with.
+async fn current_document(
+    state: &AppState,
+    product: &str,
+    key: &str,
+) -> Result<spec::Document, DashboardError> {
+    let (id, key) = (product.to_string(), key.to_string());
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::get(db, &id, &key)))
+        .await??;
+    Ok(stored.document)
+}
+/// The saved dashboard with the benchmark timings and any slow-widget warnings.
+fn saved(stored: storage::Stored, bench: Bench) -> Value {
+    let mut body = json!(stored);
+    body["bench"] = json!(bench.timings);
+    body["warnings"] = json!(bench.warnings);
+    body
+}
+
 async fn list(
     State(state): State<AppState>,
     Path(project): Path<String>,
@@ -267,8 +296,10 @@ async fn create(
     headers: HeaderMap,
     request: Body<Create>,
 ) -> Result<Json<Value>, DashboardError> {
+    throttle(&state, &product)?;
     let doc = document(body(request)?.document)?;
     verify_sql(&state, &product, &doc).await?;
+    let bench = bench_document(&state, &product, &doc, None).await?;
     let origin = origin_from(&headers);
     let id = product.clone();
     let stored = state
@@ -276,7 +307,7 @@ async fn create(
         .state(move |db| Ok(storage::create(db, &id, &doc, origin)))
         .await??;
     changed(&state, &product);
-    Ok(Json(json!(stored)))
+    Ok(Json(saved(stored, bench)))
 }
 async fn update(
     State(state): State<AppState>,
@@ -288,8 +319,11 @@ async fn update(
         base_revision,
         document: value,
     } = body(request)?;
+    throttle(&state, &product)?;
     let doc = document(value)?;
     verify_sql(&state, &product, &doc).await?;
+    let current = current_document(&state, &product, &key).await?;
+    let bench = bench_document(&state, &product, &doc, Some(&current)).await?;
     let origin = origin_from(&headers);
     let id = product.clone();
     let stored = state
@@ -297,13 +331,14 @@ async fn update(
         .state(move |db| Ok(storage::update(db, &id, &key, base_revision, &doc, origin)))
         .await??;
     changed(&state, &product);
-    Ok(Json(json!(stored)))
+    Ok(Json(saved(stored, bench)))
 }
 async fn restore(
     State(state): State<AppState>,
     Path((product, key, n)): Path<(String, String, i64)>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, DashboardError> {
+    throttle(&state, &product)?;
     let origin: Origin = origin_from(&headers);
     let (id, revision_key) = (product.clone(), key.clone());
     let doc = state
@@ -311,18 +346,21 @@ async fn restore(
         .state(move |db| Ok(storage::revision(db, &id, &revision_key, n)))
         .await??;
     verify_sql(&state, &product, &doc).await?;
+    let current = current_document(&state, &product, &key).await?;
+    let bench = bench_document(&state, &product, &doc, Some(&current)).await?;
     let id = product.clone();
     let stored = state
         .store
         .state(move |db| Ok(storage::restore(db, &id, &key, n, origin)))
         .await??;
     changed(&state, &product);
-    Ok(Json(json!(stored)))
+    Ok(Json(saved(stored, bench)))
 }
 async fn remove(
     State(state): State<AppState>,
     Path((product, key)): Path<(String, String)>,
 ) -> Result<StatusCode, DashboardError> {
+    throttle(&state, &product)?;
     let id = product.clone();
     state
         .store

@@ -44,6 +44,8 @@ pub struct AppState {
     pub sql_parser: Arc<dashboards::sql::Parser>,
     /// Extra origins allowed to call `/api/read` cross-origin (`*` allows all).
     pub cors_origins: Arc<Vec<String>>,
+    /// Dashboard writes per project per minute; replace it to change the limit.
+    pub write_limit: Arc<dashboards::limit::WriteLimit>,
 }
 pub struct Config {
     pub data_dir: PathBuf,
@@ -70,6 +72,7 @@ impl AppState {
             favicon_slots: Arc::new(tokio::sync::Semaphore::new(2)),
             sql_parser: Arc::new(dashboards::sql::Parser::open()?),
             cors_origins: Arc::default(),
+            write_limit: Arc::default(),
         })
     }
 }

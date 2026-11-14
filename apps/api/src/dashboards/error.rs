@@ -3,7 +3,7 @@ use super::validate::Report;
 use crate::error::ApiError;
 use axum::{
     Json,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde_json::json;
@@ -12,9 +12,19 @@ use serde_json::json;
 pub enum DashboardError {
     Api(ApiError),
     Invalid(Report),
-    Conflict { revision: i64 },
-    Timeout { after_ms: u64 },
+    Conflict {
+        revision: i64,
+    },
+    Timeout {
+        after_ms: u64,
+    },
     Limit(String),
+    /// A widget failed its pre-save benchmark; the report points at `/widgets/N`.
+    TooSlow(Report),
+    /// Too many writes from one project; retry after this many seconds.
+    RateLimited {
+        retry_after: u64,
+    },
 }
 impl From<ApiError> for DashboardError {
     fn from(e: ApiError) -> Self {
@@ -55,6 +65,29 @@ impl IntoResponse for DashboardError {
                 StatusCode::BAD_REQUEST,
                 json!({"error": message, "code": "limit"}),
             ),
+            Self::TooSlow(report) => (
+                StatusCode::BAD_REQUEST,
+                json!({
+                    "error": "A widget is too slow to save",
+                    "code": "too_slow",
+                    "errors": report.errors,
+                    "warnings": report.warnings,
+                }),
+            ),
+            Self::RateLimited { retry_after } => {
+                let mut response = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(json!({
+                        "error": "Too many dashboard writes; slow down",
+                        "code": "rate_limited",
+                    })),
+                )
+                    .into_response();
+                response
+                    .headers_mut()
+                    .insert(header::RETRY_AFTER, retry_after.into());
+                return response;
+            }
         };
         (status, Json(body)).into_response()
     }
