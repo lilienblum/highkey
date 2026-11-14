@@ -17,7 +17,7 @@ use axum::{
     response::Response,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 pub async fn limit(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let otlp_request = request.uri().path().ends_with("/v1/logs");
@@ -105,10 +105,7 @@ pub async fn settings(
     Path(id): Path<String>,
 ) -> ApiResult<Json<Value>> {
     Ok(Json(
-        state
-            .store
-            .state(move |db| Ok(json!({"retention_days":keys::retention(db,&id)?})))
-            .await?,
+        state.store.state(move |db| keys::settings(db, &id)).await?,
     ))
 }
 #[derive(Deserialize)]

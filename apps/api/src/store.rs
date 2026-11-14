@@ -407,6 +407,41 @@ pub fn create_key(
         serde_json::json!({"id":key_id,"key":key,"source_id":source_id,"allowed_origins":allowed_origins}),
     )
 }
+/// Replaces the origins of an active ingestion key and returns the normalized list.
+pub fn update_key_origins(
+    db: &rusqlite::Connection,
+    id: &str,
+    key: &str,
+    allowed_origins: &[String],
+) -> ApiResult<Vec<String>> {
+    let allowed = crate::origins::normalize(allowed_origins)?;
+    let changed = db
+        .execute(
+            "UPDATE ingestion_keys SET allowed_origins=? WHERE product_id=? AND id=? AND revoked=0",
+            params![
+                serde_json::to_string(&allowed).map_err(anyhow::Error::from)?,
+                id,
+                key
+            ],
+        )
+        .map_err(anyhow::Error::from)?;
+    if changed == 0 {
+        return Err(ApiError::missing());
+    }
+    Ok(allowed)
+}
+pub fn revoke_key(db: &rusqlite::Connection, id: &str, key: &str) -> ApiResult<()> {
+    let n = db
+        .execute(
+            "UPDATE ingestion_keys SET revoked=1 WHERE product_id=? AND id=?",
+            [id, key],
+        )
+        .map_err(anyhow::Error::from)?;
+    if n == 0 {
+        return Err(ApiError::missing());
+    }
+    Ok(())
+}
 pub fn keys(db: &rusqlite::Connection, id: &str) -> ApiResult<Vec<KeyInfo>> {
     product(db, id)?;
     let mut q=db.prepare("SELECT id,label,prefix,created_at,revoked,source_id,allowed_origins FROM ingestion_keys WHERE product_id=? ORDER BY created_at").map_err(anyhow::Error::from)?;

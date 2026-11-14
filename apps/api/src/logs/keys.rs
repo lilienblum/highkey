@@ -23,6 +23,9 @@ pub fn retention(db: &rusqlite::Connection, id: &str) -> ApiResult<i64> {
         .map_err(anyhow::Error::from)?
         .unwrap_or(7))
 }
+pub fn settings(db: &rusqlite::Connection, id: &str) -> ApiResult<Value> {
+    Ok(json!({"retention_days":retention(db,id)?}))
+}
 pub fn set_retention(db: &rusqlite::Connection, id: &str, days: i64) -> ApiResult<Value> {
     store::product(db, id)?;
     if !(1..=365).contains(&days) {

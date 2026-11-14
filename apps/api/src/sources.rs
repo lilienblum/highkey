@@ -147,6 +147,17 @@ pub fn get(db: &rusqlite::Connection, product_id: &str, id: &str) -> ApiResult<S
     .map_err(anyhow::Error::from)?
     .ok_or_else(ApiError::missing)
 }
+/// A source of the project by id, or else by slug.
+pub fn resolve(db: &rusqlite::Connection, product_id: &str, key: &str) -> ApiResult<Source> {
+    db.query_row(
+        "SELECT id,product_id,name,icon,created_at,slug FROM sources WHERE product_id=?1 AND (id=?2 OR slug=?2) ORDER BY id=?2 DESC",
+        [product_id, key],
+        row,
+    )
+    .optional()
+    .map_err(anyhow::Error::from)?
+    .ok_or_else(ApiError::missing)
+}
 pub fn key_source<'a>(product: &'a Product, id: Option<&str>) -> ApiResult<&'a Source> {
     if let Some(id) = id {
         return product

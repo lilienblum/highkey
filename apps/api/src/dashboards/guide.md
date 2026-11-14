@@ -129,6 +129,18 @@ A failing tool returns its error body as a tool result marked as an error. Read 
 
 Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revision_conflict` (re-read the dashboard, merge, save with the new `revision` as `base_revision`), `too_slow`, `busy` and `query_timeout` (retry or narrow the widget), `limit`, `rate_limited`, `ambiguous_view`, `confirm_mismatch`. Warnings never block a save: an unknown event name or property only warns, because the data may arrive later.
 
+## Workspace tools
+
+Besides dashboards, the full MCP manages the workspace. Every tool takes `project` as an id or slug; sources are an id or slug, keys are ids.
+
+- Projects: `create_project` (retention defaults to 365 days), `update_project` (only the given fields change; `website_url: ""` clears the website).
+- Sources: `list_sources`, `create_source`, `update_source`, and `connect_source`, which creates a source plus an ingestion key and returns ready-to-paste setup snippets with the secret filled in. Replace `PIKO_URL` in them with the origin of the Piko URL this server is reached at. The secret is shown only once. `icon` is one of website, ios, android, mobile, terminal, desktop, server, code, package, game, generic.
+- Ingestion keys: `list_keys`, `create_key`, `update_key_origins`, `revoke_key`.
+- Logs: `list_log_keys`, `create_log_key`, `revoke_log_key`, `get_log_settings`, `update_log_settings` (retention 1-365 days, 7 by default).
+- Tools that revoke keys (`revoke_key`, `revoke_log_key`) and tools that delete (`delete_dashboard`, `delete_view`) need `confirm` equal to the id or slug. A mismatch is a `confirm_mismatch` error and nothing changes.
+- The read path (`/api/read/mcp`) has only `list_sources` and `get_log_settings` from this group; key tools and every change are on the full path.
+- Validation errors name the argument in `errors[].path` (for example `/icon` or `/allowed_origins`) with a hint, and the code is `invalid_input`, `not_found` or `conflict`.
+
 ## Examples
 
 A stat that compares with the previous period, where fewer is better:

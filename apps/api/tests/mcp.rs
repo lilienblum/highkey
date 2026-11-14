@@ -1156,3 +1156,430 @@ async fn updating_a_dashboard_requires_base_revision() {
     assert_eq!(got["revision"], 1);
     test.close().await;
 }
+
+const WORKSPACE_WRITES: [&str; 13] = [
+    "create_project",
+    "update_project",
+    "create_source",
+    "update_source",
+    "connect_source",
+    "list_keys",
+    "create_key",
+    "update_key_origins",
+    "revoke_key",
+    "list_log_keys",
+    "create_log_key",
+    "revoke_log_key",
+    "update_log_settings",
+];
+
+#[tokio::test]
+async fn read_path_hides_management_writes() {
+    let test = Test::new();
+    let read = test.tool_names(READ).await;
+    for name in ["list_sources", "get_log_settings"] {
+        assert!(read.contains(&name.to_string()), "{name} in {read:?}");
+    }
+    for name in WORKSPACE_WRITES {
+        assert!(!read.contains(&name.to_string()), "{name} in {read:?}");
+    }
+    let full = test.tool_names(FULL).await;
+    for name in WORKSPACE_WRITES
+        .into_iter()
+        .chain(["list_sources", "get_log_settings"])
+    {
+        assert!(full.contains(&name.to_string()), "{name} in {full:?}");
+    }
+    let info = test.initialize(FULL).await;
+    assert!(info["instructions"].as_str().unwrap().contains(
+        "tools that revoke keys or delete need a confirm argument equal to the id or slug."
+    ));
+    test.close().await;
+}
+
+#[tokio::test]
+async fn connect_source_returns_a_working_key() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    let connected = test
+        .ok(
+            "connect_source",
+            json!({"project":"orbit","name":"Marketing site","icon":"website"}),
+        )
+        .await;
+    assert_eq!(connected["source"]["slug"], "marketing-site");
+    assert_eq!(connected["key"]["prefix"].as_str().unwrap().len(), 11);
+    let secret = connected["key"]["secret"].as_str().unwrap().to_string();
+    assert!(secret.starts_with("pk_"));
+    let setup = &connected["setup"];
+    assert!(setup["instructions"].as_str().unwrap().contains(
+        "Replace PIKO_URL with the origin of the Piko URL this MCP server is reached at. The secret is shown only once."
+    ));
+    assert_eq!(setup["logs"], "For logs, call create_log_key.");
+    for integration in ["browser", "typescript", "http", "rust"] {
+        let snippet = setup["snippets"][integration].as_str().unwrap();
+        assert!(snippet.contains(&secret), "{integration}: {snippet}");
+        assert!(snippet.contains("PIKO_URL"), "{integration}: {snippet}");
+    }
+    let one = test
+        .ok(
+            "connect_source",
+            json!({"project":"orbit","name":"CLI","integration":"rust","label":"Release CLI"}),
+        )
+        .await;
+    assert_eq!(one["setup"]["snippets"].as_object().unwrap().len(), 1);
+    assert!(one["setup"]["snippets"]["rust"].is_string());
+    let keys = test.ok("list_keys", json!({"project":"orbit"})).await;
+    assert!(
+        keys.as_array()
+            .unwrap()
+            .iter()
+            .any(|k| k["label"] == "Release CLI")
+    );
+    assert!(
+        keys.as_array()
+            .unwrap()
+            .iter()
+            .any(|k| k["label"] == "Marketing site")
+    );
+
+    let (status, ack) = test
+        .send(
+            "POST",
+            "/api/ingest",
+            json!({"event_id": uuid::Uuid::now_v7().to_string(), "name":"signup", "source":"web"}),
+            &[("authorization", &format!("Bearer {secret}"))],
+        )
+        .await;
+    assert_eq!(status, 200, "{ack}");
+    assert_eq!(ack["accepted"], 1);
+    let sources = test.ok("list_sources", json!({"project":"orbit"})).await;
+    assert!(
+        sources
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["id"] == connected["source"]["id"] && s["name"] == "Marketing site")
+    );
+
+    let bad = test
+        .fails(
+            "connect_source",
+            json!({"project":"orbit","name":"Broken","allowed_origins":["not a url"]}),
+        )
+        .await;
+    assert_eq!(bad["errors"][0]["path"], "/allowed_origins", "{bad}");
+    let sources = test.ok("list_sources", json!({"project":"orbit"})).await;
+    assert!(
+        !sources
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "Broken"),
+        "a failed connect leaves no source behind"
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn update_project_changes_only_given_fields() {
+    let test = Test::new();
+    let created = test
+        .ok(
+            "create_project",
+            json!({"name":"Orbit","website_url":"https://orbit.example","retention_days":30}),
+        )
+        .await;
+    assert_eq!(created["slug"], "orbit");
+    assert_eq!(created["retention_days"], 30);
+    assert_eq!(created["sources"][0]["slug"], "events");
+    let defaulted = test.ok("create_project", json!({"name":"Plain"})).await;
+    assert_eq!(defaulted["retention_days"], 365);
+
+    let renamed = test
+        .ok(
+            "update_project",
+            json!({"project":"orbit","name":"Orbit 2"}),
+        )
+        .await;
+    assert_eq!(renamed["name"], "Orbit 2");
+    assert_eq!(renamed["retention_days"], 30);
+    assert_eq!(renamed["website_url"], "https://orbit.example");
+    assert_eq!(renamed["slug"], "orbit");
+
+    let retained = test
+        .ok(
+            "update_project",
+            json!({"project":created["id"],"retention_days":60}),
+        )
+        .await;
+    assert_eq!(retained["name"], "Orbit 2");
+    assert_eq!(retained["retention_days"], 60);
+    assert_eq!(retained["website_url"], "https://orbit.example");
+
+    let cleared = test
+        .ok(
+            "update_project",
+            json!({"project":"orbit","website_url":""}),
+        )
+        .await;
+    assert_eq!(cleared["website_url"], Value::Null);
+    assert_eq!(cleared["name"], "Orbit 2");
+
+    let bad = test
+        .fails(
+            "update_project",
+            json!({"project":"orbit","retention_days":0}),
+        )
+        .await;
+    assert_eq!(bad["code"], "invalid_input", "{bad}");
+    assert_eq!(bad["errors"][0]["path"], "/retention_days");
+    assert!(hint(&bad).contains("3650"), "{bad}");
+    let bad = test
+        .fails(
+            "update_project",
+            json!({"project":"orbit","website_url":"ftp://x"}),
+        )
+        .await;
+    assert_eq!(bad["errors"][0]["path"], "/website_url", "{bad}");
+    let missing = test
+        .fails("update_project", json!({"project":"orbt","name":"x"}))
+        .await;
+    assert_eq!(missing["code"], "not_found");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn revoke_key_requires_matching_confirm() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    let key = test
+        .ok(
+            "create_key",
+            json!({"project":"orbit","label":"Web","allowed_origins":["https://orbit.example"]}),
+        )
+        .await;
+    let key_id = key["id"].as_str().unwrap().to_string();
+    assert!(key["key"].as_str().unwrap().starts_with("pk_"));
+    assert_eq!(key["allowed_origins"], json!(["https://orbit.example"]));
+
+    let updated = test
+        .ok(
+            "update_key_origins",
+            json!({"project":"orbit","key":key_id,"allowed_origins":["https://orbit.example/","https://*.orbit.example"]}),
+        )
+        .await;
+    assert_eq!(
+        updated["allowed_origins"],
+        json!(["https://orbit.example", "https://*.orbit.example"])
+    );
+    let bad = test
+        .fails(
+            "update_key_origins",
+            json!({"project":"orbit","key":key_id,"allowed_origins":["orbit.example/path"]}),
+        )
+        .await;
+    assert_eq!(bad["code"], "invalid_input");
+    assert_eq!(bad["errors"][0]["path"], "/allowed_origins");
+    assert!(hint(&bad).contains("https://example.com"), "{bad}");
+
+    let refused = test
+        .fails(
+            "revoke_key",
+            json!({"project":"orbit","key":key_id,"confirm":"nope"}),
+        )
+        .await;
+    assert_eq!(refused["code"], "confirm_mismatch", "{refused}");
+    assert!(hint(&refused).contains(&key_id));
+    let listed = test.ok("list_keys", json!({"project":"orbit"})).await;
+    let found = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|k| k["id"] == key_id.as_str())
+        .unwrap();
+    assert_eq!(found["revoked"], false);
+
+    test.ok(
+        "revoke_key",
+        json!({"project":"orbit","key":key_id,"confirm":key_id}),
+    )
+    .await;
+    let listed = test.ok("list_keys", json!({"project":"orbit"})).await;
+    let found = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|k| k["id"] == key_id.as_str())
+        .unwrap();
+    assert_eq!(found["revoked"], true);
+    let (status, _) = test
+        .send(
+            "POST",
+            "/api/ingest",
+            json!({"event_id":"e1","name":"x","source":"web"}),
+            &[(
+                "authorization",
+                &format!("Bearer {}", key["key"].as_str().unwrap()),
+            )],
+        )
+        .await;
+    assert_eq!(status, 401);
+    let missing = test
+        .fails(
+            "revoke_key",
+            json!({"project":"orbit","key":"zzz","confirm":"zzz"}),
+        )
+        .await;
+    assert_eq!(missing["code"], "not_found");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn invalid_icon_error_lists_icons() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    let body = test
+        .fails(
+            "create_source",
+            json!({"project":"orbit","name":"App","icon":"phone"}),
+        )
+        .await;
+    assert_eq!(body["code"], "invalid_input", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/icon");
+    for icon in ["website", "ios", "android", "terminal", "generic"] {
+        assert!(hint(&body).contains(icon), "{body}");
+    }
+    let source = test
+        .ok(
+            "create_source",
+            json!({"project":"orbit","name":"App","icon":"ios"}),
+        )
+        .await;
+    assert_eq!(source["icon"], "ios");
+    let renamed = test
+        .ok(
+            "update_source",
+            json!({"project":"orbit","source":"app","name":"iOS app"}),
+        )
+        .await;
+    assert_eq!(renamed["name"], "iOS app");
+    assert_eq!(renamed["icon"], "ios");
+    assert_eq!(renamed["slug"], "app");
+    let missing = test
+        .fails(
+            "update_source",
+            json!({"project":"orbit","source":"ap","name":"x"}),
+        )
+        .await;
+    assert_eq!(missing["code"], "not_found");
+    assert!(hint(&missing).contains("app"), "{missing}");
+    let dup = test
+        .fails("create_source", json!({"project":"orbit","name":"ios APP"}))
+        .await;
+    assert_eq!(dup["errors"][0]["path"], "/name", "{dup}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn log_settings_round_trip() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    let settings = test
+        .ok("get_log_settings", json!({"project":"orbit"}))
+        .await;
+    assert_eq!(settings["retention_days"], 7);
+    let updated = test
+        .ok(
+            "update_log_settings",
+            json!({"project":"orbit","retention_days":30}),
+        )
+        .await;
+    assert_eq!(updated["retention_days"], 30);
+    let again = test
+        .ok("update_log_settings", json!({"project":"orbit"}))
+        .await;
+    assert_eq!(again["retention_days"], 30);
+    let read = test
+        .tool_on(READ, "get_log_settings", json!({"project":"orbit"}))
+        .await;
+    assert_eq!(read.1["retention_days"], 30);
+    let bad = test
+        .fails(
+            "update_log_settings",
+            json!({"project":"orbit","retention_days":1000}),
+        )
+        .await;
+    assert_eq!(bad["errors"][0]["path"], "/retention_days", "{bad}");
+    assert!(hint(&bad).contains("365"));
+
+    let key = test
+        .ok(
+            "create_log_key",
+            json!({"project":"orbit","label":"API logs"}),
+        )
+        .await;
+    assert!(key["key"].as_str().unwrap().starts_with("pl_"));
+    let key_id = key["id"].as_str().unwrap().to_string();
+    let listed = test.ok("list_log_keys", json!({"project":"orbit"})).await;
+    assert_eq!(listed[0]["label"], "API logs");
+    assert_eq!(listed[0]["revoked"], false);
+    let refused = test
+        .fails(
+            "revoke_log_key",
+            json!({"project":"orbit","key":key_id,"confirm":"x"}),
+        )
+        .await;
+    assert_eq!(refused["code"], "confirm_mismatch");
+    test.ok(
+        "revoke_log_key",
+        json!({"project":"orbit","key":key_id,"confirm":key_id}),
+    )
+    .await;
+    let listed = test.ok("list_log_keys", json!({"project":"orbit"})).await;
+    assert_eq!(listed[0]["revoked"], true);
+    let bad = test
+        .fails("create_log_key", json!({"project":"orbit","label":""}))
+        .await;
+    assert_eq!(bad["errors"][0]["path"], "/label", "{bad}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn mcp_source_change_emits_a_hint() {
+    let test = Test::new();
+    let project = test.project("Orbit").await;
+    let mut changes = test.state.store.changes.subscribe();
+    test.ok("create_source", json!({"project":"orbit","name":"Web"}))
+        .await;
+    let seen = tokio::time::timeout(Duration::from_secs(2), changes.recv())
+        .await
+        .expect("a hint")
+        .unwrap();
+    assert_eq!(seen, (id(&project).to_string(), Signal::Dashboards));
+    test.ok(
+        "update_project",
+        json!({"project":"orbit","name":"Orbit 2"}),
+    )
+    .await;
+    let seen = tokio::time::timeout(Duration::from_secs(2), changes.recv())
+        .await
+        .expect("a hint")
+        .unwrap();
+    assert_eq!(seen, (id(&project).to_string(), Signal::Dashboards));
+    // The HTTP route shares the function, so it emits too.
+    let (status, _) = test
+        .manage(
+            "POST",
+            &format!("/api/products/{}/sources", id(&project)),
+            json!({"name":"Docs"}),
+        )
+        .await;
+    assert_eq!(status, 200);
+    let seen = tokio::time::timeout(Duration::from_secs(2), changes.recv())
+        .await
+        .expect("a hint")
+        .unwrap();
+    assert_eq!(seen, (id(&project).to_string(), Signal::Dashboards));
+    test.close().await;
+}

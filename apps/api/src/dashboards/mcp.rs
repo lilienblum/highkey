@@ -41,7 +41,7 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-const INSTRUCTIONS: &str = "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own events or logs table, using only the parameters $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs.";
+const INSTRUCTIONS: &str = "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own events or logs table, using only the parameters $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug.";
 
 const SCHEMA_URI: &str = "piko://schema/dashboard.v1";
 const GUIDE_URI: &str = "piko://docs/dashboards";
@@ -74,6 +74,8 @@ pub fn service(
     )
 }
 
+mod workspace;
+
 #[derive(Clone)]
 pub struct PikoMcp {
     state: AppState,
@@ -83,8 +85,10 @@ pub struct PikoMcp {
 impl PikoMcp {
     fn new(state: AppState, writes: bool) -> Self {
         let mut tool_router = Self::read_tools();
+        tool_router.merge(Self::workspace_read_tools());
         if writes {
             tool_router.merge(Self::write_tools());
+            tool_router.merge(Self::workspace_write_tools());
         }
         Self { state, tool_router }
     }
@@ -214,17 +218,17 @@ fn saved_summary(saved: &Value) -> Value {
     })
 }
 
-/// A confirmation that does not equal the slug of what would be deleted.
-fn confirm_mismatch(what: &str, slug: &str) -> DashboardError {
+/// A confirmation that does not equal the `field` (slug or id) of what `action` would affect.
+fn confirm_mismatch(action: &str, what: &str, field: &str, slug: &str) -> DashboardError {
     DashboardError::Detailed {
         status: StatusCode::BAD_REQUEST,
         message: "Confirmation does not match".into(),
         code: "confirm_mismatch",
         errors: vec![Issue {
             path: "confirm".into(),
-            message: format!("`confirm` must equal the {what}'s slug, `{slug}`"),
+            message: format!("`confirm` must equal the {what}'s {field}, `{slug}`"),
             hint: Some(format!(
-                "Pass confirm: \"{slug}\" to delete this {what}; it cannot be undone"
+                "Pass confirm: \"{slug}\" to {action} this {what}; it cannot be undone"
             )),
         }],
     }
@@ -659,7 +663,7 @@ impl PikoMcp {
                 let stored = routes::get_dashboard(&self.state, id.clone(), p.dashboard).await?;
                 let slug = stored["slug"].as_str().unwrap_or_default().to_string();
                 if p.confirm != slug {
-                    return Err(confirm_mismatch("dashboard", &slug));
+                    return Err(confirm_mismatch("delete", "dashboard", "slug", &slug));
                 }
                 let key = stored["id"].as_str().unwrap_or_default();
                 routes::remove_dashboard(&self.state, &id, key).await?;
@@ -703,7 +707,7 @@ impl PikoMcp {
                 let stored = views::get_view(&self.state, id.clone(), p.view, p.kind).await?;
                 let slug = stored["slug"].as_str().unwrap_or_default().to_string();
                 if p.confirm != slug {
-                    return Err(confirm_mismatch("view", &slug));
+                    return Err(confirm_mismatch("delete", "view", "slug", &slug));
                 }
                 let key = stored["id"].as_str().unwrap_or_default();
                 views::delete_view(&self.state, &id, key, None).await?;

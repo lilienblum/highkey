@@ -13,6 +13,7 @@ pub mod store;
 pub mod telemetry;
 pub mod views;
 pub mod website;
+pub mod workspace;
 use crate::{
     error::{ApiError, ApiResult},
     ingest::Writer,
@@ -232,47 +233,18 @@ async fn ingest_events(
 pub(crate) async fn list_products(State(s): State<AppState>) -> ApiResult<Json<Vec<Product>>> {
     Ok(Json(s.store.state(store::products).await?))
 }
-async fn with_favicon(s: &AppState, product: Product) -> Product {
-    let Some(website) = product
-        .website_url
-        .clone()
-        .filter(|_| product.favicon_version.is_none())
-    else {
-        return product;
-    };
-    let Ok(_permit) = s.favicon_slots.try_acquire() else {
-        return product;
-    };
-    let Some(bytes) = website::fetch_icon(&website).await else {
-        return product;
-    };
-    let id = product.id.clone();
-    // A concurrent website edit must never receive the old site's icon.
-    s.store
-        .state(move |db| store::cache_favicon(db, &id, &website, &bytes))
-        .await
-        .unwrap_or(product)
-}
 async fn create_product(
     State(s): State<AppState>,
     Json(input): Json<ProductInput>,
 ) -> ApiResult<Json<Product>> {
-    let product = s
-        .store
-        .state(move |db| store::save_product(db, None, input))
-        .await?;
-    Ok(Json(with_favicon(&s, product).await))
+    Ok(Json(workspace::create_project(&s, input).await?))
 }
 async fn update_product(
     State(s): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<ProductInput>,
 ) -> ApiResult<Json<Product>> {
-    let product = s
-        .store
-        .state(move |db| store::save_product(db, Some(id), input))
-        .await?;
-    Ok(Json(with_favicon(&s, product).await))
+    Ok(Json(workspace::update_project(&s, id, input).await?))
 }
 async fn project_favicon(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Response> {
     use rusqlite::OptionalExtension;
@@ -318,17 +290,7 @@ async fn create_key(
     Json(input): Json<NewKey>,
 ) -> ApiResult<Json<Value>> {
     Ok(Json(
-        s.store
-            .state(move |db| {
-                store::create_key(
-                    db,
-                    &id,
-                    &input.label,
-                    input.source_id.as_deref(),
-                    &input.allowed_origins,
-                )
-            })
-            .await?,
+        workspace::create_key(&s, id, input.label, input.source_id, input.allowed_origins).await?,
     ))
 }
 #[derive(Deserialize)]
@@ -341,32 +303,14 @@ async fn update_key_origins(
     Path((id, key)): Path<(String, String)>,
     Json(input): Json<KeyOrigins>,
 ) -> ApiResult<StatusCode> {
-    let allowed = origins::normalize(&input.allowed_origins)?;
-    s.store.state(move |db| {
-        let changed = db.execute("UPDATE ingestion_keys SET allowed_origins=? WHERE product_id=? AND id=? AND revoked=0", rusqlite::params![serde_json::to_string(&allowed).map_err(anyhow::Error::from)?, id, key]).map_err(anyhow::Error::from)?;
-        if changed == 0 { return Err(ApiError::missing()); }
-        Ok(())
-    }).await?;
+    workspace::update_key_origins(&s, id, key, input.allowed_origins).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 async fn revoke_key(
     State(s): State<AppState>,
     Path((id, key)): Path<(String, String)>,
 ) -> ApiResult<StatusCode> {
-    s.store
-        .state(move |db| {
-            let n = db
-                .execute(
-                    "UPDATE ingestion_keys SET revoked=1 WHERE product_id=? AND id=?",
-                    [id, key],
-                )
-                .map_err(anyhow::Error::from)?;
-            if n == 0 {
-                return Err(ApiError::missing());
-            }
-            Ok(())
-        })
-        .await?;
+    workspace::revoke_key(&s, id, key).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 pub(crate) async fn query_product(
@@ -413,20 +357,12 @@ async fn create_source(
     Path(id): Path<String>,
     Json(input): Json<model::SourceInput>,
 ) -> ApiResult<Json<model::Source>> {
-    Ok(Json(
-        s.store
-            .state(move |db| sources::save(db, &id, None, input))
-            .await?,
-    ))
+    Ok(Json(workspace::create_source(&s, id, input).await?))
 }
 async fn update_source(
     State(s): State<AppState>,
     Path((id, source)): Path<(String, String)>,
     Json(input): Json<model::SourceInput>,
 ) -> ApiResult<Json<model::Source>> {
-    Ok(Json(
-        s.store
-            .state(move |db| sources::save(db, &id, Some(source), input))
-            .await?,
-    ))
+    Ok(Json(workspace::update_source(&s, id, source, input).await?))
 }

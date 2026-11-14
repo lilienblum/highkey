@@ -139,15 +139,18 @@ pub struct SourceInput {
     pub icon: Option<String>,
     pub name: String,
 }
+/// The icons a source may pin; `null` picks one automatically.
+pub const SOURCE_ICONS: [&str; 11] = [
+    "website", "ios", "android", "mobile", "terminal", "desktop", "server", "code", "package",
+    "game", "generic",
+];
 impl SourceInput {
     pub fn validate(&self) -> ApiResult<()> {
-        if self.icon.as_deref().is_some_and(|icon| {
-            ![
-                "website", "ios", "android", "mobile", "terminal", "desktop", "server", "code",
-                "package", "game", "generic",
-            ]
-            .contains(&icon)
-        }) {
+        if self
+            .icon
+            .as_deref()
+            .is_some_and(|icon| !SOURCE_ICONS.contains(&icon))
+        {
             return Err(ApiError::bad(
                 "Unknown source icon; use website/ios/android/mobile/terminal/desktop/server/code/package/game/generic, or null for automatic",
             ));
@@ -170,13 +173,11 @@ impl ProductInput {
         if let Some(website) = &self.website_url {
             crate::website::normalize(website)?;
         }
-        if self.name.trim().is_empty()
-            || self.name.len() > 80
-            || !(1..=3650).contains(&self.retention_days)
-        {
-            return Err(ApiError::bad(
-                "Use a name of 1–80 bytes and retention_days 1–3650",
-            ));
+        if self.name.trim().is_empty() || self.name.len() > 80 {
+            return Err(ApiError::bad("Use a project name of 1–80 bytes"));
+        }
+        if !(1..=3650).contains(&self.retention_days) {
+            return Err(ApiError::bad("Use retention_days 1–3650"));
         }
         Ok(())
     }
