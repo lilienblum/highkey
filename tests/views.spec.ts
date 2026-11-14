@@ -565,7 +565,7 @@ test("a view recreated under a deleted view's name never shows the deleted query
     const seen = { deleted: false };
     (window as unknown as { seen: typeof seen }).seen = seen;
     new MutationObserver(() => {
-      if (document.body.innerText.includes("across 3 matching events")) seen.deleted = true;
+      if (document.body.textContent?.includes("across 3 matching events")) seen.deleted = true;
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
   await link.click();
