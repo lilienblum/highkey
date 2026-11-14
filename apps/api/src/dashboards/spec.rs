@@ -1,0 +1,264 @@
+//! The `piko.dashboard/v1` document: serde types, defaults and the published JSON Schema.
+use indexmap::IndexMap;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+pub const SCHEMA_ID: &str = "/api/read/schemas/dashboard.v1.json";
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Document {
+    #[serde(rename = "$schema", default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    pub version: u32,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub widgets: Vec<Widget>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Widget {
+    pub id: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub view: View,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<Size>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub queries: IndexMap<String, QuerySpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series: Option<Vec<Series>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct View {
+    #[serde(rename = "type")]
+    pub kind: ViewKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<Unit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decimals: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suffix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sparkline: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compare: Option<Compare>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bucket: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stacked: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub markdown: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewKind {
+    Stat,
+    Line,
+    Area,
+    Bar,
+    Ranking,
+    Events,
+    Logs,
+    Text,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Compare {
+    PreviousPeriod,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Unit {
+    Number,
+    Percent,
+    Ratio,
+    Ms,
+    Seconds,
+    Bytes,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Color {
+    Yellow,
+    Violet,
+    Aqua,
+    Green,
+    Red,
+    Neutral,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Size {
+    pub w: u8,
+    pub h: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Threshold {
+    pub at: f64,
+    pub color: Color,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Series {
+    pub expr: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<Unit>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub thresholds: Vec<Threshold>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "signal", rename_all = "lowercase")]
+pub enum QuerySpec {
+    Events(EventsQuery),
+    Logs(LogsQuery),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum EventMeasure {
+    #[default]
+    Count,
+    Actors,
+    Sum,
+    Avg,
+    P50,
+    P95,
+    Min,
+    Max,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LogMeasure {
+    #[default]
+    Count,
+    Sum,
+    Avg,
+    P50,
+    P95,
+    Min,
+    Max,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EventsQuery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_kind: Option<String>,
+    #[serde(default)]
+    pub measure: EventMeasure,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub property: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<crate::query::Filter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LogsQuery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_level: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<LogFilter>,
+    #[serde(default)]
+    pub measure: LogMeasure,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribute: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LogFilter {
+    pub attribute: String,
+    pub value: serde_json::Value,
+}
+
+/// The JSON Schema (draft 2020-12) published for `piko.dashboard/v1` documents.
+pub fn schema() -> serde_json::Value {
+    let mut schema = serde_json::to_value(schemars::schema_for!(Document))
+        .expect("the document schema serializes");
+    schema["$id"] = SCHEMA_ID.into();
+    schema
+}
+
+impl Widget {
+    /// Explicit series, or one series per query (in declaration order) when none are written.
+    /// Events, logs and text views have no series.
+    pub fn series_or_default(&self) -> Vec<Series> {
+        if matches!(
+            self.view.kind,
+            ViewKind::Events | ViewKind::Logs | ViewKind::Text
+        ) {
+            return Vec::new();
+        }
+        match &self.series {
+            Some(series) => series.clone(),
+            None => self
+                .queries
+                .keys()
+                .map(|id| Series {
+                    expr: id.clone(),
+                    label: None,
+                    color: None,
+                    unit: None,
+                    thresholds: Vec::new(),
+                })
+                .collect(),
+        }
+    }
+
+    pub fn default_size(&self) -> Size {
+        let (w, h) = match self.view.kind {
+            ViewKind::Stat => (3, 1),
+            ViewKind::Line | ViewKind::Area | ViewKind::Bar | ViewKind::Ranking => (6, 2),
+            ViewKind::Events | ViewKind::Logs => (12, 3),
+            ViewKind::Text => (4, 1),
+        };
+        Size { w, h }
+    }
+}

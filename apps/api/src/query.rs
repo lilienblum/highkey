@@ -4,10 +4,10 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use duckdb::{Connection, params_from_iter, types::Value as DbValue};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Filter {
     pub property: String,
@@ -72,10 +72,12 @@ impl Query {
                 "Use hour/day/week/month buckets, a positive range ≤366 days (hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters",
             ));
         }
-        if !["count", "actors", "sum", "avg", "p50", "p95"].contains(&self.measure.as_str()) {
+        if !["count", "actors", "sum", "avg", "p50", "p95", "min", "max"]
+            .contains(&self.measure.as_str())
+        {
             return Err(ApiError::bad("Unsupported measure"));
         }
-        if ["sum", "avg", "p50", "p95"].contains(&self.measure.as_str()) {
+        if ["sum", "avg", "p50", "p95", "min", "max"].contains(&self.measure.as_str()) {
             property(
                 self.property
                     .as_deref()
@@ -139,7 +141,7 @@ fn agg(q: &Query) -> String {
         "actors" => {
             "count(DISTINCT (identity_kind, actor_id)) FILTER (WHERE actor_id IS NOT NULL)".into()
         }
-        "sum" | "avg" => format!(
+        "sum" | "avg" | "min" | "max" => format!(
             "{}({})",
             q.measure,
             numeric(q.property.as_deref().expect("validated property"))
@@ -257,6 +259,23 @@ mod tests {
             assert!(query.validate().is_ok());
             query.to += chrono::Duration::milliseconds(1);
             assert!(query.validate().is_err());
+        }
+    }
+    #[test]
+    fn min_and_max_need_a_property_and_leave_missing_buckets_null() {
+        let mut query: Query = serde_json::from_value(json!({
+            "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z", "measure": "min"
+        }))
+        .unwrap();
+        assert!(query.validate().is_err());
+        for measure in ["min", "max"] {
+            query.measure = measure.into();
+            query.property = Some("duration_ms".into());
+            assert!(query.validate().is_ok());
+            assert_eq!(
+                agg(&query),
+                format!("{measure}({})", numeric("duration_ms"))
+            );
         }
     }
     #[test]
