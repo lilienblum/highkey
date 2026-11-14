@@ -38,7 +38,13 @@ pub fn missing_hint(name: &str, candidates: &[String], plural: &str) -> String {
         return format!("did you mean `{close}`?");
     }
     if candidates.is_empty() {
-        return format!("This project has no {plural} yet");
+        return match plural {
+            "projects" => {
+                "There are no projects yet; create one in Piko's Settings or with create_project"
+                    .into()
+            }
+            _ => format!("This project has no {plural} yet"),
+        };
     }
     let listed: Vec<&str> = candidates.iter().take(LISTED).map(String::as_str).collect();
     let more = candidates.len().saturating_sub(LISTED);
@@ -76,6 +82,11 @@ mod tests {
         assert_eq!(
             missing_hint("x", &[], "views"),
             "This project has no views yet"
+        );
+        // Projects belong to the install, not to a project.
+        assert_eq!(
+            missing_hint("x", &[], "projects"),
+            "There are no projects yet; create one in Piko's Settings or with create_project"
         );
         let many: Vec<String> = (0..25).map(|n| format!("board-number-{n}")).collect();
         assert!(missing_hint("zzzzzz", &many, "dashboards").ends_with(" and 5 more"));
