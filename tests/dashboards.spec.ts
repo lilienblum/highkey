@@ -561,3 +561,99 @@ test("delete asks first and returns to Overview", async ({ page }) => {
     ),
   ).not.toContain(created.slug);
 });
+
+const sqlDashboard = {
+  version: 1,
+  name: "SQL views",
+  widgets: [
+    {
+      id: "by-name",
+      title: "Events by name",
+      view: { type: "table" },
+      size: { w: 12, h: 2 },
+      queries: {
+        q: {
+          signal: "sql",
+          database: "events",
+          sql: "SELECT name AS event, count(*) AS total, epoch_ms(max(event_time)) AS last_seen, count(*) > 5 AS busy, NULL::VARCHAR AS note, json_object('kind', name) AS meta FROM events GROUP BY 1 ORDER BY 2 DESC, 1",
+        },
+      },
+    },
+    {
+      id: "many",
+      title: "Many rows",
+      view: { type: "table" },
+      size: { w: 6, h: 2 },
+      queries: {
+        q: {
+          signal: "sql",
+          database: "events",
+          sql: "SELECT n AS number, 'row ' || n AS text FROM range(600) t(n)",
+        },
+      },
+    },
+    {
+      id: "sql-line",
+      title: "SQL events per day",
+      view: { type: "line" },
+      size: { w: 6, h: 2 },
+      queries: {
+        q: {
+          signal: "sql",
+          database: "events",
+          sql: "SELECT epoch_ms(date_trunc($bucket, epoch_ms(event_time))) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1",
+        },
+      },
+      series: [{ expr: "q", label: "SQL events" }],
+    },
+  ],
+};
+
+test("SQL table and line widgets render with a truncation note", async ({ page }) => {
+  const errors = collectErrors(page);
+  const sqlSlug = (
+    await admin<{ slug: string }>(`/products/${project.id}/dashboards`, { document: sqlDashboard })
+  ).slug;
+  await page.goto(`/projects/${project.slug}/dashboards/${sqlSlug}`);
+
+  const events = widget(page, "by-name");
+  const table = events.getByRole("region", { name: "Events by name" });
+  await expect(table).toBeVisible();
+  await expect(table).toHaveAttribute("tabindex", "0");
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "event",
+    "total",
+    "last_seen",
+    "busy",
+    "note",
+    "meta",
+  ]);
+  const first = table.getByRole("row").nth(1);
+  await expect(first.getByRole("cell").nth(0)).toHaveText("checkout_request");
+  await expect(first.getByRole("cell").nth(1)).toHaveText("20");
+  await expect(first.getByRole("cell").nth(1)).toHaveCSS("font-variant-numeric", "tabular-nums");
+  await expect(first.getByRole("cell").nth(2)).toContainText(/\d{4}/);
+  await expect(first.getByRole("cell").nth(3)).toHaveText("true");
+  await expect(first.getByRole("cell").nth(4)).toHaveText("—");
+  await expect(first.getByRole("cell").nth(5)).toContainText("checkout_request");
+  await expect(table.getByRole("columnheader").first()).toHaveCSS("position", "sticky");
+
+  const many = widget(page, "many");
+  await expect(many.getByRole("region", { name: "Many rows" }).getByRole("row")).toHaveCount(501);
+  await expect(many.locator(".dashboard-footer-notes")).toContainText(
+    "Showing the first 500 of 600 rows",
+  );
+
+  const line = widget(page, "sql-line");
+  await expect(line.locator(".analytics-plot")).toBeVisible();
+  await expect(line.locator(".dashboard-legend")).toContainText("SQL events");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(errors).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(widget(page, "by-name").getByRole("columnheader").first()).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0);
+});

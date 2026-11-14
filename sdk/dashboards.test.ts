@@ -7,6 +7,11 @@ import {
   moveWidget,
   overviewTemplate,
   queryLabel,
+  cellKind,
+  formatCell,
+  tableColumns,
+  tableNotes,
+  TABLE_ROW_LIMIT,
   removeWidget,
   resolvedSize,
   responsiveWidth,
@@ -221,4 +226,76 @@ test("seriesDisplayLabel prefers explicit labels, then measures, then the expres
   expect(hasSeriesLabel(named, 0)).toBe(false);
   expect(hasSeriesLabel(named, 1)).toBe(true);
   expect(hasSeriesLabel(base, 0)).toBe(false);
+});
+
+test("SQL queries are labelled by their series label or query id", () => {
+  const widget = {
+    id: "w",
+    title: "W",
+    view: { type: "line" as const },
+    queries: {
+      slow: { signal: "sql" as const, database: "events" as const, sql: "SELECT 1" },
+    },
+  };
+  expect(queryLabel(widget.queries.slow)).toBe("SQL");
+  expect(seriesDisplayLabel(widget, 0)).toBe("slow");
+  expect(seriesDisplayLabel({ ...widget, series: [{ expr: "slow", label: "Slow" }] }, 0)).toBe(
+    "Slow",
+  );
+});
+
+test("table columns accept objects and pairs and stop at 50", () => {
+  expect(tableColumns([{ name: "a", type: "BIGINT" }, ["b", "VARCHAR"]])).toEqual([
+    { name: "a", type: "BIGINT" },
+    { name: "b", type: "VARCHAR" },
+  ]);
+  expect(tableColumns(null)).toEqual([]);
+  const many = Array.from({ length: 60 }, (_, i) => ({ name: `c${i}`, type: "INTEGER" }));
+  expect(tableColumns(many)).toHaveLength(50);
+});
+
+test("cellKind groups DuckDB types", () => {
+  expect(cellKind("BIGINT")).toBe("number");
+  expect(cellKind("DECIMAL(18,3)")).toBe("number");
+  expect(cellKind("DOUBLE")).toBe("number");
+  expect(cellKind("HUGEINT")).toBe("number");
+  expect(cellKind("TIMESTAMP")).toBe("timestamp");
+  expect(cellKind("TIMESTAMP WITH TIME ZONE")).toBe("timestamp");
+  expect(cellKind("TIMESTAMP_MS")).toBe("timestamp");
+  expect(cellKind("DATE")).toBe("date");
+  expect(cellKind("BOOLEAN")).toBe("boolean");
+  expect(cellKind("JSON")).toBe("json");
+  expect(cellKind("STRUCT(a INTEGER)")).toBe("json");
+  expect(cellKind("VARCHAR[]")).toBe("json");
+  expect(cellKind("MAP(VARCHAR, INTEGER)")).toBe("json");
+  expect(cellKind("VARCHAR")).toBe("text");
+  expect(cellKind("UUID")).toBe("text");
+  expect(cellKind("TIME")).toBe("text");
+});
+
+test("formatCell renders nulls, numbers and booleans as text", () => {
+  expect(formatCell(null, "number")).toBe("—");
+  expect(formatCell(1234567, "number")).toBe("1,234,567");
+  expect(formatCell(12.34567, "number")).toBe("12.3457");
+  expect(formatCell(true, "boolean")).toBe("true");
+  expect(formatCell(false, "boolean")).toBe("false");
+  expect(formatCell("hello", "text")).toBe("hello");
+  expect(formatCell("", "text")).toBe("");
+  expect(formatCell("n/a", "number")).toBe("n/a");
+  expect(formatCell(Date.UTC(2026, 0, 2), "date")).toBe("2026-01-02");
+});
+
+test("tableNotes says when rows were cut", () => {
+  expect(TABLE_ROW_LIMIT).toBe(500);
+  expect(tableNotes(10, [])).toEqual([]);
+  expect(tableNotes(600, [])).toEqual(["Showing the first 500 of 600 rows"]);
+  expect(
+    tableNotes(10000, [{ path: "/queries/q/sql", message: "Showing the first 10,000 rows" }]),
+  ).toEqual(["Showing the first 500 rows", "Showing the first 10,000 rows"]);
+  expect(
+    tableNotes(3, [
+      { path: "/queries/q/sql", message: "The first row is larger than the 4 MB limit" },
+      { path: "/x", message: "Something else" },
+    ]),
+  ).toEqual(["The first row is larger than the 4 MB limit"]);
 });

@@ -4,7 +4,16 @@ export type { DashboardLink };
 
 export type Color = "yellow" | "violet" | "aqua" | "green" | "red" | "neutral";
 export type Unit = "number" | "percent" | "ratio" | "ms" | "seconds" | "bytes";
-export type ViewKind = "stat" | "line" | "area" | "bar" | "ranking" | "events" | "logs" | "text";
+export type ViewKind =
+  | "stat"
+  | "line"
+  | "area"
+  | "bar"
+  | "ranking"
+  | "table"
+  | "events"
+  | "logs"
+  | "text";
 export type Size = { w: 3 | 4 | 6 | 8 | 12; h: 1 | 2 | 3 };
 export type Threshold = { at: number; color: Color };
 
@@ -53,7 +62,13 @@ export type LogsQuery = {
   attribute?: string;
   group_by?: string;
 };
-export type QuerySpec = EventsQuery | LogsQuery;
+export type SqlQuery = {
+  signal: "sql";
+  database: "events" | "logs";
+  sql: string;
+  missing?: "zero" | "null";
+};
+export type QuerySpec = EventsQuery | LogsQuery | SqlQuery;
 export type Widget = {
   id: string;
   title: string;
@@ -106,6 +121,7 @@ export type SeriesResult = {
   previous_points?: { time: number; value: number | null }[];
   groups?: { label: string | number | boolean | null; value: number | null }[];
 };
+export type ResultColumn = { name: string; type: string };
 export type RunResult = {
   widget: string;
   range: {
@@ -117,7 +133,10 @@ export type RunResult = {
     requested_to: string;
   };
   series: SeriesResult[];
-  rows: Record<string, unknown>[] | null;
+  /** Event or log rows for list views; arrays of cell values (one per column) for a table. */
+  rows: Record<string, unknown>[] | unknown[][] | null;
+  /** A table view's result columns, each `{ name, type }` (or `[name, type]`) with a DuckDB type. */
+  columns?: (ResultColumn | [string, string])[] | null;
   elapsed_ms: number;
   warnings: Issue[];
 };
@@ -289,6 +308,7 @@ const measureNames = {
 } as const;
 /** What a query measures, in words: "Events", "Actors", "Avg duration_ms"; logs counts read "Logs". */
 export function queryLabel(query: QuerySpec): string {
+  if (query.signal === "sql") return "SQL";
   const measure = query.measure ?? "count";
   if (measure === "count") return query.signal === "logs" ? "Logs" : "Events";
   if (measure === "actors") return "Actors";
@@ -308,11 +328,64 @@ export function seriesDisplayLabel(widget: Widget, index: number): string | unde
   const expr = widget.series ? series?.expr.trim() : Object.keys(widget.queries)[index];
   if (expr === undefined) return undefined;
   const query = Object.hasOwn(widget.queries, expr) ? widget.queries[expr] : undefined;
-  return query ? queryLabel(query) : expr;
+  // An SQL query has no measure to name, so it reads as its id.
+  return query && query.signal !== "sql" ? queryLabel(query) : expr;
 }
 
 /** Whether a series was given its own label; the title already names a lone unlabelled stat. */
 export const hasSeriesLabel = (widget: Widget, index: number) => !!widget.series?.[index]?.label;
+
+export const TABLE_ROW_LIMIT = 500;
+export const TABLE_COLUMN_LIMIT = 50;
+
+/** A table view's columns as `{ name, type }`, at most 50, whichever shape the API sent. */
+export function tableColumns(columns: RunResult["columns"]): ResultColumn[] {
+  return (columns ?? [])
+    .slice(0, TABLE_COLUMN_LIMIT)
+    .map((column) =>
+      Array.isArray(column) ? { name: String(column[0]), type: String(column[1]) } : column,
+    );
+}
+
+export type CellKind = "number" | "timestamp" | "date" | "boolean" | "json" | "text";
+/** How a DuckDB type is shown: times arrive as epoch milliseconds, structures as JSON. */
+export function cellKind(type: string): CellKind {
+  const t = type.trim().toUpperCase();
+  if (t === "JSON" || t.endsWith("]") || /^(STRUCT|MAP|UNION)\b/.test(t)) return "json";
+  if (t === "BOOLEAN") return "boolean";
+  if (t === "DATE") return "date";
+  if (/^TIMESTAMP/.test(t)) return "timestamp";
+  if (/^(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|FLOAT|DOUBLE|REAL|DECIMAL|NUMERIC|BIGNUM)\b/.test(t))
+    return "number";
+  return "text";
+}
+
+const cellNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
+/** Text for a cell, except timestamps (the viewer's timezone) and JSON (highlighted). */
+export function formatCell(value: unknown, kind: CellKind): string {
+  if (value === null || value === undefined) return "—";
+  if (kind === "number" && typeof value === "number")
+    return Number.isFinite(value) ? cellNumber.format(value) : String(value);
+  if (kind === "date" && typeof value === "number" && Number.isFinite(value))
+    return new Date(value).toISOString().slice(0, 10);
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/** Footer notes for a table: rows beyond the 500 shown, and the API's own truncation warnings. */
+export function tableNotes(returned: number, warnings: Issue[]): string[] {
+  const api = warnings
+    .map((warning) => warning.message)
+    .filter((message) => /^(Showing the first|The first row)/.test(message));
+  const notes: string[] = [];
+  if (returned > TABLE_ROW_LIMIT)
+    notes.push(
+      api.length
+        ? `Showing the first ${TABLE_ROW_LIMIT} rows`
+        : `Showing the first ${TABLE_ROW_LIMIT} of ${number(returned)} rows`,
+    );
+  return [...notes, ...api];
+}
 
 const binaryUnits = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 function fixed(value: number, decimals: number | undefined, fallback: number) {

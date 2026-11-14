@@ -2,17 +2,32 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { groupLabel, number, type EventRow, type Group, type Product } from "@/lib/api";
 import {
+  cellKind,
+  formatCell,
   formatMeasure,
   hasSeriesLabel,
   resolvedSize,
   responsiveWidth,
   seriesDisplayLabel,
+  TABLE_ROW_LIMIT,
+  tableColumns,
+  tableNotes,
   thresholdColor,
+  type CellKind,
   type EventsQuery,
   type LogsQuery,
+  type QuerySpec,
   type RunResult,
   type SeriesResult,
   type Unit,
@@ -24,6 +39,7 @@ import { displayTimestamp } from "@/lib/display-time";
 import { displayValue } from "@/lib/display-values";
 import { defaultSpec } from "@/lib/explore-search";
 import { logLevels, type LogRow } from "@/lib/logs";
+import { TypedValue } from "@/lib/highlight";
 import { Markdown } from "@/lib/markdown";
 import { bucketLabels, type TimeBucket } from "@/lib/time-buckets";
 import { useNearViewport, useWidgetRun } from "@/lib/use-widget";
@@ -133,6 +149,8 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
         return <ChartBody {...shared} span={span} />;
       case "ranking":
         return <RankingBody {...shared} />;
+      case "table":
+        return <SqlTableBody {...shared} />;
       case "events":
         return <EventRowsBody {...shared} />;
       default:
@@ -189,6 +207,9 @@ type BodyProps = {
   result?: RunResult;
   loading: boolean;
 };
+
+const groupByOf = (query?: QuerySpec) =>
+  query && query.signal !== "sql" ? query.group_by : undefined;
 
 /** A series' own unit wins over the view's. */
 function measureView(widget: Widget, index: number): View {
@@ -288,7 +309,7 @@ function ChartBody({
   loading,
   span,
 }: BodyProps & { span: { from: string; to: string } }) {
-  const groupBy = Object.values(widget.queries)[0]?.group_by;
+  const groupBy = groupByOf(Object.values(widget.queries)[0]);
   // Stable inputs keep the chart definition (and its focus and tooltip) across parent renders.
   const series = useMemo(
     () =>
@@ -338,7 +359,7 @@ function ChartBody({
 }
 
 function RankingBody({ widget, product, result, loading }: BodyProps) {
-  const groupBy = Object.values(widget.queries)[0]?.group_by;
+  const groupBy = groupByOf(Object.values(widget.queries)[0]);
   const first = result?.series[0];
   const rows = first?.groups ?? [];
   const thresholds = widget.series?.[0]?.thresholds ?? [];
@@ -419,6 +440,91 @@ function RowTime({ timestamp }: { timestamp: number }) {
       {time.slice(0, -4)}
     </time>
   );
+}
+
+/** An SQL table: the result's own columns under a sticky header, scrolling inside the widget. */
+function SqlTableBody({ widget, result, loading }: BodyProps) {
+  const { timeZone } = useDisplayPreferences();
+  const columns = tableColumns(result?.columns);
+  const kinds = columns.map((column) => cellKind(column.type));
+  const rows = ((result?.rows ?? []) as unknown[][]).slice(0, TABLE_ROW_LIMIT);
+  return (
+    <WidgetContent
+      label={widget.title}
+      loading={loading}
+      empty={
+        !result
+          ? "Results unavailable."
+          : !columns.length
+            ? "The query returned no columns."
+            : rows.length
+              ? undefined
+              : "The query returned no rows."
+      }
+    >
+      <section
+        className="dashboard-table"
+        // A scrolling region has to be reachable without a pointer.
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard scrolling of the table
+        tabIndex={0}
+        aria-label={widget.title}
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {columns.map((column, index) => (
+                <TableHead
+                  // biome-ignore lint/suspicious/noArrayIndexKey: result columns may repeat a name
+                  key={index}
+                  data-kind={kinds[index]}
+                  title={`${column.name} (${column.type})`}
+                  scope="col"
+                >
+                  {column.name}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, rowIndex) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: result rows have no identity
+              <TableRow key={rowIndex}>
+                {kinds.map((kind, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
+                  <TableCell key={index} data-kind={kind}>
+                    <CellValue value={row[index]} kind={kind} timeZone={timeZone} />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </WidgetContent>
+  );
+}
+
+function CellValue({
+  value,
+  kind,
+  timeZone,
+}: {
+  value: unknown;
+  kind: CellKind;
+  timeZone: string;
+}) {
+  if (value === null || value === undefined) return <span className="dashboard-cell-null">—</span>;
+  if (kind === "timestamp" && typeof value === "number" && Number.isFinite(value)) {
+    const full = displayTimestamp(value, timeZone);
+    return (
+      <time dateTime={new Date(value).toISOString()} title={full}>
+        {full}
+      </time>
+    );
+  }
+  if (kind === "json" || (typeof value === "object" && value !== null))
+    return <TypedValue value={value} />;
+  return <>{formatCell(value, kind)}</>;
 }
 
 function EventRowsBody({ widget, product, result, loading }: BodyProps) {
@@ -526,6 +632,8 @@ function WidgetFooter({
   } else if (widget.range) notes.push(overrideLabel(widget.range));
   if (range && ["line", "area", "bar"].includes(widget.view.type))
     notes.push(`${bucketLabels[range.bucket as TimeBucket] ?? range.bucket} · UTC`);
+  if (widget.view.type === "table" && result?.rows)
+    notes.push(...tableNotes(result.rows.length, result.warnings));
   const readsLogs = Object.values(widget.queries).some((query) => query.signal === "logs");
   if (
     readsLogs &&

@@ -39,7 +39,8 @@ import { WidgetView } from "./widget";
 export function signalsOf(dashboard: DashboardDocument): Signal[] {
   const signals = new Set<Signal>();
   for (const widget of dashboard.widgets)
-    for (const query of Object.values(widget.queries ?? {})) signals.add(query.signal);
+    for (const query of Object.values(widget.queries ?? {}))
+      signals.add(query.signal === "sql" ? query.database : query.signal);
   return [...signals].sort();
 }
 

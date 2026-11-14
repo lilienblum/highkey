@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * with the Kanagawa syntax roles in styles.css (`.tok-*`); they never parse or validate. Output
  * is plain spans, so it renders identically on the server and in the browser.
  */
-export type CodeLanguage = "json" | "js" | "html" | "shell" | "http";
+export type CodeLanguage = "json" | "js" | "html" | "shell" | "http" | "sql";
 type Kind =
   | "string"
   | "number"
@@ -81,6 +81,81 @@ const shellRules: Rule[] = [
   [/\\(?=\n)|[=|;]/y, "punct"],
 ];
 
+const SQL_KEYWORDS = [
+  "select",
+  "from",
+  "where",
+  "group",
+  "by",
+  "order",
+  "having",
+  "limit",
+  "offset",
+  "as",
+  "and",
+  "or",
+  "not",
+  "in",
+  "is",
+  "like",
+  "ilike",
+  "between",
+  "case",
+  "when",
+  "then",
+  "else",
+  "end",
+  "join",
+  "left",
+  "right",
+  "inner",
+  "outer",
+  "full",
+  "cross",
+  "on",
+  "using",
+  "union",
+  "all",
+  "distinct",
+  "with",
+  "over",
+  "partition",
+  "asc",
+  "desc",
+  "cast",
+  "interval",
+  "exists",
+  "qualify",
+  "except",
+  "intersect",
+  "nulls",
+  "lateral",
+  "recursive",
+  "similar",
+  "preceding",
+  "following",
+  "unbounded",
+];
+const sqlRules: Rule[] = [
+  [/--[^\n]*|\/\*[\s\S]*?\*\//y, "comment"],
+  [/'(?:[^']|'')*'/y, "string"],
+  [/"(?:[^"]|"")*"/y, "property"],
+  [/\$[A-Za-z_][A-Za-z0-9_]*/y, "variable"],
+  [/\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\.\d+\b/y, "number"],
+  [/\b(?:true|false|null)\b/iy, "constant"],
+  [
+    new RegExp(`\\b(?:${SQL_KEYWORDS.join("|")})\\b`, "iy"),
+    // left(...) and right(...) are functions; `LEFT JOIN` is a keyword.
+    (match, rest) =>
+      /^(?:left|right)$/i.test(match) && /^\s*\(/.test(rest) ? "function" : "keyword",
+  ],
+  [/\b[A-Za-z_][\w]*\b/y, (_match, rest) => (/^\s*\(/.test(rest) ? "function" : undefined)],
+  [/[(),;.*+\-/%=<>!|:[\]{}]/y, "punct"],
+];
+
+function sql(source: string) {
+  return scan(source, sqlRules);
+}
 function json(source: string) {
   return scan(source, jsonRules);
 }
@@ -134,6 +209,7 @@ const tokenizers: Record<CodeLanguage, (source: string) => Token[]> = {
   html,
   shell,
   http,
+  sql,
 };
 
 /** Lossless token stream: concatenating every token's text returns the source. */

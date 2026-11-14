@@ -395,3 +395,62 @@
   font-size: 13px;
   color: var(--muted-foreground);
 }
+
+/* SQL tables: the region scrolls both ways inside the widget; the header stays put. */
+.dashboard-table {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  font-size: 12px;
+}
+.dashboard-table [data-slot="table-container"] {
+  /* The region above is the scroller, so the sticky header sticks to it. */
+  overflow: visible;
+  width: max-content;
+  min-width: 100%;
+}
+.dashboard-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 28px;
+  padding: 0 12px 0 8px;
+  background: var(--card);
+  box-shadow: inset 0 -1px 0 var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+.dashboard-table td {
+  max-width: 320px;
+  overflow: hidden;
+  padding: 0 12px 0 8px;
+  height: 30px;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-table tr {
+  border-bottom: 1px solid var(--border);
+}
+.dashboard-table [data-kind="number"] {
+  text-align: right;
+}
+.dashboard-table td:has(.typed-value) {
+  white-space: normal;
+  line-height: 1.4;
+}
+.dashboard-table .typed-value {
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+.dashboard-table time {
+  color: var(--muted-foreground);
+}
+.dashboard-cell-null {
+  color: var(--muted-foreground);
+}
+.dashboard-table:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
