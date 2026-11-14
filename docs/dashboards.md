@@ -156,7 +156,7 @@ Some functions are refused by name, each with a hint that says what to use inste
 | `current_setting`, `getvariable`                                     | The parameters above                                                                         |
 | Built-in macros that call any of these                               | As for the function the macro calls; the hint names it                                       |
 
-A value can still grow by other routes, such as a chain of WITH tables that each double a string with `x || x`. On Linux the API runs under a memory ceiling (see [the resource model](api.md#resource-model)), so such a query fails with an Out of Memory error instead of taking the API down.
+A value can still grow by other routes, such as nested `replace` calls that each multiply a string. On Linux the API runs under a memory ceiling (see [the resource model](api.md#resource-model)), so such a query fails with an Out of Memory error instead of taking the API down.
 
 The `events` table has `name`, `source`, `source_id`, `event_time` (epoch ms), `received_at`, `actor_id`, `identity_kind`, `session_id` and `properties` (JSON). The `logs` table has `log_id`, `source_id`, `timestamp` (epoch ms), `received_at`, `level`, `message`, `service`, `environment`, `trace_id`, `span_id`, `request_id` and `attributes` (JSON). `describe_project` returns the exact columns with their types.
 
