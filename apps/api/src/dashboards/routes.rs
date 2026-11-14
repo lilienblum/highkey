@@ -353,13 +353,14 @@ pub(crate) async fn update_dashboard(
 ) -> Result<Value, DashboardError> {
     throttle(state, product)?;
     let doc = self::document(document)?;
-    verify_sql(state, product, &doc).await?;
+    // A stale save fails before its SQL waits for a dashboard slot to be verified.
     let current = current(state, product, key).await?;
     if current.revision != base_revision {
         return Err(DashboardError::Conflict {
             revision: current.revision,
         });
     }
+    verify_sql(state, product, &doc).await?;
     let bench = bench_document(state, product, &doc, Some(&current.document)).await?;
     let (id, key) = (product.to_string(), key.to_string());
     let stored = state

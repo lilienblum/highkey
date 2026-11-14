@@ -884,6 +884,45 @@ async fn stale_base_revision_conflicts() {
 }
 
 #[tokio::test]
+async fn a_stale_save_with_sql_conflicts_without_waiting_for_the_gate() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let sql = "SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to";
+    let board = json!({
+        "version": 1, "name": "Board",
+        "widgets": [{"id": "n", "title": "N", "view": {"type": "stat"},
+            "queries": {"q": {"signal": "sql", "database": "events", "sql": sql}}}]
+    });
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board.clone()}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        put(&test, &project, "board", 1, board.clone(), &[]).await.0,
+        200
+    );
+    // Every dashboard slot is busy, so verifying the SQL would wait for its deadline.
+    let gate = test.state.store.dashboard_event_gate.clone();
+    let held = gate.acquire_many_owned(3).await.unwrap();
+    let started = std::time::Instant::now();
+    let (status, body) = put(&test, &project, "board", 1, board, &[]).await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["code"], "revision_conflict");
+    assert_eq!(body["revision"], 2);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    drop(held);
+    test.close().await;
+}
+
+#[tokio::test]
 async fn concurrent_saves_with_the_same_base_have_one_winner() {
     let test = Test::new();
     let project = test.project("Shop").await;
