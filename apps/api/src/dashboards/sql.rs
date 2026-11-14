@@ -1565,7 +1565,7 @@ const DATE_RANGE_MS: i64 = 8_640_000_000_000_000;
 
 /// An integer as a JSON number, or as a string beyond ±(2^53 - 1) so it keeps every digit.
 fn integer(value: i128) -> Value {
-    if value.abs() <= SAFE_INTEGER {
+    if value.unsigned_abs() <= SAFE_INTEGER as u128 {
         Value::from(value as i64)
     } else {
         Value::String(value.to_string())
@@ -1574,7 +1574,7 @@ fn integer(value: i128) -> Value {
 
 /// An epoch-millisecond time, or its digits as a string when a `Date` cannot hold it.
 fn instant(ms: i64) -> Value {
-    if ms.abs() <= DATE_RANGE_MS {
+    if ms.unsigned_abs() <= DATE_RANGE_MS as u64 {
         ms.into()
     } else {
         Value::String(ms.to_string())
@@ -2090,6 +2090,13 @@ mod tests {
         assert_eq!(
             decimal(12345678901234567890123, 2),
             "123456789012345678901.23"
+        );
+        // The most negative values have no positive counterpart, so they are compared unsigned.
+        assert_eq!(integer(i128::MIN), serde_json::json!(i128::MIN.to_string()));
+        assert_eq!(instant(i64::MIN), serde_json::json!(i64::MIN.to_string()));
+        assert_eq!(
+            instant(-8_640_000_000_000_000),
+            serde_json::json!(-8_640_000_000_000_000i64)
         );
         assert_eq!(instant(1_000), serde_json::json!(1000));
         assert_eq!(
