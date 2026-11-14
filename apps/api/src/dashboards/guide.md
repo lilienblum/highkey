@@ -35,7 +35,14 @@ Work in this order: `describe_project`, then `run_widget` for each widget, then 
 - Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`.
 - `measure` is `count`, or `sum`, `avg`, `p50`, `p95`, `min`, `max` over a numeric `attribute`. `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
 
-**SQL**: `{"signal": "sql", "database": "events", "sql": "SELECT ..."}` runs one read-only DuckDB `SELECT` (up to 8,000 characters) over the project's own `events` or `logs` table. Piko verifies that the statement is a single SELECT, that it uses only that table, no side-effecting functions, and only the named parameters `$from`, `$to` (epoch milliseconds), `$bucket` (hour, day, week or month) and `$source` (a source id, or NULL for all). Functions that can build values larger than the server's memory are refused (the list is not exhaustive; other routes, such as nested `replace` calls, can still grow a value): `repeat`, `lpad`, `rpad`, `bitstring`, `printf`, `format`, `bar`, `list_resize`, `array_resize`, and the list forms of `range` and `generate_series` (their table forms, as in `SELECT i FROM range(10) t(i)`, are fine). `WITH RECURSIVE` is refused too. Each refusal's hint says what to use instead. Piko then dry-runs the query on the project's data. `describe_project` lists the table columns under `sql`. Results stop at 10,000 rows with a warning. Result columns decide the shape: `value` (one number); `time` and `value`, plus an optional `group` (a time series); `label` and `value` (a ranking); or any columns for a `table`. `missing` is `null` (default) or `zero` for absent buckets.
+**SQL**: `{"signal": "sql", "database": "events", "sql": "SELECT ..."}` runs one read-only DuckDB `SELECT` (up to 8,000 characters) over the project's own events (or logs, with `"database": "logs"`).
+
+- `events` (or `logs`) already holds only the dashboard's range and selected source, so `SELECT count(*) AS value FROM events` follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Use it by default.
+- `all_events` (or `all_logs`) holds all history, of every source, for cohorts that began before the range. Filter it yourself with `$from`, `$to` and `$source` where they should apply. A query that reads only `all_events` and uses neither `$from` nor `$to` warns that it shows all history.
+- `bucket(event_time)` (or `bucket(timestamp)`) gives a row's bucket: the epoch-ms start of the dashboard's `$bucket` (UTC, weeks start Monday), the same buckets the chart draws. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
+- A WITH table of your own named `events` replaces the scoped one in that query. In earlier versions `events` held all history; read `all_events` where a query relied on that.
+
+Piko verifies that the statement is a single SELECT, that it reads only those two names of its database (and its own WITH tables), no side-effecting functions, and only the named parameters `$from`, `$to` (epoch milliseconds), `$bucket` (hour, day, week or month) and `$source` (a source id, or NULL for all). Functions that can build values larger than the server's memory are refused (the list is not exhaustive; other routes, such as nested `replace` calls, can still grow a value): `repeat`, `lpad`, `rpad`, `bitstring`, `printf`, `format`, `bar`, `list_resize`, `array_resize`, and the list forms of `range` and `generate_series` (their table forms, as in `SELECT i FROM range(10) t(i)`, are fine). `WITH RECURSIVE` is refused too. Each refusal's hint says what to use instead. Piko then dry-runs the query on the project's data. `describe_project` lists the tables under `sql`, with their columns, which are scoped, the parameters and `bucket`. Results stop at 10,000 rows with a warning. Result columns decide the shape: `value` (one number); `time` and `value`, plus an optional `group` (a time series); `label` and `value` (a ranking); or any columns for a `table`. `missing` is `null` (default) or `zero` for absent buckets.
 
 Every query in a widget must share the same `group_by`. Event queries read events; logs and SQL over logs read the logs database, which keeps 31 days.
 
@@ -190,7 +197,7 @@ A chart of an error rate, from logs over events, with a formula, thresholds and 
 }
 ```
 
-A table from SQL, bounded by the range parameters:
+A table from SQL, which follows the range and source without filtering them itself:
 
 ```json document
 {
@@ -205,7 +212,7 @@ A table from SQL, bounded by the range parameters:
         "q": {
           "signal": "sql",
           "database": "events",
-          "sql": "SELECT name, count(*) AS events FROM events WHERE event_time >= $from AND event_time < $to GROUP BY name ORDER BY events DESC LIMIT 20"
+          "sql": "SELECT name, count(*) AS events FROM events GROUP BY name ORDER BY events DESC LIMIT 20"
         }
       }
     }
@@ -213,7 +220,7 @@ A table from SQL, bounded by the range parameters:
 }
 ```
 
-Weekly churn, in SQL: actors active the week before and not this week, bucketed by week, leaving the current partial week out:
+Weekly churn, in SQL: actors active the week before and not this week, bucketed by week, leaving the current partial week out. The first week needs the week before the range, so it reads `all_events` and filters the range (one week further back) and the source itself:
 
 ```json document
 {
@@ -230,7 +237,7 @@ Weekly churn, in SQL: actors active the week before and not this week, bucketed 
           "signal": "sql",
           "database": "events",
           "missing": "zero",
-          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
+          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM all_events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
         }
       }
     }

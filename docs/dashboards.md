@@ -130,9 +130,24 @@ A grouped time series (`group_by` on a line, area or bar) allows one series and 
 
 ### Guarded SQL
 
-A widget can run one read-only DuckDB `SELECT` of up to 8,000 characters over the project's own `events` or `logs` table. It is how you build things the typed queries cannot, such as churn.
+A widget can run one read-only DuckDB `SELECT` of up to 8,000 characters over the project's own events or logs. It is how you build things the typed queries cannot, such as churn.
 
-Piko checks the statement before every save, validation and run. DuckDB's own parser must report one statement that is a `SELECT`; it may read only that database's table, may call no side-effecting function, and may use only these named parameters:
+A query names its database with `"database": "events"` or `"database": "logs"`, and reads it by two names:
+
+| Name         | Holds                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| `events`     | Only the events in the dashboard's range (`event_time` from `$from` up to `$to`) and selected source |
+| `all_events` | Every event the project keeps, of every source: history, such as cohorts that began before the range |
+| `logs`       | Only the logs in the dashboard's range (`timestamp` from `$from` up to `$to`) and selected source    |
+| `all_logs`   | Every log the project keeps, of every source                                                         |
+
+So `SELECT count(*) AS value FROM events` already follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Read `all_events` or `all_logs` only when a query needs rows outside the range, and filter them yourself with the parameters below where the range or source should apply. A WITH table of your own named `events` replaces the scoped one inside that query, as any WITH does.
+
+`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
+
+In earlier versions `events` and `logs` held all history in SQL: a query that relied on that should read `all_events` or `all_logs` instead, and one that already filters on `$from` and `$to` works unchanged.
+
+Piko checks the statement before every save, validation and run. DuckDB's own parser must report one statement that is a `SELECT`; it may read only those two names of its database (and its own WITH tables), may call no side-effecting function, and may use only these named parameters:
 
 | Parameter | Meaning                                            |
 | --------- | -------------------------------------------------- |
@@ -159,7 +174,7 @@ Some functions are refused by name, each with a hint that says what to use inste
 
 The list is not exhaustive. A value can still grow by other routes, such as nested `replace` calls that each multiply a string. Unless you opt in to a memory ceiling with `PIKO_MEMORY_LIMIT` on Linux (see [the resource model](api.md#resource-model)), such a query grows until the kernel's OOM killer stops the API; with a ceiling it fails with an Out of Memory error instead.
 
-The `events` table has `name`, `source`, `source_id`, `event_time` (epoch ms), `received_at`, `actor_id`, `identity_kind`, `session_id` and `properties` (JSON). The `logs` table has `log_id`, `source_id`, `timestamp` (epoch ms), `received_at`, `level`, `message`, `service`, `environment`, `trace_id`, `span_id`, `request_id` and `attributes` (JSON). `describe_project` returns the exact columns with their types.
+`events` and `all_events` have `product_id`, `event_id`, `name`, `source`, `source_id`, `event_time` (epoch ms), `received_at`, `actor_id`, `identity_kind`, `session_id` and `properties` (JSON). `logs` and `all_logs` have `log_id`, `source_id`, `timestamp` (epoch ms), `received_at`, `level`, `message`, `service`, `environment`, `trace_id`, `span_id`, `request_id` and `attributes` (JSON). `describe_project` returns the exact columns with their types under `sql`, which names are scoped, the parameters and `bucket`.
 
 The result's column names decide its shape:
 
@@ -172,7 +187,7 @@ The result's column names decide its shape:
 
 A query may also set `"missing": "zero"` so absent buckets count as 0; the default is `null`, which draws a gap. Results stop at 10,000 rows (and 4 MiB) with a warning. DECIMAL, HUGEINT and other big integers arrive as strings in run results so no digits are lost. Queries run in a transaction that is rolled back, under the widget's `timeout_ms`.
 
-Always bound the query with `$from` and `$to`, and filter early. A widget that takes more than 3 seconds on the last 7 days is refused at save time.
+A query that reads only `all_events` or `all_logs`, without `$from` or `$to`, shows all history whatever the range, and gets a warning that says so. Read `events` or `logs` where you can, and filter early. A widget that takes more than 3 seconds on the last 7 days is refused at save time.
 
 ## Views
 
@@ -380,7 +395,7 @@ A stat of signups per visit as a percent. It is red under 2%, yellow from 2%, gr
 
 ### Weekly churn in SQL
 
-Churn is not a typed measure, so this uses SQL. A person churned in a week when they were active (sent any event with an `actor_id`) the week before and not this week. The widget buckets by week, lower is better, and the current partial week is left out so it does not look like a drop. Change `actor_id` to whatever identity you collect.
+Churn is not a typed measure, so this uses SQL. A person churned in a week when they were active (sent any event with an `actor_id`) the week before and not this week. The first week in the range needs the week before it, which `events` does not hold, so the query reads `all_events` and filters it by the range (reaching one week further back) and by the source itself. The widget buckets by week, lower is better, and the current partial week is left out so it does not look like a drop. Change `actor_id` to whatever identity you collect.
 
 ```json piko-dashboard
 {
@@ -398,7 +413,7 @@ Churn is not a typed measure, so this uses SQL. A person churned in a week when 
           "signal": "sql",
           "database": "events",
           "missing": "zero",
-          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
+          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM all_events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
         }
       }
     }
@@ -421,7 +436,45 @@ A table is just as direct; this one lists the busiest events in the range:
         "q": {
           "signal": "sql",
           "database": "events",
-          "sql": "SELECT name, count(*) AS events FROM events WHERE event_time >= $from AND event_time < $to GROUP BY name ORDER BY events DESC LIMIT 20"
+          "sql": "SELECT name, count(*) AS events FROM events GROUP BY name ORDER BY events DESC LIMIT 20"
+        }
+      }
+    }
+  ]
+}
+```
+
+### New and returning actors in SQL
+
+`events` and `all_events` work together when a cohort began before the range. The stat counts the people active in the range who were also active before it. The chart counts new people per bucket: each person's first event ever is found in `all_events`, and `bucket` puts it on the chart's buckets. Both filter `all_events` by the source themselves, since only `events` follows the source picker.
+
+```json piko-dashboard
+{
+  "version": 1,
+  "name": "Audience",
+  "widgets": [
+    {
+      "id": "returning",
+      "title": "Returning actors",
+      "view": { "type": "stat" },
+      "queries": {
+        "returning": {
+          "signal": "sql",
+          "database": "events",
+          "sql": "SELECT count(DISTINCT actor_id) AS value FROM events WHERE actor_id IN (SELECT actor_id FROM all_events WHERE event_time < $from AND ($source IS NULL OR source_id = $source))"
+        }
+      }
+    },
+    {
+      "id": "new-actors",
+      "title": "New actors",
+      "view": { "type": "bar" },
+      "queries": {
+        "new": {
+          "signal": "sql",
+          "database": "events",
+          "missing": "zero",
+          "sql": "SELECT bucket(first_seen) AS time, count(*) AS value FROM (SELECT actor_id, min(event_time) AS first_seen FROM all_events WHERE actor_id IS NOT NULL AND ($source IS NULL OR source_id = $source) GROUP BY actor_id) WHERE first_seen >= $from AND first_seen < $to GROUP BY 1"
         }
       }
     }
