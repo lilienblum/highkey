@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 /**
  * A deliberately small Markdown renderer: headings, paragraphs, emphasis, code, lists and https
  * links. Text always goes through React's escaping and HTML is never interpreted, so links with
- * any other scheme (javascript:, data:, http:) stay literal text.
+ * any other scheme (javascript:, data:, http:) stay literal text. It renders inside a widget card
+ * titled by an h2, so `#`, `##` and `###` are h3, h4 and h5.
  */
 const inline = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
 
@@ -73,7 +74,7 @@ export function Markdown({ source }: { source: string }) {
       {parse(source).map((block, index) => {
         const key = `b${index}`;
         if (block.kind === "heading") {
-          const Tag = `h${block.level}` as "h1" | "h2" | "h3";
+          const Tag = `h${block.level + 2}` as "h3" | "h4" | "h5";
           return <Tag key={key}>{renderInline(block.text, key)}</Tag>;
         }
         if (block.kind === "list") {

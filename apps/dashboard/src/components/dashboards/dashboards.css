@@ -293,7 +293,7 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.dashboard-markdown :is(h1, h2, h3) {
+.dashboard-markdown :is(h3, h4, h5) {
   margin: 0 0 4px;
   font-family: var(--font-mono);
   font-size: 13px;

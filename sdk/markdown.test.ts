@@ -12,9 +12,11 @@ test("renders allowed constructs", () => {
   const html = render(
     "# Title\n## Sub\n### Third\n\nHello *there* **bold** `code`\n\n- one\n- two\n\n1. first\n2. second\n\n[docs](https://example.com/a)",
   );
-  expect(html).toContain("<h1>Title</h1>");
-  expect(html).toContain("<h2>Sub</h2>");
-  expect(html).toContain("<h3>Third</h3>");
+  // Headings sit under the widget's own h2 title.
+  expect(html).toContain("<h3>Title</h3>");
+  expect(html).toContain("<h4>Sub</h4>");
+  expect(html).toContain("<h5>Third</h5>");
+  expect(html).not.toContain("<h1>");
   expect(html).toContain("<p>Hello <em>there</em> <strong>bold</strong> <code>code</code></p>");
   expect(html).toContain("<ul><li>one</li><li>two</li></ul>");
   expect(html).toContain("<ol><li>first</li><li>second</li></ol>");
