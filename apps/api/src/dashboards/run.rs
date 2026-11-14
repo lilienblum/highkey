@@ -21,7 +21,7 @@ use duckdb::Connection;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 const LOG_RANGE_DAYS: i64 = 31;
 const EVENT_RANGE_DAYS: i64 = 366;
@@ -226,48 +226,56 @@ impl Run<'_> {
         self.eval(expr, set, |m| m.total)
     }
 
+    /// The formula at every time any query has a point. Each query's points are indexed by
+    /// time once, so a long series costs linear time, not one scan per point.
     fn points(&self, expr: &formula::Expr, set: &IndexMap<String, Measured>) -> Vec<Point> {
-        let times: BTreeSet<i64> = set
-            .values()
-            .flat_map(|m| m.points.iter().map(|p| p.time))
+        let series: Vec<(&str, &[Point])> = set
+            .iter()
+            .map(|(id, m)| (id.as_str(), m.points.as_slice()))
             .collect();
-        times
-            .into_iter()
-            .map(|time| Point {
-                time,
-                value: self.eval(expr, set, |m| {
-                    m.points
-                        .iter()
-                        .find(|p| p.time == time)
-                        .and_then(|p| p.value)
-                }),
-            })
-            .collect()
+        self.over_time(expr, &series)
     }
 
+    /// `points` for one group of a grouped series. A query without that group has no points,
+    /// which counts as zero or a gap like any absent bucket.
     fn group_points(
         &self,
         expr: &formula::Expr,
         set: &IndexMap<String, Measured>,
         label: &Value,
     ) -> Vec<Point> {
-        let series = |m: &Measured| {
-            m.grouped
-                .iter()
-                .find(|(l, _)| l == label)
-                .map(|(_, p)| p.clone())
-        };
-        let times: BTreeSet<i64> = set
-            .values()
-            .filter_map(series)
-            .flat_map(|points| points.into_iter().map(|p| p.time))
+        let series: Vec<(&str, &[Point])> = set
+            .iter()
+            .map(|(id, m)| {
+                let points = m.grouped.iter().find(|(l, _)| l == label);
+                (id.as_str(), points.map_or(&[][..], |(_, p)| p.as_slice()))
+            })
+            .collect();
+        self.over_time(expr, &series)
+    }
+
+    fn over_time(&self, expr: &formula::Expr, series: &[(&str, &[Point])]) -> Vec<Point> {
+        let index: Vec<(&str, HashMap<i64, Option<f64>>)> = series
+            .iter()
+            .map(|(id, points)| {
+                let mut at = HashMap::with_capacity(points.len());
+                for p in *points {
+                    at.entry(p.time).or_insert(p.value);
+                }
+                (*id, at)
+            })
+            .collect();
+        let times: BTreeSet<i64> = index
+            .iter()
+            .flat_map(|(_, at)| at.keys().copied())
             .collect();
         times
             .into_iter()
             .map(|time| Point {
                 time,
-                value: self.eval(expr, set, |m| {
-                    series(m)?.into_iter().find(|p| p.time == time)?.value
+                value: expr.eval(&|id| {
+                    let (_, at) = index.iter().find(|(q, _)| *q == id)?;
+                    fill(at.get(&time).copied().flatten(), self.zero(id))
                 }),
             })
             .collect()
@@ -647,12 +655,14 @@ fn sql_measured(
             return Ok(out);
         };
         let mut groups: Vec<(Value, Vec<Sample>)> = Vec::new();
+        let mut index = HashMap::new();
         for (t, row) in rows() {
             let label = &row[group];
-            match groups.iter_mut().find(|(l, _)| l == label) {
-                Some((_, points)) => points.push((t, number(row))),
-                None => groups.push((label.clone(), vec![(t, number(row))])),
-            }
+            let at = *index.entry(label.to_string()).or_insert_with(|| {
+                groups.push((label.clone(), Vec::new()));
+                groups.len() - 1
+            });
+            groups[at].1.push((t, number(row)));
         }
         // First in a widget, a grouped query draws its six largest groups by summed value.
         if matches!(shape, Shape::GroupedBuckets { labels } if labels.is_empty()) {
@@ -671,14 +681,21 @@ fn sql_measured(
     }
     if let Some(label) = column("label") {
         let mut groups: Vec<GroupValue> = Vec::new();
+        let mut index = HashMap::new();
         for row in &result.rows {
             let value = number(row);
-            match groups.iter_mut().find(|g| g.label == row[label]) {
-                Some(g) => g.value = sum([g.value, value].into_iter()),
-                None => groups.push(GroupValue {
-                    label: row[label].clone(),
-                    value,
-                }),
+            match index.get(&row[label].to_string()) {
+                Some(&at) => {
+                    let g: &mut GroupValue = &mut groups[at];
+                    g.value = sum([g.value, value].into_iter());
+                }
+                None => {
+                    index.insert(row[label].to_string(), groups.len());
+                    groups.push(GroupValue {
+                        label: row[label].clone(),
+                        value,
+                    });
+                }
             }
         }
         out.total = sum(groups.iter().map(|g| g.value));
@@ -1574,6 +1591,74 @@ mod tests {
             truncated: false,
             byte_limited: false,
         }
+    }
+
+    #[test]
+    fn long_series_evaluate_in_linear_time() {
+        // 10,000 off-grid SQL points per query once cost about 1e8 comparisons per formula,
+        // which no deadline can interrupt.
+        let n = 10_000;
+        let queries: serde_json::Map<String, Value> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|id| (id.to_string(), json!({"signal": "events", "event": "x"})))
+            .collect();
+        let line = widget(json!({
+            "id": "w", "title": "W", "view": {"type": "line"},
+            "queries": queries, "series": [{"expr": "a + b + c + d"}]
+        }));
+        let points: Vec<Point> = (0..n)
+            .map(|i| Point {
+                time: i * 7 + 3,
+                value: Some(1.0),
+            })
+            .collect();
+        let set: IndexMap<String, Measured> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|id| {
+                let measured = Measured {
+                    points: points.clone(),
+                    grouped: (0..6)
+                        .map(|g| (json!(format!("g{g}")), points.clone()))
+                        .collect(),
+                    ..Measured::default()
+                };
+                (id.to_string(), measured)
+            })
+            .collect();
+        let started = std::time::Instant::now();
+        let series = evaluate(&line, &set, Some(&set));
+        let points = series[0].points.as_ref().unwrap();
+        assert_eq!(points.len(), n as usize);
+        assert_eq!(points[n as usize - 1].value, Some(4.0));
+        let grouped = evaluate_as(&line, &set, None, true);
+        assert_eq!(grouped.len(), 6);
+        assert_eq!(grouped[5].points.as_ref().unwrap()[0].value, Some(4.0));
+        // Grouped rows with as many groups as rows.
+        let rows = (0..n)
+            .map(|i| json!([i * 7 + 3, format!("g{i}"), 1]))
+            .collect();
+        let result = sql_result(&["time", "group", "value"], rows);
+        let w = Window {
+            from: at("2026-11-10"),
+            to: at("2026-11-13"),
+            bucket: Bucket::Day,
+        };
+        let shape = Shape::GroupedBuckets { labels: Vec::new() };
+        let m = sql_measured(&result, Missing::Null, &w, &shape).unwrap();
+        assert_eq!(m.grouped.len(), GROUPED_SERIES);
+        let rows = (0..n).map(|i| json!([format!("l{i}"), 1])).collect();
+        let result = sql_result(&["label", "value"], rows);
+        let ranking = Shape::Groups {
+            limit: 10,
+            labels: None,
+        };
+        let m = sql_measured(&result, Missing::Null, &w, &ranking).unwrap();
+        assert_eq!(m.total, Some(n as f64));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(1),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     #[test]
