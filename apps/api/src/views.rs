@@ -391,7 +391,7 @@ pub fn summaries(
     store::require_product(db, product)?;
     let mut q = db
         .prepare(
-            "SELECT id,slug,name,kind,updated_at,document FROM views WHERE product_id=?1 AND (?2 IS NULL OR kind=?2) ORDER BY name,id",
+            "SELECT id,slug,name,kind,updated_at,document FROM views WHERE product_id=?1 AND (?2 IS NULL OR kind=?2) ORDER BY name COLLATE NOCASE,name,id",
         )
         .map_err(db_error)?;
     let rows = q
@@ -570,7 +570,7 @@ pub fn delete(
 /// The sidebar links of a project's views, by name.
 pub fn links(db: &rusqlite::Connection, product: &str) -> crate::error::ApiResult<Vec<ViewLink>> {
     let mut q = db
-        .prepare("SELECT id,slug,name,kind FROM views WHERE product_id=? ORDER BY name,id")
+        .prepare("SELECT id,slug,name,kind FROM views WHERE product_id=? ORDER BY name COLLATE NOCASE,name,id")
         .map_err(anyhow::Error::from)?;
     let links = q
         .query_map([product], |r| {

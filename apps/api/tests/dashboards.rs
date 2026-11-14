@@ -884,6 +884,43 @@ async fn stale_base_revision_conflicts() {
 }
 
 #[tokio::test]
+async fn dashboards_and_views_sort_by_name_ignoring_case() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    for name in ["Zeta", "apple", "Mango"] {
+        create_dashboard(&test, &project, name).await;
+        let (status, body) = test
+            .manage(
+                "POST",
+                &format!("/api/products/{}/views", id(&project)),
+                json!({"document": {"version": 1, "name": name, "query": {"measure": "count"}}}),
+            )
+            .await;
+        assert_eq!(status, 200, "{body}");
+    }
+    let names = |list: &Value| -> Vec<String> {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let expected = ["apple", "Mango", "Zeta"];
+    let (_, list) = test
+        .read("GET", "/api/read/products/shop/dashboards", Value::Null)
+        .await;
+    assert_eq!(names(&list), expected);
+    let (_, list) = test
+        .read("GET", "/api/read/products/shop/views", Value::Null)
+        .await;
+    assert_eq!(names(&list), expected);
+    let (_, products) = test.read("GET", "/api/products", Value::Null).await;
+    assert_eq!(names(&products[0]["dashboards"]), expected);
+    assert_eq!(names(&products[0]["views"]), expected);
+    test.close().await;
+}
+
+#[tokio::test]
 async fn a_stale_save_with_sql_conflicts_without_waiting_for_the_gate() {
     let test = Test::new();
     let project = test.project("Shop").await;

@@ -155,7 +155,7 @@ fn load(db: &rusqlite::Connection, id: &str) -> Result<Stored> {
 pub fn list(db: &rusqlite::Connection, product: &str) -> Result<Vec<Summary>> {
     store::require_product(db, product)?;
     let mut q = db.prepare(
-        "SELECT id,slug,name,revision,updated_at,document FROM dashboards WHERE product_id=? ORDER BY name,id",
+        "SELECT id,slug,name,revision,updated_at,document FROM dashboards WHERE product_id=? ORDER BY name COLLATE NOCASE,name,id",
     )?;
     let rows = q.query_map([product], |r| {
         Ok((

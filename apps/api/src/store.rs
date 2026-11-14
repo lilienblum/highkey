@@ -330,7 +330,7 @@ fn dashboard_links(
     id: &str,
 ) -> ApiResult<Vec<crate::model::DashboardLink>> {
     let mut q = db
-        .prepare("SELECT id,slug,name FROM dashboards WHERE product_id=? ORDER BY name,id")
+        .prepare("SELECT id,slug,name FROM dashboards WHERE product_id=? ORDER BY name COLLATE NOCASE,name,id")
         .map_err(anyhow::Error::from)?;
     let links = q
         .query_map([id], |r| {
