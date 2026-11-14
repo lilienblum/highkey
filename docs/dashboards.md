@@ -143,7 +143,7 @@ A query names its database with `"database": "events"` or `"database": "logs"`, 
 
 So `SELECT count(*) AS value FROM events` already follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Read `all_events` or `all_logs` only when a query needs rows outside the range, and filter them yourself with the parameters below where the range or source should apply. A WITH table of your own named `events` replaces the scoped one inside that query, as any WITH does.
 
-`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
+`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. It also takes a `TIMESTAMP` or a `DATE`. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
 
 In earlier versions `events` and `logs` held all history in SQL: a query that relied on that should read `all_events` or `all_logs` instead, and one that already filters on `$from` and `$to` works unchanged.
 
