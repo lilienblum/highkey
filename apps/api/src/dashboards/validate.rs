@@ -278,7 +278,11 @@ fn valid_query_id(id: &str) -> bool {
 
 /// Range override in hours: `^\d{1,3}(h|d)$`, non-zero.
 fn range_hours(s: &str) -> Option<u64> {
-    let (digits, unit) = s.split_at(s.len().checked_sub(1)?);
+    let (digits, unit) = if let Some(d) = s.strip_suffix('h') {
+        (d, "h")
+    } else {
+        (s.strip_suffix('d')?, "d")
+    };
     if !(1..=3).contains(&digits.len()) || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
@@ -340,12 +344,15 @@ pub fn check_widget(w: &Widget, base: &str, r: &mut Report) {
                 "Use 1–3 digits and h or d, such as 24h or 30d",
             ),
             Some(h) if h > Limits::MAX_EVENT_RANGE_DAYS * 24 => {
-                r.error(format!("{base}/range"), "Ranges are limited to 366 days");
+                r.warn(
+                    format!("{base}/range"),
+                    "Ranges are limited to 366 days; this range will be clamped",
+                );
             }
             Some(h) if has_logs && h > Limits::MAX_LOG_RANGE_DAYS * 24 => {
-                r.error(
+                r.warn(
                     format!("{base}/range"),
-                    "Ranges with a logs query are limited to 31 days",
+                    "Ranges with a logs query are limited to 31 days; this range will be clamped",
                 );
             }
             _ => {}
@@ -389,9 +396,9 @@ fn check_view(w: &Widget, base: &str, range: Option<u64>, r: &mut Report) {
             );
         } else if bucket == "hour" && range.is_some_and(|h| h > Limits::MAX_HOURLY_RANGE_DAYS * 24)
         {
-            r.error(
+            r.warn(
                 format!("{vp}/bucket"),
-                "Hourly buckets need a range of at most 31 days",
+                "Hourly buckets need a range of at most 31 days; the bucket falls back to auto",
             );
         }
     }
@@ -947,6 +954,32 @@ mod tests {
             let paths = errors(json!([w]));
             assert!(paths.iter().any(|p| p == path), "{path}: {paths:?}");
         }
+    }
+    #[test]
+    fn long_ranges_warn_and_malformed_ranges_never_panic() {
+        let w = |range: &str, signal: Value, view: Value| json!({"id":"a","title":"t","view":view,"range":range,"queries":{"a":signal}});
+        let events = || json!({"signal":"events"});
+        let cases = vec![
+            (
+                w("400d", events(), json!({"type":"stat"})),
+                "/widgets/0/range",
+            ),
+            (
+                w("90d", json!({"signal":"logs"}), json!({"type":"stat"})),
+                "/widgets/0/range",
+            ),
+            (
+                w("100d", events(), json!({"type":"line","bucket":"hour"})),
+                "/widgets/0/view/bucket",
+            ),
+        ];
+        for (widget, path) in cases {
+            let report = check_document(&parse_document(doc(json!([widget]))).unwrap());
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert!(report.warnings.iter().any(|i| i.path == path), "{path}");
+        }
+        let bad = w("5é", events(), json!({"type":"stat"}));
+        assert!(errors(json!([bad])).iter().any(|p| p == "/widgets/0/range"));
     }
     #[test]
     fn formula_errors_carry_the_column() {
