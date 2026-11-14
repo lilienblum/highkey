@@ -46,7 +46,7 @@ test.beforeEach(async ({ page }) => {
 test("TanStack keeps numeric gaps and zero/negative values, with keyboard UTC inspection", async ({
   page,
 }) => {
-  await page.goto("/explore");
+  await page.goto("/events");
   const chart = page.locator('[data-chart-library="tanstack"]');
   const lines = chart.locator('path[stroke="var(--data)"]');
   await expect(lines.first()).toHaveAttribute("d", /^M/);
@@ -80,7 +80,7 @@ test("TanStack fits mobile with reduced motion and permits touch scrolling acros
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await page.goto("/explore");
+  await page.goto("/events");
   const chart = page.locator('[data-chart-library="tanstack"]');
   await expect(chart.locator("svg").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -118,7 +118,7 @@ for (const sample of [
         },
       }),
     );
-    await page.goto("/explore");
+    await page.goto("/events");
     const chart = page.locator('[data-chart-library="tanstack"]');
     await expect(chart.locator("svg.ts-chart")).toBeVisible();
     await chart.locator("svg.ts-chart").press("Home");

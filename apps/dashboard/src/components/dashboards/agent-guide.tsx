@@ -22,7 +22,8 @@ import type { Product } from "@/lib/api";
 const docsUrl = "https://github.com/lilienblum/piko#readme";
 
 export type GuideDashboard = { slug: string; name: string; revision: number };
-export type GuideMode = "create" | "edit";
+export type GuideView = { slug: string; name: string; kind: "events" | "logs" };
+export type GuideMode = "create" | "edit" | "view";
 
 const noopSubscribe = () => () => {};
 /** The page's origin; a placeholder on the server so hydration agrees. */
@@ -40,11 +41,40 @@ export function claudeCommand(origin: string) {
 export function codexConfig(origin: string) {
   return `[mcp_servers.piko]\nurl = "${origin}/api/mcp"`;
 }
-export function askPrompt(mode: GuideMode, project: string, dashboard?: GuideDashboard) {
+export function askPrompt(
+  mode: GuideMode,
+  project: string,
+  dashboard?: GuideDashboard,
+  view?: GuideView,
+) {
+  if (mode === "view" && view)
+    return `In Piko project "${project}", change the saved ${view.kind} view "${view.slug}": … . Read it with get_view (kind ${view.kind}), then save the change with save_view, keeping its name unless asked.`;
   if (mode === "edit" && dashboard)
     return `In Piko project "${project}", update dashboard "${dashboard.slug}" (revision ${dashboard.revision}): … . Read it with get_dashboard, preview changes with run_widget, and save with base_revision ${dashboard.revision}.`;
   return `In Piko project "${project}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`;
 }
+
+const viewExamples = {
+  events: [
+    {
+      title: "Narrow to a plan",
+      note: "Filter",
+      prompt: "Filter this view to events where the plan property is pro, grouped by path.",
+    },
+    {
+      title: "Switch the measure",
+      note: "Measure",
+      prompt: "Change this view to the 95th percentile of duration_ms, grouped by command.",
+    },
+  ],
+  logs: [
+    {
+      title: "Narrow to errors",
+      note: "Filter",
+      prompt: "Show only error logs from the checkout service in this view.",
+    },
+  ],
+};
 
 const examples = [
   {
@@ -136,18 +166,21 @@ export function AgentGuide({
   mode,
   project,
   dashboard,
+  view,
   headingLevel = 3,
 }: {
   mode: GuideMode;
   project: Product;
   dashboard?: GuideDashboard;
+  view?: GuideView;
   headingLevel?: 2 | 3;
 }) {
   const origin = useOrigin();
   const { status, copy } = useCopy();
   const ids = useId();
   const Heading = `h${headingLevel}` as "h2" | "h3";
-  const prompt = askPrompt(mode, project.slug, dashboard);
+  const prompt = askPrompt(mode, project.slug, dashboard, view);
+  const shown = mode === "view" ? viewExamples[view?.kind ?? "events"] : examples;
   return (
     <div className="agent-guide">
       <section aria-labelledby={`${ids}-connect`}>
@@ -186,7 +219,7 @@ export function AgentGuide({
         <Heading id={`${ids}-examples`} className="agent-guide-heading">
           Examples
         </Heading>
-        {examples.map((example) => (
+        {shown.map((example) => (
           <div key={example.title}>
             <p className="agent-guide-label">
               {example.title} <span>{example.note}</span>
@@ -206,32 +239,38 @@ export function AgentGuide({
   );
 }
 
-/** The guide as a dialog, for creating a dashboard or changing the open one. */
+/** The guide as a dialog, for creating a dashboard or changing the open dashboard or view. */
 export function AgentGuideDialog({
   open,
   onOpenChange,
   mode,
   project,
   dashboard,
+  view,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: GuideMode;
   project: Product;
   dashboard?: GuideDashboard;
+  view?: GuideView;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="agent-guide-dialog">
         <DialogHeader>
-          <DialogTitle>{mode === "edit" ? "Edit dashboard" : "New dashboard"}</DialogTitle>
+          <DialogTitle>
+            {mode === "view" ? "Edit view" : mode === "edit" ? "Edit dashboard" : "New dashboard"}
+          </DialogTitle>
           <DialogDescription>
-            {mode === "edit"
-              ? `Piko dashboards are changed by your agent over MCP. Ask it to update ${dashboard?.name ?? "this dashboard"}.`
-              : "Piko dashboards are created by your agent over MCP. Connect it, then describe what you want to see."}
+            {mode === "view"
+              ? `Saved views are changed by your agent over MCP. Ask it to update ${view?.name ?? "this view"}.`
+              : mode === "edit"
+                ? `Piko dashboards are changed by your agent over MCP. Ask it to update ${dashboard?.name ?? "this dashboard"}.`
+                : "Piko dashboards are created by your agent over MCP. Connect it, then describe what you want to see."}
           </DialogDescription>
         </DialogHeader>
-        <AgentGuide mode={mode} project={project} dashboard={dashboard} />
+        <AgentGuide mode={mode} project={project} dashboard={dashboard} view={view} />
       </DialogContent>
     </Dialog>
   );

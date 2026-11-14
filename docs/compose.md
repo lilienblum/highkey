@@ -1,6 +1,6 @@
 # Docker Compose
 
-Piko supports Compose alongside [native Tako](tako.md). Both use the same Rust API and Bun dashboard. Compose runs the standalone servers: Overview and Explore refresh every 30 seconds while visible and online, and on focus/reconnect. Immediate Tako channel hints are available with the native option. No notification secret is needed for Compose.
+Piko supports Compose alongside [native Tako](tako.md). Both use the same Rust API and Bun dashboard. Compose runs the standalone servers: Overview and Events refresh every 30 seconds while visible and online, and on focus/reconnect. Immediate Tako channel hints are available with the native option. No notification secret is needed for Compose.
 
 The shared `compose.yaml` builds two targets from the root Dockerfile. Only the dashboard is exposed; it forwards `/api/*` to `http://api:3001`. The API owns the `piko-data` named volume mounted at `/data`. Keep one API replica. Both services have health checks, and dashboard startup waits for a healthy API.
 

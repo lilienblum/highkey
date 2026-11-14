@@ -96,7 +96,7 @@ export function SourceSettings({ product }: { product: Product }) {
           ))}
         </div>
         <p className="quiet">
-          Use All sources for a combined view, or select one in Overview and Explore. Retention
+          Use All sources for a combined view, or select one in Overview and Events. Retention
           belongs to the project.
         </p>
       </CardContent>

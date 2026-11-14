@@ -180,7 +180,7 @@ type BreakdownProps = {
   unit?: string;
   total?: number;
   drilldown?: (group: Group) => ExploreDrilldown | undefined;
-  destination?: "overview" | "explore";
+  destination?: "overview" | "events";
   /** The project's sources, so Overview links can name a source by its slug. */
   sources?: Source[];
   externalHref?: (group: Group) => string | undefined;
@@ -205,7 +205,7 @@ export function BreakdownRows({
   total,
   drilldown,
   externalHref,
-  destination = "explore",
+  destination = "events",
   sources,
 }: BreakdownProps) {
   const { projectSlug } = useParams({ strict: false });
@@ -233,7 +233,7 @@ export function BreakdownRows({
               {target ? (
                 <Link
                   className="breakdown-label breakdown-filter"
-                  {...workspaceTarget(destination === "overview" ? "/" : "/explore", projectSlug)}
+                  {...workspaceTarget(destination === "overview" ? "/" : "/events", projectSlug)}
                   search={(previous) =>
                     destination === "overview"
                       ? {
@@ -252,7 +252,7 @@ export function BreakdownRows({
                         }
                       : { drilldown: target }
                   }
-                  aria-label={`${destination === "overview" ? "Filter by" : "Explore"} ${label}`}
+                  aria-label={`${destination === "overview" ? "Filter by" : "Events for"} ${label}`}
                   title={label}
                 >
                   <span className="breakdown-link-text">{label}</span>

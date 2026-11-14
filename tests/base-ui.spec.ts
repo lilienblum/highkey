@@ -45,9 +45,9 @@ test("project select supports typeahead, keyboard selection, Escape and human-re
   await expect(select).toBeFocused();
   await expect(select).toContainText(zulu.name);
   expect(await context.cookies()).toEqual([]);
-  await expect(page.getByRole("link", { name: "Explore", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Events", exact: true })).toHaveAttribute(
     "href",
-    `/projects/${zulu.slug}/explore?source=all&days=7`,
+    `/projects/${zulu.slug}/events?source=all&days=7`,
   );
 });
 

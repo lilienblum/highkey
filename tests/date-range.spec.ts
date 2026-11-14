@@ -81,7 +81,7 @@ test("calendar applies inclusive UTC dates, preserves scope, and shares across t
   const link = page.url();
   expect(new URL(link).searchParams.get("from")).toBe(from);
   expect(new URL(link).searchParams.get("to")).toBe(to);
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 2 matching events")).toBeVisible();
   expect(new URL(page.url()).searchParams.get("from")).toBe(from);
   await page.goBack();
@@ -181,7 +181,7 @@ test("changing calendar dates preserves a drilldown's event and typed filter", a
     filter: { property: "amount", value: 20 },
   };
   await page.goto(
-    `/projects/${project.slug}/explore?drilldown=${encodeURIComponent(JSON.stringify(selection))}`,
+    `/projects/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify(selection))}`,
   );
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await trigger(page).click();
@@ -410,7 +410,7 @@ test("custom shortcut and preset back action hand off focus without scrolling", 
 
 test("shortcuts leave typing, other overlays, and modified key presses alone", async ({ page }) => {
   await open(page);
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 4 matching events")).toBeVisible();
   const original = page.url();
   await page.getByRole("button", { name: "Filter", exact: true }).click();

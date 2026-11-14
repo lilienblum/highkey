@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NameDialog } from "./dashboards/new-dashboard-dialog";
+import { DashboardNameDialog } from "./dashboards/new-dashboard-dialog";
 import { number, sourceGroups, type Group } from "@/lib/api";
 import { sourceDistribution } from "@/lib/overview-widgets";
 import type { OverviewSearch } from "@/lib/workspace-search";
@@ -118,7 +118,7 @@ function OverviewActions() {
           <DropdownMenuItem onClick={() => setOpen(true)}>Duplicate as dashboard</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <NameDialog
+      <DashboardNameDialog
         open={open}
         onOpenChange={setOpen}
         title="Duplicate Overview"
@@ -308,7 +308,7 @@ function ProductOverview() {
             {displayValue(selectedFilter.field, selectedFilter.value)} ×
           </Button>
           <Link
-            to="/projects/$projectSlug/explore"
+            to="/projects/$projectSlug/events"
             params={{ projectSlug: product.slug }}
             search={{
               drilldown: {

@@ -165,12 +165,12 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
   const link =
     kind === "events" && query?.signal === "events" ? (
       <Link
-        to="/projects/$projectSlug/explore"
+        to="/projects/$projectSlug/events"
         params={{ projectSlug: product.slug }}
         search={exploreSearch(query, span, product, sourceId)}
         className="widget-link"
       >
-        Open in Explore
+        Open in Events
         <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" />
       </Link>
     ) : kind === "logs" && query?.signal === "logs" ? (

@@ -28,7 +28,7 @@ test.beforeAll(async () => {
   }
 });
 
-for (const route of ["/", "/explore", "/settings"]) {
+for (const route of ["/", "/events", "/settings"]) {
   for (const { width, collapsed } of [
     { width: 1440, collapsed: false },
     { width: 1440, collapsed: true },
@@ -185,7 +185,7 @@ for (const collapsed of [false, true]) {
 }
 
 test("connect a source lives in the sidebar, not in page headers", async ({ page }) => {
-  for (const route of ["/", "/explore", "/logs"]) {
+  for (const route of ["/", "/events", "/logs"]) {
     await page.goto(`/projects/${project.slug}${route === "/" ? "" : route}`);
     const sources = page.locator(".workspace-sources");
     await expect(
@@ -203,7 +203,7 @@ test("connect a source stays reachable from the collapsed rail", async ({ page }
     localStorage.setItem("piko:product", id);
     localStorage.setItem("piko:sidebar", "collapsed");
   }, project.id);
-  await page.goto(`/projects/${project.slug}/explore`);
+  await page.goto(`/projects/${project.slug}/events`);
   const link = page.getByRole("link", { name: "Connect a source", exact: true });
   // The rail is inert until preferences load, then the link is enabled.
   await expect(link).toBeEnabled();

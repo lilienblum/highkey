@@ -135,7 +135,7 @@ test("explore loading matches results and pending query recovers after error", a
   let pendingStreamY: number | undefined;
   const release = await hold(page, "**/api/products/*/query");
   try {
-    await page.goto("/explore");
+    await page.goto("/events");
     const pending = page.getByRole("status", { name: "Loading query results", exact: true });
     await expect(pending).toBeVisible();
     await expect(pending.locator(".metrics")).toHaveCount(0);
@@ -340,7 +340,7 @@ test("settings mutations show the active operation and retain a key after list r
 test("server HTML includes real navigation and controls without a full-page skeleton", async ({
   request,
 }) => {
-  for (const route of ["/", "/explore", "/settings"]) {
+  for (const route of ["/", "/events", "/settings"]) {
     const response = await request.get(route);
     expect(response.ok()).toBe(true);
     const html = await response.text();

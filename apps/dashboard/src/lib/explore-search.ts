@@ -1,4 +1,4 @@
-import { validKey, validDate } from "./workspace-search";
+import { validKey, validDate, validViewSlug } from "./workspace-search";
 export type ExploreDrilldown = {
   productId?: string;
   from: string;
@@ -12,6 +12,8 @@ export type ExploreSearch = {
   drilldown?: ExploreDrilldown;
   invalidDrilldown?: true;
   query?: ExploreSpec;
+  /** The saved view this query came from; it marks the active item in the sidebar. */
+  view?: string;
   page?: number;
   pageSize?: number;
   invalidQuery?: true;
@@ -103,6 +105,9 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     (search.pageSize !== undefined && ![15, 30, 50].includes(Number(search.pageSize)))
   )
     return { ...result, invalidQuery: true };
+  if (search.view !== undefined && !validViewSlug(search.view))
+    return { ...result, invalidQuery: true };
+  result.view = search.view as string | undefined;
   result.page = search.page as number | undefined;
   result.pageSize = search.pageSize === undefined ? undefined : Number(search.pageSize);
   if (search.query === undefined) return result;
@@ -132,4 +137,21 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     return { ...result, invalidQuery: true };
   result.query = spec;
   return result;
+}
+
+/**
+ * The query the page runs: the URL's, or the defaults narrowed by a drilldown from Overview, a
+ * breakdown or a dashboard widget.
+ */
+export function appliedSpec(search: Pick<ExploreSearch, "query" | "drilldown">): ExploreSpec {
+  const { query, drilldown } = search;
+  return (
+    query ?? {
+      ...defaultSpec,
+      event: drilldown?.event ?? "",
+      source: drilldown?.source ?? "",
+      filterProperty: drilldown?.filter?.property ?? "",
+      filterValue: drilldown?.filter ? JSON.stringify(drilldown.filter.value) : "",
+    }
+  );
 }

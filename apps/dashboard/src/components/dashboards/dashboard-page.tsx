@@ -30,7 +30,7 @@ import type { Signal } from "@/lib/change-envelope";
 import { deleteDashboard, type DashboardDocument, type StoredDashboard } from "@/lib/dashboards";
 import { AgentGuide, AgentGuideDialog } from "./agent-guide";
 import { RevisionsSheet } from "./revisions-sheet";
-import { NameDialog } from "./new-dashboard-dialog";
+import { DashboardNameDialog } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
@@ -220,7 +220,7 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
         onRestored={refreshDashboard}
         finalFocus={trigger}
       />
-      <NameDialog
+      <DashboardNameDialog
         open={duplicating}
         onOpenChange={setDuplicating}
         title="Duplicate dashboard"

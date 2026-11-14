@@ -87,7 +87,7 @@ test("automatic Overview update retains cards and chart without layout movement"
 });
 
 test("automatic Explore update retains results, rows, and current pagination", async ({ page }) => {
-  await page.goto("/explore");
+  await page.goto("/events");
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Page 2 of 3")).toBeVisible();
@@ -118,7 +118,7 @@ test("automatic Explore update retains results, rows, and current pagination", a
   await expect(page.getByText("Page 2 of 3")).toBeVisible();
 });
 
-for (const path of ["/", "/explore"]) {
+for (const path of ["/", "/events"]) {
   test(`failed refresh at ${path} keeps known results and recovers automatically`, async ({
     page,
   }) => {
@@ -129,7 +129,7 @@ for (const path of ["/", "/explore"]) {
     await expect(content).toContainText("31");
     const chart = await page.locator(":is(.activity-widget, .chart-card)").elementHandle();
     const row =
-      path === "/explore"
+      path === "/events"
         ? await page.locator(".event-card tbody tr").first().elementHandle()
         : null;
     await page.route(
@@ -154,7 +154,7 @@ for (const path of ["/", "/explore"]) {
 
 test("narrow Explore refresh keeps rows and controls in place", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/explore");
+  await page.goto("/events");
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   const builder = await page.locator(".query-builder").boundingBox();
   const stream = await page.locator(".event-card").boundingBox();

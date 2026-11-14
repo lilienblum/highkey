@@ -1,6 +1,6 @@
 import { workspaceTarget } from "@/lib/workspace-route";
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -33,13 +33,22 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { DashboardLink, Product } from "@/lib/api";
+import { appliedSpec, type ExploreSearch } from "@/lib/explore-search";
 import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
+import {
+  CollapsedGroup,
+  SaveEventViewDialog,
+  ViewList,
+  useCollapsedRail,
+  type ViewLinkRenderer,
+} from "./saved-views";
 import { SourceIcon } from "./source-icon";
 
 export function WorkspaceSidebar({
   path,
   dashboardSlug,
+  eventViewSlug,
   product,
   sourceId,
   picker,
@@ -49,6 +58,8 @@ export function WorkspaceSidebar({
   path: string;
   /** The open dashboard, when the page is one. */
   dashboardSlug?: string;
+  /** The open event view, when the page is Events with one applied. */
+  eventViewSlug?: string;
   product?: Product;
   sourceId?: string;
   picker: ReactNode;
@@ -58,7 +69,30 @@ export function WorkspaceSidebar({
   const { isMobile, setOpenMobile, open, state } = useSidebar();
   const sources = [{ id: "", name: "All sources", icon: null }, ...(product?.sources ?? [])];
   const dashboards = product?.dashboards ?? [];
+  const eventViews = (product?.views ?? []).filter((view) => view.kind === "events");
   const [creating, setCreating] = useState(false);
+  const [savingView, setSavingView] = useState(false);
+  const collapsedRail = useCollapsedRail();
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as ExploreSearch;
+  const eventViewLink: ViewLinkRenderer = (view, props) => (
+    <Link
+      {...workspaceTarget("/events", product?.slug)}
+      search={(previous) => ({
+        ...previous,
+        view: view.slug,
+        query: undefined,
+        page: undefined,
+        drilldown: undefined,
+      })}
+      {...(props as object)}
+    />
+  );
+  // A query is built on the Events page; elsewhere, Save view goes there to build one.
+  const saveEventView = () => {
+    if (path === "/events") setSavingView(true);
+    else if (product) void navigate({ ...workspaceTarget("/events", product.slug) });
+  };
   return (
     <>
       <Sidebar collapsible="icon" className="workspace-sidebar">
@@ -107,7 +141,7 @@ export function WorkspaceSidebar({
                   {(
                     [
                       ["/", "Overview", DashboardSquare01Icon],
-                      ["/explore", "Explore", Search01Icon],
+                      ["/events", "Events", Search01Icon],
                       ["/logs", "Logs", ComputerTerminal02Icon],
                       ["/settings", "Settings", Settings02Icon],
                     ] as const
@@ -120,6 +154,27 @@ export function WorkspaceSidebar({
                           active={path === "/"}
                           activeDashboard={dashboardSlug}
                           onNew={() => setCreating(true)}
+                        />
+                      ) : to === "/events" && eventViews.length > 0 && collapsedRail ? (
+                        <CollapsedGroup
+                          label="Events"
+                          icon={Search01Icon}
+                          active={path === "/events"}
+                          home={(props) => (
+                            <Link
+                              {...workspaceTarget("/events", product?.slug)}
+                              {...(props as object)}
+                            />
+                          )}
+                          itemsLabel="Views"
+                          items={eventViews.map((view) => ({
+                            key: view.id,
+                            name: view.name,
+                            active: view.slug === eventViewSlug,
+                            link: (props) => eventViewLink(view, props),
+                          }))}
+                          actionLabel="Save view"
+                          onAction={saveEventView}
                         />
                       ) : (
                         <SidebarMenuButton
@@ -173,6 +228,16 @@ export function WorkspaceSidebar({
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         </SidebarMenuSub>
+                      )}
+                      {to === "/events" && product && (
+                        <ViewList
+                          label="Views"
+                          views={eventViews}
+                          activeSlug={eventViewSlug}
+                          link={eventViewLink}
+                          onSave={saveEventView}
+                          onNavigate={() => setOpenMobile(false)}
+                        />
                       )}
                     </SidebarMenuItem>
                   ))}
@@ -267,6 +332,14 @@ export function WorkspaceSidebar({
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
+      {product && (
+        <SaveEventViewDialog
+          open={savingView}
+          onOpenChange={setSavingView}
+          product={product}
+          spec={appliedSpec(search)}
+        />
+      )}
       {product && (
         <AgentGuideDialog
           open={creating}

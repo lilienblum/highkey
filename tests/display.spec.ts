@@ -42,7 +42,7 @@ test("event timezone persists across reload, changes event inspection, and leave
   await page.getByRole("option", { name: "Asia/Tokyo", exact: true }).click();
   await page.reload();
   await expect(zone).toContainText("Asia/Tokyo");
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(
     page.getByRole("columnheader", { name: "Time", exact: true }).locator("span"),
   ).toHaveAttribute("title", "Asia/Tokyo");

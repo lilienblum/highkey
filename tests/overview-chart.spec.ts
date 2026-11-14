@@ -347,7 +347,7 @@ for (const width of [1440, 894, 390]) {
     await expect(page.locator(".audience-widget .widget-value")).toHaveText("3");
     await expect(page.locator(".sources-widget")).toHaveCount(0);
     if (width === 390) await page.getByRole("button", { name: "Toggle Sidebar" }).click();
-    await page.getByRole("link", { name: "Explore", exact: true }).click();
+    await page.getByRole("link", { name: "Events", exact: true }).click();
     await expect(page.getByText("across 6 matching events")).toBeVisible();
   });
 }

@@ -91,7 +91,7 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await page.getByRole("link", { name: "Filter by iOS app", exact: true }).click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1");
   expect(new URL(page.url()).searchParams.get("source")).toBe("ios-app");
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   const linked = page.url();
   await page.reload();
@@ -205,7 +205,7 @@ test("source creation retries a failed catalog refresh without creating the sour
     from: new Date(Date.now() - 86400000).toISOString(),
     to: new Date().toISOString(),
   };
-  await page.goto(`/explore?drilldown=${encodeURIComponent(JSON.stringify(invalid))}`);
+  await page.goto(`/events?drilldown=${encodeURIComponent(JSON.stringify(invalid))}`);
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeVisible();
   await expect(
     page.getByText("The project or source in this link is not available in this workspace."),

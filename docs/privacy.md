@@ -46,7 +46,7 @@ Retention is configured per project in Settings and applies to all its sources; 
 
 Application logs contain the messages, trace/request IDs, and typed attributes supplied by your services or OTLP collector. Piko does not automatically redact or anonymize them. Apply redaction and sampling in the sending application or collector, and keep `pl_` log keys in server configuration. Logs live in separate project database files and follow their own retention policy. Existing backups retain data until you remove them independently.
 
-There is no automatic personal-data classification or per-person erasure workflow in v1. Minimize collection up front, keep retention short, and verify the stored events in Explore before rolling out a collector broadly.
+There is no automatic personal-data classification or per-person erasure workflow in v1. Minimize collection up front, keep retention short, and verify the stored events in Events before rolling out a collector broadly.
 
 ## Multiple sources
 

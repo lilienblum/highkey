@@ -98,7 +98,7 @@ export function AppShell({
   const router = useRouter();
   const search = useSearch({ from: "__root__" });
   const currentSearch = useSearch({ strict: false });
-  const drilldown = view === "/explore" ? currentSearch.drilldown : undefined;
+  const drilldown = view === "/events" ? currentSearch.drilldown : undefined;
   const requestedProject = projectSlug ?? search.project;
   const days = search.days ?? (requestedProject ? 7 : savedDays);
   useEffect(() => {
@@ -258,7 +258,7 @@ export function AppShell({
   const label = (
     {
       "/": "Overview",
-      "/explore": "Explore",
+      "/events": "Events",
       "/logs": "Logs",
       "/settings": "Settings",
       "/dashboards": "Dashboard",
@@ -325,6 +325,7 @@ export function AppShell({
         <WorkspaceSidebar
           path={view}
           dashboardSlug={view === "/dashboards" ? dashboardSlug : undefined}
+          eventViewSlug={view === "/events" ? currentSearch.view : undefined}
           product={product}
           sourceId={sourceId}
           picker={projectPicker}

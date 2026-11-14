@@ -100,7 +100,7 @@ test("Explore updates CLI results automatically while preserving pagination, dra
   page,
 }) => {
   const tool = await fixture("tool", 31);
-  await open(page, tool, "/explore");
+  await open(page, tool, "/events");
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Page 2 of 3")).toBeVisible();
@@ -254,7 +254,7 @@ test("Explore catches up changes between its initial query and first live connec
       .poll(() => observer.messages.some((message) => hinted(message.data, tool.id)))
       .toBe(true);
     await page.addInitScript((id) => localStorage.setItem("piko:product", id), tool.id);
-    await page.goto("/explore");
+    await page.goto("/events");
     await expect(page.getByText("across 1 matching events")).toBeVisible();
     const before = observer.messages.length;
     await ingest(tool, "tool", 2);
@@ -285,7 +285,7 @@ test("a transient runtime capability error retries and enables live updates", as
   });
 });
 
-for (const path of ["/", "/explore"]) {
+for (const path of ["/", "/events"]) {
   test(`periodic reconciliation at ${path} works without channels and pauses when hidden`, async ({
     page,
   }) => {
@@ -328,7 +328,7 @@ test("an online event catches up without a channel or a click", async ({ page })
   const tool = await fixture("tool", 1);
   await page.addInitScript((id) => localStorage.setItem("piko:product", id), tool.id);
   await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
-  await page.goto("/explore");
+  await page.goto("/events");
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await ingest(tool, "tool", 2);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
@@ -337,7 +337,7 @@ test("an online event catches up without a channel or a click", async ({ page })
 
 test("event bursts queue one catch-up behind an in-flight query", async ({ page }) => {
   const tool = await fixture("tool", 1);
-  await open(page, tool, "/explore");
+  await open(page, tool, "/events");
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await page.waitForTimeout(2200);
   let release = () => {};
@@ -378,7 +378,7 @@ test("fixed-date Explore receives late events without expanding its date range",
   page.on("request", (request) => {
     if (request.url().endsWith(`/products/${web.id}/query`)) bodies.push(request.postDataJSON());
   });
-  await open(page, web, `/explore?drilldown=${encodeURIComponent(JSON.stringify(selection))}`);
+  await open(page, web, `/events?drilldown=${encodeURIComponent(JSON.stringify(selection))}`);
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await send(web, [
     { ...event("website"), timestamp: new Date(Date.now() - 60_000).toISOString() },

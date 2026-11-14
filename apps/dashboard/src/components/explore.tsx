@@ -5,7 +5,9 @@ import { automaticBucket } from "@/lib/time-buckets";
 import { workspaceTarget } from "@/lib/workspace-route";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
-import { defaultSpec, type ExploreSpec as Spec, type ExploreDrilldown } from "@/lib/explore-search";
+import { appliedSpec, type ExploreSpec as Spec, type ExploreDrilldown } from "@/lib/explore-search";
+import { getView, queryToSpec, specToQuery, type EventViewDocument } from "@/lib/views";
+import { ViewActions } from "./saved-views";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, FilterHorizontalIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +26,7 @@ import { ExploreLoading } from "./loading";
 import { Spinner } from "@/components/ui/spinner";
 export function Explore() {
   const { product, sourceId } = useWorkspace();
-  const { drilldown, invalidDrilldown, invalidQuery } = useSearch({ strict: false });
+  const { drilldown, invalidDrilldown, invalidQuery, view, query } = useSearch({ strict: false });
   if (
     invalidQuery ||
     invalidDrilldown ||
@@ -44,12 +46,15 @@ export function Explore() {
           variant="outline"
           nativeButton={false}
           role="link"
-          render={<Link {...workspaceTarget("/explore", product?.slug)} search={{}} />}
+          render={<Link {...workspaceTarget("/events", product?.slug)} search={{}} />}
         >
           Clear selection
         </Button>
       </>
     );
+  // A saved view opens by loading its query into the URL, so reloads and history keep it.
+  if (product && view && !query && !drilldown)
+    return <OpenView key={`${product.id}:${view}`} slug={view} />;
   return product ? (
     <ExploreProduct
       key={`${product.id}:${sourceId ?? "all"}:${JSON.stringify(drilldown)}`}
@@ -59,17 +64,67 @@ export function Explore() {
     <NoProduct />
   );
 }
+/** Loads the saved view named in the URL and applies its query to the page. */
+function OpenView({ slug }: { slug: string }) {
+  const { product } = useWorkspace();
+  const navigate = useNavigate({ from: "/projects/$projectSlug/events" });
+  const [state, setState] = useState<"loading" | "missing" | "failed">("loading");
+  const [attempt, setAttempt] = useState(0);
+  const productSlug = product?.slug;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a retry reloads the same view
+  useEffect(() => {
+    if (!productSlug) return;
+    const controller = new AbortController();
+    setState("loading");
+    getView<EventViewDocument>(productSlug, slug, "events", controller.signal).then(
+      (stored) =>
+        void navigate({
+          search: (previous) => ({ ...previous, query: queryToSpec(stored.document.query) }),
+          replace: true,
+          resetScroll: false,
+        }),
+      (error) => {
+        if (!controller.signal.aborted) setState(error?.status === 404 ? "missing" : "failed");
+      },
+    );
+    return () => controller.abort();
+  }, [productSlug, slug, attempt]);
+  if (state === "missing")
+    return (
+      <>
+        <PageHeader
+          title="This view no longer exists"
+          description="It may have been deleted. The project’s other views and its events are unchanged."
+        />
+        <Button
+          variant="outline"
+          nativeButton={false}
+          role="link"
+          render={<Link {...workspaceTarget("/events", productSlug)} search={{}} />}
+        >
+          Clear selection
+        </Button>
+      </>
+    );
+  return (
+    <>
+      <PageHeader title="Events" description="Opening the saved view…" />
+      {state === "failed" ? (
+        <ErrorState
+          message="The saved view could not be loaded."
+          retry={() => setAttempt((n) => n + 1)}
+        />
+      ) : (
+        <ExploreLoading />
+      )}
+    </>
+  );
+}
 function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const { product, source, sourceId, range, refresh, refreshKey } = useWorkspace();
   const search = useSearch({ strict: false });
-  const navigate = useNavigate({ from: "/projects/$projectSlug/explore" });
-  const applied: Spec = search.query ?? {
-    ...defaultSpec,
-    event: drilldown?.event ?? "",
-    source: drilldown?.source ?? "",
-    filterProperty: drilldown?.filter?.property ?? "",
-    filterValue: drilldown?.filter ? JSON.stringify(drilldown.filter.value) : "",
-  };
+  const navigate = useNavigate({ from: "/projects/$projectSlug/events" });
+  const applied: Spec = appliedSpec({ query: search.query, drilldown });
   const appliedKey = JSON.stringify(applied);
   const [draft, setDraft] = useState<Spec>(applied);
   const [showFilter, setShowFilter] = useState(!!applied.filterProperty);
@@ -90,6 +145,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const page = (search.page ?? 1) - 1;
   const setPage = (page: number) =>
     void navigate({ search: (previous) => ({ ...previous, page: page + 1 }), resetScroll: false });
+  const openView = product?.views?.find(
+    (candidate) => candidate.kind === "events" && candidate.slug === search.view,
+  );
   const [validation, setValidation] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((key) => key + 1);
@@ -138,9 +196,28 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   return (
     <>
       <PageHeader
-        title="Explore events"
-        description={`Query and inspect activity from ${source ? `${product?.name} / ${source.name}` : product?.name}.`}
-      />
+        title="Events"
+        description={`${openView ? `Saved view ${openView.name}. ` : ""}Query and inspect activity from ${source ? `${product?.name} / ${source.name}` : product?.name}.`}
+      >
+        {product && openView && (
+          <ViewActions<EventViewDocument>
+            key={openView.id}
+            product={product}
+            view={openView}
+            withCurrent={(stored) => ({ ...stored, query: specToQuery(applied) })}
+            onDeleted={() =>
+              navigate({
+                search: (previous) => ({
+                  ...previous,
+                  view: undefined,
+                  query: undefined,
+                  page: undefined,
+                }),
+              })
+            }
+          />
+        )}
+      </PageHeader>
       {drilldown && (
         <section className="drilldown-context" aria-label="Overview selection">
           <div>
@@ -190,7 +267,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             size="sm"
             nativeButton={false}
             role="link"
-            render={<Link {...workspaceTarget("/explore", product?.slug)} search={{}} />}
+            render={<Link {...workspaceTarget("/events", product?.slug)} search={{}} />}
           >
             <HugeiconsIcon
               icon={Cancel01Icon}

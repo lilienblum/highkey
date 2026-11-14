@@ -20,7 +20,7 @@ Point your Tunnel's hostname at the Bun dashboard (`http://localhost:3000`, or `
 
 Verify from a signed-out browser or unauthenticated client after configuring the edge:
 
-- `/`, `/explore`, `/settings`, and `/api/products` require Access authentication.
+- `/`, `/events`, `/settings`, and `/api/products` require Access authentication.
 - `/api/products/<id>/query`, product/key mutation paths, and `/api/cleanup` cannot bypass Access.
 - `/tracker.js` loads as a public JavaScript module with CORS.
 - `OPTIONS /api/ingest` succeeds; `POST /api/ingest` without an ingestion key returns 401; a valid ingestion key can only send to its own product.

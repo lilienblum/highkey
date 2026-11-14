@@ -96,7 +96,7 @@ test("website and tool overviews, numeric query, filtering and server pagination
   await select(page, "Select project", tool.name);
   await expect(page.locator(".activity-widget .widget-measure-label")).toBeVisible();
   await expect(page.locator(".outcomes-widget .widget-value")).toHaveText("50%");
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await select(page, "Measure", "Numeric average");
   await page.getByRole("button", { name: "Run query" }).click();
   await expect(page.locator(".explore-summary strong")).toHaveText("255 ms");
@@ -143,7 +143,7 @@ test("date picker supports keyboard selection, persistence, and narrow layouts",
   await expect(trigger).toBeFocused();
   await page.reload();
   await expect(trigger).toContainText("Last 90 days");
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(trigger).toContainText("Last 90 days");
   await page.setViewportSize({ width: 320, height: 844 });
   await trigger.click();
@@ -286,8 +286,8 @@ test("sidebar collapses, persists and keeps navigation keyboard accessible", asy
   await toggle.press("Enter");
   await expect(sidebar).toHaveAttribute("data-state", "collapsed");
   await expect(toggle).toBeFocused();
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Explore events" })).toBeVisible();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
   const measure = page.getByRole("combobox", { name: "Measure", exact: true });
   await measure.focus();
   await page.keyboard.press("ArrowDown");
@@ -339,9 +339,9 @@ test("mobile drawer navigates and dark selects fit the screen", async ({ page })
   await openWorkspace(page);
   await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Sidebar", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
-  await expect(page.getByRole("heading", { name: "Explore events" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
   await select(page, "Select project", tool.name);
   await select(page, "Measure", "Numeric average");
   await page.getByRole("button", { name: "Run query" }).click();
@@ -419,7 +419,7 @@ test("breakdown choices drill into referrers and campaigns, with missing values 
   await page.getByRole("link", { name: "Overview", exact: true }).click();
   await select(page, "Breakdown", "Campaigns");
   await expect(page.getByText("Not provided", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Explore Not provided" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Events for Not provided" })).toHaveCount(0);
   await page.getByRole("link", { name: "Filter by launch", exact: true }).click();
   await page.getByRole("link", { name: "View matching events", exact: true }).click();
   await expect(page.getByText("across 16 matching events")).toBeVisible();
@@ -504,7 +504,7 @@ test("drilldown URLs preserve primitive property types and reject unsafe or inco
       (r) =>
         r.url().endsWith(`/products/${generic.id}/query`) && r.postDataJSON().filters?.length === 1,
     );
-    await page.goto(`/explore?drilldown=${encodeURIComponent(JSON.stringify(drilldown))}`);
+    await page.goto(`/events?drilldown=${encodeURIComponent(JSON.stringify(drilldown))}`);
     expect((await request).postDataJSON().filters).toEqual([
       { property: "variant", op: "eq", value },
     ]);
@@ -524,7 +524,7 @@ test("drilldown URLs preserve primitive property types and reject unsafe or inco
     { productId: generic.id, from: "2020-01-01T00:00:00.000Z", to: bounds.to },
     { productId: crypto.randomUUID(), ...bounds },
   ]) {
-    await page.goto(`/explore?drilldown=${encodeURIComponent(JSON.stringify(drilldown))}`);
+    await page.goto(`/events?drilldown=${encodeURIComponent(JSON.stringify(drilldown))}`);
     await expect(
       page.getByRole("heading", { name: "This selection is unavailable" }),
     ).toBeVisible();
@@ -590,7 +590,7 @@ test("only validated Explore search can change the workspace context", async ({ 
   page.on("request", (request) => {
     if (request.url().endsWith("/query")) queries.push(request.url());
   });
-  await page.goto(`/explore?drilldown=${malformed}`);
+  await page.goto(`/events?drilldown=${malformed}`);
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("piko:product"))).toBe(web.id);
   expect(queries).toEqual([]);
@@ -612,7 +612,7 @@ test("event inspector exposes context, metadata and JSON with keyboard and clipb
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await openWorkspace(page);
   await select(page, "Select project", web.name);
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   const stream = page.locator(".event-card");
   const opener = stream.getByRole("button", { name: "Inspect page_view", exact: true }).first();
   await expect(stream.locator("tbody tr").first()).toContainText("Direct");
@@ -694,7 +694,7 @@ test("event pagination fetches server pages and keeps charts stable during loadi
 }) => {
   await openWorkspace(page);
   await select(page, "Select project", web.name);
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   const stream = page.locator(".event-card");
   await expect(stream.getByRole("button", { name: "Inspect page_view", exact: true })).toHaveCount(
     15,
@@ -761,7 +761,7 @@ test("inspector preserves numeric and string values and wraps long properties on
   await page.setViewportSize({ width: 390, height: 844 });
   await openWorkspace(page);
   await select(page, "Select project", generic.name);
-  await page.goto("/explore");
+  await page.goto("/events");
   const stream = page.locator(".event-card");
   await expect(stream.locator("tbody tr").first()).not.toContainText("0 ms");
   for (const [index, value, total] of [
@@ -770,7 +770,7 @@ test("inspector preserves numeric and string values and wraps long properties on
     [5, 0, 4],
     [6, "", 4],
   ] as const) {
-    await page.goto("/explore");
+    await page.goto("/events");
     await stream.getByRole("button", { name: "Inspect activity", exact: true }).nth(index).click();
     const inspector = page.getByRole("dialog");
     await inspector.getByLabel("Search properties").fill("variant");
@@ -789,7 +789,7 @@ test("inspector preserves numeric and string values and wraps long properties on
     ]);
     await expect(page.getByText(`across ${total} matching events`)).toBeVisible();
   }
-  await page.goto("/explore");
+  await page.goto("/events");
   await stream.getByRole("button", { name: "Inspect activity", exact: true }).first().click();
   const inspector = page.getByRole("dialog");
   await inspector.getByLabel("Search properties").fill("note");
@@ -812,7 +812,7 @@ test("clipboard failures are visible and inspector scope ends when the product c
   });
   await openWorkspace(page);
   await select(page, "Select project", web.name);
-  await page.goto("/explore");
+  await page.goto("/events");
   await page
     .locator(".event-card")
     .getByRole("button", { name: "Inspect page_view", exact: true })

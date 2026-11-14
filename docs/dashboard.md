@@ -2,20 +2,22 @@
 
 Select a project and source in the sidebar, and a date range beside the report heading. **All sources** combines the project; a named source filters every metric, chart, breakdown, and event row on the server. Every source uses the same overview, includes all event names, and offers the same chart metrics and breakdowns. The URL records the selected project, source, and date range; saved preferences only initialize a bare entry URL. Settings manages every source regardless of the analytics selection.
 
-Click a page, command, event, referrer, or other breakdown row to filter Overview in place. A removable filter and **View matching events** link appear above the metrics. That link opens Explore with the selected source, exact UTC interval, and typed value. Overview supports one event/client/property filter plus source scope; choosing another report value replaces that filter. Source rows change the source scope and preserve the current filter. Reload and browser history restore the selection.
+Click a page, command, event, referrer, or other breakdown row to filter Overview in place. A removable filter and **View matching events** link appear above the metrics. That link opens Events with the selected source, exact UTC interval, and typed value. Overview supports one event/client/property filter plus source scope; choosing another report value replaces that filter. Source rows change the source scope and preserve the current filter. Reload and browser history restore the selection.
 
 Page and referrer rows can also have a separate external-link icon. It appears on row hover or keyboard focus, stays visible on touch devices, and opens the website in another tab without changing the analytics filter. Page paths require the project's optional website address. Referrers must be HTTP(S) URLs or valid hostnames. Missing or unsafe targets get no external action; outgoing links suppress the referrer and opener.
 
-Explore shows the linked interval and applied filters. Use its query controls to change the measure, grouping, or filter. Running a query writes the applied configuration to the URL, so reloading or sharing it restores those changes. Unsubmitted edits stay local. Clear the drilldown to return to the normal date range. Selecting another project, source, or date range also clears the linked selection. A missing project/source or malformed drilldown shows an error instead of querying another product.
+Events shows the linked interval and applied filters. Use its query controls to change the measure, grouping, or filter. Running a query writes the applied configuration to the URL, so reloading or sharing it restores those changes. Unsubmitted edits stay local. Clear the drilldown to return to the normal date range. Selecting another project, source, or date range also clears the linked selection. A missing project/source or malformed drilldown shows an error instead of querying another product.
+
+**Saved views.** The query builder stays for ad-hoc exploration. Name a query you want to keep with **Save view** in the sidebar, under Events. Views sort by name and open on the Events page with their query applied; the URL carries `view=<slug>` and the usual `query`. A view stores the event, measure, numeric property, one filter and grouping; the date range and the workspace source come from the toolbar. The open view's menu offers **Update view with current query**, **Rename**, **Copy JSON**, **Edit with your agent** and **Delete** (after confirmation). Agents list, read, save and delete views over MCP (`list_views`, `get_view`, `save_view`, `delete_view`). A view saved by an agent may use fields the page cannot show (an identity-kind filter or more than one filter); the page opens with what it can show. The former `/explore` paths redirect to `/events` with their search.
 
 ## Shareable URLs
 
 Projects have stable, unique slugs. An example Overview link is `/projects/orbit?source=all&period=month`. A renamed project keeps its slug. Explicit URL selections win over browser preferences; unavailable projects/sources and malformed scope parameters show an error instead of querying a fallback project. Links do not change access permissions.
 
-- Project paths: `/projects/<slug>`, `/projects/<slug>/explore`, and `/projects/<slug>/settings`. Bare `/`, `/explore`, and `/settings` open the saved project and replace the URL with its canonical path.
+- Project paths: `/projects/<slug>`, `/projects/<slug>/events`, and `/projects/<slug>/settings`. Bare `/`, `/events`, and `/settings` open the saved project and replace the URL with its canonical path.
 - Shared query parameters: `source` (`all` or a source UUID), `days` (7, 30, or 90), `period` (`today`, `yesterday`, `month`, `last-month`, `year`, or `12months`), and optional `from` / `to` (a complete pair of exact UTC ISO timestamps, start inclusive and end exclusive).
 - Overview parameters: `metric`, `breakdown`, `duration` (`avg` or `p95`), and a JSON `filter` with `field` and typed `value`. Fields are `name`, `source` (client), or `property:<name>`. Old `interval` parameters are ignored.
-- Explore parameters: `query` (TanStack Router's JSON-encoded applied configuration), `page` (one-based), and `pageSize` (15, 30, or 50). Typed filter text is preserved, including the difference between `42` and `"42"`.
+- Events parameters: `view` (a saved view's slug), `query` (TanStack Router's JSON-encoded applied configuration), `page` (one-based), and `pageSize` (15, 30, or 50). Typed filter text is preserved, including the difference between `42` and `"42"`.
 
 One date picker offers Today, Yesterday, Last 7/30/90 days, Month to date, Last month, Year to date, Last 12 months, and Custom range. A `period` takes precedence over a saved rolling `days` choice. Previous/next arrows move by day, calendar month, calendar year, or the fixed range's covered days; forward navigation stops at the current period. Rolling 7/30/90-day and 12-month windows have no arrows. Returning to the current day/month/year restores its live preset.
 
@@ -36,12 +38,12 @@ A single wide **Activity over time** chart follows. Choose events, identified ac
 - **Success rate** reports succeeded/failed shares only among boolean `success` values. Missing properties and strings are excluded.
 - **Duration** offers average/p95 summaries and a numeric comparison. Only numeric `duration_ms` values contribute. Percentiles are calculated from raw events, never averaged from bucket percentiles. There is no second duration chart.
 
-Chart grouping is automatic in Overview and Explore: ranges up to two days use hourly points; up to 31 days use daily points; up to 180 days use weekly points; longer ranges use monthly points. A note states the grouping and any partial buckets. Buckets and labels are UTC; weeks start Monday and months follow calendar boundaries. No separate interval choice is required.
+Chart grouping is automatic in Overview and Events: ranges up to two days use hourly points; up to 31 days use daily points; up to 180 days use weekly points; longer ranges use monthly points. A note states the grouping and any partial buckets. Buckets and labels are UTC; weeks start Monday and months follow calendar boundaries. No separate interval choice is required.
 
 Distinct identities are counted within each bucket; summing bucket counts does not give a period's distinct count. Missing durations remain gaps, not zero-duration commands. Missing measurements are explained. Changing a chart measure or breakdown only loads that region. Automatic refresh retains existing values and mounted plots; errors offer a local Retry. Skullet placeholders occupy affected regions for new scopes. The chart and Breakdown retain their positions while source discovery completes. All aggregation and filtering remain server-side; duration summaries reuse the main response.
 ## Breakdown dimensions
 
-The **Breakdown** selector offers Top events, Sources, Clients, Pages, Commands, Referrers, Campaign sources, Campaigns, Screens, Versions, OS, and Architecture for every source. Property dimensions include all matching events; they do not silently restrict the event name. Missing values remain informational. Use Explore to explicitly filter an event, inspect typed properties, or choose other groupings.
+The **Breakdown** selector offers Top events, Sources, Clients, Pages, Commands, Referrers, Campaign sources, Campaigns, Screens, Versions, OS, and Architecture for every source. Property dimensions include all matching events; they do not silently restrict the event name. Missing values remain informational. Use Events to explicitly filter an event, inspect typed properties, or choose other groupings.
 
 ## Source icons
 
@@ -69,7 +71,7 @@ The [PostHog Activity interface](https://posthog.com/docs/activity) informed the
 
 ## Zooming from charts
 
-Drag across the Overview activity chart or an Explore chart to zoom the workspace to those buckets (click one bucket to zoom to just that one). The selection becomes an ordinary custom range: the date picker shows it, the URL keeps it, and its previous/next arrows and presets work as usual. On Logs, drag across the volume histogram the same way; the time control shows **Selected range**, Follow pauses, and choosing a preset returns to a rolling window.
+Drag across the Overview activity chart or an Events chart to zoom the workspace to those buckets (click one bucket to zoom to just that one). The selection becomes an ordinary custom range: the date picker shows it, the URL keeps it, and its previous/next arrows and presets work as usual. On Logs, drag across the volume histogram the same way; the time control shows **Selected range**, Follow pauses, and choosing a preset returns to a rolling window.
 
 ## Display formatting
 
@@ -83,9 +85,9 @@ Service, environment, and attribute filters list the values received in the sele
 
 ## Loading and feedback
 
-The project catalog loads on the server, so project pages arrive with navigation, the project picker, sources, and the page heading already in place. If the server cannot reach the API, a full-screen message offers Try again. Overview uses local placeholders inside its mounted widgets. Explore uses placeholders shaped like its results, chart, breakdown, and event rows. Logs keeps its toolbar and shows a histogram placeholder and row-height placeholders. Breakdown choices load within their own card. Changing a product or query replaces the previous results with placeholders; pagination keeps the matching charts visible while its event rows load.
+The project catalog loads on the server, so project pages arrive with navigation, the project picker, sources, and the page heading already in place. If the server cannot reach the API, a full-screen message offers Try again. Overview uses local placeholders inside its mounted widgets. Events uses placeholders shaped like its results, chart, breakdown, and event rows. Logs keeps its toolbar and shows a histogram placeholder and row-height placeholders. Breakdown choices load within their own card. Changing a product or query replaces the previous results with placeholders; pagination keeps the matching charts visible while its event rows load.
 
-Refreshing the current view keeps its cards, charts, event rows, inspector, and page number visible. Analytics results are cached while you navigate: returning to Overview or Explore shows the last results immediately and refreshes them in the background. Updates run in the background; a failed refresh leaves the last results available with retry feedback. New products, date selections, or applied queries still use placeholders so unrelated results are never mislabeled. Live hints, reconnection, focus, and visible online polling keep analytics current without a manual refresh control.
+Refreshing the current view keeps its cards, charts, event rows, inspector, and page number visible. Analytics results are cached while you navigate: returning to Overview or Events shows the last results immediately and refreshes them in the background. Updates run in the background; a failed refresh leaves the last results available with retry feedback. New products, date selections, or applied queries still use placeholders so unrelated results are never mislabeled. Live hints, reconnection, focus, and visible online polling keep analytics current without a manual refresh control.
 
 Run query indicates request activity and prevents duplicate submissions. Settings shows key-list loading separately from an empty list or a failed request. Create, save, and revoke actions show their active operation. A failed key revocation explains the failure inside its confirmation dialog.
 
@@ -106,7 +108,7 @@ Settings lists sources with their name and icon. Automatic chooses an icon from 
 
 ## Chart inspection
 
-Overview and Explore use TanStack Charts. Hover or touch a time-series to inspect a bucket. Ranked report rows retain exact counts and shares. Keyboard users can focus the chart and use Left/Right, Home/End, and Escape; values are announced to assistive technology. Labels and tooltips use UTC regardless of the device timezone. Zero remains a measured zero, missing numeric values remain gaps, and negative numeric aggregates retain their sign. Touch scrolling remains available across the plot.
+Overview and Events use TanStack Charts. Hover or touch a time-series to inspect a bucket. Ranked report rows retain exact counts and shares. Keyboard users can focus the chart and use Left/Right, Home/End, and Escape; values are announced to assistive technology. Labels and tooltips use UTC regardless of the device timezone. Zero remains a measured zero, missing numeric values remain gaps, and negative numeric aggregates retain their sign. Touch scrolling remains available across the plot.
 
 ## Component foundation
 

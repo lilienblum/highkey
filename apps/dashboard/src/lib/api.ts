@@ -10,6 +10,8 @@ export type Source = {
   created_at: string;
 };
 export type DashboardLink = { id: string; slug: string; name: string };
+/** A saved view in the sidebar: an event view sits under Events, a log view under Logs. */
+export type ViewLink = { id: string; slug: string; name: string; kind: "events" | "logs" };
 export type Product = {
   slug: string;
   website_url: string | null;
@@ -19,6 +21,8 @@ export type Product = {
   sources: Source[];
   /** Named dashboards, ordered by name; absent when an older API or a mock omits them. */
   dashboards?: DashboardLink[];
+  /** Saved views, ordered by name; absent when an older API or a mock omits them. */
+  views?: ViewLink[];
   retention_days: number;
   created_at: string;
 };

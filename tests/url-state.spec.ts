@@ -111,7 +111,7 @@ test("project URL wins over saved preferences and applies a portable calendar ra
 });
 
 test("applied Explore queries and pages survive reload and browser history", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/explore?source=all&days=30`);
+  await page.goto(`/projects/${project.slug}/events?source=all&days=30`);
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   await select(page, "Measure", "Numeric average");
   await page.getByRole("button", { name: "Filter", exact: true }).click();
@@ -159,8 +159,8 @@ test("source links remain scoped and invalid selections never query a fallback p
     `/projects/${project.slug}?snapshot=yesterday`,
     `/projects/${project.slug}?from=2026-01-01T00:00:00.000Z`,
     `/projects/${project.slug}?from=2026-02-02T00:00:00.000Z&to=2026-02-01T00:00:00.000Z`,
-    `/projects/${project.slug}/explore?drilldown=${encodeURIComponent(JSON.stringify({ productId: other.id, from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" }))}`,
-    `/projects/${project.slug}/explore?query=${encodeURIComponent(JSON.stringify({ measure: "sql" }))}`,
+    `/projects/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify({ productId: other.id, from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" }))}`,
+    `/projects/${project.slug}/events?query=${encodeURIComponent(JSON.stringify({ measure: "sql" }))}`,
   ]) {
     await page.goto(link);
     await expect(
@@ -175,7 +175,7 @@ test("source links remain scoped and invalid selections never query a fallback p
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeHidden();
   await page.goto(`/projects/${project.slug}?source=${project.sources[0].slug}&days=7`);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
+  await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   expect(params(page).get("source")).toBe(project.sources[0].slug);
 });
@@ -187,9 +187,9 @@ test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
   });
   const source = await post(`/products/${legacy.id}/sources`, { name: "Web App" });
   expect(source.slug).toBe("web-app");
-  await page.goto(`/projects/${legacy.slug}/explore?source=${source.id}&days=30`);
+  await page.goto(`/projects/${legacy.slug}/events?source=${source.id}&days=30`);
   await expect.poll(() => params(page).get("source")).toBe("web-app");
-  expect(new URL(page.url()).pathname).toBe(`/projects/${legacy.slug}/explore`);
+  expect(new URL(page.url()).pathname).toBe(`/projects/${legacy.slug}/events`);
   expect(params(page).get("days")).toBe("30");
   await expect(
     page
@@ -230,8 +230,8 @@ test("project paths win over legacy query slugs and project switching updates th
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${other.slug}`);
   await page.goBack();
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(project.name);
-  await page.getByRole("link", { name: "Explore", exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${project.slug}/explore`);
+  await page.getByRole("link", { name: "Events", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${project.slug}/events`);
   // The full-navigation fixture seeds the other project as the saved preference.
   await page.goto("/settings");
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${other.slug}/settings`);
@@ -317,7 +317,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
     page: "2",
     pageSize: "30",
   });
-  await page.goto(`/projects/${other.slug}/explore?${search}`);
+  await page.goto(`/projects/${other.slug}/events?${search}`);
   await expect(page.getByRole("region", { name: "Overview selection" })).toBeVisible();
   await expect(page.getByLabel("Typed value")).toHaveValue("true");
   await page.getByLabel("Typed value").fill("false");
@@ -325,7 +325,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
   const request = page.waitForRequest((r) => r.url().endsWith(`/products/${project.id}/query`));
   await select(page, "Select project", project.name);
   await expect(page.getByText("across 31 matching events")).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe(`/projects/${project.slug}/explore`);
+  expect(new URL(page.url()).pathname).toBe(`/projects/${project.slug}/events`);
   expect(Object.fromEntries(params(page))).toEqual({ source: "all", days: "7" });
   expect((await request).postDataJSON()).toMatchObject({
     measure: "count",
