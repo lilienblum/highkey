@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  sourceParam,
   validateWorkspaceSearch,
   validateOverviewSearch,
 } from "../apps/dashboard/src/lib/workspace-search";
@@ -15,7 +16,7 @@ test("workspace links accept stable slugs and fixed UTC endpoints, and reject am
   expect(validateWorkspaceSearch(link)).toEqual(link);
   for (const patch of [
     { project: "../../orbit" },
-    { source: "missing" },
+    { source: "Missing" },
     { days: 0 },
     { days: [7] },
     { snapshot: "yesterday" },
@@ -31,6 +32,47 @@ test("workspace links accept stable slugs and fixed UTC endpoints, and reject am
     from: undefined,
     to: undefined,
   });
+});
+test("workspace source links use slugs and still accept legacy source IDs", () => {
+  for (const source of [
+    "all",
+    "web-app",
+    "web-app-2",
+    "a".repeat(64),
+    "0195f1c2-7b3a-7c4d-9e5f-6a7b8c9d0e1f",
+    "F7EC76D3-4B2A-4C1D-8E9F-0A1B2C3D4E5F",
+  ])
+    expect(validateWorkspaceSearch({ source })).toEqual({
+      project: undefined,
+      source,
+      period: undefined,
+      days: undefined,
+      snapshot: undefined,
+      from: undefined,
+      to: undefined,
+    });
+  for (const source of [
+    "Web-App",
+    "web_app",
+    "web app",
+    "-web",
+    "web-",
+    "web--app",
+    "a".repeat(65),
+    "../web",
+    "",
+    42,
+  ])
+    expect(validateWorkspaceSearch({ source }).invalidWorkspace).toBe(true);
+});
+test("workspace source links name a catalog source by its slug", () => {
+  const sources = [{ id: "0195f1c2-7b3a-7c4d-9e5f-6a7b8c9d0e1f", slug: "web-app" }];
+  expect(sourceParam(sources, sources[0].id)).toBe("web-app");
+  expect(sourceParam(sources, undefined)).toBe("all");
+  // An ID outside the catalog stays a legacy link, which the workspace reports as unavailable.
+  expect(sourceParam(sources, "f7ec76d3-4b2a-4c1d-8e9f-0a1b2c3d4e5f")).toBe(
+    "f7ec76d3-4b2a-4c1d-8e9f-0a1b2c3d4e5f",
+  );
 });
 test("Explore URL validation preserves typed filter text and bounded pagination", () => {
   for (const value of ["true", "42", '"42"', '"build"']) {

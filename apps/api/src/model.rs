@@ -113,6 +113,7 @@ pub struct Source {
     pub id: String,
     pub product_id: String,
     pub name: String,
+    pub slug: String,
     pub created_at: String,
 }
 #[derive(Debug, Deserialize)]

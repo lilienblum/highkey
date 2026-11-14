@@ -18,7 +18,7 @@ Management mutations require `X-Piko-Admin: 1`. This public request marker preve
 
 ## Projects and sources
 
-A project owns one analytics DuckDB database, a separate log database, independent retention for each, and any number of sources. A source is a named integration such as Website, iOS app, or CLI. All sources have the same analytics capabilities; there is no project or source type. Source names are unique within a project (ASCII case-insensitive). Creating a project automatically creates an initial source named **Events**, which can be renamed. Project responses include a stable, unique `slug` and `sources` with `id`, `product_id`, `name`, `icon`, and `created_at`.
+A project owns one analytics DuckDB database, a separate log database, independent retention for each, and any number of sources. A source is a named integration such as Website, iOS app, or CLI. All sources have the same analytics capabilities; there is no project or source type. Source names are unique within a project (ASCII case-insensitive). Creating a project automatically creates an initial source named **Events**, which can be renamed. Project responses include a stable, unique `slug` and `sources` with `id`, `product_id`, `name`, `slug`, `icon`, and `created_at`.
 
 Application logs use separate source-scoped keys, ingestion endpoints, queries, and retention. See [application logs](logs.md) for the JSON/OTLP collection and management contracts.
 
@@ -32,6 +32,8 @@ Application logs use separate source-scoped keys, ingestion endpoints, queries, 
 Keys cannot move between sources or projects. Foreign-project source IDs are rejected. Source deletion and merging are not supported; revoke a source's keys to stop new authorized intake.
 
 Slugs are allocated from the project name on creation, with numeric suffixes for collisions. Renaming keeps the slug unchanged. Schema 6 assigns slugs to existing projects without changing IDs, keys, sources, or event files. HTTP management endpoints continue to use UUIDs; the dashboard resolves its URL slug through the catalog. Slugs are identifiers, not credentials.
+
+Sources get slugs the same way, unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. Schema 7 assigns slugs to existing sources in creation order without changing their IDs. Dashboard URLs name the source by slug (`?source=web-app`); older links with a source ID still open and are rewritten to the slug.
 
 ### Existing data
 

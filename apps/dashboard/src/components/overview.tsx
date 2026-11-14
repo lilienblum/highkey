@@ -354,6 +354,7 @@ function ProductOverview() {
               <section className="widget-ranking breakdowns" aria-label={dimensionLabel}>
                 <BreakdownRows
                   destination="overview"
+                  sources={product.sources}
                   title={dimensionLabel}
                   groups={
                     dimension === "source_id"
@@ -387,6 +388,7 @@ function ProductOverview() {
                 <section className="widget-ranking breakdowns" aria-label="Source distribution">
                   <BreakdownRows
                     destination="overview"
+                    sources={product.sources}
                     title="Source"
                     groups={sourceSlices.map(
                       (slice) =>

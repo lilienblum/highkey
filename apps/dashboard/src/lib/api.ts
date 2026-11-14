@@ -4,6 +4,8 @@ export type Source = {
   id: string;
   product_id: string;
   name: string;
+  /** Unique within the project; workspace URLs name the source by it. */
+  slug: string;
   icon: SourceIconId | null;
   created_at: string;
 };

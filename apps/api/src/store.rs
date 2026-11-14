@@ -203,7 +203,7 @@ pub fn save_product(
         }
     }
     tx.execute(
-        "INSERT OR IGNORE INTO sources(id,product_id,name,created_at) VALUES (?1,?1,'Events',?2)",
+        "INSERT OR IGNORE INTO sources(id,product_id,name,created_at,slug) VALUES (?1,?1,'Events',?2,'events')",
         params![id, chrono::Utc::now().to_rfc3339()],
     )
     .map_err(anyhow::Error::from)?;
@@ -337,10 +337,21 @@ mod slug_tests {
     fn version_five_migration_assigns_stable_slugs_without_losing_catalog_data() {
         let mut db = rusqlite::Connection::open_in_memory().unwrap();
         db.execute_batch("CREATE TABLE products(id TEXT PRIMARY KEY,name TEXT NOT NULL,retention_days INTEGER NOT NULL,created_at TEXT NOT NULL,website_url TEXT,favicon BLOB,favicon_version TEXT);
+            CREATE TABLE sources(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),name TEXT NOT NULL COLLATE NOCASE,created_at TEXT NOT NULL,icon TEXT,UNIQUE(product_id,name));
             INSERT INTO products VALUES ('1','Orbit',90,'2026-01-01',NULL,NULL,NULL),('2','Orbit',365,'2026-01-02','https://example.com',x'00','cached');
+            INSERT INTO sources VALUES ('1','1','Events','2026-01-01',NULL),('2','2','Events','2026-01-02',NULL);
             PRAGMA user_version=5;").unwrap();
         crate::sources::migrate(&mut db).unwrap();
         crate::sources::migrate(&mut db).unwrap();
+        assert_eq!(
+            db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            7
+        );
+        // Source slugs are unique per project, so both initial sources keep `events`.
+        for id in ["1", "2"] {
+            assert_eq!(crate::sources::list(&db, id).unwrap()[0].slug, "events");
+        }
         let values: Vec<(String, i64, Option<String>)> = db
             .prepare("SELECT slug,retention_days,favicon_version FROM products ORDER BY id")
             .unwrap()

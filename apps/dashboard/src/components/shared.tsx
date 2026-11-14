@@ -22,8 +22,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { groupLabel, number, type Group, type QueryResult } from "@/lib/api";
+import { groupLabel, number, type Group, type QueryResult, type Source } from "@/lib/api";
 import type { ExploreDrilldown } from "@/lib/explore-search";
+import { sourceParam } from "@/lib/workspace-search";
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
   return (
     <Alert variant="destructive">
@@ -180,6 +181,8 @@ type BreakdownProps = {
   total?: number;
   drilldown?: (group: Group) => ExploreDrilldown | undefined;
   destination?: "overview" | "explore";
+  /** The project's sources, so Overview links can name a source by its slug. */
+  sources?: Source[];
   externalHref?: (group: Group) => string | undefined;
 };
 export function Breakdown({ description, ...props }: BreakdownProps & { description: string }) {
@@ -203,6 +206,7 @@ export function BreakdownRows({
   drilldown,
   externalHref,
   destination = "explore",
+  sources,
 }: BreakdownProps) {
   const { projectSlug } = useParams({ strict: false });
   const max = Math.max(...groups.map((g) => g.value ?? 0), 1);
@@ -234,7 +238,7 @@ export function BreakdownRows({
                     destination === "overview"
                       ? {
                           ...previous,
-                          source: target.sourceId ?? "all",
+                          source: sourceParam(sources, target.sourceId),
                           filter: target.event
                             ? { field: "name", value: target.event }
                             : target.source

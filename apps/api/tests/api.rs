@@ -655,6 +655,7 @@ async fn multiple_sources_share_a_project_but_keys_and_filters_are_scoped() {
     );
     assert!(mobile["icon"].is_null());
     assert!(mobile.get("kind").is_none());
+    assert_eq!(mobile["slug"], "ios");
     assert_eq!(
         call(
             &f.app,
@@ -783,6 +784,7 @@ async fn multiple_sources_share_a_project_but_keys_and_filters_are_scoped() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(renamed["id"], source_id);
     assert_eq!(renamed["icon"], "android");
+    assert_eq!(renamed["slug"], "ios");
     let (_, filtered) = call(
         &f.app,
         "POST",
@@ -861,6 +863,7 @@ async fn existing_keys_and_events_migrate_to_the_initial_source_without_changing
         let app = router(state.clone());
         let (_, products) = call(&app, "GET", "/api/products", MANAGEMENT, json!(null)).await;
         assert_eq!(products[0]["sources"][0]["id"], id);
+        assert_eq!(products[0]["sources"][0]["slug"], "website");
         assert_eq!(products[0]["sources"].as_array().unwrap().len(), 1);
         let mut q = range();
         q["source_id"] = json!(id);

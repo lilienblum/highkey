@@ -153,6 +153,8 @@ test("source links remain scoped and invalid selections never query a fallback p
   });
   for (const link of [
     `/projects/does-not-exist`,
+    `/projects/${project.slug}?source=missing-source`,
+    // A legacy ID only resolves within its own project.
     `/projects/${project.slug}?source=${other.sources[0].id}`,
     `/projects/${project.slug}?snapshot=yesterday`,
     `/projects/${project.slug}?from=2026-01-01T00:00:00.000Z`,
@@ -171,11 +173,37 @@ test("source links remain scoped and invalid selections never query a fallback p
     .or(page.getByRole("link", { name: "Clear selection", exact: true }))
     .click();
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeHidden();
-  await page.goto(`/projects/${project.slug}?source=${project.sources[0].id}&days=7`);
+  await page.goto(`/projects/${project.slug}?source=${project.sources[0].slug}&days=7`);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
   await page.getByRole("link", { name: "Explore", exact: true }).click();
   await expect(page.getByText("across 31 matching events")).toBeVisible();
-  expect(params(page).get("source")).toBe(project.sources[0].id);
+  expect(params(page).get("source")).toBe(project.sources[0].slug);
+});
+
+test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
+  const legacy = await post("/products", {
+    name: `Legacy source link ${Date.now()}`,
+    retention_days: 365,
+  });
+  const source = await post(`/products/${legacy.id}/sources`, { name: "Web App" });
+  expect(source.slug).toBe("web-app");
+  await page.goto(`/projects/${legacy.slug}/explore?source=${source.id}&days=30`);
+  await expect.poll(() => params(page).get("source")).toBe("web-app");
+  expect(new URL(page.url()).pathname).toBe(`/projects/${legacy.slug}/explore`);
+  expect(params(page).get("days")).toBe("30");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Project sources" })
+      .getByRole("button", { name: "Web App", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".workspace-source-name")).toHaveText("Web App");
+  // Choosing another source writes its slug too.
+  await page
+    .getByRole("navigation", { name: "Project sources" })
+    .getByRole("button", { name: "Events", exact: true })
+    .click();
+  await expect.poll(() => params(page).get("source")).toBe("events");
+  await expect(page.locator(".workspace-source-name")).toHaveText("Events");
 });
 
 test("automatic refresh changes neither the current URL nor browser history", async ({ page }) => {
@@ -216,7 +244,7 @@ for (const [label, dates] of Object.entries<Record<string, string>>({
   test(`switching projects resets Overview filters and ${label}`, async ({ page }) => {
     const search = new URLSearchParams({
       ...dates,
-      source: other.sources[0].id,
+      source: other.sources[0].slug,
       days: "90",
       filter: JSON.stringify({ field: "property:success", value: true }),
       metric: "average",
@@ -266,7 +294,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
   page,
 }) => {
   const search = new URLSearchParams({
-    source: other.sources[0].id,
+    source: other.sources[0].slug,
     days: "7",
     snapshot: "2025-01-08T00:00:00.000Z",
     drilldown: JSON.stringify({

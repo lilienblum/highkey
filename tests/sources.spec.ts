@@ -84,10 +84,13 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await expect(sources.locator("[data-chart-kind='donut']")).toHaveCount(0);
   await expect(sources).toHaveCount(0);
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1");
+  // Renaming the initial Events source kept its slug.
+  expect(new URL(page.url()).searchParams.get("source")).toBe("events");
   await select(page, "Select source", "All sources");
   await expect(sources).toBeVisible();
   await page.getByRole("link", { name: "Filter by iOS app", exact: true }).click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1");
+  expect(new URL(page.url()).searchParams.get("source")).toBe("ios-app");
   await page.getByRole("link", { name: "Explore", exact: true }).click();
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   const linked = page.url();

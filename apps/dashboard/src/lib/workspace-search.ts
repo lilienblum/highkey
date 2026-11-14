@@ -21,6 +21,16 @@ export const validId = (value: unknown): value is string =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export const validKey = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9_./-]{1,64}$/.test(value);
+export const validSlug = (value: unknown): value is string =>
+  typeof value === "string" && value.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+/** The workspace `source` URL value for a source ID: its slug, or "all" without a source. */
+export function sourceParam(
+  sources: readonly { id: string; slug: string }[] | undefined,
+  id: string | undefined,
+) {
+  if (!id) return "all";
+  return sources?.find((source) => source.id === id)?.slug ?? id;
+}
 
 export function validateWorkspaceSearch(search: Record<string, unknown>): WorkspaceSearch {
   if (
@@ -34,7 +44,11 @@ export function validateWorkspaceSearch(search: Record<string, unknown>): Worksp
       (typeof search.project !== "string" ||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(search.project) ||
         search.project.length > 80)) ||
-    (search.source !== undefined && search.source !== "all" && !validId(search.source)) ||
+    // Source slugs, with source IDs still accepted from older links.
+    (search.source !== undefined &&
+      search.source !== "all" &&
+      !validSlug(search.source) &&
+      !validId(search.source)) ||
     (search.days !== undefined &&
       ![7, 30, 90, "7", "30", "90"].includes(search.days as number | string)) ||
     (search.snapshot !== undefined && !validDate(search.snapshot)) ||

@@ -151,7 +151,10 @@ export function AppShell({
   const requestedSource = drilldown
     ? (drilldown.sourceId ?? "all")
     : (search.source ?? (requestedProject ? "all" : (sourceSelection[product?.id ?? ""] ?? "all")));
-  const source = product?.sources?.find((source) => source.id === requestedSource);
+  // URLs name sources by slug; IDs come from older links, drilldowns and saved choices.
+  const source =
+    product?.sources?.find((source) => source.slug === requestedSource) ??
+    product?.sources?.find((source) => source.id === requestedSource);
   const sourceId = source?.id;
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
@@ -169,7 +172,7 @@ export function AppShell({
     if (
       projectSlug !== product.slug ||
       search.project !== undefined ||
-      search.source !== (sourceId ?? "all") ||
+      search.source !== (source?.slug ?? "all") ||
       search.days !== days
     )
       void navigate({
@@ -177,7 +180,7 @@ export function AppShell({
         search: (previous) => ({
           ...previous,
           project: undefined,
-          source: sourceId ?? "all",
+          source: source?.slug ?? "all",
           days,
         }),
         replace: true,
@@ -191,6 +194,7 @@ export function AppShell({
     missingSource,
     days,
     sourceId,
+    source?.slug,
     projectSlug,
     view,
     search.project,
@@ -302,13 +306,13 @@ export function AppShell({
           sourceId={sourceId}
           picker={projectPicker}
           navigationReady={preferencesReady}
-          onSourceChange={(id) => {
+          onSourceChange={(slug) => {
             if (!product) return;
             void navigate({
               ...workspaceTarget(view === "/settings" ? "/" : view, product.slug),
               search: {
                 project: undefined,
-                source: id || "all",
+                source: slug || "all",
                 days,
                 period: search.period,
                 snapshot: search.snapshot,
