@@ -594,3 +594,20 @@ test("a saved view opens from an Events link that was invalid", async ({ page })
   await expect.poll(() => viewParam(page)).toBe(planView.slug);
   await expect(page.getByText("across 2 matching events")).toBeVisible();
 });
+
+test("Save view says a client filter is not part of a view", async ({ page }) => {
+  const to = new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000);
+  const from = new Date(to.getTime() - 86_400_000);
+  const drilldown = JSON.stringify({
+    productId: project.id,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    source: "browser",
+  });
+  await page.goto(`${eventsUrl()}?drilldown=${encodeURIComponent(drilldown)}`);
+  await expect(page.getByText("Client · browser")).toBeVisible();
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Save view" })).toContainText(
+    "The client filter isn’t saved.",
+  );
+});

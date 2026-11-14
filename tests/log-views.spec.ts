@@ -368,3 +368,15 @@ test("without channels, an agent's change to the open log view applies by pollin
   await expect(service(page)).toContainText("checkout");
   await expect(page.getByText("Changed by your agent")).toHaveCount(0);
 });
+
+test("Save view says a trace ID filter is not part of a view", async ({ page }) => {
+  await page.goto(`${logsUrl()}?trace=${"a".repeat(32)}`);
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Save view" });
+  await expect(dialog).toContainText("The trace ID filter isn’t saved.");
+  await page.keyboard.press("Escape");
+  await page.goto(logsUrl());
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toContainText("isn’t saved");
+});
