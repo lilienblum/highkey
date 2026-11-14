@@ -4,14 +4,14 @@ import { decorative } from "@tanstack/charts/mark/decorative";
 import { Chart } from "@tanstack/charts/react";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
-import { useId, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useId, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useWorkspace } from "./app-shell";
 import { number, type QueryResult } from "@/lib/api";
 import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
 
 // Bayer 4×4 screen tones at 2px per dither pixel (8px tiles), from the line down to the baseline.
 // `from`/`to` are offsets below each value as a share of the series peak.
-const TONE_BANDS = [
+export const TONE_BANDS = [
   {
     density: 50,
     from: 0,
@@ -22,7 +22,7 @@ const TONE_BANDS = [
   { density: 12, from: 0.22, to: Number.POSITIVE_INFINITY, path: "M0 0h2v2H0zM4 4h2v2H4z" },
 ] as const;
 
-function formatDate(time: number, bucket: TimeBucket, full = false) {
+export function formatDate(time: number, bucket: TimeBucket, full = false) {
   return new Date(time).toLocaleString("en-US", {
     timeZone: "UTC",
     month: "short",
@@ -169,7 +169,56 @@ export function AnalyticsChart({
       },
     });
   }, [series, label, bucket, unit, from, to, compact, toneId]);
-  // Drag across the plot (or click one bucket) to zoom the workspace range to those buckets.
+  return (
+    <ZoomableChart bucket={bucket} to={to} enabled={series.length >= 2}>
+      <Chart
+        definition={definition}
+        onRender={({ svg, interaction }) => {
+          // TanStack 1.1 only handles Escape for pinned tooltips; preserve ordinary dismissal too.
+          svg.onkeydown = (event) => {
+            if (event.key === "Escape") interaction.setControlledFocus(null);
+          };
+        }}
+        className="analytics-plot"
+        style={{ height: "100%", touchAction: "pan-y pinch-zoom" }}
+        ariaLabel={`${label} by UTC ${bucket === "day" ? "date" : bucket}`}
+        ariaDescription="Use Left and Right arrows to inspect values, Home and End for the first and last bucket, and Escape to dismiss."
+      />
+      {/* Pattern definitions follow the plot so the chart stays the container's first SVG. */}
+      <svg className="dither-defs" aria-hidden="true" focusable="false" width="0" height="0">
+        {TONE_BANDS.map((band) => (
+          <pattern
+            key={band.density}
+            id={`${toneId}-${band.density}`}
+            width="8"
+            height="8"
+            patternUnits="userSpaceOnUse"
+          >
+            <path d={band.path} />
+          </pattern>
+        ))}
+      </svg>
+    </ZoomableChart>
+  );
+}
+
+/**
+ * The plot container for time charts: drag across the plot (or click one bucket) to zoom the
+ * workspace range to those buckets. Buckets are read from the chart's `buckets` dot mark, whose
+ * keys are bucket start times.
+ */
+export function ZoomableChart({
+  bucket,
+  to,
+  enabled,
+  children,
+}: {
+  bucket: TimeBucket;
+  /** The range end; a zoom never extends past it. */
+  to?: string;
+  enabled: boolean;
+  children: ReactNode;
+}) {
   const { selectRange } = useWorkspace();
   const container = useRef<HTMLDivElement>(null);
   const [brush, setBrush] = useState<{ start: number; end: number }>();
@@ -207,7 +256,7 @@ export function AnalyticsChart({
       data-chart-library="tanstack"
       data-zooming={brush ? "" : undefined}
       onPointerDown={(event) => {
-        if (event.button !== 0 || series.length < 2) return;
+        if (event.button !== 0 || !enabled) return;
         const all = buckets();
         if (!all.length) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -244,33 +293,7 @@ export function AnalyticsChart({
           }}
         />
       )}
-      <Chart
-        definition={definition}
-        onRender={({ svg, interaction }) => {
-          // TanStack 1.1 only handles Escape for pinned tooltips; preserve ordinary dismissal too.
-          svg.onkeydown = (event) => {
-            if (event.key === "Escape") interaction.setControlledFocus(null);
-          };
-        }}
-        className="analytics-plot"
-        style={{ height: "100%", touchAction: "pan-y pinch-zoom" }}
-        ariaLabel={`${label} by UTC ${bucket === "day" ? "date" : bucket}`}
-        ariaDescription="Use Left and Right arrows to inspect values, Home and End for the first and last bucket, and Escape to dismiss."
-      />
-      {/* Pattern definitions follow the plot so the chart stays the container's first SVG. */}
-      <svg className="dither-defs" aria-hidden="true" focusable="false" width="0" height="0">
-        {TONE_BANDS.map((band) => (
-          <pattern
-            key={band.density}
-            id={`${toneId}-${band.density}`}
-            width="8"
-            height="8"
-            patternUnits="userSpaceOnUse"
-          >
-            <path d={band.path} />
-          </pattern>
-        ))}
-      </svg>
+      {children}
     </div>
   );
 }

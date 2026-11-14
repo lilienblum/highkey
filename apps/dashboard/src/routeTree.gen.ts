@@ -22,6 +22,7 @@ import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.
 import { Route as ProjectsProjectSlugExploreRouteImport } from './routes/projects.$projectSlug.explore'
 import { Route as ProjectsProjectSlugLogsRouteImport } from './routes/projects.$projectSlug.logs'
 import { Route as ProjectsProjectSlugSettingsRouteImport } from './routes/projects.$projectSlug.settings'
+import { Route as ProjectsProjectSlugDashboardsDashboardSlugRouteImport } from './routes/projects.$projectSlug.dashboards.$dashboardSlug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -91,6 +92,12 @@ const ProjectsProjectSlugSettingsRoute =
     path: '/settings',
     getParentRoute: () => ProjectsProjectSlugRoute,
   } as any)
+const ProjectsProjectSlugDashboardsDashboardSlugRoute =
+  ProjectsProjectSlugDashboardsDashboardSlugRouteImport.update({
+    id: '/dashboards/$dashboardSlug',
+    path: '/dashboards/$dashboardSlug',
+    getParentRoute: () => ProjectsProjectSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
+  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,6 +128,7 @@ export interface FileRoutesByTo {
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugIndexRoute
+  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -136,6 +145,7 @@ export interface FileRoutesById {
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
   '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
   '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
+  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug/'
+    | '/projects/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug'
+    | '/projects/$projectSlug/dashboards/$dashboardSlug'
   id:
     | '__root__'
     | '/'
@@ -182,6 +194,7 @@ export interface FileRouteTypes {
     | '/projects/$projectSlug/logs'
     | '/projects/$projectSlug/settings'
     | '/projects/$projectSlug/'
+    | '/projects/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -289,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectSlugSettingsRouteImport
       parentRoute: typeof ProjectsProjectSlugRoute
     }
+    '/projects/$projectSlug/dashboards/$dashboardSlug': {
+      id: '/projects/$projectSlug/dashboards/$dashboardSlug'
+      path: '/dashboards/$dashboardSlug'
+      fullPath: '/projects/$projectSlug/dashboards/$dashboardSlug'
+      preLoaderRoute: typeof ProjectsProjectSlugDashboardsDashboardSlugRouteImport
+      parentRoute: typeof ProjectsProjectSlugRoute
+    }
   }
 }
 
@@ -297,6 +317,7 @@ interface ProjectsProjectSlugRouteChildren {
   ProjectsProjectSlugLogsRoute: typeof ProjectsProjectSlugLogsRoute
   ProjectsProjectSlugSettingsRoute: typeof ProjectsProjectSlugSettingsRoute
   ProjectsProjectSlugIndexRoute: typeof ProjectsProjectSlugIndexRoute
+  ProjectsProjectSlugDashboardsDashboardSlugRoute: typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
 }
 
 const ProjectsProjectSlugRouteChildren: ProjectsProjectSlugRouteChildren = {
@@ -304,6 +325,8 @@ const ProjectsProjectSlugRouteChildren: ProjectsProjectSlugRouteChildren = {
   ProjectsProjectSlugLogsRoute: ProjectsProjectSlugLogsRoute,
   ProjectsProjectSlugSettingsRoute: ProjectsProjectSlugSettingsRoute,
   ProjectsProjectSlugIndexRoute: ProjectsProjectSlugIndexRoute,
+  ProjectsProjectSlugDashboardsDashboardSlugRoute:
+    ProjectsProjectSlugDashboardsDashboardSlugRoute,
 }
 
 const ProjectsProjectSlugRouteWithChildren =

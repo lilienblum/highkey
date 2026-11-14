@@ -1,6 +1,6 @@
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
-import { workspaceTarget, workspaceView } from "@/lib/workspace-route";
+import { dashboardRoute, workspaceTarget, workspaceView } from "@/lib/workspace-route";
 import { ProjectIcon } from "./project-icon";
 import {
   createContext,
@@ -19,6 +19,7 @@ import {
   useLocation,
   useNavigate,
   useParams,
+  useRouter,
   useSearch,
 } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -34,6 +35,7 @@ import { findSource, sourceParam } from "@/lib/workspace-search";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { LiveUpdates } from "./live-updates";
+import type { Signal } from "@/lib/change-envelope";
 
 type Context = {
   products: Product[];
@@ -48,6 +50,8 @@ type Context = {
   setAnalyticsPending: (pending: boolean) => void;
   /** Applies an explicit range, as the date picker's custom range does (charts use it to zoom). */
   selectRange: (range: { from: string; to: string }) => void;
+  /** The signals whose live hints refresh the current page; `null` restores the default (events). */
+  setLiveSignals: (signals: Signal[] | null) => void;
 };
 const Workspace = createContext<Context | null>(null);
 export function useWorkspace() {
@@ -72,6 +76,7 @@ export function AppShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [analyticsPending, setAnalyticsPending] = useState(false);
+  const [liveSignals, setLiveSignals] = useState<Signal[] | null>(null);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [selected, setSelected] = useState("");
   const [sourceSelection, setSourceSelection] = useState<Record<string, string>>({});
@@ -87,8 +92,9 @@ export function AppShell({
   const [error, setError] = useState("");
   const path = useLocation({ select: (l) => l.pathname });
   const view = workspaceView(path);
-  const { projectSlug } = useParams({ strict: false });
+  const { projectSlug, dashboardSlug } = useParams({ strict: false });
   const navigate = useNavigate();
+  const router = useRouter();
   const search = useSearch({ from: "__root__" });
   const currentSearch = useSearch({ strict: false });
   const drilldown = view === "/explore" ? currentSearch.drilldown : undefined;
@@ -176,7 +182,7 @@ export function AppShell({
       search.days !== days
     )
       void navigate({
-        ...workspaceTarget(view, product.slug),
+        ...workspaceTarget(view, product.slug, dashboardSlug),
         search: (previous) => ({
           ...previous,
           project: undefined,
@@ -196,6 +202,7 @@ export function AppShell({
     sourceId,
     sourceValue,
     projectSlug,
+    dashboardSlug,
     view,
     search.project,
     search.source,
@@ -235,7 +242,7 @@ export function AppShell({
   };
   const selectRange = (next: { from: string; to: string }) =>
     void navigate({
-      ...workspaceTarget(view, product?.slug),
+      ...workspaceTarget(view, product?.slug, dashboardSlug),
       search: (previous) => ({
         ...previous,
         period: undefined,
@@ -248,8 +255,21 @@ export function AppShell({
       resetScroll: false,
     });
   const label = (
-    { "/": "Overview", "/explore": "Explore", "/logs": "Logs", "/settings": "Settings" } as const
+    {
+      "/": "Overview",
+      "/explore": "Explore",
+      "/logs": "Logs",
+      "/settings": "Settings",
+      "/dashboards": "Dashboard",
+    } as const
   )[view];
+  // A dashboard changed elsewhere (or while disconnected): refresh the sidebar's list and, on a
+  // dashboard page, its document in the background.
+  const dashboardsChanged = () => {
+    void reload().catch(() => undefined);
+    if (view === "/dashboards")
+      void router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+  };
   const projectPicker = (
     <ValueSelect
       label="Select project"
@@ -282,6 +302,7 @@ export function AppShell({
         now,
         setAnalyticsPending,
         selectRange,
+        setLiveSignals,
       }}
     >
       <a className="skip-link" href="#main-content">
@@ -302,6 +323,7 @@ export function AppShell({
       >
         <WorkspaceSidebar
           path={view}
+          dashboardSlug={view === "/dashboards" ? dashboardSlug : undefined}
           product={product}
           sourceId={sourceId}
           picker={projectPicker}
@@ -309,7 +331,7 @@ export function AppShell({
           onSourceChange={(id) => {
             if (!product) return;
             void navigate({
-              ...workspaceTarget(view === "/settings" ? "/" : view, product.slug),
+              ...workspaceTarget(view === "/settings" ? "/" : view, product.slug, dashboardSlug),
               search: {
                 project: undefined,
                 source: sourceParam(product.sources, id),
@@ -337,9 +359,13 @@ export function AppShell({
               search.from,
               search.to,
               view,
+              dashboardSlug,
             ])}
             busy={resolvingProject || analyticsPending}
             onRefresh={refreshBackground}
+            signals={liveSignals ?? undefined}
+            minIntervalMs={view === "/dashboards" ? 30_000 : 1_500}
+            onDashboardsChanged={dashboardsChanged}
           />
           <div
             className="page-content"
@@ -359,7 +385,7 @@ export function AppShell({
                     period={search.period}
                     onPreset={(preset) => {
                       void navigate({
-                        ...workspaceTarget(view, product?.slug),
+                        ...workspaceTarget(view, product?.slug, dashboardSlug),
                         search: (previous) => ({
                           ...previous,
                           days: typeof preset === "number" ? preset : days,
@@ -436,7 +462,7 @@ export function PageHeader({
     <div className="page-heading">
       <div>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       {children}
     </div>

@@ -1,0 +1,310 @@
+/*
+ * Named dashboards: Overview widget cards on a 12-column grid (spec §5). Widths follow the
+ * viewport tiers from `responsiveWidth`: as written from 1280px, 3/4 → 6 and 8 → 12 from 768px,
+ * everything 12 below. One row is 140px, so h:2 (two rows and a gap) is Overview's 300px report.
+ */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: minmax(140px, auto);
+  grid-auto-flow: row;
+  gap: 20px;
+}
+.overview-widget.dashboard-widget {
+  grid-column: span var(--widget-span-narrow, 12);
+  grid-row: span var(--widget-rows, 2);
+  height: auto;
+  min-height: 0;
+}
+@media (min-width: 768px) {
+  .overview-widget.dashboard-widget {
+    grid-column: span var(--widget-span-medium, 12);
+  }
+}
+@media (min-width: 1280px) {
+  .overview-widget.dashboard-widget {
+    grid-column: span var(--widget-span-wide, 12);
+  }
+}
+/*
+ * Plots, rankings and lists fill the rows they are given instead of sizing them, so loading and
+ * refreshing never move the grid. Stats and notes may grow a row when narrow text wraps.
+ */
+.dashboard-widget:not([data-view="stat"], [data-view="text"]) .widget-body {
+  contain: size;
+}
+.overview-widget.dashboard-widget[data-h="1"] {
+  gap: 6px;
+  padding: 16px;
+}
+.dashboard-widget[data-h="1"] .widget-header {
+  min-height: 24px;
+}
+.dashboard-widget[data-h="1"] .widget-footer {
+  min-height: 0;
+}
+@media (max-width: 640px) {
+  .overview-widget.dashboard-widget {
+    padding: 16px;
+  }
+}
+
+/* Palette tokens by name; orange is never a data color. */
+.dashboard-widget [data-color="yellow"] {
+  --widget-color: var(--data);
+}
+.dashboard-widget [data-color="violet"] {
+  --widget-color: var(--data-secondary);
+}
+.dashboard-widget [data-color="aqua"] {
+  --widget-color: var(--data-tertiary);
+}
+.dashboard-widget [data-color="green"] {
+  --widget-color: var(--success);
+}
+.dashboard-widget [data-color="red"] {
+  --widget-color: var(--destructive);
+}
+.dashboard-widget [data-color="neutral"] {
+  --widget-color: var(--muted-foreground);
+}
+
+.widget-header .widget-hint {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.widget-hint:is(:hover, [data-popup-open]) {
+  color: var(--foreground);
+}
+.widget-hint svg {
+  width: 16px;
+  height: 16px;
+}
+[data-slot="popover-content"].widget-hint-content {
+  width: auto;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.widget-header .widget-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.widget-link:hover {
+  text-decoration: underline;
+}
+.widget-link svg {
+  width: 14px;
+  height: 14px;
+}
+.dashboard-footer-notes {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Stat: a Geist Pixel headline, its change, and an optional trend line. */
+.dashboard-stat {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-top: auto;
+}
+.dashboard-stat .widget-measurement {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.dashboard-stat[data-color] .widget-value {
+  color: var(--widget-color);
+}
+.dashboard-sparkline {
+  flex: 1;
+  min-width: 48px;
+  max-width: 50%;
+  height: 32px;
+  margin-bottom: 4px;
+}
+.dashboard-sparkline path {
+  fill: none;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Time charts: the legend names every series, then the plot takes the remaining height. */
+.dashboard-chart {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.dashboard-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  list-style: none;
+}
+.dashboard-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.dashboard-swatch {
+  width: 12px;
+  height: 3px;
+  flex-shrink: 0;
+  background: var(--widget-color);
+}
+/* Repeated hues and the previous period are dotted, as their lines are. */
+.dashboard-legend :is([data-dither], [data-previous]) .dashboard-swatch {
+  height: 2px;
+  background: linear-gradient(90deg, var(--widget-color) 2px, transparent 0) 0 0 / 4px 2px repeat-x;
+}
+.dashboard-legend-label {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-legend-value {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rankings: Overview's report rows, with each extra series as an aligned value column. */
+.dashboard-ranking :is(.breakdown-head, .breakdown-row) .dashboard-columns {
+  display: flex;
+  gap: 12px;
+}
+.dashboard-columns > span {
+  min-width: 64px;
+  text-align: right;
+}
+/* The header lines up with the rows' inline padding, so labels sit over their values. */
+.dashboard-ranking .breakdown-head {
+  gap: 12px;
+  padding-inline: 8px;
+}
+.dashboard-ranking .breakdown-row[data-color] .breakdown-fill {
+  --tone-ink: color-mix(in oklab, var(--widget-color) 30%, var(--card));
+}
+
+/* Newest events and logs: compact aligned rows under a sticky column header. */
+.dashboard-rows ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-rows .dashboard-row {
+  --row-time: 124px;
+  display: grid;
+  grid-template-columns: var(--row-time) minmax(0, 1fr) minmax(0, 120px);
+  align-items: center;
+  gap: 12px;
+  min-height: 30px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+.dashboard-rows li.dashboard-row {
+  border-bottom: 1px solid var(--border);
+}
+.dashboard-rows[data-rows="logs"] .dashboard-row {
+  grid-template-columns: var(--row-time) 44px minmax(0, 120px) minmax(0, 1fr);
+}
+.dashboard-rows .breakdown-head.dashboard-row {
+  min-height: 0;
+  font-size: 11px;
+}
+.dashboard-row time {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dashboard-row-main,
+.dashboard-row-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-row-meta {
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .dashboard-rows .dashboard-row {
+    --row-time: 64px;
+    grid-template-columns: var(--row-time) minmax(0, 1fr);
+  }
+  .dashboard-rows[data-rows="logs"] .dashboard-row {
+    grid-template-columns: var(--row-time) 44px minmax(0, 1fr);
+  }
+  .dashboard-rows .dashboard-row > .dashboard-row-meta,
+  .dashboard-rows .breakdown-head.dashboard-row > :nth-child(3),
+  .dashboard-row-date {
+    display: none;
+  }
+}
+
+/* Notes: the small Markdown subset in the interface's mono hierarchy. */
+.dashboard-markdown {
+  min-height: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.dashboard-markdown :is(h1, h2, h3) {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.dashboard-markdown :is(p, ul, ol) {
+  margin: 0 0 8px;
+}
+.dashboard-markdown :is(ul, ol) {
+  padding-left: 18px;
+}
+.dashboard-markdown ul {
+  list-style: disc;
+}
+.dashboard-markdown ol {
+  list-style: decimal;
+}
+.dashboard-markdown strong {
+  font-weight: 650;
+}
+.dashboard-markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.dashboard-markdown a {
+  color: var(--primary);
+  text-decoration: underline;
+}

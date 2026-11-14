@@ -1,5 +1,5 @@
 import { workspaceTarget } from "@/lib/workspace-route";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -12,6 +12,7 @@ import {
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sidebar,
   SidebarHeader,
@@ -24,14 +25,18 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { Product } from "@/lib/api";
+import type { DashboardLink, Product } from "@/lib/api";
 import { DitherField } from "./dither-field";
 import { SourceIcon } from "./source-icon";
 
 export function WorkspaceSidebar({
   path,
+  dashboardSlug,
   product,
   sourceId,
   picker,
@@ -39,14 +44,17 @@ export function WorkspaceSidebar({
   onSourceChange,
 }: {
   path: string;
+  /** The open dashboard, when the page is one. */
+  dashboardSlug?: string;
   product?: Product;
   sourceId?: string;
   picker: ReactNode;
   navigationReady: boolean;
   onSourceChange: (id: string) => void;
 }) {
-  const { isMobile, setOpenMobile, open } = useSidebar();
+  const { isMobile, setOpenMobile, open, state } = useSidebar();
   const sources = [{ id: "", name: "All sources", icon: null }, ...(product?.sources ?? [])];
+  const dashboards = product?.dashboards ?? [];
   return (
     <Sidebar collapsible="icon" className="workspace-sidebar">
       <SidebarHeader className="workspace-identity">
@@ -100,19 +108,48 @@ export function WorkspaceSidebar({
                   ] as const
                 ).map(([to, label, icon]) => (
                   <SidebarMenuItem key={to}>
-                    <SidebarMenuButton
-                      isActive={path === to}
-                      tooltip={label}
-                      render={
-                        <Link
-                          {...workspaceTarget(to, product?.slug)}
-                          onClick={() => setOpenMobile(false)}
-                        />
-                      }
-                    >
-                      <HugeiconsIcon icon={icon} strokeWidth={2} aria-hidden="true" />
-                      <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
-                    </SidebarMenuButton>
+                    {to === "/" && dashboards.length > 0 && state === "collapsed" && !isMobile ? (
+                      <CollapsedOverview
+                        product={product}
+                        dashboards={dashboards}
+                        active={path === "/"}
+                        activeDashboard={dashboardSlug}
+                      />
+                    ) : (
+                      <SidebarMenuButton
+                        isActive={path === to}
+                        tooltip={label}
+                        render={
+                          <Link
+                            {...workspaceTarget(to, product?.slug)}
+                            onClick={() => setOpenMobile(false)}
+                          />
+                        }
+                      >
+                        <HugeiconsIcon icon={icon} strokeWidth={2} aria-hidden="true" />
+                        <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
+                      </SidebarMenuButton>
+                    )}
+                    {to === "/" && dashboards.length > 0 && (
+                      <SidebarMenuSub aria-label="Dashboards" className="workspace-dashboards">
+                        {dashboards.map((dashboard) => (
+                          <SidebarMenuSubItem key={dashboard.id}>
+                            <SidebarMenuSubButton
+                              isActive={dashboard.slug === dashboardSlug}
+                              title={dashboard.name}
+                              render={
+                                <Link
+                                  {...workspaceTarget("/dashboards", product?.slug, dashboard.slug)}
+                                  onClick={() => setOpenMobile(false)}
+                                />
+                              }
+                            >
+                              <span>{dashboard.name}</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    )}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -178,5 +215,68 @@ export function WorkspaceSidebar({
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+/**
+ * In the collapsed rail the nested list has no room, so Overview opens a small menu with Overview
+ * and the project's dashboards. It is a nonmodal popover: focus moves to its first link, Tab walks
+ * the links, and Escape returns focus to the rail.
+ */
+function CollapsedOverview({
+  product,
+  dashboards,
+  active,
+  activeDashboard,
+}: {
+  product?: Product;
+  dashboards: DashboardLink[];
+  active: boolean;
+  activeDashboard?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
+      <PopoverTrigger
+        render={<SidebarMenuButton isActive={active || activeDashboard !== undefined} />}
+      >
+        <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} aria-hidden="true" />
+        <span className="sr-only">Overview</span>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="workspace-dashboards-menu"
+        aria-label="Overview"
+      >
+        <Link
+          {...workspaceTarget("/", product?.slug)}
+          className="workspace-dashboards-menu-link"
+          data-active={active ? "" : undefined}
+          onClick={() => setOpen(false)}
+        >
+          Overview
+        </Link>
+        <span className="workspace-dashboards-menu-label" aria-hidden="true">
+          Dashboards
+        </span>
+        <ul aria-label="Dashboards">
+          {dashboards.map((dashboard) => (
+            <li key={dashboard.id}>
+              <Link
+                {...workspaceTarget("/dashboards", product?.slug, dashboard.slug)}
+                className="workspace-dashboards-menu-link"
+                data-active={dashboard.slug === activeDashboard ? "" : undefined}
+                title={dashboard.name}
+                onClick={() => setOpen(false)}
+              >
+                {dashboard.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -128,16 +128,22 @@ function ChangeSubscription({
   onDashboardsChanged?: () => void;
 }) {
   const previousStatus = useRef("connecting");
+  const dashboardsChanged = useRef(onDashboardsChanged);
+  dashboardsChanged.current = onDashboardsChanged;
   const { status } = useChangeChannel((message) => {
     if (message.type !== "changed" || !productId) return;
     const change = parseChangeEnvelope(message.data);
     if (!change) return;
     if (matches(change, productId, signals)) onChange();
-    if (onDashboardsChanged && matches(change, productId, ["dashboards"])) onDashboardsChanged();
+    if (matches(change, productId, ["dashboards"])) dashboardsChanged.current?.();
   });
   useEffect(() => {
-    // No replay: reconcile every connection, including the initial subscription.
-    if (status === "open" && previousStatus.current !== "open") onChange();
+    // No replay: reconcile every connection, including the initial subscription, so changes to
+    // data and to dashboards made while disconnected are both picked up.
+    if (status === "open" && previousStatus.current !== "open") {
+      onChange();
+      dashboardsChanged.current?.();
+    }
     previousStatus.current = status;
   }, [status, onChange]);
   return null;

@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, type ComponentProps, type ReactNode } from "react";
 import { Skeleton as MeasuredSkeleton } from "skullet/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ export function OverviewWidget({
   className = "",
   error,
   retry,
+  ...props
 }: {
   title: string;
   controls?: ReactNode;
@@ -19,10 +20,10 @@ export function OverviewWidget({
   className?: string;
   error?: string;
   retry: () => void;
-}) {
+} & Omit<ComponentProps<"section">, "title" | "children" | "className">) {
   const id = useId();
   return (
-    <section className={`overview-widget ${className}`} aria-labelledby={id}>
+    <section {...props} className={`overview-widget ${className}`} aria-labelledby={id}>
       <header className="widget-header">
         <h2 id={id}>{title}</h2>
         {controls}

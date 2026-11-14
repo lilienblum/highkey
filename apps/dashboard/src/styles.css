@@ -137,6 +137,8 @@
   .breakdown-fill,
   .breakdown-row,
   [data-slot="sidebar-menu-button"],
+  [data-slot="sidebar-menu-sub-button"],
+  .workspace-dashboards-menu-link,
   [data-slot="button"],
   [data-slot$="-trigger"][data-variant],
   .date-period-control > button,
@@ -499,7 +501,11 @@ h3,
  * Menus and select popups share one lit panel with pill rows. The pointer/keyboard row takes the
  * quiet-control hover (lifted face, darker 50% dots); the applied row is the selection pill.
  */
-:is([data-slot="select-content"], [data-slot="dropdown-menu-content"]) {
+:is(
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="popover-content"].workspace-dashboards-menu
+) {
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -909,6 +915,7 @@ h3,
       white-space: nowrap;
     }
     .brand-word,
+    [data-slot="sidebar-menu-sub"],
     [data-slot="sidebar-menu-button"] > svg:last-child {
       display: none;
     }
@@ -2317,6 +2324,104 @@ h1 {
 [data-collapsible="icon"] .workspace-sources {
   padding-inline: 4px;
 }
+/*
+ * Named dashboards nest under Overview on the dotted rail. Rows are quieter than destinations;
+ * the open dashboard takes the active page's orange screen. A long list scrolls on its own so
+ * the sources below stay reachable.
+ */
+.workspace-dashboards {
+  max-height: min(34vh, 320px);
+  margin-block: 4px 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.workspace-sidebar [data-slot="sidebar-menu-sub-button"] {
+  height: 30px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+.workspace-sidebar [data-slot="sidebar-menu-sub-button"]:not([data-active]):hover {
+  --tone-ink: color-mix(in oklab, var(--sidebar-foreground) 14%, var(--sidebar));
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    var(--sidebar);
+  color: var(--sidebar-foreground);
+}
+.workspace-sidebar [data-slot="sidebar-menu-sub-button"][data-active] {
+  --tone-ink: color-mix(in oklab, var(--primary) 30%, var(--sidebar));
+  background:
+    var(--tone-25) 0 0 / 4px 4px,
+    var(--sidebar);
+  color: var(--sidebar-primary);
+  font-weight: 600;
+}
+.workspace-sidebar [data-slot="sidebar-menu-sub-button"][data-active]:hover {
+  --tone-ink: color-mix(in oklab, var(--primary) 38%, var(--sidebar));
+}
+/* The collapsed rail's Overview menu: Overview, then the project's dashboards. */
+[data-slot="popover-content"].workspace-dashboards-menu {
+  width: 240px;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 420px);
+  gap: 2px;
+  overflow-y: auto;
+}
+.workspace-dashboards-menu ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workspace-dashboards-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.workspace-dashboards-menu-label::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
+      transparent 0
+    )
+    0 0 / 4px 2px repeat-x;
+}
+.workspace-dashboards-menu-link {
+  --tone-ink: var(--popover);
+  display: block;
+  height: 32px;
+  padding-inline: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  color: var(--popover-foreground);
+  font-size: 13px;
+  line-height: 32px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-dashboards-menu-link:is(:hover, :focus-visible) {
+  background:
+    var(--tone-50) 0 0 / 4px 4px,
+    var(--surface-pressed);
+  color: var(--foreground);
+}
+.workspace-dashboards-menu-link[data-active] {
+  background: var(--selection-face);
+  color: var(--selection-foreground);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
+}
 .overview-breakdowns > [data-slot="card"] > [data-slot="card-header"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2353,6 +2458,10 @@ h1 {
     width: 100%;
   }
   .workspace-sidebar [data-slot="sidebar-menu-button"] {
+    min-height: 40px;
+  }
+  .workspace-sidebar [data-slot="sidebar-menu-sub-button"] {
+    height: auto;
     min-height: 40px;
   }
 }
@@ -3152,7 +3261,9 @@ html {
   }
   :is(
     [data-slot="toggle-group-item"][aria-pressed="true"],
-    [data-slot="sidebar-menu-button"][data-active]
+    [data-slot="sidebar-menu-button"][data-active],
+    [data-slot="sidebar-menu-sub-button"][data-active],
+    .workspace-dashboards-menu-link[data-active]
   ) {
     forced-color-adjust: none;
     background: Highlight;

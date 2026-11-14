@@ -1,14 +1,25 @@
-export type WorkspaceView = "/" | "/explore" | "/logs" | "/settings";
+export type WorkspaceView = "/" | "/explore" | "/logs" | "/settings" | "/dashboards";
 const routes = {
   "/": "/projects/$projectSlug",
   "/explore": "/projects/$projectSlug/explore",
   "/logs": "/projects/$projectSlug/logs",
   "/settings": "/projects/$projectSlug/settings",
 } as const;
-export function workspaceTarget(view: WorkspaceView, projectSlug?: string) {
+export const dashboardRoute = "/projects/$projectSlug/dashboards/$dashboardSlug";
+/**
+ * The canonical route for a workspace view. A dashboard needs its slug; without one (or for
+ * another project, which has its own dashboards) the view falls back to Overview.
+ */
+export function workspaceTarget(view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) {
+  if (view === "/dashboards") {
+    if (projectSlug && dashboardSlug)
+      return { to: dashboardRoute, params: { projectSlug, dashboardSlug } };
+    return workspaceTarget("/", projectSlug);
+  }
   return projectSlug ? { to: routes[view], params: { projectSlug } } : { to: view };
 }
 export function workspaceView(path: string): WorkspaceView {
+  if (path.includes("/dashboards/")) return "/dashboards";
   if (path.endsWith("/explore")) return "/explore";
   if (path.endsWith("/logs")) return "/logs";
   if (path.endsWith("/settings")) return "/settings";
