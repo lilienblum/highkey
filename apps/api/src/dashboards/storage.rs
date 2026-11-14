@@ -6,10 +6,11 @@
 use super::{
     error::DashboardError,
     spec::Document,
+    suggest::missing_hint,
     validate::{Limits, check_document},
 };
 use crate::{error::ApiError, store};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Serialize;
 use serde_json::Value;
@@ -91,8 +92,22 @@ pub fn migrate(db: &rusqlite::Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn not_found(what: &str) -> DashboardError {
-    ApiError(StatusCode::NOT_FOUND, format!("{what} not found")).into()
+fn revision_not_found() -> DashboardError {
+    DashboardError::not_found(
+        "Revision",
+        Some("Only the newest revisions are kept; list the dashboard's revisions for the numbers that exist".into()),
+    )
+}
+/// The not-found error for a dashboard slug or id, with the nearest slugs of the project.
+fn unknown(db: &rusqlite::Connection, product: &str, key: &str) -> DashboardError {
+    let slugs = db
+        .prepare("SELECT slug FROM dashboards WHERE product_id=? ORDER BY slug")
+        .and_then(|mut q| {
+            q.query_map([product], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap_or_default();
+    DashboardError::not_found("Dashboard", Some(missing_hint(key, &slugs, "dashboards")))
 }
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
@@ -119,7 +134,7 @@ fn resolve(db: &rusqlite::Connection, product: &str, key: &str) -> Result<(Strin
         |r| Ok((r.get(0)?, r.get(1)?)),
     )
     .optional()?
-    .ok_or_else(|| not_found("Dashboard"))
+    .ok_or_else(|| unknown(db, product, key))
 }
 fn load(db: &rusqlite::Connection, id: &str) -> Result<Stored> {
     let (id, slug, revision, updated_at, document): (String, String, i64, String, String) = db
@@ -307,7 +322,7 @@ pub fn revision(
             |r| r.get(0),
         )
         .optional()?
-        .ok_or_else(|| not_found("Revision"))?;
+        .ok_or_else(revision_not_found)?;
     Ok(serde_json::from_str(&text)?)
 }
 /// Writes a new revision equal to `revision`.
@@ -328,7 +343,7 @@ pub fn restore(
             |r| r.get(0),
         )
         .optional()?
-        .ok_or_else(|| not_found("Revision"))?;
+        .ok_or_else(revision_not_found)?;
     let doc: Document = serde_json::from_str(&text)?;
     let json = validated(&doc)?;
     save(&tx, &id, current, &doc, &json, origin)?;

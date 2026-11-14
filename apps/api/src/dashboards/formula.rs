@@ -159,23 +159,6 @@ fn tokenize(chars: &[char]) -> Result<Vec<(usize, Token)>, FormulaError> {
     Ok(tokens)
 }
 
-fn distance(a: &str, b: &str) -> usize {
-    let b: Vec<char> = b.chars().collect();
-    let mut row: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.chars().enumerate() {
-        let mut diagonal = row[0];
-        row[0] = i + 1;
-        for (j, cb) in b.iter().enumerate() {
-            let above = row[j + 1];
-            row[j + 1] = (above + 1)
-                .min(row[j] + 1)
-                .min(diagonal + usize::from(ca != *cb));
-            diagonal = above;
-        }
-    }
-    row[b.len()]
-}
-
 struct Parser<'a> {
     tokens: Vec<(usize, Token)>,
     at: usize,
@@ -286,16 +269,11 @@ impl Parser<'_> {
                 if self.known.contains(&name.as_str()) {
                     return Ok(Expr::Query(name));
                 }
-                let suggestion = self
-                    .known
-                    .iter()
-                    .map(|k| (distance(&name, k), *k))
-                    .filter(|(d, _)| *d <= 2)
-                    .min_by_key(|(d, _)| *d);
+                let suggestion = super::suggest::nearest(&name, self.known.iter().copied());
                 error(
                     column,
                     match suggestion {
-                        Some((_, k)) => format!("unknown query `{name}`; did you mean `{k}`?"),
+                        Some(k) => format!("unknown query `{name}`; did you mean `{k}`?"),
                         None => format!("unknown query `{name}`"),
                     },
                 )

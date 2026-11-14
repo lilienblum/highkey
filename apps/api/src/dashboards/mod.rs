@@ -9,4 +9,5 @@ pub mod run;
 pub mod spec;
 pub mod sql;
 pub mod storage;
+pub mod suggest;
 pub mod validate;

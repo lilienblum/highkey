@@ -1,17 +1,26 @@
 //! Errors from dashboard reads, runs and writes, with typed JSON bodies.
-use super::validate::Report;
+use super::validate::{Issue, Report};
 use crate::error::ApiError;
 use axum::{
     Json,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use serde_json::json;
+use serde_json::{Value, json};
 
 #[derive(Debug)]
 pub enum DashboardError {
     Api(ApiError),
     Invalid(Report),
+    /// A saved view document failed validation.
+    InvalidView(Report),
+    /// Any other typed failure, with issues that point at the argument at fault.
+    Detailed {
+        status: StatusCode,
+        message: String,
+        code: &'static str,
+        errors: Vec<Issue>,
+    },
     Conflict {
         revision: i64,
     },
@@ -35,11 +44,34 @@ impl From<ApiError> for DashboardError {
         Self::Api(e)
     }
 }
-/// Bodies keep `error` for the message, like every other API error, and add a `code`.
-impl IntoResponse for DashboardError {
-    fn into_response(self) -> Response {
-        let (status, body) = match self {
-            Self::Api(error) => return error.into_response(),
+impl DashboardError {
+    /// A 404 that names what was not found and what exists instead, so a caller can correct a
+    /// misspelt slug. `what` is `Dashboard`, `View`, `Project` or `Revision`.
+    pub fn not_found(what: &str, hint: Option<String>) -> Self {
+        let path = what.to_lowercase();
+        Self::Detailed {
+            status: StatusCode::NOT_FOUND,
+            message: format!("{what} not found"),
+            code: "not_found",
+            errors: vec![Issue {
+                message: format!("No {path} matches that id or slug"),
+                path,
+                hint,
+            }],
+        }
+    }
+
+    /// The HTTP status, the JSON body and the seconds a client should wait before retrying.
+    /// The HTTP responses and the MCP tool errors are both built from this, so they cannot
+    /// disagree.
+    pub fn into_parts(self) -> (StatusCode, Value, Option<u64>) {
+        match self {
+            Self::Api(ApiError(status, message)) => {
+                let retry = (status == StatusCode::SERVICE_UNAVAILABLE
+                    || status == StatusCode::TOO_MANY_REQUESTS)
+                    .then_some(1);
+                (status, json!({"error": message}), retry)
+            }
             Self::Invalid(report) => (
                 StatusCode::BAD_REQUEST,
                 json!({
@@ -48,6 +80,27 @@ impl IntoResponse for DashboardError {
                     "errors": report.errors,
                     "warnings": report.warnings,
                 }),
+                None,
+            ),
+            Self::InvalidView(report) => (
+                StatusCode::BAD_REQUEST,
+                json!({
+                    "error": "Invalid view document",
+                    "code": "invalid_document",
+                    "errors": report.errors,
+                    "warnings": report.warnings,
+                }),
+                None,
+            ),
+            Self::Detailed {
+                status,
+                message,
+                code,
+                errors,
+            } => (
+                status,
+                json!({"error": message, "code": code, "errors": errors}),
+                None,
             ),
             Self::Conflict { revision } => (
                 StatusCode::CONFLICT,
@@ -56,6 +109,7 @@ impl IntoResponse for DashboardError {
                     "code": "revision_conflict",
                     "revision": revision,
                 }),
+                None,
             ),
             // A timeout repeats on retry, so it carries no Retry-After for clients to loop on.
             Self::Timeout { after_ms, .. } => (
@@ -64,10 +118,12 @@ impl IntoResponse for DashboardError {
                     "error": format!("Timed out after {} s", after_ms as f64 / 1000.0),
                     "code": "query_timeout",
                 }),
+                None,
             ),
             Self::Limit(message) => (
                 StatusCode::BAD_REQUEST,
                 json!({"error": message, "code": "limit"}),
+                None,
             ),
             Self::TooSlow(report) => (
                 StatusCode::BAD_REQUEST,
@@ -77,44 +133,46 @@ impl IntoResponse for DashboardError {
                     "errors": report.errors,
                     "warnings": report.warnings,
                 }),
+                None,
             ),
-            Self::Busy(report) => {
-                let mut response = (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({
-                        "error": "Piko was busy running other queries",
-                        "code": "busy",
-                        "errors": report.errors,
-                        "warnings": report.warnings,
-                    })),
-                )
-                    .into_response();
-                response
-                    .headers_mut()
-                    .insert(header::RETRY_AFTER, "5".parse().expect("static header"));
-                return response;
-            }
-            Self::RateLimited { retry_after } => {
-                let mut response = (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    Json(json!({
-                        "error": "Too many dashboard writes; slow down",
-                        "code": "rate_limited",
-                        "errors": [{
-                            "path": "",
-                            "message": "Too many dashboard writes for this project",
-                            "hint": format!("Retry after {retry_after} s"),
-                        }],
-                    })),
-                )
-                    .into_response();
-                response
-                    .headers_mut()
-                    .insert(header::RETRY_AFTER, retry_after.into());
-                return response;
-            }
-        };
-        (status, Json(body)).into_response()
+            Self::Busy(report) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({
+                    "error": "Piko was busy running other queries",
+                    "code": "busy",
+                    "errors": report.errors,
+                    "warnings": report.warnings,
+                }),
+                Some(5),
+            ),
+            Self::RateLimited { retry_after } => (
+                StatusCode::TOO_MANY_REQUESTS,
+                json!({
+                    "error": "Too many dashboard writes; slow down",
+                    "code": "rate_limited",
+                    "errors": [{
+                        "path": "",
+                        "message": "Too many dashboard writes for this project",
+                        "hint": format!("Retry after {retry_after} s"),
+                    }],
+                }),
+                Some(retry_after),
+            ),
+        }
+    }
+}
+
+/// Bodies keep `error` for the message, like every other API error, and add a `code`.
+impl IntoResponse for DashboardError {
+    fn into_response(self) -> Response {
+        let (status, body, retry_after) = self.into_parts();
+        let mut response = (status, Json(body)).into_response();
+        if let Some(seconds) = retry_after {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, seconds.into());
+        }
+        response
     }
 }
 

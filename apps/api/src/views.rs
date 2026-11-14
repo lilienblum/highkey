@@ -8,7 +8,8 @@ use crate::{
         error::DashboardError,
         routes::{Body, body, changed, throttle},
         spec::{EventsQuery, LogFilter, LogMeasure, LogsQuery},
-        validate::{Limits, Report, check_events, check_logs, parse, text_len},
+        suggest::missing_hint,
+        validate::{Issue, Limits, Report, check_events, check_logs, parse, text_len},
     },
     error::ApiError,
     model::ViewLink,
@@ -241,9 +242,6 @@ pub fn migrate(db: &rusqlite::Connection) -> anyhow::Result<()> {
 fn db_error(e: rusqlite::Error) -> DashboardError {
     ApiError::from(anyhow::Error::from(e)).into()
 }
-fn not_found() -> DashboardError {
-    ApiError(StatusCode::NOT_FOUND, "View not found".into()).into()
-}
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
@@ -251,7 +249,7 @@ fn now() -> String {
 fn validated(doc: &ViewDocument) -> Result<String> {
     let report = check_view(doc);
     if !report.is_ok() {
-        return Err(DashboardError::Invalid(report));
+        return Err(DashboardError::InvalidView(report));
     }
     serde_json::to_string(doc).map_err(|e| ApiError::from(anyhow::Error::from(e)).into())
 }
@@ -271,25 +269,84 @@ fn begin(db: &rusqlite::Connection) -> Result<Transaction<'_>> {
     Transaction::new_unchecked(db, TransactionBehavior::Immediate).map_err(db_error)
 }
 
-/// A project's view by id or slug, as `(id, kind)`. A slug shared by both kinds is told apart
-/// by `kind`; without it the event view wins. An id is always exact.
+/// A project's view by id or slug, as `(id, kind)`. An id is always exact. A slug shared by
+/// both kinds needs `kind`; without it the lookup is ambiguous and says so.
 fn resolve(
     db: &rusqlite::Connection,
     product: &str,
     key: &str,
     kind: Option<ViewKind>,
 ) -> Result<(String, ViewKind)> {
-    let kind_text = kind.map(ViewKind::as_str);
-    let (id, found): (String, String) = db
+    let exact = db
         .query_row(
-            "SELECT id,kind FROM views WHERE product_id=?1 AND (id=?2 OR (slug=?2 AND (?3 IS NULL OR kind=?3))) ORDER BY id=?2 DESC, kind LIMIT 1",
-            params![product, key, kind_text],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            "SELECT id,kind FROM views WHERE product_id=?1 AND id=?2",
+            params![product, key],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
         )
         .optional()
+        .map_err(db_error)?;
+    if let Some((id, found)) = exact {
+        return Ok((id, ViewKind::parse(&found).unwrap_or(ViewKind::Events)));
+    }
+    let mut q = db
+        .prepare("SELECT id,kind FROM views WHERE product_id=?1 AND slug=?2 ORDER BY kind")
+        .map_err(db_error)?;
+    let shared = q
+        .query_map(params![product, key], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
         .map_err(db_error)?
-        .ok_or_else(not_found)?;
-    Ok((id, ViewKind::parse(&found).unwrap_or(ViewKind::Events)))
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db_error)?
+        .into_iter()
+        .map(|(id, k)| (id, ViewKind::parse(&k).unwrap_or(ViewKind::Events)))
+        .collect::<Vec<_>>();
+    match (kind, shared.as_slice()) {
+        (Some(kind), shared) => {
+            if let Some((id, _)) = shared.iter().find(|(_, k)| *k == kind) {
+                return Ok((id.clone(), kind));
+            }
+            match shared.first() {
+                Some((_, other)) => Err(DashboardError::not_found(
+                    "View",
+                    Some(format!(
+                        "`{key}` exists as a {} view; use kind `{}`",
+                        other.as_str(),
+                        other.as_str()
+                    )),
+                )),
+                None => Err(unknown(db, product, key, Some(kind))?),
+            }
+        }
+        (None, [(id, kind)]) => Ok((id.clone(), *kind)),
+        (None, []) => Err(unknown(db, product, key, None)?),
+        (None, _) => Err(DashboardError::Detailed {
+            status: StatusCode::CONFLICT,
+            message: "More than one view has that slug".into(),
+            code: "ambiguous_view",
+            errors: vec![Issue {
+                path: "view".into(),
+                message: format!("`{key}` is both an events view and a logs view"),
+                hint: Some("Pass ?kind=events or ?kind=logs (the `kind` argument over MCP)".into()),
+            }],
+        }),
+    }
+}
+/// The not-found error for a view that exists under no kind, with the nearest slugs.
+fn unknown(
+    db: &rusqlite::Connection,
+    product: &str,
+    key: &str,
+    kind: Option<ViewKind>,
+) -> Result<DashboardError> {
+    let slugs = summaries(db, product, kind)?
+        .into_iter()
+        .map(|v| v.slug)
+        .collect::<Vec<_>>();
+    Ok(DashboardError::not_found(
+        "View",
+        Some(missing_hint(key, &slugs, "views")),
+    ))
 }
 fn load(db: &rusqlite::Connection, id: &str) -> Result<Stored> {
     let (id, slug, kind, created_at, updated_at, document): (
@@ -428,22 +485,36 @@ pub fn create(db: &rusqlite::Connection, product: &str, doc: &ViewDocument) -> R
     load(db, &id)
 }
 
-/// Replaces the whole document of a view. A view keeps its kind and its slug.
+/// Replaces the whole document of a view. A view keeps its kind and its slug. `kind_written`
+/// says whether the document named its kind: a slug shared by both kinds is only unambiguous
+/// when it did, and a document that did not is an events view.
 pub fn replace(
     db: &rusqlite::Connection,
     product: &str,
     key: &str,
     doc: &ViewDocument,
+    kind_written: bool,
 ) -> Result<Stored> {
     let json = validated(doc)?;
     store::product(db, product)?;
     let tx = begin(db)?;
-    let (id, kind) = resolve(&tx, product, key, Some(doc.kind()))?;
+    let (id, kind) = resolve(&tx, product, key, kind_written.then(|| doc.kind()))?;
     if kind != doc.kind() {
-        return Err(DashboardError::Invalid(issue(
-            "/kind",
-            &format!("This is a {} view; its kind cannot change", kind.as_str()),
-        )));
+        return Err(if id == key {
+            DashboardError::InvalidView(issue(
+                "/kind",
+                &format!("This is a {} view; its kind cannot change", kind.as_str()),
+            ))
+        } else {
+            DashboardError::not_found(
+                "View",
+                Some(format!(
+                    "`{key}` exists as a {} view; write `\"kind\": \"{}\"` in the document",
+                    kind.as_str(),
+                    kind.as_str()
+                )),
+            )
+        });
     }
     tx.execute(
         "UPDATE views SET name=?1,document=?2,updated_at=?3 WHERE id=?4",
@@ -505,18 +576,21 @@ fn kind_param(
 ) -> Result<Option<ViewKind>> {
     let Query(KindParam { kind }) = query.map_err(|e| ApiError(e.status(), e.body_text()))?;
     kind.map(|k| {
-        ViewKind::parse(&k).ok_or_else(|| {
-            ApiError(
-                StatusCode::BAD_REQUEST,
-                "kind must be events or logs".into(),
-            )
-            .into()
+        ViewKind::parse(&k).ok_or_else(|| DashboardError::Detailed {
+            status: StatusCode::BAD_REQUEST,
+            message: "kind must be events or logs".into(),
+            code: "invalid_kind",
+            errors: vec![Issue {
+                path: "kind".into(),
+                message: format!("`{k}` is not a view kind"),
+                hint: Some("Use `events` or `logs`".into()),
+            }],
         })
     })
     .transpose()
 }
 fn document(value: Value) -> Result<ViewDocument> {
-    parse_view(value).map_err(DashboardError::Invalid)
+    parse_view(value).map_err(DashboardError::InvalidView)
 }
 
 pub fn read_routes() -> Router<AppState> {
@@ -584,11 +658,13 @@ async fn replace_view(
     request: Body<Write>,
 ) -> Result<Json<Value>> {
     throttle(&state, &product)?;
-    let doc = document(body(request)?.document)?;
+    let value = body(request)?.document;
+    let kind_written = value.get("kind").is_some();
+    let doc = document(value)?;
     let id = product.clone();
     let stored = state
         .store
-        .state(move |db| Ok(replace(db, &id, &key, &doc)))
+        .state(move |db| Ok(replace(db, &id, &key, &doc, kind_written)))
         .await??;
     changed(&state, &product);
     Ok(Json(json!(stored)))

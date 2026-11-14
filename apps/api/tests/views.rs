@@ -270,8 +270,9 @@ async fn slugs_are_unique_per_kind_and_validate_is_reserved() {
     assert_eq!(got["id"], logs["id"]);
     let (_, got) = test.read(&format!("{path}?kind=events")).await;
     assert_eq!(got["id"], first["id"]);
-    let (_, got) = test.read(&path).await;
-    assert_eq!(got["id"], first["id"]);
+    let (status, got) = test.read(&path).await;
+    assert_eq!(status, 409, "{got}");
+    assert_eq!(got["code"], "ambiguous_view");
     let (_, list) = test
         .read(&format!("{}?kind=logs", views_path(&project)))
         .await;
@@ -485,4 +486,157 @@ async fn view_writes_emit_the_dashboards_signal_and_share_the_write_limit() {
     let (status, body) = test.save(&project, event_view("Two")).await;
     assert_eq!(status, 429, "{body}");
     assert_eq!(body["code"], "rate_limited");
+}
+
+#[tokio::test]
+async fn invalid_view_documents_say_view_not_dashboard() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let mut doc = event_view("Bad");
+    doc["extra"] = json!(1);
+    let (status, body) = test.save(&project, doc).await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"], "Invalid view document");
+    assert_eq!(body["code"], "invalid_document");
+    let (_, created) = test.save(&project, event_view("Good")).await;
+    let (status, body) = test
+        .manage(
+            "PUT",
+            &format!(
+                "/api/products/{}/views/{}",
+                id(&project),
+                created["id"].as_str().unwrap()
+            ),
+            json!({"document": event_view("")}),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"], "Invalid view document");
+}
+
+#[tokio::test]
+async fn a_bad_kind_is_a_structured_error_that_lists_the_kinds() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    for path in [
+        format!("{}?kind=metrics", views_path(&project)),
+        format!("{}/anything?kind=metrics", views_path(&project)),
+    ] {
+        let (status, body) = test.read(&path).await;
+        assert_eq!(status, 400, "{body}");
+        assert_eq!(body["code"], "invalid_kind");
+        assert_eq!(body["errors"][0]["path"], "kind");
+        let hint = body["errors"][0]["hint"].as_str().unwrap();
+        assert!(hint.contains("events") && hint.contains("logs"), "{hint}");
+    }
+    let (status, body) = test
+        .manage(
+            "DELETE",
+            &format!("/api/products/{}/views/anything?kind=metrics", id(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["errors"][0]["path"], "kind");
+}
+
+#[tokio::test]
+async fn replacing_a_slug_that_exists_as_the_other_kind_is_a_404_naming_it() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    test.save(&project, log_view("Errors")).await;
+    let path = format!("/api/products/{}/views/errors", id(&project));
+    // The document names no kind, so it is an events view.
+    let (status, body) = test
+        .manage("PUT", &path, json!({"document": event_view("Errors")}))
+        .await;
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["code"], "not_found");
+    assert!(
+        body["errors"][0]["hint"].as_str().unwrap().contains("logs"),
+        "{body}"
+    );
+    // A kind that is written but wrong gets the same answer.
+    let mut doc = event_view("Errors");
+    doc["kind"] = json!("events");
+    let (status, body) = test.manage("PUT", &path, json!({"document": doc})).await;
+    assert_eq!(status, 404, "{body}");
+    assert!(
+        body["errors"][0]["hint"].as_str().unwrap().contains("logs"),
+        "{body}"
+    );
+    // The right kind replaces it.
+    let (status, body) = test
+        .manage("PUT", &path, json!({"document": log_view("Errors")}))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    // A GET with the wrong kind says where the view is.
+    let (status, body) = test
+        .read(&format!("{}/errors?kind=events", views_path(&project)))
+        .await;
+    assert_eq!(status, 404);
+    assert!(
+        body["errors"][0]["hint"].as_str().unwrap().contains("logs"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn a_slug_shared_by_both_kinds_needs_a_kind() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let (_, events) = test.save(&project, event_view("Both")).await;
+    let (_, logs) = test.save(&project, log_view("Both")).await;
+    assert_eq!(events["slug"], logs["slug"]);
+    let read = format!("{}/both", views_path(&project));
+    let write = format!("/api/products/{}/views/both", id(&project));
+
+    let (status, body) = test.read(&read).await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["code"], "ambiguous_view");
+    let hint = body["errors"][0]["hint"].as_str().unwrap();
+    assert!(
+        hint.contains("?kind=events") && hint.contains("?kind=logs"),
+        "{hint}"
+    );
+
+    // A document that names no kind cannot say which view it replaces.
+    let (status, body) = test
+        .manage("PUT", &write, json!({"document": event_view("Both")}))
+        .await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["code"], "ambiguous_view");
+    let (status, body) = test.manage("DELETE", &write, Value::Null).await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["code"], "ambiguous_view");
+
+    // Naming the kind settles each of them.
+    let mut doc = event_view("Both");
+    doc["kind"] = json!("events");
+    let (status, body) = test.manage("PUT", &write, json!({"document": doc})).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["id"], events["id"]);
+    let (status, _) = test.read(&format!("{read}?kind=logs")).await;
+    assert_eq!(status, 200);
+    let (status, _) = test
+        .manage("DELETE", &format!("{write}?kind=events"), Value::Null)
+        .await;
+    assert_eq!(status, 204);
+    // With one left, the slug is no longer ambiguous.
+    let (status, body) = test.read(&read).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["id"], logs["id"]);
+}
+
+#[tokio::test]
+async fn an_unknown_view_suggests_the_nearest_slug() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    test.save(&project, event_view("Checkout")).await;
+    let (status, body) = test
+        .read(&format!("{}/chekout", views_path(&project)))
+        .await;
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["code"], "not_found");
+    assert_eq!(body["errors"][0]["hint"], "did you mean `checkout`?");
 }
