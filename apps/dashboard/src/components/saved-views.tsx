@@ -624,6 +624,8 @@ export function ViewActions<D extends ViewDocument>({
       setConfirming(false);
       await reload();
       await onDeleted();
+      // The API reuses a slug after a delete, so a view saved under it next must not meet this copy.
+      client.removeQueries({ queryKey: key, exact: true });
     } catch (e) {
       setConfirming(false);
       setError(viewErrorMessage(e, "Could not delete the view."));
@@ -695,7 +697,9 @@ export function ViewActions<D extends ViewDocument>({
           } catch (e) {
             throw new Error(viewErrorMessage(e, "Could not rename the view."));
           }
-          client.setQueryData(key, saved);
+          // A rename that moves the slug leaves the old one's copy for a later view to find.
+          if (saved.slug !== view.slug) client.removeQueries({ queryKey: key, exact: true });
+          client.setQueryData(viewQueryKey(product.id, kind, saved.slug), saved);
           // A new name changes nothing the page shows, so the page stays on this version.
           if (inStep) mark(saved);
           await reload();

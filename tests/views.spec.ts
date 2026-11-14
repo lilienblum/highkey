@@ -539,6 +539,44 @@ test("an agent's change waits while an unsent query draft is on the page", async
   await expect(page.getByText("across 3 matching events")).toBeVisible();
 });
 
+test("a view recreated under a deleted view's name never shows the deleted query", async ({
+  page,
+}) => {
+  const name = `Recreated ${run}`;
+  const first = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "signup", measure: "count" } },
+  });
+  await page.goto(`${eventsUrl()}?view=${first.slug}`);
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  await page.getByRole("button", { name: "View actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete view" }).click();
+  await expect.poll(() => viewParam(page)).toBeNull();
+  // The API reuses a slug after a delete.
+  const second = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "page_view", measure: "count" } },
+  });
+  expect(second.slug).toBe(first.slug);
+  const link = sidebar(page).getByRole("link", { name, exact: true });
+  await expect(link).toBeVisible();
+  // Only the deleted view's query would ever read "3 matching events".
+  await page.evaluate(() => {
+    const seen = { deleted: false };
+    (window as unknown as { seen: typeof seen }).seen = seen;
+    new MutationObserver(() => {
+      if (document.body.innerText.includes("across 3 matching events")) seen.deleted = true;
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  await link.click();
+  await expect(page.getByText("across 4 matching events")).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  await page.waitForTimeout(500);
+  expect(
+    await page.evaluate(() => (window as unknown as { seen: { deleted: boolean } }).seen.deleted),
+  ).toBe(false);
+});
+
 test("Load latest hands focus on to the view's menu when its notice goes", async ({ page }) => {
   const name = `Focus latest ${run}`;
   const created = await admin<View>(`/products/${project.id}/views`, {
