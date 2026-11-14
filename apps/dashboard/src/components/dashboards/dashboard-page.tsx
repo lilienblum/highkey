@@ -29,6 +29,7 @@ import { api, type Product } from "@/lib/api";
 import type { Signal } from "@/lib/change-envelope";
 import { deleteDashboard, type DashboardDocument, type StoredDashboard } from "@/lib/dashboards";
 import { AgentGuide, AgentGuideDialog } from "./agent-guide";
+import { RevisionsSheet } from "./revisions-sheet";
 import { NameDialog } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
@@ -133,10 +134,12 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
 function DashboardActions({ stored, product }: { stored: StoredDashboard; product: Product }) {
   const { reload } = useWorkspace();
   const navigate = useNavigate();
+  const router = useRouter();
   const trigger = useRef<HTMLButtonElement>(null);
   const [confirming, setConfirming] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [guiding, setGuiding] = useState(false);
+  const [revising, setRevising] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -154,6 +157,10 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
     } catch {
       setError("Could not copy to the clipboard. Allow clipboard access and try again.");
     }
+  }
+  async function refreshDashboard() {
+    await router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+    await reload();
   }
   async function remove() {
     setBusy(true);
@@ -191,6 +198,7 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
         <DropdownMenuContent align="end" className="min-w-44">
           <DropdownMenuItem onClick={() => setDuplicating(true)}>Duplicate</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void copyJson()}>Copy JSON</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setRevising(true)}>Revisions</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
             Delete
@@ -203,6 +211,14 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
         mode="edit"
         project={product}
         dashboard={{ slug: stored.slug, name: stored.document.name, revision: stored.revision }}
+      />
+      <RevisionsSheet
+        productId={product.id}
+        dashboard={{ slug: stored.slug, revision: stored.revision }}
+        open={revising}
+        onOpenChange={setRevising}
+        onRestored={refreshDashboard}
+        finalFocus={trigger}
       />
       <NameDialog
         open={duplicating}

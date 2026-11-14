@@ -562,6 +562,48 @@ test("delete asks first and returns to Overview", async ({ page }) => {
   ).not.toContain(created.slug);
 });
 
+test("revisions list origins and restore an earlier version", async ({ page }) => {
+  const original = `Revisions ${Date.now()}`;
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: { ...checkoutDashboard, name: original },
+  });
+  const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    body: JSON.stringify({
+      base_revision: 1,
+      document: { ...checkoutDashboard, name: `${original} edited` },
+    }),
+  });
+  expect(saved.ok, `save: ${saved.status}`).toBe(true);
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await expect(page.getByRole("heading", { level: 1, name: `${original} edited` })).toBeVisible();
+  const menu = page.getByRole("button", { name: "Dashboard actions" });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Revisions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Revisions" });
+  const rows = sheet.getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Revision 2");
+  await expect(rows.nth(0)).toContainText("Current");
+  await expect(rows.nth(0)).toContainText("API");
+  await expect(rows.nth(1)).toContainText("Revision 1");
+  await expect(rows.nth(1)).toContainText(/\d{2} \w{3} \d{4}, \d{2}:\d{2}/);
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeFocused();
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Revisions" }).click();
+  await rows.nth(1).getByRole("button", { name: "Restore" }).click();
+  const alert = page.getByRole("alertdialog");
+  await expect(alert).toContainText("Restore revision 1?");
+  await alert.getByRole("button", { name: "Restore revision" }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText("Revision 3");
+  await expect(rows.nth(0)).toContainText("Dashboard");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { level: 1, name: original, exact: true })).toBeVisible();
+});
+
 const sqlDashboard = {
   version: 1,
   name: "SQL views",
