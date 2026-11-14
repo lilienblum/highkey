@@ -411,15 +411,16 @@ test("new dashboard from Overview creates an editable copy and opens it", async 
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "New dashboard" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Name").fill("Ops");
+  const name = `Ops ${Date.now()}`;
+  await dialog.getByLabel("Name").fill(name);
   await dialog.getByRole("button", { name: "Start from Overview" }).click();
   await dialog.getByRole("button", { name: "Create dashboard" }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/dashboards/ops(\\?|$)`));
-  await expect(page.getByRole("heading", { level: 1, name: "Ops" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/dashboards/ops-\\d+(\\?|$)`));
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
   await expect(page.locator(".dashboard-widget")).toHaveCount(7);
   for (const heading of await page.locator(".dashboard-widget h2").all())
     await expect(heading).toBeVisible();
-  await expect(sidebar(page).getByRole("link", { name: "Ops", exact: true })).toHaveAttribute(
+  await expect(sidebar(page).getByRole("link", { name, exact: true })).toHaveAttribute(
     "data-active",
     "",
   );
@@ -498,9 +499,7 @@ test("delete asks first and returns to Overview", async ({ page }) => {
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete dashboard" }).click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
   await expect(page.locator(".overview-dashboard")).toBeVisible();
-  await expect(
-    sidebar(page).getByRole("link", { name: "Checkout health", exact: true }),
-  ).toHaveCount(1);
+  await expect(sidebar(page).locator(`a[href$="/dashboards/${created.slug}"]`)).toHaveCount(0);
   expect(
     (await admin<{ slug: string }[]>(`/read/products/${project.slug}/dashboards`)).map(
       (d) => d.slug,

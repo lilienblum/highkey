@@ -263,11 +263,7 @@ export function DashboardError({ error }: ErrorComponentProps) {
   return (
     <ErrorState
       message={error instanceof Error ? error.message : "Could not load this dashboard."}
-      retry={() =>
-        void router.invalidate({
-          filter: (match) => match.routeId === dashboardRoute,
-        })
-      }
+      retry={() => void router.invalidate({ filter: (match) => match.routeId === dashboardRoute })}
     />
   );
 }

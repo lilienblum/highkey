@@ -557,10 +557,7 @@ const iso = (value: string) => new Date(value).toISOString();
 function widgetRange(widget: Widget, range: { from: string; to: string }) {
   if (!widget.range) return range;
   const hours = Number(widget.range.slice(0, -1)) * (widget.range.endsWith("d") ? 24 : 1);
-  return {
-    from: new Date(Date.parse(range.to) - hours * 3_600_000).toISOString(),
-    to: range.to,
-  };
+  return { from: new Date(Date.parse(range.to) - hours * 3_600_000).toISOString(), to: range.to };
 }
 
 const dimensions: Record<string, string> = {

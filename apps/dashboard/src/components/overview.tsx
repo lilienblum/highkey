@@ -36,32 +36,15 @@ type ChartChoice = {
 const chartChoices: ChartChoice[] = [
   { id: "count", label: "Events", measure: "count" },
   { id: "actors", label: "Identified actors", measure: "actors" },
-  {
-    id: "visitors",
-    label: "Unique visitors",
-    measure: "actors",
-    identity_kind: "visitor",
-  },
+  { id: "visitors", label: "Unique visitors", measure: "actors", identity_kind: "visitor" },
   {
     id: "installations",
     label: "Active installations",
     measure: "actors",
     identity_kind: "installation",
   },
-  {
-    id: "average",
-    label: "Average duration",
-    measure: "avg",
-    property: "duration_ms",
-    unit: "ms",
-  },
-  {
-    id: "p95",
-    label: "p95 duration",
-    measure: "p95",
-    property: "duration_ms",
-    unit: "ms",
-  },
+  { id: "average", label: "Average duration", measure: "avg", property: "duration_ms", unit: "ms" },
+  { id: "p95", label: "p95 duration", measure: "p95", property: "duration_ms", unit: "ms" },
 ];
 const dimensions = [
   ["name", "Top events"],
@@ -134,10 +117,7 @@ function ProductOverview() {
   const chartMetric = search.metric ?? "count";
   const durationMetric = search.duration ?? "avg";
   const update = (patch: OverviewSearch) =>
-    void navigate({
-      search: (previous) => ({ ...previous, ...patch }),
-      resetScroll: false,
-    });
+    void navigate({ search: (previous) => ({ ...previous, ...patch }), resetScroll: false });
   const setDimension = (breakdown: string) => update({ breakdown });
   const setChartMetric = (metric: string) => update({ metric: metric as OverviewSearch["metric"] });
   const setDurationMetric = (duration: string) =>
@@ -147,13 +127,7 @@ function ProductOverview() {
     event: selectedFilter?.field === "name" ? selectedFilter.value : undefined,
     source: selectedFilter?.field === "source" ? selectedFilter.value : undefined,
     filters: selectedFilter?.field.startsWith("property:")
-      ? [
-          {
-            property: selectedFilter.field.slice(9),
-            op: "eq",
-            value: selectedFilter.value,
-          },
-        ]
+      ? [{ property: selectedFilter.field.slice(9), op: "eq", value: selectedFilter.value }]
       : [],
   };
   const body = {
@@ -212,13 +186,7 @@ function ProductOverview() {
   };
   const active = useQuery(
     product?.id,
-    {
-      ...activeRange,
-      ...eventFilters,
-      source_id: sourceId,
-      measure: "actors",
-      page_size: 1,
-    },
+    { ...activeRange, ...eventFilters, source_id: sourceId, measure: "actors", page_size: 1 },
     refreshKey,
     `active:${sourceId ?? "all"}:${JSON.stringify(selectedFilter)}`,
   );
@@ -249,10 +217,7 @@ function ProductOverview() {
     if (groupBy === "source" && typeof group.label === "string")
       return { ...context, source: group.label };
     if (groupBy.startsWith("property:"))
-      return {
-        ...context,
-        filter: { property: groupBy.slice(9), value: group.label },
-      };
+      return { ...context, filter: { property: groupBy.slice(9), value: group.label } };
   };
   const noEvents =
     s?.total === 0
@@ -269,11 +234,7 @@ function ProductOverview() {
           : undefined);
   const actorGroups: Group[] = [
     { label: "Visitors", value: s?.visitors ?? 0, count: s?.visitors ?? 0 },
-    {
-      label: "Installations",
-      value: s?.installations ?? 0,
-      count: s?.installations ?? 0,
-    },
+    { label: "Installations", value: s?.installations ?? 0, count: s?.installations ?? 0 },
     {
       label: "Other actors",
       value: Math.max(0, (s?.actors ?? 0) - (s?.visitors ?? 0) - (s?.installations ?? 0)),
@@ -311,10 +272,7 @@ function ProductOverview() {
                 source:
                   selectedFilter.field === "source" ? String(selectedFilter.value) : undefined,
                 filter: selectedFilter.field.startsWith("property:")
-                  ? {
-                      property: selectedFilter.field.slice(9),
-                      value: selectedFilter.value,
-                    }
+                  ? { property: selectedFilter.field.slice(9), value: selectedFilter.value }
                   : undefined,
               },
             }}
@@ -345,16 +303,8 @@ function ProductOverview() {
             />
           </article>
           {[
-            {
-              label: "Events",
-              value: number(s?.total),
-              detail: "In selected period",
-            },
-            {
-              label: "Visitors",
-              value: number(s?.visitors),
-              detail: "Unique visitor IDs",
-            },
+            { label: "Events", value: number(s?.total), detail: "In selected period" },
+            { label: "Visitors", value: number(s?.visitors), detail: "Unique visitor IDs" },
             {
               label: "Installations",
               value: number(s?.installations),
@@ -555,11 +505,7 @@ function ProductOverview() {
                 unit="Percent"
                 groups={[
                   { label: "Succeeded", value: s?.success_rate ?? 0, count: 0 },
-                  {
-                    label: "Failed",
-                    value: 100 - (s?.success_rate ?? 0),
-                    count: 0,
-                  },
+                  { label: "Failed", value: 100 - (s?.success_rate ?? 0), count: 0 },
                 ]}
               />
             </WidgetContent>
@@ -613,11 +559,7 @@ function ProductOverview() {
                 unit="Milliseconds"
                 groups={[
                   { label: "Average", value: s?.avg_duration ?? 0, count: 0 },
-                  {
-                    label: "95th percentile",
-                    value: s?.p95_duration ?? 0,
-                    count: 0,
-                  },
+                  { label: "95th percentile", value: s?.p95_duration ?? 0, count: 0 },
                 ]}
               />
             </WidgetContent>
