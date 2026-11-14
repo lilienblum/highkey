@@ -47,8 +47,9 @@ const format = (value: number) =>
 /**
  * Change against the previous period: "+30% vs previous 7 days". Rates pass `points` (the factor
  * that turns the value into percent) to show percentage points instead. The outcome says whether
- * the change is good, so measures where lower is better (durations) flip it. A previous value of
- * 0 or none has no meaningful change and shows a dash.
+ * the change is good, so measures where lower is better (durations) flip it. Without a previous
+ * value there is no change to show, so it reads as a dash; so does a relative change from 0, but
+ * a rate that rose from 0% has a change in points.
  */
 export function growth(
   current: number | null | undefined,
@@ -60,7 +61,7 @@ export function growth(
     previous == null ||
     !Number.isFinite(current) ||
     !Number.isFinite(previous) ||
-    previous === 0
+    (previous === 0 && options.points === undefined)
   )
     return { text: "—", short: "—", outcome: "none" };
   const change =

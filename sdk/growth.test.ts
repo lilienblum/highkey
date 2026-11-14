@@ -67,7 +67,14 @@ test("rates change in percentage points", () => {
     outcome: "good",
   });
   expect(growth(0.4, 0.5, { points: 100 }).text).toStartWith("−10 pts");
-  expect(growth(5, 0, { points: 1 }).text).toBe("—");
+  // A rate that rose from 0% changed by points, even though no percentage change exists.
+  expect(growth(5, 0, { points: 1, range: range(7) })).toEqual({
+    text: "+5 pts vs previous 7 days",
+    short: "+5 pts vs prior 7d",
+    outcome: "good",
+  });
+  expect(growth(0, 0, { points: 1 }).outcome).toBe("neutral");
+  expect(growth(5, null, { points: 1 }).text).toBe("—");
 });
 
 test("the label names the length of the range", () => {
