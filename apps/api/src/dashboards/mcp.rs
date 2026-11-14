@@ -41,7 +41,7 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-const INSTRUCTIONS: &str = "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own events or logs table, using only the parameters $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug.";
+const INSTRUCTIONS: &str = "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own data: `events` and `logs` already hold only the dashboard's range and source, `all_events` and `all_logs` hold all history (for cohorts), `bucket(event_time)` gives a row's bucket, and the parameters are $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug.";
 
 const SCHEMA_URI: &str = "piko://schema/dashboard.v1";
 const GUIDE_URI: &str = "piko://docs/dashboards";
@@ -398,7 +398,7 @@ impl PikoMcp {
     }
 
     #[tool(
-        description = "Describes a project: event names and property keys, log services and levels, sources, retention, the SQL tables with their columns and parameters, and the document limits. Call this first.",
+        description = "Describes a project: event names and property keys, log services and levels, sources, retention, the SQL tables (and which follow the dashboard's range), their columns, parameters and functions, and the document limits. Call this first.",
         annotations(read_only_hint = true)
     )]
     async fn describe_project(

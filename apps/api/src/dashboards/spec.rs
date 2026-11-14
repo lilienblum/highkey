@@ -191,11 +191,19 @@ pub enum SqlDatabase {
     Logs,
 }
 impl SqlDatabase {
-    /// The one table each database holds.
+    /// The one table each database holds. Inside SQL this name holds only the rows of the run's
+    /// window and source (see `sql::scope`).
     pub fn table(self) -> &'static str {
         match self {
             Self::Events => "events",
             Self::Logs => "logs",
+        }
+    }
+    /// The name SQL reads the whole table by, all history included.
+    pub fn history(self) -> &'static str {
+        match self {
+            Self::Events => "all_events",
+            Self::Logs => "all_logs",
         }
     }
 }

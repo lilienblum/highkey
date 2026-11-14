@@ -5,7 +5,14 @@
 //! 2. a walk of the serialized tree refuses table functions off an allowlist, side-effecting
 //!    scalar functions, other catalogs and schemas, tables other than the database's own, and
 //!    parameters other than `$from`, `$to`, `$bucket` and `$source`;
-//! 3. a dry run on the project's database reads the result columns, which must fit the view.
+//! 3. a dry run on the project's database reads the result columns, which must fit the view,
+//!    and DuckDB's plan for the query may read only the database's own table.
+//!
+//! A query reads the database's table by two names (see `scope`): `events` (or `logs`) holds
+//! only the rows of the run's window and source, and `all_events` (or `all_logs`) the whole
+//! table. `bucket(t)` gives the start of the run's bucket holding `t`. Steps 1 and 2 check the
+//! text as written, and the dry run and plan check run it as it executes, with those names
+//! defined.
 //!
 //! Queries then run inside a transaction that is always rolled back, on connections whose
 //! settings are locked (see `product_db`), under the widget deadline and the dashboard gate.
@@ -39,6 +46,40 @@ pub const MAX_TABLE_COLUMNS: usize = 50;
 
 /// The parameters a query may use, bound by name.
 pub const PARAMETERS: [&str; 4] = ["from", "to", "bucket", "source"];
+/// The names a query reads the project's tables by, for the catalog: each name, its database,
+/// whether it holds only the run's window and source, and what it holds (see `scope`).
+pub const TABLES: [(&str, SqlDatabase, bool, &str); 4] = [
+    (
+        "events",
+        SqlDatabase::Events,
+        true,
+        "Only the events inside the dashboard's range (event_time from $from up to $to) and of its selected source, so a query needs no time or source filter of its own. Read this by default",
+    ),
+    (
+        "all_events",
+        SqlDatabase::Events,
+        false,
+        "Every event the project keeps, of every source, for history such as cohorts whose first events predate the range. Filter it by event_time with $from and $to where the range should apply",
+    ),
+    (
+        "logs",
+        SqlDatabase::Logs,
+        true,
+        "Only the logs inside the dashboard's range (timestamp from $from up to $to) and of its selected source, so a query needs no time or source filter of its own. Read this by default",
+    ),
+    (
+        "all_logs",
+        SqlDatabase::Logs,
+        false,
+        "Every log the project keeps (logs retention applies), of every source. Filter it by timestamp with $from and $to where the range should apply",
+    ),
+];
+/// The functions Piko adds to SQL, for the catalog: name, a call, and what it returns.
+pub const FUNCTIONS: [(&str, &str, &str); 1] = [(
+    "bucket",
+    "bucket(event_time)",
+    "The start (epoch milliseconds) of the dashboard's $bucket that holds an epoch-millisecond time, in UTC with weeks starting on Monday: the same buckets the chart draws, so SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1 lands on them. Use bucket(timestamp) over logs",
+)];
 /// The table functions a query may call. They generate rows from values; none reads files,
 /// the network or SQL text (as `query` and `query_table` do).
 pub const TABLE_FUNCTIONS: [&str; 5] = [
@@ -165,6 +206,9 @@ pub struct Parser {
 pub struct Verified {
     /// The parameters the query uses.
     pub parameters: BTreeSet<String>,
+    /// The tables the query reads by name, lowercase: `events`, `all_events`, `logs` or
+    /// `all_logs`. Names that a WITH table of the query defines are not among them.
+    pub tables: BTreeSet<String>,
 }
 
 fn issue(message: impl Into<String>, hint: impl Into<String>) -> Issue {
@@ -499,7 +543,7 @@ fn check_statement(sql: &str, nodes: &[Node]) -> Result<(), Issue> {
         1 => Ok(()),
         0 => Err(issue(
             "The query is empty; write one SELECT",
-            "For example: SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to",
+            "For example: SELECT count(*) AS value FROM events",
         )),
         n => Err(issue(
             format!("Only a single SELECT is allowed; this SQL has {n} statements"),
@@ -832,12 +876,20 @@ fn string(b: &[u8], start: usize) -> Option<(String, usize)> {
     None
 }
 
-/// The table, or tables, a query may read.
+/// The tables a query may read, for hints.
 fn tables(database: Option<SqlDatabase>) -> &'static str {
     match database {
-        Some(database) => database.table(),
-        None => "events or logs",
+        Some(SqlDatabase::Events) => "this project's events and all_events tables",
+        Some(SqlDatabase::Logs) => "this project's logs and all_logs tables",
+        None => "this project's events, all_events, logs and all_logs tables",
     }
+}
+
+/// The database whose table `name` (lowercase) reads, if it is one of the four.
+fn owner(name: &str) -> Option<SqlDatabase> {
+    [SqlDatabase::Events, SqlDatabase::Logs]
+        .into_iter()
+        .find(|db| db.table() == name || db.history() == name)
 }
 
 fn table_function(
@@ -854,7 +906,7 @@ fn table_function(
     issue(
         format!("{name} is not allowed{}", position(sql, offset)),
         format!(
-            "{name} is not allowed: SQL may only read this project's {} table; table functions are limited to {}",
+            "{name} is not allowed: SQL may only read {}; table functions are limited to {}",
             tables(database),
             TABLE_FUNCTIONS.join(", ")
         ),
@@ -926,7 +978,7 @@ fn check_tree(
                     position(sql, offset)
                 ),
                 format!(
-                    "SQL may only read this project's {} table: name it alone, as in FROM {}",
+                    "SQL may only read {}: name the table alone, as in FROM {}",
                     tables(database),
                     database.map_or("events", SqlDatabase::table)
                 ),
@@ -960,7 +1012,7 @@ fn check_tree(
                         position(sql, offset)
                     ),
                     format!(
-                        "The catalog's sql section lists the columns of the {} table; select from it instead",
+                        "The catalog's sql section lists the columns of {}; select from them instead",
                         tables(database)
                     ),
                 ));
@@ -1008,20 +1060,17 @@ fn check_tree(
     // Tables are checked once every node is read, so a refusal above names the earlier problem.
     for (name, offset) in names {
         let lower = name.to_ascii_lowercase();
-        let known = [SqlDatabase::Events, SqlDatabase::Logs]
-            .iter()
-            .any(|db| db.table() == lower);
-        match database {
-            _ if !known => {
+        match (owner(&lower), database) {
+            (None, _) => {
                 return Err(issue(
                     format!("Table {name} is not available{}", position(sql, offset)),
                     format!(
-                        "SQL may only read this project's {} table, and tables defined with WITH",
+                        "SQL may only read {}, and tables defined with WITH",
                         tables(database)
                     ),
                 ));
             }
-            Some(db) if lower != db.table() => {
+            (Some(other), Some(db)) if other != db => {
                 return Err(issue(
                     format!(
                         "{name} is not in the {} database{}",
@@ -1029,12 +1078,15 @@ fn check_tree(
                         position(sql, offset)
                     ),
                     format!(
-                        "A query reads one database: set \"database\": \"{lower}\" to query {lower}, or read the {} table",
-                        db.table()
+                        "A query reads one database: set \"database\": \"{}\" to query {lower}, or read {}",
+                        other.table(),
+                        tables(Some(db))
                     ),
                 ));
             }
-            _ => {}
+            _ => {
+                verified.tables.insert(lower);
+            }
         }
     }
     Ok(verified)
@@ -1215,6 +1267,77 @@ fn rolled_back<T: Send>(
     })
 }
 
+/// `name` as a quoted SQL identifier.
+fn quoted(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
+/// Defines what a query over `database` reads by name, inside `tx`, and returns the
+/// database's catalog name:
+/// - `events` (or `logs`): the database's table, holding only the rows of the run's window
+///   (`[from, to)` on its time column) and, when one is chosen, of its source;
+/// - `all_events` (or `all_logs`): the whole table, for history such as cohorts;
+/// - `bucket(t)`: the epoch-ms start of the run's `$bucket` holding the epoch-ms time `t`, in
+///   UTC with weeks starting on Monday, as DuckDB's `date_trunc` and Piko's bucket grid have it.
+///
+/// They are temporary views and a temporary macro, so they belong to this connection alone and
+/// vanish when the transaction rolls back; the typed queries that share a widget's connection
+/// never see them. DuckDB resolves temporary objects first, for unqualified names and names
+/// qualified with `main` alike, so `events` and `main.events` both mean the scoped view. A
+/// query's own WITH table of the same name still shadows them, and the views name the table by
+/// its catalog so that nothing else can stand in for it (the guard refuses catalog names in
+/// queries). Nothing a query writes can create or replace an object: it is a single SELECT.
+///
+/// The run's values are bound into a variable, never written into SQL text, and the views and
+/// the macro read it with `getvariable`, which DuckDB folds into a constant while binding: the
+/// window still prunes the table scan, as a literal would. Variables belong to the connection
+/// too. The guard refuses `getvariable` and `SET` in queries, so only this reads or writes it.
+fn scope(tx: &Transaction<'_>, database: SqlDatabase, params: &SqlParams) -> ApiResult<String> {
+    let source = params.source.clone().map_or(DbValue::Null, DbValue::Text);
+    let values = [
+        DbValue::BigInt(params.from),
+        DbValue::BigInt(params.to),
+        source,
+        DbValue::Text(params.bucket.as_str().into()),
+    ];
+    tx.execute(
+        "SET VARIABLE piko_run = {'from': ?::BIGINT, 'to': ?::BIGINT, 'source': ?::VARCHAR, 'bucket': ?::VARCHAR}",
+        params_from_iter(values),
+    )
+    .map_err(internal)?;
+    let catalog: String = tx
+        .query_row("SELECT current_database()", [], |r| r.get(0))
+        .map_err(internal)?;
+    let table = database.table();
+    let own = format!("{}.main.{table}", quoted(&catalog));
+    let time = time_column(database);
+    tx.execute_batch(&format!(
+        "CREATE OR REPLACE TEMP VIEW {table} AS SELECT * FROM {own}
+            WHERE {time} >= getvariable('piko_run').from AND {time} < getvariable('piko_run').to
+              AND (getvariable('piko_run').source IS NULL OR source_id = getvariable('piko_run').source);
+         CREATE OR REPLACE TEMP VIEW {history} AS SELECT * FROM {own};
+         CREATE OR REPLACE TEMP MACRO bucket(t) AS
+            epoch_ms(date_trunc(getvariable('piko_run').bucket, epoch_ms(t)));",
+        history = database.history(),
+    ))
+    .map_err(internal)?;
+    Ok(catalog)
+}
+
+/// `rolled_back`, with the query's names defined first (see `scope`). `f` also gets the
+/// database's catalog name.
+fn scoped<T: Send>(
+    db: &mut Connection,
+    database: SqlDatabase,
+    params: &SqlParams,
+    f: impl FnOnce(&Transaction<'_>, &str) -> ApiResult<T> + Send,
+) -> ApiResult<T> {
+    rolled_back(db, |tx| {
+        let catalog = scope(tx, database, params)?;
+        f(tx, &catalog)
+    })
+}
+
 /// DuckDB's name for a type, with `JSON` for JSON columns.
 fn type_name(t: &LogicalTypeHandle) -> String {
     if let Some(alias) = t.get_alias() {
@@ -1292,8 +1415,9 @@ pub fn describe(
     db: &mut Connection,
     sql: &str,
     params: &SqlParams,
+    database: SqlDatabase,
 ) -> ApiResult<Vec<(String, String)>> {
-    rolled_back(db, |tx| {
+    scoped(db, database, params, |tx, _| {
         stream(tx, sql, 0, params, |statement| {
             Ok(result_columns(statement))
         })
@@ -1359,20 +1483,18 @@ fn plan_refusal(node: &Node, catalog: &str, database: SqlDatabase) -> Option<Str
         .then(|| name.to_ascii_lowercase())
 }
 
-/// The other half of step 3: DuckDB's physical plan for the query, with its parameters bound,
-/// may read only the database's own table, the query's WITH tables and the allowed table
-/// functions. The plan shows what the tree cannot, such as a catalog macro (`pg_get_viewdef`)
-/// that calls a system table function. Returns what else the query would read.
+/// The other half of step 3: DuckDB's physical plan for the query, with its parameters bound
+/// and its names defined as it runs (`scope`), may read only the database's own table, the
+/// query's WITH tables and the allowed table functions. The plan shows what the tree cannot,
+/// such as a catalog macro (`pg_get_viewdef`) that calls a system table function, and what the
+/// scoped views read. Returns what else the query would read.
 pub fn check_plan(
     db: &mut Connection,
     sql: &str,
     params: &SqlParams,
     database: SqlDatabase,
 ) -> ApiResult<Option<String>> {
-    rolled_back(db, |tx| {
-        let catalog: String = tx
-            .query_row("SELECT current_database()", [], |r| r.get(0))
-            .map_err(internal)?;
+    scoped(db, database, params, |tx, catalog| {
         // EXPLAIN plans the verified statement without running it.
         let explain = format!("EXPLAIN (FORMAT JSON)\n{sql}");
         let plans = stream(tx, &explain, 1, params, |statement| {
@@ -1388,7 +1510,7 @@ pub fn check_plan(
                 .map_err(|_| ApiError::from(anyhow::anyhow!("DuckDB's plan is not JSON")))?;
             if let Some(read) = nodes
                 .iter()
-                .find_map(|node| plan_refusal(node, &catalog, database))
+                .find_map(|node| plan_refusal(node, catalog, database))
             {
                 return Ok(Some(read));
             }
@@ -1504,20 +1626,23 @@ pub fn check_shape(kind: ViewKind, columns: &[(String, String)]) -> Option<Strin
     None
 }
 
-fn shape_hint(kind: ViewKind) -> &'static str {
+/// What to return for a `kind` view, as a query over `database`.
+fn shape_hint(kind: ViewKind, database: SqlDatabase) -> String {
+    let (table, time, label) = match database {
+        SqlDatabase::Events => ("events", "event_time", "name"),
+        SqlDatabase::Logs => ("logs", "timestamp", "service"),
+    };
     match kind {
-        ViewKind::Stat => {
-            "Return one row: SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to"
-        }
-        ViewKind::Line | ViewKind::Area | ViewKind::Bar => {
-            "Return a row per bucket: SELECT date_trunc($bucket, epoch_ms(event_time)) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1; add a group column for one series per group"
-        }
-        ViewKind::Ranking => {
-            "Return a row per label: SELECT name AS label, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1 ORDER BY 2 DESC"
-        }
-        ViewKind::Table => "Select between 1 and 50 columns",
+        ViewKind::Stat => format!("Return one row: SELECT count(*) AS value FROM {table}"),
+        ViewKind::Line | ViewKind::Area | ViewKind::Bar => format!(
+            "Return a row per bucket: SELECT bucket({time}) AS time, count(*) AS value FROM {table} GROUP BY 1; add a group column for one series per group"
+        ),
+        ViewKind::Ranking => format!(
+            "Return a row per label: SELECT {label} AS label, count(*) AS value FROM {table} GROUP BY 1 ORDER BY 2 DESC"
+        ),
+        ViewKind::Table => "Select between 1 and 50 columns".into(),
         ViewKind::Events | ViewKind::Logs | ViewKind::Text => {
-            "Use a stat, line, area, bar, ranking or table view for SQL"
+            "Use a stat, line, area, bar, ranking or table view for SQL".into()
         }
     }
 }
@@ -1744,9 +1869,10 @@ pub fn execute(
     db: &mut Connection,
     sql: &str,
     params: &SqlParams,
+    database: SqlDatabase,
     max_rows: usize,
 ) -> ApiResult<SqlResult> {
-    rolled_back(db, |tx| {
+    scoped(db, database, params, |tx, _| {
         stream(tx, sql, 0, params, |statement| {
             let columns = result_columns(statement);
             let mut rows = Vec::new();
@@ -1851,15 +1977,21 @@ pub fn verify_widget(
                 continue;
             }
         };
-        if !verified.parameters.contains("from") && !verified.parameters.contains("to") {
+        // `events` (or `logs`) follows the range by itself, so only a query that reads nothing
+        // but the whole table, and never names the range, shows all history.
+        let (table, history) = (q.database.table(), q.database.history());
+        let follows = verified.tables.contains(table)
+            || verified.parameters.contains("from")
+            || verified.parameters.contains("to");
+        if !follows && verified.tables.contains(history) {
             let column = time_column(q.database);
             check.warnings.push(Issue {
                 path: path.clone(),
-                message:
-                    "This query uses neither $from nor $to, so it ignores the dashboard's range"
-                        .into(),
+                message: format!(
+                    "This query reads only {history}, so it shows all history and ignores the dashboard's range"
+                ),
                 hint: Some(format!(
-                    "Filter by time: WHERE {column} >= $from AND {column} < $to"
+                    "{history} holds all history. Read {table} instead, which holds only the dashboard's range and source, or filter by time: WHERE {column} >= $from AND {column} < $to"
                 )),
             });
         }
@@ -1872,7 +2004,7 @@ pub fn verify_widget(
                 "The widget run has no connection for a query"
             ))
         })?;
-        let columns = match describe(db, &q.sql, params) {
+        let columns = match describe(db, &q.sql, params, q.database) {
             Ok(columns) => columns,
             Err(ApiError(StatusCode::BAD_REQUEST, message)) => {
                 let hint = if deep(&message) {
@@ -1899,12 +2031,12 @@ pub fn verify_widget(
                 check.errors.push(Issue {
                     path,
                     message: format!(
-                        "This query reads {read}, which is outside this project's {} table",
-                        q.database.table()
+                        "This query reads {read}, which is outside {}",
+                        tables(Some(q.database))
                     ),
                     hint: Some(format!(
-                        "SQL may only read the {} table, its own WITH tables and the table functions {}; system views and catalog functions (such as pg_get_viewdef) are not available",
-                        q.database.table(),
+                        "SQL may only read {}, its own WITH tables and the table functions {}; system views and catalog functions (such as pg_get_viewdef) are not available",
+                        tables(Some(q.database)),
                         TABLE_FUNCTIONS.join(", ")
                     )),
                 });
@@ -1926,7 +2058,7 @@ pub fn verify_widget(
             check.errors.push(Issue {
                 path,
                 message,
-                hint: Some(shape_hint(widget.view.kind).into()),
+                hint: Some(shape_hint(widget.view.kind, q.database)),
             });
             continue;
         }
@@ -2318,15 +2450,18 @@ mod tests {
         }
         let issue = refusal("SELECT count(*) AS value FROM read_csv('x')");
         assert_eq!(issue.message, "read_csv is not allowed (line 1, column 31)");
-        assert!(issue.hint.unwrap().contains("events or logs table"));
+        assert!(
+            issue
+                .hint
+                .unwrap()
+                .contains("events, all_events, logs and all_logs tables")
+        );
         let issue = parser()
             .verify("SELECT * FROM read_csv('x')", Some(SqlDatabase::Events))
             .unwrap_err();
-        assert!(
-            issue.hint.unwrap().starts_with(
-                "read_csv is not allowed: SQL may only read this project's events table"
-            )
-        );
+        assert!(issue.hint.unwrap().starts_with(
+            "read_csv is not allowed: SQL may only read this project's events and all_events tables"
+        ));
     }
 
     #[test]
@@ -2539,6 +2674,51 @@ mod tests {
             )
             .is_ok()
         );
+        // Each database's table has two names: the scoped one and the whole table.
+        use SqlDatabase::{Events, Logs};
+        for (sql, database, other) in [
+            ("SELECT count(*) AS value FROM all_events", Events, "events"),
+            ("SELECT count(*) AS value FROM ALL_EVENTS", Events, "events"),
+            ("SELECT count(*) AS value FROM all_logs", Logs, "logs"),
+        ] {
+            assert!(p.verify(sql, Some(database)).is_ok(), "{sql}");
+            assert!(p.verify(sql, None).is_ok(), "{sql}");
+            let wrong = if database == Events { Logs } else { Events };
+            let issue = p.verify(sql, Some(wrong)).unwrap_err();
+            assert!(
+                issue
+                    .message
+                    .contains(&format!("{} database", wrong.table())),
+                "{sql}: {issue:?}"
+            );
+            let hint = issue.hint.unwrap();
+            assert!(
+                hint.contains(&format!("\"database\": \"{other}\"")),
+                "{sql}: {hint}"
+            );
+        }
+        // What a query reads by name, without the WITH tables that shadow a name.
+        let read = |sql: &str| {
+            p.verify(sql, Some(Events))
+                .unwrap_or_else(|i| panic!("{sql}: {i:?}"))
+                .tables
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(read("SELECT 1 AS value"), Vec::<String>::new());
+        assert_eq!(read("SELECT count(*) FROM main.events"), ["events"]);
+        assert_eq!(
+            read("SELECT * FROM events JOIN All_Events USING (event_id)"),
+            ["all_events", "events"]
+        );
+        assert_eq!(
+            read("WITH events AS (SELECT * FROM all_events) SELECT * FROM events"),
+            ["all_events"]
+        );
+        assert_eq!(
+            read("WITH events AS (SELECT * FROM events) SELECT * FROM events"),
+            ["events"]
+        );
     }
 
     #[test]
@@ -2610,7 +2790,7 @@ mod tests {
             db,
             "SELECT date_trunc($bucket, epoch_ms(event_time)) AS time, name AS \"group\", count(*) AS value
              FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1, 2",
-            &params(),
+            &params(), SqlDatabase::Events,
         )
         .unwrap();
         assert_eq!(
@@ -2627,11 +2807,18 @@ mod tests {
             db,
             "SELECT count(*) AS value FROM range(10000000000) a, range(10) b",
             &params(),
+            SqlDatabase::Events,
         )
         .unwrap();
         assert_eq!(names(&heavy), ["value"]);
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
-        let error = describe(db, "SELECT nosuch FROM events", &params()).unwrap_err();
+        let error = describe(
+            db,
+            "SELECT nosuch FROM events",
+            &params(),
+            SqlDatabase::Events,
+        )
+        .unwrap_err();
         assert_eq!(error.0, 400);
         assert!(error.1.contains("nosuch"), "{}", error.1);
         assert!(error.1.ends_with("(line 1, column 8)"), "{}", error.1);
@@ -2655,21 +2842,43 @@ mod tests {
             "SELECT count(*) AS value, $bucket AS bucket FROM events
              WHERE event_time >= $from AND event_time < $to AND ($source IS NULL OR source_id = $source)",
             &scoped,
+            SqlDatabase::Events,
             MAX_SQL_ROWS,
         )
         .unwrap();
         assert_eq!(result.rows, vec![vec![Value::from(1), Value::from("day")]]);
         assert!(!result.truncated);
 
-        let result = execute(db, "SELECT * FROM range(25) t(n)", &params(), 10).unwrap();
+        let result = execute(
+            db,
+            "SELECT * FROM range(25) t(n)",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
         assert_eq!(result.rows.len(), 10);
         assert!(result.truncated);
         assert_eq!(result.columns, columns(&[("n", "BIGINT")]));
-        let result = execute(db, "SELECT * FROM range(10) t(n)", &params(), 10).unwrap();
+        let result = execute(
+            db,
+            "SELECT * FROM range(10) t(n)",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
         assert_eq!((result.rows.len(), result.truncated), (10, false));
         // Stopping early does not wait for the rest of a long query.
         let started = std::time::Instant::now();
-        let result = execute(db, "SELECT * FROM range(10000000000) t(n)", &params(), 3).unwrap();
+        let result = execute(
+            db,
+            "SELECT * FROM range(10000000000) t(n)",
+            &params(),
+            SqlDatabase::Events,
+            3,
+        )
+        .unwrap();
         assert!(result.truncated);
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
 
@@ -2681,6 +2890,7 @@ mod tests {
                     INTERVAL 90 MINUTE AS span, uuid() IS NOT NULL AS has_uuid
              FROM events WHERE event_id = 'a'",
             &params(),
+            SqlDatabase::Events,
             MAX_SQL_ROWS,
         )
         .unwrap();
@@ -2712,7 +2922,14 @@ mod tests {
         // Nothing is left open: the next transaction starts cleanly.
         db.transaction().unwrap().commit().unwrap();
 
-        let error = execute(db, "SELECT 1 / 0 AS v, 'x'::INTEGER AS n", &params(), 10).unwrap_err();
+        let error = execute(
+            db,
+            "SELECT 1 / 0 AS v, 'x'::INTEGER AS n",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap_err();
         assert_eq!(error.0, 400);
         assert!(error.1.contains("Conversion Error"), "{}", error.1);
         // An error while rows stream is the query's own too, and the connection stays usable.
@@ -2720,13 +2937,89 @@ mod tests {
             db,
             "SELECT (name || 'x')::INTEGER AS n FROM events",
             &params(),
+            SqlDatabase::Events,
             10,
         )
         .unwrap_err();
         assert_eq!(error.0, 400, "{}", error.1);
         assert!(error.1.contains("Conversion Error"), "{}", error.1);
-        let result = execute(db, "SELECT count(*) AS n FROM events", &params(), 10).unwrap();
+        let result = execute(
+            db,
+            "SELECT count(*) AS n FROM all_events",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
         assert_eq!(result.rows, vec![vec![Value::from(3)]]);
+    }
+
+    #[test]
+    fn names_hold_the_run_and_vanish_after_it() {
+        let (_dir, dbs, id) = events_db();
+        let mut lease = dbs.connection(&id).unwrap();
+        let db = &mut lease.connection;
+        // Rows at 1000 and 20000 belong to the project's own source, 2000 to `other`.
+        let run = SqlParams {
+            from: 1500,
+            to: 10_000,
+            source: Some("other".into()),
+            ..params()
+        };
+        let count = |db: &mut Connection, sql: &str| {
+            execute(db, sql, &run, SqlDatabase::Events, 10)
+                .unwrap_or_else(|e| panic!("{sql}: {}", e.1))
+                .rows[0][0]
+                .clone()
+        };
+        assert_eq!(count(db, "SELECT count(*) FROM events"), 1);
+        assert_eq!(count(db, "SELECT count(*) FROM all_events"), 3);
+        // The window prunes the scan as literals would: DuckDB folds the variable while binding.
+        let plan: String = scoped(db, SqlDatabase::Events, &run, |tx, _| {
+            tx.query_row("EXPLAIN (FORMAT JSON) SELECT * FROM events", [], |r| {
+                r.get(1)
+            })
+            .map_err(internal)
+        })
+        .unwrap();
+        let filters = plan.split_whitespace().collect::<String>();
+        assert!(
+            filters.contains("event_time>=1500") && filters.contains("event_time<10000"),
+            "{plan}"
+        );
+        assert!(filters.contains("source_id='other'"), "{plan}");
+        // Outside the run the connection has only the database's own table, even after a run
+        // that failed partway, so the typed queries sharing it see every row.
+        let failed = execute(
+            db,
+            "SELECT (name || 'x')::INTEGER AS n FROM events",
+            &run,
+            SqlDatabase::Events,
+            10,
+        );
+        assert_eq!(failed.unwrap_err().0, 400);
+        for sql in [
+            "SELECT count(*) FROM events",
+            "SELECT count(*) FROM main.events",
+        ] {
+            let n: i64 = db.query_row(sql, [], |r| r.get(0)).unwrap();
+            assert_eq!(n, 3, "{sql}");
+        }
+        for sql in ["SELECT count(*) FROM all_events", "SELECT bucket(1)"] {
+            assert!(db.query_row(sql, [], |_| Ok(())).is_err(), "{sql}");
+        }
+        // And another connection to the same database never sees them.
+        let other = dbs.connection(&id).unwrap();
+        scoped(db, SqlDatabase::Events, &run, move |_, _| {
+            assert!(
+                other
+                    .connection
+                    .query_row("SELECT count(*) FROM all_events", [], |_| Ok(()))
+                    .is_err()
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -2777,7 +3070,6 @@ mod tests {
                 "duckdb_databases",
                 Events,
             ),
-            ("SELECT name FROM events", "events", Logs),
         ] {
             let found = plan(db, sql, database).unwrap_or_else(|| panic!("allowed: {sql}"));
             assert!(found.contains(read), "{sql}: {found}");
@@ -2794,6 +3086,10 @@ mod tests {
             "SELECT * FROM (VALUES (1), (2)) v(x) WHERE x > 0",
             "SELECT 1 WHERE false",
             "SELECT name FROM events WHERE name IN (SELECT name FROM events WHERE event_time > $from)",
+            // The scoped views read the database's own table, and so do their other names.
+            "SELECT count(*) FROM all_events",
+            "SELECT count(*) FROM main.events, main.all_events",
+            "WITH events AS (SELECT * FROM all_events) SELECT bucket(event_time) AS time FROM events",
         ] {
             assert_eq!(plan(db, sql, Events), None, "{sql}");
         }
@@ -2804,9 +3100,24 @@ mod tests {
         let logs = ProductDatabases::for_logs(dir.path().join("logs")).unwrap();
         let mut lease = logs.connection(&id).unwrap();
         let db = &mut lease.connection;
-        let recent = "SELECT count(*) FROM logs WHERE timestamp >= $from";
-        assert_eq!(plan(db, recent, Logs), None);
-        assert!(plan(db, "SELECT count(*) FROM logs", Events).is_some());
+        for sql in [
+            "SELECT count(*) FROM logs WHERE timestamp >= $from",
+            "SELECT bucket(timestamp) AS time, count(*) AS value FROM all_logs GROUP BY 1",
+        ] {
+            assert_eq!(plan(db, sql, Logs), None, "{sql}");
+        }
+        // A scan of any other table is refused, the other database's own included.
+        let scan_of = |table: &str| {
+            let plan = format!(
+                r#"[{{"name": "SEQ_SCAN", "children": [], "extra_info": {{"Table": "{table}"}}}}]"#
+            );
+            let nodes = scan(&plan, &PLAN_FIELDS, usize::MAX).unwrap();
+            nodes.iter().find_map(|node| plan_refusal(node, "p", Logs))
+        };
+        assert_eq!(scan_of("p.main.logs"), None);
+        for table in ["p.main.events", "q.main.logs", "p.other.logs", "logs_copy"] {
+            assert_eq!(scan_of(table).as_deref(), Some(table));
+        }
     }
 
     fn nested(kind: &str, n: usize) -> String {
@@ -2880,7 +3191,7 @@ mod tests {
                         // What verification accepts is described and planned, without crashing.
                         if p.verify(&sql, Some(SqlDatabase::Events)).is_ok() {
                             for result in [
-                                describe(db, &sql, &params()).map(|_| ()),
+                                describe(db, &sql, &params(), SqlDatabase::Events).map(|_| ()),
                                 check_plan(db, &sql, &params(), SqlDatabase::Events).map(|_| ()),
                             ] {
                                 if let Err(e) = result {
@@ -2933,10 +3244,10 @@ mod tests {
                 // and past 250 levels DuckDB's binder refuses it.
                 let chain = nested("with", 200);
                 assert!(p.verify(&chain, None).is_ok());
-                assert!(describe(db, &chain, &params()).is_ok());
+                assert!(describe(db, &chain, &params(), SqlDatabase::Events).is_ok());
                 let chain = nested("with", 270);
                 assert!(chain.chars().count() <= MAX_SQL_CHARS);
-                let error = describe(db, &chain, &params()).unwrap_err();
+                let error = describe(db, &chain, &params(), SqlDatabase::Events).unwrap_err();
                 assert!(error.1.contains("Max expression depth"), "{}", error.1);
             })
             .unwrap()
@@ -2949,7 +3260,14 @@ mod tests {
         let (_dir, dbs, id) = events_db();
         let mut lease = dbs.connection(&id).unwrap();
         let sql = "SELECT repeat('x', 100000) AS big FROM range(100)";
-        let result = execute(&mut lease.connection, sql, &params(), MAX_SQL_ROWS).unwrap();
+        let result = execute(
+            &mut lease.connection,
+            sql,
+            &params(),
+            SqlDatabase::Events,
+            MAX_SQL_ROWS,
+        )
+        .unwrap();
         let n = result.rows.len();
         assert!((1..100).contains(&n), "{n}");
         assert!(n * 100_002 <= MAX_RESULT_BYTES && (n + 1) * 100_002 > MAX_RESULT_BYTES);
@@ -2958,10 +3276,24 @@ mod tests {
             result.warning().unwrap(),
             format!("Showing the first {n} rows (4 MB limit)")
         );
-        let small = execute(&mut lease.connection, "SELECT 1 AS one", &params(), 10).unwrap();
+        let small = execute(
+            &mut lease.connection,
+            "SELECT 1 AS one",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
         assert_eq!(small.warning(), None);
         let huge = "SELECT repeat('x', 5000000) AS big";
-        let result = execute(&mut lease.connection, huge, &params(), 10).unwrap();
+        let result = execute(
+            &mut lease.connection,
+            huge,
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
         assert!(result.rows.is_empty() && result.byte_limited);
         assert_eq!(
             result.warning().unwrap(),

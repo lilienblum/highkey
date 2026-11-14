@@ -339,6 +339,14 @@ async fn the_server_says_how_to_use_it() {
         "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first"
     ));
     assert!(instructions.contains("Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs."));
+    // SQL follows the dashboard's range and source by default.
+    for part in [
+        "`events` and `logs` already hold only the dashboard's range and source",
+        "`all_events` and `all_logs` hold all history",
+        "`bucket(event_time)` gives a row's bucket",
+    ] {
+        assert!(instructions.contains(part), "{part}: {instructions}");
+    }
     assert!(info["capabilities"]["tools"].is_object());
     assert!(info["capabilities"]["resources"].is_object());
     assert!(info["capabilities"]["prompts"].is_object());

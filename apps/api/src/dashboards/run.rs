@@ -419,7 +419,7 @@ impl Measurer<'_> {
             SqlDatabase::Events => Self::connection(&mut self.events)?,
             SqlDatabase::Logs => Self::connection(&mut self.logs)?,
         };
-        match sql::execute(db, &q.sql, &params, MAX_SQL_ROWS) {
+        match sql::execute(db, &q.sql, &params, q.database, MAX_SQL_ROWS) {
             Ok(result) => {
                 if let Some(warning) = result.warning()
                     && !self.truncated.iter().any(|(t, _)| t == id)
@@ -1595,6 +1595,66 @@ mod tests {
                 .unwrap();
             assert!(!expected.is_empty());
             assert_eq!(bucket_starts(&w), expected, "{from} {to} {b}");
+        }
+    }
+
+    #[test]
+    fn sql_bucket_function_is_the_grids_bucket_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let dbs = crate::product_db::ProductDatabases::new(dir.path().join("products")).unwrap();
+        let mut lease = dbs.connection(&uuid::Uuid::now_v7().to_string()).unwrap();
+        let ms = |t: &str| t.parse::<DateTime<Utc>>().unwrap().timestamp_millis();
+        // Exact boundaries of every bucket, a millisecond either side, and odd corners.
+        let times: Vec<i64> = [
+            "2026-11-16T00:00:00Z", // a Monday, the first of no month
+            "2026-11-01T00:00:00Z", // a Sunday, the first of a month
+            "2026-11-14T13:00:00Z",
+            "2026-11-14T13:59:59.999Z",
+            "2024-02-29T12:34:56.789Z",
+            "2027-01-01T00:00:00Z",
+            "1970-01-01T00:00:00Z",
+        ]
+        .iter()
+        .flat_map(|t| [ms(t) - 1, ms(t), ms(t) + 1])
+        .collect();
+        let values = times
+            .iter()
+            .map(|t| format!("({t}::BIGINT)"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!("SELECT t, bucket(t) AS b FROM (VALUES {values}) v(t) ORDER BY t");
+        for bucket in [Bucket::Hour, Bucket::Day, Bucket::Week, Bucket::Month] {
+            let params = SqlParams {
+                from: 0,
+                to: 1,
+                bucket,
+                source: None,
+            };
+            let result = sql::execute(
+                &mut lease.connection,
+                &sql,
+                &params,
+                SqlDatabase::Events,
+                MAX_SQL_ROWS,
+            )
+            .unwrap();
+            assert_eq!(result.columns[1], ("b".into(), "BIGINT".into()));
+            assert_eq!(result.rows.len(), times.len());
+            for row in result.rows {
+                let t = row[0].as_i64().unwrap();
+                let w = Window {
+                    from: DateTime::from_timestamp_millis(t).unwrap(),
+                    to: DateTime::from_timestamp_millis(t + 1).unwrap(),
+                    bucket,
+                };
+                // The grid's first bucket is the one holding `from`.
+                assert_eq!(
+                    row[1].as_i64(),
+                    bucket_starts(&w).first().copied(),
+                    "{} {t}",
+                    bucket.as_str()
+                );
+            }
         }
     }
 

@@ -61,8 +61,25 @@ pub async fn catalog(state: &AppState, project: &str) -> ApiResult<Value> {
         "retention": {"events_days": product.retention_days, "logs_days": logs_days},
         "sql": {
             "events": event_columns,
+            "all_events": event_columns,
             "logs": log_columns,
+            "all_logs": log_columns,
+            "tables": super::sql::TABLES
+                .iter()
+                .map(|(name, database, scoped, description)| json!({
+                    "name": name,
+                    "database": database.table(),
+                    "scoped": scoped,
+                    "description": description,
+                }))
+                .collect::<Vec<_>>(),
             "parameters": super::sql::PARAMETERS,
+            "functions": super::sql::FUNCTIONS
+                .iter()
+                .map(|(name, call, description)| json!({
+                    "name": name, "call": call, "description": description,
+                }))
+                .collect::<Vec<_>>(),
         },
         "limits": limits_json(),
     }))

@@ -3,7 +3,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{HeaderMap, Request, StatusCode},
 };
-use chrono::{DateTime, Duration, DurationRound, Utc};
+use chrono::{DateTime, Datelike, Duration, DurationRound, Utc};
 use piko::{AppState, Config, router};
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -1832,20 +1832,305 @@ async fn sql_parameters_bind_by_name() {
     let (_, body) = test.run(id(&project), request).await;
     assert_eq!(body["rows"][0][3], json!(ios));
 
-    // A query that uses no parameter also runs, over all time, with a warning that says so.
-    let all = "SELECT count(*) AS value FROM events";
+    // Only a query that reads nothing but all_events, without $from or $to, ignores the range,
+    // and its warning says so.
+    let all = "SELECT count(*) AS value FROM all_events";
     let (status, body) = test
         .run(id(&project), run_body(sql_widget("stat", all), 7))
         .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(total(&body), 6.0);
-    assert_eq!(body["warnings"][0]["path"], "/queries/q/sql", "{body}");
-    assert!(
-        body["warnings"][0]["hint"]
-            .as_str()
-            .unwrap()
-            .contains("$from")
+    assert_eq!(body["warnings"].as_array().unwrap().len(), 1, "{body}");
+    let warning = &body["warnings"][0];
+    assert_eq!(warning["path"], "/queries/q/sql", "{body}");
+    assert_eq!(
+        warning["message"],
+        "This query reads only all_events, so it shows all history and ignores the dashboard's range"
     );
+    let hint = warning["hint"].as_str().unwrap();
+    assert!(
+        hint.contains("all history") && hint.contains("events") && hint.contains("$from"),
+        "{hint}"
+    );
+    for sql in [
+        "SELECT count(*) AS value FROM events",
+        "SELECT count(*) AS value FROM all_events WHERE event_time >= $from",
+        "SELECT count(*) AS value FROM all_events WHERE event_time < $to",
+        "SELECT (SELECT count(*) FROM all_events) - (SELECT count(*) FROM events) AS value",
+        "SELECT 7 AS value",
+        "SELECT count(*) AS value FROM range(3)",
+    ] {
+        let (status, body) = test
+            .run(id(&project), run_body(sql_widget("stat", sql), 7))
+            .await;
+        assert_eq!(status, 200, "{sql}: {body}");
+        assert_eq!(body["warnings"], json!([]), "{sql}: {body}");
+    }
+    // A WITH named events over all_events reads only all history.
+    let shadowed = "WITH events AS (SELECT * FROM all_events) SELECT count(*) AS value FROM events";
+    let (_, body) = test
+        .run(id(&project), run_body(sql_widget("stat", shadowed), 7))
+        .await;
+    assert_eq!(body["warnings"][0]["path"], "/queries/q/sql", "{body}");
+    test.close().await;
+}
+
+/// Runs `sql` in a stat widget over the last 7 days, scoped to `source` when given, and
+/// returns its total.
+async fn stat_total(test: &Test, project: &Value, sql: &str, source: Option<&str>) -> Value {
+    let mut request = run_body(sql_widget("stat", sql), 7);
+    if let Some(source) = source {
+        request["source_id"] = json!(source);
+    }
+    let (status, body) = test.run(id(project), request).await;
+    assert_eq!(status, 200, "{sql}: {body}");
+    total(&body)
+}
+
+#[tokio::test]
+async fn sql_events_hold_only_the_dashboards_range_and_source() {
+    let test = Test::new();
+    let project = test.project("Scoped").await;
+    let ios = test.source(&project, "iOS").await;
+    test.seed_events(&project, None, "visit", 3).await;
+    test.seed_events(&project, Some(&ios), "visit", 2).await;
+    let old = (Utc::now() - Duration::days(10)).to_rfc3339();
+    test.ingest_events(
+        &project,
+        None,
+        vec![json!({"name": "visit", "timestamp": old})],
+    )
+    .await;
+    let ios = Some(ios.as_str());
+    for (sql, source, expected) in [
+        // No $from or $to: events holds the window's rows, of the chosen source only.
+        ("SELECT count(*) AS value FROM events", None, 5.0),
+        ("SELECT count(*) AS value FROM events", ios, 2.0),
+        // A qualified name is the same scoped relation.
+        ("SELECT count(*) AS value FROM main.events", None, 5.0),
+        // all_events holds all history, of every source.
+        ("SELECT count(*) AS value FROM all_events", None, 6.0),
+        ("SELECT count(*) AS value FROM all_events", ios, 6.0),
+        // Filtering events by $from and $to as well is harmless.
+        (
+            "SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to AND ($source IS NULL OR source_id = $source)",
+            ios,
+            2.0,
+        ),
+        // A WITH named events shadows it, as any WITH does.
+        (
+            "WITH events AS (SELECT * FROM all_events) SELECT count(*) AS value FROM events",
+            None,
+            6.0,
+        ),
+        (
+            "WITH events AS (SELECT 42 AS value) SELECT value FROM events",
+            None,
+            42.0,
+        ),
+        // Inside its own definition, events is still the scoped relation.
+        (
+            "WITH events AS (SELECT * FROM events WHERE name = 'visit') SELECT count(*) AS value FROM events",
+            ios,
+            2.0,
+        ),
+        // Joins and subqueries see the same rows.
+        (
+            "SELECT count(*) AS value FROM events e JOIN all_events a USING (event_id)",
+            None,
+            5.0,
+        ),
+        (
+            "SELECT (SELECT count(*) FROM all_events) - (SELECT count(*) FROM events) AS value",
+            None,
+            1.0,
+        ),
+    ] {
+        let total = stat_total(&test, &project, sql, source).await;
+        assert_eq!(total, expected, "{sql} ({source:?})");
+    }
+    // Result columns and their order are the query's own, ORDER BY included.
+    let (status, body) = test
+        .run(
+            id(&project),
+            run_body(
+                sql_widget(
+                    "table",
+                    "SELECT event_time AS b, name AS a FROM all_events ORDER BY event_time",
+                ),
+                7,
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body["columns"],
+        json!([{"name": "b", "type": "BIGINT"}, {"name": "a", "type": "VARCHAR"}])
+    );
+    let times: Vec<i64> = body["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r[0].as_i64().unwrap())
+        .collect();
+    assert_eq!(times.len(), 6);
+    assert!(times.is_sorted(), "{times:?}");
+    test.close().await;
+}
+
+/// Writes logs straight into the project's logs database: `(source id, epoch ms)` each.
+fn insert_logs(test: &Test, project: &Value, logs: &[(&str, i64)]) {
+    let lease = test.state.store.logs.connection(id(project)).unwrap();
+    for (source, at) in logs {
+        lease
+            .connection
+            .execute(
+                "INSERT INTO logs VALUES (?, ?, ?, ?, 'error', 'Failed', 'checkout', NULL, NULL, NULL, NULL, '{}')",
+                duckdb::params![uuid::Uuid::now_v7().to_string(), source, at, at],
+            )
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn sql_logs_hold_only_the_dashboards_range_and_source() {
+    let test = Test::new();
+    let project = test.project("Scoped logs").await;
+    let ios = test.source(&project, "iOS").await;
+    let web = test.source(&project, "Web").await;
+    let now = Utc::now().timestamp_millis();
+    let day = 86_400_000;
+    insert_logs(
+        &test,
+        &project,
+        &[
+            (&web, now - 1000),
+            (&web, now - 2000),
+            (&ios, now - 3000),
+            (&web, now - 3 * day),
+        ],
+    );
+    let run = |sql: &str, source: Option<&str>| {
+        let widget = json!({
+            "id": "logs", "title": "Logs", "view": {"type": "stat"},
+            "queries": {"q": sql_query("logs", sql)}
+        });
+        let mut request = run_body(widget, 1);
+        if let Some(source) = source {
+            request["source_id"] = json!(source);
+        }
+        let test = &test;
+        let project = &project;
+        let sql = sql.to_string();
+        async move {
+            let (status, body) = test.run(id(project), request).await;
+            assert_eq!(status, 200, "{sql}: {body}");
+            total(&body)
+        }
+    };
+    assert_eq!(run("SELECT count(*) AS value FROM logs", None).await, 3.0);
+    assert_eq!(
+        run("SELECT count(*) AS value FROM logs", Some(&ios)).await,
+        1.0
+    );
+    assert_eq!(
+        run("SELECT count(*) AS value FROM logs", Some(&web)).await,
+        2.0
+    );
+    assert_eq!(
+        run("SELECT count(*) AS value FROM all_logs", None).await,
+        4.0
+    );
+    assert_eq!(
+        run("SELECT count(*) AS value FROM all_logs", Some(&ios)).await,
+        4.0
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_bucket_lands_on_the_typed_grid() {
+    let test = Test::new();
+    let project = test.project("Grid").await;
+    let now = Utc::now();
+    let hour = now.duration_trunc(Duration::hours(1)).unwrap();
+    let day = now.duration_trunc(Duration::days(1)).unwrap();
+    let monday = day - Duration::days(i64::from(day.weekday().num_days_from_monday()));
+    let first = day - Duration::days(i64::from(day.day0()));
+    let mut times = vec![
+        now - Duration::hours(1),
+        now - Duration::days(3),
+        now - Duration::days(45),
+        now - Duration::days(150),
+    ];
+    // Exactly on a boundary of each bucket, and a millisecond before it.
+    for boundary in [hour, day, monday, first] {
+        times.extend([boundary, boundary - Duration::milliseconds(1)]);
+    }
+    let events = times
+        .iter()
+        .map(|t| json!({"name": "visit", "timestamp": t.to_rfc3339()}))
+        .collect();
+    test.ingest_events(&project, None, events).await;
+    for (bucket, days) in [("hour", 2), ("day", 7), ("week", 60), ("month", 200)] {
+        let widget = json!({
+            "id": "grid", "title": "Grid",
+            "view": {"type": "line", "bucket": bucket, "compare": "none"},
+            "queries": {
+                "sql": {
+                    "signal": "sql", "database": "events", "missing": "zero",
+                    "sql": "SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1"
+                },
+                "typed": {"signal": "events"}
+            }
+        });
+        let (status, body) = test.run(id(&project), run_body(widget, days)).await;
+        assert_eq!(status, 200, "{bucket}: {body}");
+        assert_eq!(body["range"]["bucket"], bucket, "{body}");
+        let (sql, typed) = (&body["series"][0], &body["series"][1]);
+        assert_eq!(sql["points"], typed["points"], "{bucket}: {body}");
+        assert_eq!(sql["total"], typed["total"], "{bucket}: {body}");
+        assert!(typed["total"].as_f64().unwrap() > 0.0, "{bucket}: {body}");
+    }
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_previous_period_rescopes_events() {
+    let test = Test::new();
+    let project = test.project("Compare").await;
+    let now = Utc::now();
+    test.seed_events_at(&project, "visit", 2, now - Duration::days(1))
+        .await;
+    test.seed_events_at(&project, "visit", 3, now - Duration::days(10))
+        .await;
+    test.seed_events_at(&project, "visit", 4, now - Duration::days(20))
+        .await;
+    // Stats compare with the previous period by default, which runs the SQL again over it.
+    let (status, body) = test
+        .run(
+            id(&project),
+            run_body(
+                sql_widget("stat", "SELECT count(*) AS value FROM events"),
+                7,
+            ),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["series"][0]["total"], 2.0, "{body}");
+    assert_eq!(body["series"][0]["previous_total"], 3.0, "{body}");
+    // all_events is all history in both periods.
+    let (_, body) = test
+        .run(
+            id(&project),
+            run_body(
+                sql_widget("stat", "SELECT count(*) AS value FROM all_events"),
+                7,
+            ),
+        )
+        .await;
+    assert_eq!(body["series"][0]["total"], 9.0, "{body}");
+    assert_eq!(body["series"][0]["previous_total"], 9.0, "{body}");
     test.close().await;
 }
 
@@ -2257,6 +2542,37 @@ async fn catalog_describes_the_sql_schemas_and_parameters() {
     assert!(has("logs", "timestamp", "BIGINT"), "{sql}");
     assert!(has("logs", "attributes", "JSON"), "{sql}");
     assert!(!has("logs", "event_time", "BIGINT"));
+    // The whole tables have the same columns, and the catalog says which names are scoped.
+    assert_eq!(sql["all_events"], sql["events"]);
+    assert_eq!(sql["all_logs"], sql["logs"]);
+    let tables = sql["tables"].as_array().unwrap();
+    let names: Vec<(&str, &str, bool)> = tables
+        .iter()
+        .map(|t| {
+            (
+                t["name"].as_str().unwrap(),
+                t["database"].as_str().unwrap(),
+                t["scoped"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("events", "events", true),
+            ("all_events", "events", false),
+            ("logs", "logs", true),
+            ("all_logs", "logs", false),
+        ]
+    );
+    assert!(tables.iter().all(|t| t["description"].is_string()), "{sql}");
+    assert!(
+        tables[0]["description"].as_str().unwrap().contains("range"),
+        "{sql}"
+    );
+    assert_eq!(sql["functions"][0]["name"], "bucket", "{sql}");
+    assert_eq!(sql["functions"][0]["call"], "bucket(event_time)", "{sql}");
+    assert!(sql["functions"][0]["description"].is_string(), "{sql}");
     assert_eq!(body["limits"]["max_sql_chars"], 8_000);
     assert_eq!(body["limits"]["max_sql_rows"], 10_000);
     assert_eq!(body["limits"]["max_table_columns"], 50);
