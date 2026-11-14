@@ -887,8 +887,9 @@ pub async fn run_widget(
             .await
             .map_err(|e| match e {
                 // Report the widget's own budget, which is what its author set.
-                DashboardError::Timeout { .. } => DashboardError::Timeout {
+                DashboardError::Timeout { queued, .. } => DashboardError::Timeout {
                     after_ms: timeout_ms,
+                    queued,
                 },
                 e => e,
             })?

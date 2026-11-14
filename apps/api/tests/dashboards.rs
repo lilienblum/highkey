@@ -2219,6 +2219,7 @@ fn board(name: &str, widgets: Vec<Value>) -> Value {
 async fn a_fast_widget_saves_and_reports_its_bench() {
     let test = Test::new();
     let project = test.project("Shop").await;
+    test.seed_events(&project, None, "page_view", 2).await;
     let (status, body) = test
         .manage(
             "POST",
@@ -2256,6 +2257,26 @@ async fn a_slow_sql_cross_join_is_refused_and_nothing_is_saved() {
     assert_eq!(status, 400, "{body}");
     assert_eq!(body["code"], "too_slow", "{body}");
     assert_eq!(body["errors"][0]["path"], "/widgets/1", "{body}");
+    // The widget's own 1 s timeout set this budget, so the hint says so.
+    let hint = body["errors"][0]["hint"].as_str().unwrap();
+    assert!(
+        hint.contains("own timeout is 1 s") && hint.contains("`timeout_ms`"),
+        "{hint}"
+    );
+    // With the default timeout the plain 3 s budget applies and the hint is the brief's text.
+    let plain = sql_widget(
+        "stat",
+        "SELECT count(*) AS value FROM events a, events b, events c, events d",
+    );
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board("Slow", vec![plain])}),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["code"], "too_slow", "{body}");
     assert_eq!(
         body["errors"][0]["hint"],
         "This widget took over 3 s on the last 7 days of data. Narrow it with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins."
@@ -2345,7 +2366,107 @@ async fn the_thirty_first_write_in_a_minute_is_rate_limited() {
     assert_eq!(body["code"], "rate_limited");
     let wait: u64 = headers["retry-after"].to_str().unwrap().parse().unwrap();
     assert!((1..=60).contains(&wait), "{wait}");
+    assert_eq!(
+        body["errors"][0]["message"],
+        "Too many dashboard writes for this project"
+    );
+    assert_eq!(body["errors"][0]["hint"], format!("Retry after {wait} s"));
     // Another project has its own allowance.
     create_dashboard(&test, &other, "Fine").await;
+    test.close().await;
+}
+
+#[tokio::test]
+async fn waiting_for_a_busy_gate_is_busy_not_too_slow() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let mut widget = views_widget("a", "x");
+    widget["timeout_ms"] = json!(1_000);
+    let held = test
+        .state
+        .store
+        .dashboard_event_gate
+        .clone()
+        .acquire_many_owned(3)
+        .await
+        .unwrap();
+    let (status, headers, body) = test
+        .send_full(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board("Busy", vec![widget])}),
+            &[("x-piko-admin", "1")],
+        )
+        .await;
+    assert_eq!(status, 503, "{body}");
+    assert_eq!(body["code"], "busy", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/widgets/0");
+    assert_eq!(
+        body["errors"][0]["message"],
+        "Piko was busy running other queries"
+    );
+    assert_eq!(body["errors"][0]["hint"], "Retry the save in a few seconds");
+    assert!(headers.get("retry-after").is_some());
+    drop(held);
+    // Nothing was saved, and the same save works once the gate is free.
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board("Busy", vec![views_widget("a", "x")])}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn a_run_warning_reaches_a_successful_save_under_the_widget() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": board("Warn", vec![views_widget("a", "never_seen")])}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let warnings = body["warnings"].as_array().unwrap();
+    assert!(!warnings.is_empty(), "{body}");
+    assert!(
+        warnings
+            .iter()
+            .all(|w| w["path"].as_str().unwrap().starts_with("/widgets/0/")),
+        "{body}"
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn a_stale_put_conflicts_before_any_benchmark_runs() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    create_dashboard(&test, &project, "Board").await;
+    // A benchmark would wait out this held gate for a second; a conflict answers at once.
+    let held = test
+        .state
+        .store
+        .dashboard_event_gate
+        .clone()
+        .acquire_many_owned(3)
+        .await
+        .unwrap();
+    let mut changed = document("Board");
+    changed["widgets"][0]["queries"]["views"]["event"] = json!("other");
+    changed["widgets"][0]["timeout_ms"] = json!(5_000);
+    let started = std::time::Instant::now();
+    let (status, body) = put(&test, &project, "board", 7, changed, &[]).await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["code"], "revision_conflict");
+    assert_eq!(body["revision"], 1);
+    assert!(body.get("bench").is_none());
+    assert!(started.elapsed() < std::time::Duration::from_millis(900));
+    drop(held);
     test.close().await;
 }

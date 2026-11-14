@@ -193,18 +193,19 @@ fn throttle(state: &AppState, product: &str) -> Result<(), DashboardError> {
         .take(product)
         .map_err(|retry_after| DashboardError::RateLimited { retry_after })
 }
-/// The dashboard's current document, which unchanged widgets are compared with.
-async fn current_document(
+/// The dashboard as stored now: its document is what unchanged widgets are compared with, and
+/// its revision lets a stale save fail before anything is benchmarked.
+async fn current(
     state: &AppState,
     product: &str,
     key: &str,
-) -> Result<spec::Document, DashboardError> {
+) -> Result<storage::Stored, DashboardError> {
     let (id, key) = (product.to_string(), key.to_string());
     let stored = state
         .store
         .state(move |db| Ok(storage::get(db, &id, &key)))
         .await??;
-    Ok(stored.document)
+    Ok(stored)
 }
 /// The saved dashboard with the benchmark timings and any slow-widget warnings.
 fn saved(stored: storage::Stored, bench: Bench) -> Value {
@@ -322,8 +323,13 @@ async fn update(
     throttle(&state, &product)?;
     let doc = document(value)?;
     verify_sql(&state, &product, &doc).await?;
-    let current = current_document(&state, &product, &key).await?;
-    let bench = bench_document(&state, &product, &doc, Some(&current)).await?;
+    let current = current(&state, &product, &key).await?;
+    if current.revision != base_revision {
+        return Err(DashboardError::Conflict {
+            revision: current.revision,
+        });
+    }
+    let bench = bench_document(&state, &product, &doc, Some(&current.document)).await?;
     let origin = origin_from(&headers);
     let id = product.clone();
     let stored = state
@@ -346,8 +352,8 @@ async fn restore(
         .state(move |db| Ok(storage::revision(db, &id, &revision_key, n)))
         .await??;
     verify_sql(&state, &product, &doc).await?;
-    let current = current_document(&state, &product, &key).await?;
-    let bench = bench_document(&state, &product, &doc, Some(&current)).await?;
+    let current = current(&state, &product, &key).await?;
+    let bench = bench_document(&state, &product, &doc, Some(&current.document)).await?;
     let id = product.clone();
     let stored = state
         .store

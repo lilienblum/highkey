@@ -130,7 +130,7 @@ impl Store {
     /// The deadline covers waiting at the dashboard gates and for query slots as well as the
     /// work itself. Gates keep the last event slot and one log slot for interactive queries,
     /// which keep `try_acquire`. At the deadline, or as soon as the caller's future is dropped,
-    /// the work's statements are interrupted (and the caller gets `Timeout`); the permits stay
+    /// the work's statements are interrupted (and the caller gets `Timeout`, with `queued` set when the deadline passed before any work started); the permits stay
     /// with the blocking work until it really ends.
     pub async fn widget_query<T: Send + 'static>(
         self: &Arc<Self>,
@@ -144,8 +144,9 @@ impl Store {
     ) -> Result<T, DashboardError> {
         use std::sync::atomic::{AtomicBool, Ordering};
         let started = tokio::time::Instant::now();
-        let timeout = move || DashboardError::Timeout {
+        let timeout = move |queued| DashboardError::Timeout {
             after_ms: started.elapsed().as_millis() as u64,
+            queued,
         };
         // Acquire in one fixed order (event gate, event slot, log gate, log slot) so runs that
         // need both signals cannot deadlock each other.
@@ -162,7 +163,7 @@ impl Store {
         for semaphore in stages {
             let permit = tokio::time::timeout_at(deadline, semaphore.clone().acquire_owned())
                 .await
-                .map_err(|_| timeout())?
+                .map_err(|_| timeout(true))?
                 .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?;
             permits.push(permit);
         }
@@ -241,7 +242,7 @@ impl Store {
                 .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?
                 .map_err(DashboardError::Api),
             // The watchdog stopped the work at the deadline.
-            Ok(Err(_)) | Err(_) => Err(timeout()),
+            Ok(Err(_)) | Err(_) => Err(timeout(false)),
         }
     }
 }

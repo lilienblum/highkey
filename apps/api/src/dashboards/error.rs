@@ -15,8 +15,10 @@ pub enum DashboardError {
     Conflict {
         revision: i64,
     },
+    /// `queued`: the deadline passed while waiting for a gate or slot, before any work began.
     Timeout {
         after_ms: u64,
+        queued: bool,
     },
     Limit(String),
     /// A widget failed its pre-save benchmark; the report points at `/widgets/N`.
@@ -25,6 +27,8 @@ pub enum DashboardError {
     RateLimited {
         retry_after: u64,
     },
+    /// A save's benchmark could not get a query slot in time; retry shortly.
+    Busy(Report),
 }
 impl From<ApiError> for DashboardError {
     fn from(e: ApiError) -> Self {
@@ -54,7 +58,7 @@ impl IntoResponse for DashboardError {
                 }),
             ),
             // A timeout repeats on retry, so it carries no Retry-After for clients to loop on.
-            Self::Timeout { after_ms } => (
+            Self::Timeout { after_ms, .. } => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 json!({
                     "error": format!("Timed out after {} s", after_ms as f64 / 1000.0),
@@ -74,12 +78,33 @@ impl IntoResponse for DashboardError {
                     "warnings": report.warnings,
                 }),
             ),
+            Self::Busy(report) => {
+                let mut response = (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({
+                        "error": "Piko was busy running other queries",
+                        "code": "busy",
+                        "errors": report.errors,
+                        "warnings": report.warnings,
+                    })),
+                )
+                    .into_response();
+                response
+                    .headers_mut()
+                    .insert(header::RETRY_AFTER, "5".parse().expect("static header"));
+                return response;
+            }
             Self::RateLimited { retry_after } => {
                 let mut response = (
                     StatusCode::TOO_MANY_REQUESTS,
                     Json(json!({
                         "error": "Too many dashboard writes; slow down",
                         "code": "rate_limited",
+                        "errors": [{
+                            "path": "",
+                            "message": "Too many dashboard writes for this project",
+                            "hint": format!("Retry after {retry_after} s"),
+                        }],
                     })),
                 )
                     .into_response();
@@ -115,14 +140,22 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_response_is_typed_and_not_retryable() {
-        let (status, headers, body) = parts(DashboardError::Timeout { after_ms: 5000 }).await;
+        let (status, headers, body) = parts(DashboardError::Timeout {
+            after_ms: 5000,
+            queued: false,
+        })
+        .await;
         assert_eq!(status, 503);
         assert!(headers.get("retry-after").is_none());
         assert_eq!(
             body,
             json!({"error":"Timed out after 5 s","code":"query_timeout"})
         );
-        let (_, _, body) = parts(DashboardError::Timeout { after_ms: 1500 }).await;
+        let (_, _, body) = parts(DashboardError::Timeout {
+            after_ms: 1500,
+            queued: false,
+        })
+        .await;
         assert_eq!(body["error"], "Timed out after 1.5 s");
     }
 

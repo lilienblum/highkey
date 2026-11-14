@@ -32,12 +32,12 @@ pub struct Bench {
     pub warnings: Vec<Issue>,
 }
 
-fn too_slow(path: String, message: String) -> DashboardError {
+fn too_slow(path: String, message: String, hint: String) -> DashboardError {
     DashboardError::TooSlow(Report {
         errors: vec![Issue {
             path,
             message,
-            hint: Some(HINT.into()),
+            hint: Some(hint),
         }],
         warnings: Vec::new(),
     })
@@ -50,6 +50,16 @@ pub async fn bench_document(
     doc: &Document,
     stored: Option<&Document>,
 ) -> Result<Bench, DashboardError> {
+    bench_within(state, product, doc, stored, TOTAL_BUDGET_MS).await
+}
+
+async fn bench_within(
+    state: &AppState,
+    product: &str,
+    doc: &Document,
+    stored: Option<&Document>,
+    total_budget_ms: u64,
+) -> Result<Bench, DashboardError> {
     let mut bench = Bench {
         timings: Vec::new(),
         warnings: Vec::new(),
@@ -61,14 +71,15 @@ pub async fn bench_document(
             continue;
         }
         let path = format!("/widgets/{n}");
-        let remaining = TOTAL_BUDGET_MS.saturating_sub(spent);
+        let remaining = total_budget_ms.saturating_sub(spent);
         if remaining < MIN_BUDGET_MS {
             return Err(too_slow(
                 path,
                 format!(
-                    "The widgets before this one used up the {} s benchmark budget for one save",
+                    "The save's combined benchmark budget ({} s) ran out before this widget",
                     TOTAL_BUDGET_MS / 1000
                 ),
+                "The save's combined benchmark budget (15 s) ran out at this widget; save fewer or lighter widgets at once".into(),
             ));
         }
         let budget = widget
@@ -88,10 +99,22 @@ pub async fn bench_document(
         };
         let result = match run_widget(state, product, request).await {
             Ok(result) => result,
+            // Waiting for a query slot is Piko's load, not the widget's cost.
+            Err(DashboardError::Timeout { queued: true, .. }) => {
+                return Err(DashboardError::Busy(Report {
+                    errors: vec![Issue {
+                        path,
+                        message: "Piko was busy running other queries".into(),
+                        hint: Some("Retry the save in a few seconds".into()),
+                    }],
+                    warnings: Vec::new(),
+                }));
+            }
             Err(DashboardError::Timeout { .. }) => {
                 return Err(too_slow(
                     path,
-                    format!("This widget did not finish within {} ms", budget),
+                    format!("This widget did not finish within {budget} ms"),
+                    slow_hint(widget, budget, remaining),
                 ));
             }
             // The run's own refusal, pointed at the widget inside the document.
@@ -103,13 +126,31 @@ pub async fn bench_document(
             }
             Err(e) => return Err(e),
         };
+        let warnings: Vec<Issue> = result["warnings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|w| Issue {
+                path: w["path"].as_str().unwrap_or_default().to_string(),
+                message: w["message"].as_str().unwrap_or_default().to_string(),
+                hint: w["hint"].as_str().map(str::to_string),
+            })
+            .collect();
         let elapsed = result["elapsed_ms"].as_u64().unwrap_or(0);
         spent += elapsed;
         if elapsed > budget {
             return Err(too_slow(
                 path,
                 format!("This widget took {elapsed} ms, over its {budget} ms benchmark budget"),
+                slow_hint(widget, budget, remaining),
             ));
+        }
+        // The run's own warnings (unknown event, clamped range, truncation) help the author too.
+        for mut issue in warnings {
+            issue.path = format!("{path}{}", issue.path);
+            if !bench.warnings.iter().any(|w| w.path == issue.path) {
+                bench.warnings.push(issue);
+            }
         }
         if elapsed > WARN_MS {
             bench.warnings.push(Issue {
@@ -125,10 +166,81 @@ pub async fn bench_document(
     Ok(bench)
 }
 
+/// The hint for a widget over budget: the brief's text for the plain 3 s case, otherwise what
+/// actually set the budget.
+fn slow_hint(widget: &Widget, budget: u64, remaining: u64) -> String {
+    let own = widget
+        .timeout_ms
+        .unwrap_or(super::validate::Limits::DEFAULT_TIMEOUT_MS);
+    if budget >= WIDGET_BUDGET_MS {
+        HINT.into()
+    } else if budget == remaining && remaining < own {
+        "The save's combined benchmark budget (15 s) is nearly used up; save fewer or lighter widgets at once".into()
+    } else {
+        format!(
+            "This widget's own timeout is {} s. Raise `timeout_ms` or narrow the query with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins.",
+            own as f64 / 1000.0
+        )
+    }
+}
+
 /// Whether the stored revision already holds exactly this widget (same id, same JSON).
 fn unchanged(value: &Value, stored: Option<&Document>, widget: &Widget) -> bool {
     stored
         .and_then(|doc| doc.widgets.iter().find(|w| w.id == widget.id))
         .and_then(|w| serde_json::to_value(w).ok())
         .is_some_and(|old| &old == value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AppState, Config};
+
+    fn widget(timeout_ms: Option<u64>) -> Widget {
+        serde_json::from_value(json!({
+            "id": "w", "title": "W", "view": {"type": "stat"}, "timeout_ms": timeout_ms,
+            "queries": {"q": {"signal": "events", "event": "x"}}
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn hints_name_what_set_the_budget() {
+        assert_eq!(slow_hint(&widget(None), 3_000, 15_000), HINT);
+        assert_eq!(slow_hint(&widget(Some(10_000)), 3_000, 15_000), HINT);
+        let own = slow_hint(&widget(Some(1_000)), 1_000, 15_000);
+        assert!(
+            own.contains("own timeout is 1 s") && own.contains("`timeout_ms`"),
+            "{own}"
+        );
+        let total = slow_hint(&widget(None), 2_000, 2_000);
+        assert!(total.contains("combined benchmark budget"), "{total}");
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_total_budget_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::open(&Config {
+            data_dir: dir.path().into(),
+            query_concurrency: 2,
+            queue_capacity: 4,
+        })
+        .unwrap();
+        let doc: Document = serde_json::from_value(
+            json!({"version": 1, "name": "N", "widgets": [serde_json::to_value(widget(None)).unwrap()]}),
+        )
+        .unwrap();
+        let Err(DashboardError::TooSlow(report)) = bench_within(&state, "p", &doc, None, 0).await
+        else {
+            panic!("expected too_slow");
+        };
+        assert_eq!(report.errors[0].path, "/widgets/0");
+        assert_eq!(
+            report.errors[0].hint.as_deref(),
+            Some(
+                "The save's combined benchmark budget (15 s) ran out at this widget; save fewer or lighter widgets at once"
+            )
+        );
+    }
 }
