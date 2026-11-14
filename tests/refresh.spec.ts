@@ -132,15 +132,19 @@ for (const path of ["/", "/events"]) {
       path === "/events"
         ? await page.locator(".event-card tbody tr").first().elementHandle()
         : null;
-    await page.route(
-      "**/api/products/*/query",
-      (route) =>
-        route.fulfill({
-          status: 503,
-          json: { error: "Refresh temporarily unavailable" },
-        }),
-      { times: 1 },
-    );
+    // Fail one read that shows its error: Overview also refreshes its growth and live-activity
+    // reads (page_size 1), which have no alert, so the failure must land on the main read.
+    let failed = false;
+    await page.route("**/api/products/*/query", (route) => {
+      const body = route.request().postDataJSON();
+      if (failed || (path === "/" && (body.group_by !== "name" || body.page_size !== undefined)))
+        return route.fallback();
+      failed = true;
+      return route.fulfill({
+        status: 503,
+        json: { error: "Refresh temporarily unavailable" },
+      });
+    });
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.getByRole("alert").first()).toContainText("Refresh temporarily unavailable");
     await expect(content).toContainText("31");
