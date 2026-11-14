@@ -543,7 +543,11 @@ fn scan(json: &str, fields: &[&str], max_depth: usize) -> Result<Vec<Node>, Unsc
                 {
                     query.ctes.push(name.to_ascii_lowercase());
                 }
-                if node.get("type") == Some("BASE_TABLE") {
+                // DuckDB binds WITH tables only to unqualified names; `main.x` is the catalog's x.
+                if node.get("type") == Some("BASE_TABLE")
+                    && node.get("catalog_name").unwrap_or_default().is_empty()
+                    && node.get("schema_name").unwrap_or_default().is_empty()
+                {
                     let name = node
                         .get("table_name")
                         .unwrap_or_default()
@@ -883,7 +887,12 @@ fn internal(e: duckdb::Error) -> ApiError {
 
 /// A query's own error, as a 400 that callers place at its `sql` path.
 fn refused(sql: &str, e: duckdb::Error) -> ApiError {
-    ApiError::bad(duckdb_message(sql, &e.to_string()))
+    refused_in(sql, e, 0)
+}
+
+/// `refused` for an error in `text`, which is the query after `shift` lines of our own prefix.
+fn refused_in(text: &str, e: duckdb::Error, shift: usize) -> ApiError {
+    ApiError::bad(duckdb_message(text, &e.to_string(), shift))
 }
 
 /// A DuckDB message on one line, without its advice to change a setting (settings are locked).
@@ -901,16 +910,19 @@ fn deep(message: &str) -> bool {
     message.contains("Max expression depth")
 }
 
-/// DuckDB's message on one line, ending with the line and column its caret points at.
-fn duckdb_message(sql: &str, message: &str) -> String {
+/// DuckDB's message on one line, ending with the line and column its caret points at, counted
+/// from the end of the first `shift` lines of `sql` (a prefix the user did not write).
+fn duckdb_message(sql: &str, message: &str, shift: usize) -> String {
     let (head, context) = match message.split_once("\n\nLINE ") {
         Some((head, context)) => (head, Some(context)),
         None => (message, None),
     };
     let head = tidy(head);
     match context.and_then(|c| caret(sql, c)) {
-        Some((line, column)) => format!("{head} (line {line}, column {column})"),
-        None => head,
+        Some((line, column)) if line > shift => {
+            format!("{head} (line {}, column {column})", line - shift)
+        }
+        _ => head,
     }
 }
 
@@ -962,20 +974,22 @@ impl Drop for Stop {
 }
 
 /// Prepares `sql` on `tx`, binds its parameters by name and starts it streaming, then lets
-/// `read` take what it needs. Rows are produced only as `read` fetches them.
+/// `read` take what it needs. Rows are produced only as `read` fetches them. `shift` is how
+/// many lines of our own text precede the query, so errors point into the query itself.
 fn stream<T>(
     tx: &Transaction<'_>,
     sql: &str,
+    shift: usize,
     params: &SqlParams,
     read: impl FnOnce(&Statement<'_>) -> ApiResult<T>,
 ) -> ApiResult<T> {
-    let mut statement = tx.prepare(sql).map_err(|e| refused(sql, e))?;
+    let mut statement = tx.prepare(sql).map_err(|e| refused_in(sql, e, shift))?;
     let _stop = Stop(tx.interrupt_handle());
     let values = bind(&statement, params)?;
     drop(
         statement
             .stream_arrow(params_from_iter(values))
-            .map_err(|e| refused(sql, e))?,
+            .map_err(|e| refused_in(sql, e, shift))?,
     );
     read(&statement)
 }
@@ -1099,7 +1113,9 @@ pub fn describe(
     params: &SqlParams,
 ) -> ApiResult<Vec<(String, String)>> {
     rolled_back(db, |tx| {
-        stream(tx, sql, params, |statement| Ok(result_columns(statement)))
+        stream(tx, sql, 0, params, |statement| {
+            Ok(result_columns(statement))
+        })
     })
 }
 
@@ -1178,10 +1194,10 @@ pub fn check_plan(
             .map_err(internal)?;
         // EXPLAIN plans the verified statement without running it.
         let explain = format!("EXPLAIN (FORMAT JSON)\n{sql}");
-        let plans = stream(tx, &explain, params, |statement| {
+        let plans = stream(tx, &explain, 1, params, |statement| {
             let mut plans = Vec::new();
             let mut rows = statement.raw_query();
-            while let Some(row) = rows.next().map_err(|e| refused(sql, e))? {
+            while let Some(row) = rows.next().map_err(|e| refused_in(&explain, e, 1))? {
                 plans.push(row.get::<_, String>(1).map_err(internal)?);
             }
             Ok(plans)
@@ -1339,6 +1355,9 @@ impl SqlResult {
         match (self.truncated, self.byte_limited) {
             (false, _) => None,
             (true, false) => Some(TRUNCATED.into()),
+            (true, true) if self.rows.is_empty() => {
+                Some("The first row is larger than the 4 MB limit".into())
+            }
             (true, true) => Some(format!(
                 "Showing the first {} rows (4 MB limit)",
                 self.rows.len()
@@ -1490,7 +1509,7 @@ pub fn execute(
     max_rows: usize,
 ) -> ApiResult<SqlResult> {
     rolled_back(db, |tx| {
-        stream(tx, sql, params, |statement| {
+        stream(tx, sql, 0, params, |statement| {
             let columns = result_columns(statement);
             let mut rows = Vec::new();
             let (mut truncated, mut byte_limited, mut bytes) = (false, false, 0);
@@ -1987,6 +2006,19 @@ mod tests {
                 "WITH RECURSIVE r AS (SELECT * FROM sqlite_master UNION ALL SELECT * FROM r) SELECT * FROM r",
                 "sqlite_master",
             ),
+            // Only unqualified names bind to WITH tables; `main.x` is the catalog object x.
+            (
+                "WITH duckdb_databases AS (SELECT 1 AS x) SELECT * FROM main.duckdb_databases",
+                "duckdb_databases",
+            ),
+            (
+                "WITH RECURSIVE sqlite_master AS (SELECT 1 AS n UNION ALL SELECT n FROM main.sqlite_master) SELECT * FROM sqlite_master",
+                "sqlite_master",
+            ),
+            (
+                "WITH t AS (SELECT 1 AS x) SELECT * FROM main.t",
+                "Table t is not available",
+            ),
             (
                 "SELECT current_setting('temp_directory')",
                 "current_setting",
@@ -2354,6 +2386,10 @@ mod tests {
         ] {
             assert_eq!(plan(db, sql, Events), None, "{sql}");
         }
+        // An error while planning points into the query, not into the EXPLAIN around it.
+        let error = check_plan(db, "SELECT 1\nFROM nosuch", &params(), Events).unwrap_err();
+        assert_eq!(error.0, 400);
+        assert!(error.1.ends_with("(line 2, column 6)"), "{}", error.1);
         let logs = ProductDatabases::for_logs(dir.path().join("logs")).unwrap();
         let mut lease = logs.connection(&id).unwrap();
         let db = &mut lease.connection;
@@ -2513,6 +2549,13 @@ mod tests {
         );
         let small = execute(&mut lease.connection, "SELECT 1 AS one", &params(), 10).unwrap();
         assert_eq!(small.warning(), None);
+        let huge = "SELECT repeat('x', 5000000) AS big";
+        let result = execute(&mut lease.connection, huge, &params(), 10).unwrap();
+        assert!(result.rows.is_empty() && result.byte_limited);
+        assert_eq!(
+            result.warning().unwrap(),
+            "The first row is larger than the 4 MB limit"
+        );
     }
 
     #[test]
