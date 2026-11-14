@@ -73,6 +73,11 @@ const viewExamples = {
       note: "Filter",
       prompt: "Show only error logs from the checkout service in this view.",
     },
+    {
+      title: "Widen the window",
+      note: "Window",
+      prompt: "Show warnings and errors from the last 24 hours in this view.",
+    },
   ],
 };
 

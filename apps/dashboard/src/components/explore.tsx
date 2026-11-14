@@ -28,7 +28,7 @@ import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
 import { useQuery } from "@/lib/use-query";
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
-import { Breakdown, ErrorState, NoEvents, SeriesChart } from "./shared";
+import { Breakdown, ErrorState, NoEvents, PinChip, SeriesChart } from "./shared";
 import { ExploreLoading } from "./loading";
 import { Spinner } from "@/components/ui/spinner";
 export function Explore() {
@@ -81,25 +81,6 @@ const opSymbols: Record<string, string> = {
 };
 function filterText(filter: ExploreFilter) {
   return `${filter.property} ${opSymbols[filter.op] ?? filter.op} ${JSON.stringify(filter.value)}`;
-}
-/** A narrowing the builder has no row for, with a button that removes it. */
-function PinChip({
-  label,
-  remove,
-  onRemove,
-}: {
-  label: string;
-  remove: string;
-  onRemove: () => void;
-}) {
-  return (
-    <Badge variant="outline" className="drilldown-property">
-      {label}
-      <button type="button" aria-label={remove} onClick={onRemove}>
-        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" className="size-3" />
-      </button>
-    </Badge>
-  );
 }
 
 /** Loads the saved view named in the URL and applies its query to the page. */

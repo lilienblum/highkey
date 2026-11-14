@@ -732,3 +732,54 @@ async fn facets_list_every_known_service_environment_and_typed_attribute() {
     assert_eq!(kind("cached").as_deref(), Some("boolean"));
     assert_eq!(kind("context"), None);
 }
+
+#[tokio::test]
+async fn minimum_level_includes_more_severe_levels_and_excludes_an_exact_level() {
+    let test = Test::new();
+    let project = test.project("Levels").await;
+    let key = test.key(&project).await;
+    let records: Vec<Value> = ["trace", "debug", "info", "warn", "error", "fatal"]
+        .iter()
+        .map(|level| json!({"log_id":format!("l-{level}"),"service":"api","level":level,"message":"m"}))
+        .collect();
+    let (status, ack) = test
+        .call(
+            "/api/logs/ingest",
+            "POST",
+            json!({"logs":records}),
+            Some(&key),
+        )
+        .await;
+    assert_eq!(status, 200, "{ack}");
+    assert_eq!(test.query(&project, json!({})).await["total"], 6);
+    assert_eq!(
+        test.query(&project, json!({"min_level":"warn"})).await["total"],
+        3
+    );
+    assert_eq!(
+        test.query(&project, json!({"min_level":"fatal"})).await["total"],
+        1
+    );
+    assert_eq!(
+        test.query(&project, json!({"level":"warn"})).await["total"],
+        1
+    );
+    let now = chrono::Utc::now();
+    let path = format!(
+        "/api/products/{}/logs/query",
+        project["id"].as_str().unwrap()
+    );
+    for extra in [
+        json!({"min_level":"loud"}),
+        json!({"level":"warn","min_level":"warn"}),
+    ] {
+        let mut body =
+            json!({"from":(now-chrono::Duration::days(1)).to_rfc3339(),"to":now.to_rfc3339()});
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let (status, result) = test.call(&path, "POST", body, None).await;
+        assert_eq!(status, 400, "{result}");
+    }
+    test.close().await;
+}

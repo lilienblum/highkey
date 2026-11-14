@@ -32,14 +32,17 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import type { Product } from "@/lib/api";
 import type { ExploreSearch, ExploreSpec } from "@/lib/explore-search";
+import type { LogsSearch } from "@/lib/logs";
 import {
   createView,
   deleteView,
   getView,
+  logsToQuery,
   saveView,
   specToQuery,
   viewErrorMessage,
   type EventViewDocument,
+  type LogViewDocument,
   type StoredView,
   type ViewDocument,
   type ViewLink,
@@ -232,6 +235,58 @@ export function SaveEventViewDialog({
   );
 }
 
+/** Saves the Logs page's current filters and time window as a named view, then opens it. */
+export function SaveLogViewDialog({
+  open,
+  onOpenChange,
+  product,
+  search,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product: Product;
+  search: LogsSearch;
+}) {
+  const { reload } = useWorkspace();
+  const navigate = useNavigate();
+  return (
+    <NameDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Save view"
+      description="Saves these filters and the time window under a name in the sidebar. The workspace source stays with the toolbar."
+      initialName=""
+      submitLabel="Save view"
+      failure="Could not save the view."
+      onSubmit={async (name) => {
+        let stored: StoredView<LogViewDocument>;
+        try {
+          stored = await createView<LogViewDocument>(product.id, {
+            version: 1,
+            kind: "logs",
+            name,
+            query: logsToQuery(search),
+            ...(search.logWindow ? { window: search.logWindow } : {}),
+          });
+        } catch (error) {
+          throw new Error(viewErrorMessage(error, "Could not save the view."));
+        }
+        onOpenChange(false);
+        await reload();
+        await navigate({
+          ...workspaceTarget("/logs", product.slug),
+          search: (previous: LogsSearch) => ({
+            ...previous,
+            view: stored.slug,
+            logWindow: search.logWindow ?? "1h",
+          }),
+          resetScroll: false,
+        });
+      }}
+    />
+  );
+}
+
 /**
  * An open view's overflow menu. Update replaces the view's query with the page's current one,
  * Rename keeps the query, Copy JSON hands the stored document to the clipboard, Edit shows how to
@@ -242,10 +297,13 @@ export function ViewActions<D extends ViewDocument>({
   view,
   withCurrent,
   onDeleted,
+  noun = "query",
 }: {
   product: Product;
   view: ViewLink;
-  /** The stored document with the page's current query in place of its own. */
+  /** What Update replaces: an event view's query, a log view's filters. */
+  noun?: string;
+  /** The stored document with the page's current query or filters in place of its own. */
   withCurrent: (stored: D) => D;
   /** Leaves the deleted view's page, after the sidebar has dropped it. */
   onDeleted: () => void | Promise<void>;
@@ -319,7 +377,7 @@ export function ViewActions<D extends ViewDocument>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-56">
           <DropdownMenuItem onClick={() => void update()}>
-            Update view with current query
+            Update view with current {noun}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setRenaming(true)}>Rename</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void copyJson()}>Copy JSON</DropdownMenuItem>
@@ -334,7 +392,7 @@ export function ViewActions<D extends ViewDocument>({
         open={renaming}
         onOpenChange={setRenaming}
         title="Rename view"
-        description="The query stays as it is."
+        description={`The ${noun} stays as it is.`}
         initialName={view.name}
         submitLabel="Rename"
         failure="Could not rename the view."

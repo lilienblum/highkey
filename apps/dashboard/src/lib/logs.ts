@@ -1,4 +1,4 @@
-import { validDate, validKey } from "./workspace-search";
+import { validDate, validKey, validViewSlug } from "./workspace-search";
 export const logLevels = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 export type LogLevel = (typeof logLevels)[number];
 export const logWindows = {
@@ -38,9 +38,20 @@ export type LogResult = {
   /** Present on the first page of a query; older pages keep the first page's facets. */
   facets?: LogFacets | null;
 };
+/** A typed attribute filter beyond the first, which has its own row in the filter panel. */
+export type LogAttributeFilter = { attribute: string; value: string | number | boolean };
+/** The levels a view can name as "this level and above"; the lower ones would match everything. */
+export const minLevels = ["warn", "error", "fatal"] as const;
 export type LogsSearch = {
   logq?: string;
   level?: LogLevel;
+  /** This level and every more severe one; exclusive with `level`. */
+  minLevel?: LogLevel;
+  /** A source a saved view pins; without one the workspace source applies. */
+  logSource?: string;
+  moreFilters?: LogAttributeFilter[];
+  /** The saved view these filters came from; it marks the active item in the sidebar. */
+  view?: string;
   service?: string;
   environment?: string;
   trace?: string;
@@ -66,6 +77,24 @@ export function attributeValue(value: string, type: string): string | number | b
   }
   return value;
 }
+function validMoreFilters(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.length <= 7 &&
+      value.every(
+        (filter) =>
+          filter &&
+          typeof filter === "object" &&
+          typeof filter.attribute === "string" &&
+          filter.attribute.length >= 1 &&
+          filter.attribute.length <= 128 &&
+          (typeof filter.value === "boolean" ||
+            (typeof filter.value === "number" && Number.isFinite(filter.value)) ||
+            (typeof filter.value === "string" && filter.value.length <= 512)),
+      ))
+  );
+}
 export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
   const text = (key: string, max: number) =>
     s[key] === undefined || (typeof s[key] === "string" && (s[key] as string).length <= max);
@@ -78,6 +107,11 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     !text("attribute", 128) ||
     !text("attributeValue", 512) ||
     (s.level !== undefined && !logLevels.includes(s.level as LogLevel)) ||
+    (s.minLevel !== undefined && !minLevels.includes(s.minLevel as never)) ||
+    (s.level !== undefined && s.minLevel !== undefined) ||
+    (s.logSource !== undefined && !validKey(s.logSource)) ||
+    (s.view !== undefined && !validViewSlug(s.view)) ||
+    !validMoreFilters(s.moreFilters) ||
     (s.logWindow !== undefined && !Object.hasOwn(logWindows, String(s.logWindow))) ||
     (s.attributeType !== undefined &&
       !["string", "number", "boolean"].includes(String(s.attributeType))) ||
@@ -101,6 +135,10 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
   return {
     logq: s.logq as string | undefined,
     level: s.level as LogLevel | undefined,
+    minLevel: s.minLevel as LogLevel | undefined,
+    logSource: s.logSource as string | undefined,
+    moreFilters: s.moreFilters as LogAttributeFilter[] | undefined,
+    view: s.view as string | undefined,
     service: s.service as string | undefined,
     environment: s.environment as string | undefined,
     trace: s.trace as string | undefined,
@@ -113,3 +151,24 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     logTo: s.logTo as string | undefined,
   };
 }
+
+/** Every Logs filter, cleared so that opening a view starts from the view's own. */
+export const clearedLogs: Record<keyof LogsSearch, undefined> = {
+  logq: undefined,
+  level: undefined,
+  minLevel: undefined,
+  logSource: undefined,
+  moreFilters: undefined,
+  view: undefined,
+  service: undefined,
+  environment: undefined,
+  trace: undefined,
+  logWindow: undefined,
+  attribute: undefined,
+  attributeValue: undefined,
+  attributeType: undefined,
+  logBefore: undefined,
+  logFrom: undefined,
+  logTo: undefined,
+  invalidLogs: undefined,
+};

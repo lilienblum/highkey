@@ -1,5 +1,13 @@
 import { api, type ViewLink } from "./api";
 import { defaultSpec, validateExploreSearch, type ExploreSpec } from "./explore-search";
+import {
+  attributeValue,
+  type logWindows,
+  validateLogsSearch,
+  type LogAttributeFilter,
+  type LogLevel,
+  type LogsSearch,
+} from "./logs";
 import { asDocumentError, DocumentError, type EventMeasure, type Issue } from "./dashboards";
 
 export type { ViewLink };
@@ -24,8 +32,26 @@ export type EventViewDocument = {
   description?: string;
   query: EventViewQuery;
 };
-/** Documents of the other kind are carried untouched; the Events page only reads its own. */
-export type ViewDocument = EventViewDocument | { version: 1; kind: "logs"; name: string };
+/** The logs query of a view: the dashboards logs query's filter fields only. */
+export type LogViewQuery = {
+  level?: string;
+  min_level?: string;
+  service?: string;
+  environment?: string;
+  source_id?: string;
+  search?: string;
+  filters?: { attribute: string; value: Scalar }[];
+};
+export type LogViewWindow = keyof typeof logWindows;
+export type LogViewDocument = {
+  version: 1;
+  kind: "logs";
+  name: string;
+  description?: string;
+  query: LogViewQuery;
+  window?: LogViewWindow;
+};
+export type ViewDocument = EventViewDocument | LogViewDocument;
 export type StoredView<D extends ViewDocument = ViewDocument> = {
   id: string;
   slug: string;
@@ -144,4 +170,76 @@ export function queryToSpec(query: EventViewQuery): ExploreSpec {
 /** Whether the Events page can run a spec, by the same rules as its URL. */
 export function explorable(spec: ExploreSpec): boolean {
   return !validateExploreSearch({ query: spec }).invalidQuery;
+}
+
+const defaultLogWindow: LogViewWindow = "1h";
+
+/**
+ * The logs query a view stores for what the Logs page runs. The time window is saved beside it,
+ * and the workspace source is not, but a source a view pins is its own. A trace ID, a selected
+ * range and an older-logs cursor have no place in a view.
+ */
+export function logsToQuery(search: LogsSearch): LogViewQuery {
+  const query: LogViewQuery = {};
+  if (search.level) query.level = search.level;
+  if (search.minLevel) query.min_level = search.minLevel;
+  if (search.service) query.service = search.service;
+  if (search.environment) query.environment = search.environment;
+  if (search.logSource) query.source_id = search.logSource;
+  if (search.logq) query.search = search.logq;
+  const filters: NonNullable<LogViewQuery["filters"]> = [];
+  if (search.attribute)
+    filters.push({
+      attribute: search.attribute,
+      value: attributeValue(search.attributeValue ?? "", search.attributeType ?? "string"),
+    });
+  filters.push(...(search.moreFilters ?? []));
+  if (filters.length) query.filters = filters;
+  return query;
+}
+
+/**
+ * What the Logs page runs for a stored view: the first attribute filter fills the filter panel's
+ * row and the rest become chips. The window is always set, so a view that names none opens on the
+ * page's default one; that also tells the page the view has been applied.
+ */
+export function queryToLogs(query: LogViewQuery, window?: LogViewWindow): LogsSearch {
+  const [first, ...rest] = query.filters ?? [];
+  return {
+    logWindow: window ?? defaultLogWindow,
+    ...(query.search ? { logq: query.search } : {}),
+    ...(query.level ? { level: query.level as LogLevel } : {}),
+    ...(query.min_level ? { minLevel: query.min_level as LogLevel } : {}),
+    ...(query.service ? { service: query.service } : {}),
+    ...(query.environment ? { environment: query.environment } : {}),
+    ...(query.source_id ? { logSource: query.source_id } : {}),
+    ...(first
+      ? {
+          attribute: first.attribute,
+          attributeValue: String(first.value),
+          attributeType: typeof first.value as "string" | "number" | "boolean",
+        }
+      : {}),
+    ...(rest.length ? { moreFilters: rest as LogAttributeFilter[] } : {}),
+  };
+}
+
+/** Whether the Logs page can run a search, by the same rules as its URL. */
+export function logsRunnable(search: LogsSearch): boolean {
+  return !validateLogsSearch({ ...search }).invalidLogs;
+}
+
+/**
+ * The stored log view with the page's current filters and window in place of its own. A window
+ * the page only holds as the default is not written into a view that named none.
+ */
+export function currentLogView(stored: LogViewDocument, search: LogsSearch): LogViewDocument {
+  const { window: _window, ...rest } = stored;
+  const window = search.logWindow;
+  const unchanged = stored.window === undefined && window === defaultLogWindow;
+  return {
+    ...rest,
+    query: logsToQuery(search),
+    ...(window && !unchanged ? { window } : {}),
+  };
 }

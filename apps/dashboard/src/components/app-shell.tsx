@@ -326,6 +326,7 @@ export function AppShell({
           path={view}
           dashboardSlug={view === "/dashboards" ? dashboardSlug : undefined}
           eventViewSlug={view === "/events" ? currentSearch.view : undefined}
+          logViewSlug={view === "/logs" ? currentSearch.view : undefined}
           product={product}
           sourceId={sourceId}
           picker={projectPicker}

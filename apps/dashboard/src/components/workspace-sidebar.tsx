@@ -34,11 +34,13 @@ import {
 } from "@/components/ui/sidebar";
 import type { DashboardLink, Product } from "@/lib/api";
 import { appliedSpec, type ExploreSearch } from "@/lib/explore-search";
+import { clearedLogs, validateLogsSearch } from "@/lib/logs";
 import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
 import {
   CollapsedGroup,
   SaveEventViewDialog,
+  SaveLogViewDialog,
   ViewList,
   useCollapsedRail,
   type ViewLinkRenderer,
@@ -49,6 +51,7 @@ export function WorkspaceSidebar({
   path,
   dashboardSlug,
   eventViewSlug,
+  logViewSlug,
   product,
   sourceId,
   picker,
@@ -60,6 +63,8 @@ export function WorkspaceSidebar({
   dashboardSlug?: string;
   /** The open event view, when the page is Events with one applied. */
   eventViewSlug?: string;
+  /** The open log view, when the page is Logs with one applied. */
+  logViewSlug?: string;
   product?: Product;
   sourceId?: string;
   picker: ReactNode;
@@ -71,10 +76,13 @@ export function WorkspaceSidebar({
   const dashboards = product?.dashboards ?? [];
   const eventViews = (product?.views ?? []).filter((view) => view.kind === "events");
   const [creating, setCreating] = useState(false);
+  const logViews = (product?.views ?? []).filter((view) => view.kind === "logs");
   const [savingView, setSavingView] = useState(false);
+  const [savingLogView, setSavingLogView] = useState(false);
   const collapsedRail = useCollapsedRail();
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as ExploreSearch;
+  const logsSearch = validateLogsSearch(search as Record<string, unknown>);
   const eventViewLink: ViewLinkRenderer = (view, props) => (
     <Link
       {...workspaceTarget("/events", product?.slug)}
@@ -88,10 +96,26 @@ export function WorkspaceSidebar({
       {...(props as object)}
     />
   );
+  const logViewLink: ViewLinkRenderer = (view, props) => (
+    <Link
+      {...workspaceTarget("/logs", product?.slug)}
+      search={(previous) => ({
+        ...previous,
+        ...clearedLogs,
+        view: view.slug,
+      })}
+      {...(props as object)}
+    />
+  );
   // A query is built on the Events page; elsewhere, Save view goes there to build one.
   const saveEventView = () => {
     if (path === "/events") setSavingView(true);
     else if (product) void navigate({ ...workspaceTarget("/events", product.slug) });
+  };
+  // Filters are set on the Logs page; elsewhere, Save view goes there to set some.
+  const saveLogView = () => {
+    if (path === "/logs") setSavingLogView(true);
+    else if (product) void navigate({ ...workspaceTarget("/logs", product.slug) });
   };
   return (
     <>
@@ -176,6 +200,27 @@ export function WorkspaceSidebar({
                           actionLabel="Save view"
                           onAction={saveEventView}
                         />
+                      ) : to === "/logs" && logViews.length > 0 && collapsedRail ? (
+                        <CollapsedGroup
+                          label="Logs"
+                          icon={ComputerTerminal02Icon}
+                          active={path === "/logs"}
+                          home={(props) => (
+                            <Link
+                              {...workspaceTarget("/logs", product?.slug)}
+                              {...(props as object)}
+                            />
+                          )}
+                          itemsLabel="Views"
+                          items={logViews.map((view) => ({
+                            key: view.id,
+                            name: view.name,
+                            active: view.slug === logViewSlug,
+                            link: (props) => logViewLink(view, props),
+                          }))}
+                          actionLabel="Save view"
+                          onAction={saveLogView}
+                        />
                       ) : (
                         <SidebarMenuButton
                           isActive={path === to}
@@ -229,9 +274,19 @@ export function WorkspaceSidebar({
                           </SidebarMenuSubItem>
                         </SidebarMenuSub>
                       )}
+                      {to === "/logs" && product && (
+                        <ViewList
+                          label="Log views"
+                          views={logViews}
+                          activeSlug={logViewSlug}
+                          link={logViewLink}
+                          onSave={saveLogView}
+                          onNavigate={() => setOpenMobile(false)}
+                        />
+                      )}
                       {to === "/events" && product && (
                         <ViewList
-                          label="Views"
+                          label="Event views"
                           views={eventViews}
                           activeSlug={eventViewSlug}
                           link={eventViewLink}
@@ -332,6 +387,14 @@ export function WorkspaceSidebar({
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
+      {product && (
+        <SaveLogViewDialog
+          open={savingLogView}
+          onOpenChange={setSavingLogView}
+          product={product}
+          search={logsSearch}
+        />
+      )}
       {product && (
         <SaveEventViewDialog
           open={savingView}

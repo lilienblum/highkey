@@ -15,6 +15,8 @@ pub struct Query {
     pub to: DateTime<Utc>,
     pub source_id: Option<String>,
     pub level: Option<String>,
+    /// This level and every more severe one; exclusive with `level`.
+    pub min_level: Option<String>,
     pub service: Option<String>,
     pub environment: Option<String>,
     pub search: Option<String>,
@@ -47,6 +49,16 @@ impl Query {
             .is_some_and(|s| !super::model::LEVELS.contains(&s.as_str()))
         {
             return Err(ApiError::bad("Invalid log level"));
+        }
+        if self
+            .min_level
+            .as_ref()
+            .is_some_and(|s| !super::model::LEVELS.contains(&s.as_str()))
+        {
+            return Err(ApiError::bad("Invalid log level"));
+        }
+        if self.level.is_some() && self.min_level.is_some() {
+            return Err(ApiError::bad("Use either level or min_level, not both"));
         }
         for text in [&self.service, &self.environment, &self.trace_id] {
             if text.as_ref().is_some_and(|s| s.is_empty() || s.len() > 128) {
@@ -185,6 +197,14 @@ fn execute(db: &mut Connection, query: Query) -> ApiResult<Value> {
     );
     conditions.extend(extra);
     values.extend(extra_values);
+    if let Some(min) = &query.min_level {
+        let levels = super::model::LEVELS
+            .iter()
+            .skip_while(|level| *level != min)
+            .collect::<Vec<_>>();
+        conditions.push(format!("level IN ({})", vec!["?"; levels.len()].join(", ")));
+        values.extend(levels.iter().map(|l| SqlValue::Text((**l).to_string())));
+    }
     let where_sql = conditions.join(" AND ");
     let bucket = ((query.to - query.from).num_milliseconds() / 60).max(1);
     let mut series_values = vec![

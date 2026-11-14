@@ -30,6 +30,7 @@ let project: Project;
 let planView: View;
 const eventsUrl = () => `/projects/${project.slug}/events`;
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
+const eventViews = (page: Page) => sidebar(page).getByRole("list", { name: "Event views" });
 const viewParam = (page: Page) => new URL(page.url()).searchParams.get("view");
 const views = () =>
   admin<{ slug: string; name: string }[]>(`/read/products/${project.slug}/views?kind=events`);
@@ -121,7 +122,7 @@ test("the sidebar says Events and lists saved views from the server render", asy
     const link = sidebar(page).getByRole("link", { name: planName, exact: true });
     await expect(link).toBeVisible();
     await expect(
-      sidebar(page).getByRole("button", { name: "Save view", exact: true }),
+      eventViews(page).getByRole("button", { name: "Save view", exact: true }),
     ).toBeVisible();
     release();
     await runtime;
@@ -172,7 +173,7 @@ test("Save view stores the current query and opens it", async ({ page }) => {
   await page.getByRole("option", { name: "page_view", exact: true }).click();
   await page.getByRole("button", { name: "Run query", exact: true }).click();
   await expect(page.getByText("across 4 matching events")).toBeVisible();
-  await sidebar(page).getByRole("button", { name: "Save view", exact: true }).click();
+  await eventViews(page).getByRole("button", { name: "Save view", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save view" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(name);
@@ -194,7 +195,7 @@ test("Save view stores the current query and opens it", async ({ page }) => {
     "",
   );
   // The new view sorts by name among the others, with Save view still last.
-  const items = await sidebar(page).locator(".workspace-views > li").allInnerTexts();
+  const items = await eventViews(page).locator("> li").allInnerTexts();
   expect(items.at(-1)).toBe("Save view");
   expect(items.slice(0, -1)).toEqual([...items.slice(0, -1)].sort((a, b) => a.localeCompare(b)));
 });
@@ -414,7 +415,7 @@ test("a rejected save shows the API's message and hint and creates nothing", asy
     });
   });
   await page.goto(eventsUrl());
-  await sidebar(page).getByRole("button", { name: "Save view", exact: true }).click();
+  await eventViews(page).getByRole("button", { name: "Save view", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save view" });
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByRole("button", { name: "Save view", exact: true }).click();

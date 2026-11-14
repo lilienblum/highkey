@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
@@ -14,13 +14,22 @@ import { number } from "@/lib/api";
 import { highlight, TypedValue } from "@/lib/highlight";
 import {
   attributeValue,
+  clearedLogs,
   logLevels,
   logWindows,
+  minLevels,
   validateLogsSearch,
   type LogFacets,
   type LogRow,
   type LogsSearch,
 } from "@/lib/logs";
+import {
+  getView,
+  logsRunnable,
+  queryToLogs,
+  currentLogView,
+  type LogViewDocument,
+} from "@/lib/views";
 import { workspaceTarget } from "@/lib/workspace-route";
 import { displayTimestamp } from "@/lib/display-time";
 import { PageHeader, useWorkspace } from "./app-shell";
@@ -33,7 +42,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ValueSelect } from "./value-select";
-import { ErrorState, QueryDraftNotice } from "./shared";
+import { ErrorState, PinChip, QueryDraftNotice } from "./shared";
+import { AgentGuideDialog } from "./dashboards/agent-guide";
+import { ViewActions } from "./saved-views";
 import { LogStream } from "./log-stream";
 import { useLogFeed } from "@/lib/use-log-feed";
 import { MAX_BUFFERED_LOGS } from "@/lib/log-buffer";
@@ -42,9 +53,119 @@ const direction =
   "THESIS: A compact log workspace that keeps investigation beside the stream. OWN-WORLD: Kanagawa Wave, Geist, fine seams, Base UI controls and restrained severity colors. STORY: Search a project, locate a request, inspect its structured context. FIRST VIEWPORT: Query bar, time and follow controls, shallow volume histogram, aligned timestamp/severity/service/message rows. FORM: Extend the existing shell with the requested dense stream and a right-hand inspector.";
 export function Logs() {
   const { product } = useWorkspace();
+  const { view, logWindow, invalidLogs } = validateLogsSearch(useSearch({ strict: false }));
+  // A saved view opens by loading its filters into the URL, so reloads and history keep them. The
+  // window it sets marks it as applied.
+  if (product && view && !logWindow && !invalidLogs)
+    return <OpenLogView key={`${product.id}:${view}`} slug={view} />;
   // Only the project remounts the explorer: a source switch keeps the stream, histogram and
   // filters in place and refreshes them.
   return <LogExplorer key={product?.id} />;
+}
+/** Loads the saved view named in the URL and applies its filters and window to the page. */
+function OpenLogView({ slug }: { slug: string }) {
+  const { product } = useWorkspace();
+  const navigate = useNavigate();
+  const [state, setState] = useState<"loading" | "missing" | "failed" | "unsupported">("loading");
+  const [name, setName] = useState("");
+  const [guiding, setGuiding] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const productSlug = product?.slug;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a retry reloads the same view
+  useEffect(() => {
+    if (!productSlug) return;
+    const controller = new AbortController();
+    setState("loading");
+    getView<LogViewDocument>(productSlug, slug, "logs", controller.signal).then(
+      (stored) => {
+        const applied = queryToLogs(stored.document.query, stored.document.window);
+        if (!logsRunnable(applied)) {
+          setName(stored.document.name);
+          setState("unsupported");
+          return;
+        }
+        void navigate({
+          ...workspaceTarget("/logs", productSlug),
+          search: (previous: Record<string, unknown>) => ({
+            ...previous,
+            ...clearedLogs,
+            ...applied,
+            view: slug,
+          }),
+          replace: true,
+          resetScroll: false,
+        });
+      },
+      (error) => {
+        if (!controller.signal.aborted) setState(error?.status === 404 ? "missing" : "failed");
+      },
+    );
+    return () => controller.abort();
+  }, [productSlug, slug, attempt]);
+  const clear = (
+    <Button
+      variant="outline"
+      nativeButton={false}
+      role="link"
+      render={
+        <Link
+          {...workspaceTarget("/logs", productSlug)}
+          search={(previous: Record<string, unknown>) => ({ ...previous, view: undefined })}
+        />
+      }
+    >
+      {state === "unsupported" ? "Clear view" : "Clear selection"}
+    </Button>
+  );
+  if (state === "missing")
+    return (
+      <>
+        <PageHeader
+          title="This view no longer exists"
+          description="It may have been deleted. The project’s other views and its logs are unchanged."
+        />
+        {clear}
+      </>
+    );
+  if (state === "unsupported")
+    return (
+      <>
+        <PageHeader
+          title="This view uses settings Logs can’t show"
+          description={`${name} was saved with filters this page cannot run. Ask your agent to change it, or clear the view.`}
+        />
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => setGuiding(true)}>
+            Edit with your agent
+          </Button>
+          {clear}
+        </div>
+        {product && (
+          <AgentGuideDialog
+            open={guiding}
+            onOpenChange={setGuiding}
+            mode="view"
+            project={product}
+            view={{ slug, name, kind: "logs" }}
+          />
+        )}
+      </>
+    );
+  return (
+    <>
+      <PageHeader title="Logs" description="Opening the saved view…" />
+      {state === "failed" ? (
+        <ErrorState
+          message="The saved view could not be loaded."
+          retry={() => setAttempt((n) => n + 1)}
+        />
+      ) : (
+        <div className="logs-viewport" aria-hidden="true">
+          <Skeleton className="h-3 w-full" />
+        </div>
+      )}
+    </>
+  );
 }
 function LogExplorer() {
   const { product, sourceId, now: workspaceNow } = useWorkspace();
@@ -67,26 +188,31 @@ function LogExplorer() {
   function setSelected(log: LogRow | undefined) {
     setSelection(log ? { log, scope } : undefined);
   }
+  const filters = [
+    ...(search.attribute
+      ? [
+          {
+            attribute: search.attribute,
+            value: attributeValue(search.attributeValue ?? "", search.attributeType ?? "string"),
+          },
+        ]
+      : []),
+    ...(search.moreFilters ?? []),
+  ];
   const query = useLogFeed(
     product?.id,
     {
       from: search.logFrom ?? new Date(workspaceNow - logWindows[window]).toISOString(),
       to: search.logTo ?? new Date(workspaceNow).toISOString(),
-      source_id: sourceId,
+      source_id: search.logSource ?? sourceId,
       level: search.level,
+      min_level: search.minLevel,
       service: search.service || undefined,
       environment: search.environment || undefined,
       search: search.logq || undefined,
       trace_id: search.trace || undefined,
       cursor: search.logBefore,
-      filters: search.attribute
-        ? [
-            {
-              attribute: search.attribute,
-              value: attributeValue(search.attributeValue ?? "", search.attributeType ?? "string"),
-            },
-          ]
-        : undefined,
+      filters: filters.length ? filters : undefined,
     },
     {
       windowMs: search.logBefore || search.logFrom ? undefined : logWindows[window],
@@ -142,9 +268,16 @@ function LogExplorer() {
     minute: "2-digit",
     hourCycle: "h23",
   });
+  const moreFilters = search.moreFilters ?? [];
+  const openView = product.views?.find(
+    (candidate) => candidate.kind === "logs" && candidate.slug === search.view,
+  );
   const hasFilters = Boolean(
     search.logq ||
       search.level ||
+      search.minLevel ||
+      search.logSource ||
+      moreFilters.length ||
       search.service ||
       search.attribute ||
       search.environment ||
@@ -152,7 +285,21 @@ function LogExplorer() {
   );
   return (
     <>
-      <PageHeader title="Logs" description="Investigate what happened across your services." />
+      <PageHeader
+        title="Logs"
+        description={`${openView ? `Saved view ${openView.name}. ` : ""}Investigate what happened across your services.`}
+      >
+        {openView && (
+          <ViewActions<LogViewDocument>
+            key={openView.id}
+            product={product}
+            view={openView}
+            noun="filters"
+            withCurrent={(stored) => currentLogView(stored, search)}
+            onDeleted={() => apply({ view: undefined })}
+          />
+        )}
+      </PageHeader>
       <section className="logs-workspace" aria-label="Project logs">
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static design provenance, with no dynamic or user content. */}
         <span hidden dangerouslySetInnerHTML={{ __html: `<!-- ${direction} -->` }} />
@@ -233,16 +380,24 @@ function LogExplorer() {
         <div className="logs-filters">
           <ValueSelect
             label="Severity"
-            value={search.level ?? "all"}
+            value={search.minLevel ? `min:${search.minLevel}` : (search.level ?? "all")}
             onValueChange={(value) =>
-              apply({ level: value === "all" ? undefined : (value as LogsSearch["level"]) })
+              apply(
+                value.startsWith("min:")
+                  ? { level: undefined, minLevel: value.slice(4) as LogsSearch["level"] }
+                  : {
+                      level: value === "all" ? undefined : (value as LogsSearch["level"]),
+                      minLevel: undefined,
+                    },
+              )
             }
             options={[
               ["all", "All levels"],
-              ...logLevels.map(
-                (level) =>
-                  [level, level.charAt(0).toUpperCase() + level.slice(1)] as [string, string],
-              ),
+              ...logLevels.map((level): [string, string] => [level, capitalized(level)]),
+              ...minLevels.map((level): [string, string] => [
+                `min:${level}`,
+                `${capitalized(level)} and above`,
+              ]),
             ]}
           />
           <ValueSelect
@@ -278,23 +433,35 @@ function LogExplorer() {
                   : "Loading logs…"}
           </span>
         </div>
+        {(search.logSource || moreFilters.length > 0) && (
+          <section className="drilldown-filters query-pins" aria-label="Also applied">
+            {search.logSource && (
+              <PinChip
+                label={`Source · ${product.sources.find((s) => s.id === search.logSource)?.name ?? "unavailable"}`}
+                remove="Remove source"
+                onRemove={() => apply({ logSource: undefined })}
+              />
+            )}
+            {moreFilters.map((filter, index) => (
+              <PinChip
+                key={`${filter.attribute}:${JSON.stringify(filter.value)}`}
+                label={`${filter.attribute} = ${JSON.stringify(filter.value)}`}
+                remove={`Remove filter ${filter.attribute} = ${JSON.stringify(filter.value)}`}
+                onRemove={() => {
+                  const next = moreFilters.filter((_, i) => i !== index);
+                  apply({ moreFilters: next.length ? next : undefined });
+                }}
+              />
+            ))}
+          </section>
+        )}
         {advanced && (
           <LogFilters key={viewKey} search={search} facets={data?.facets} onApply={apply} />
         )}
         {search.invalidLogs ? (
           <ErrorState
             message="This log query has invalid filters. Clear the query and try again."
-            retry={() =>
-              apply({
-                logq: undefined,
-                level: undefined,
-                service: undefined,
-                environment: undefined,
-                trace: undefined,
-                attribute: undefined,
-                attributeValue: undefined,
-              })
-            }
+            retry={() => apply(everyFilterButWindow)}
           />
         ) : (
           error && <ErrorState message={error} retry={() => void query.refresh()} />
@@ -482,6 +649,8 @@ function LogExplorer() {
     </>
   );
 }
+const { logWindow: _window, ...everyFilterButWindow } = clearedLogs;
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 /** The histogram bucket under the pointer. */
 function bucketAt(event: { clientX: number; currentTarget: HTMLElement }, count: number) {
   const rect = event.currentTarget.getBoundingClientRect();

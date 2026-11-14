@@ -8,11 +8,13 @@ import {
   LinkSquare02Icon,
   ArrowRight01Icon,
   ArrowRight02Icon,
+  Cancel01Icon,
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { Link, useParams } from "@tanstack/react-router";
 import { AnalyticsChart } from "@/components/analytics-chart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -302,5 +304,25 @@ export function BreakdownRows({
         <p className="quiet">No values in this range.</p>
       )}
     </>
+  );
+}
+
+/** A narrowing the builder has no row for, with a button that removes it. */
+export function PinChip({
+  label,
+  remove,
+  onRemove,
+}: {
+  label: string;
+  remove: string;
+  onRemove: () => void;
+}) {
+  return (
+    <Badge variant="outline" className="drilldown-property">
+      {label}
+      <button type="button" aria-label={remove} onClick={onRemove}>
+        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" className="size-3" />
+      </button>
+    </Badge>
   );
 }
