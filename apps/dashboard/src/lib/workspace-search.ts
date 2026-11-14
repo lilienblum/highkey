@@ -26,6 +26,10 @@ export const validSlug = (value: unknown): value is string =>
 /** A saved view's slug, as the API generates it from the view's name. */
 export const validViewSlug = (value: unknown): value is string =>
   typeof value === "string" && value.length <= 100 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+/** The `updated_at` of the saved view a page applied, as the API writes it (RFC 3339). */
+export const validViewAt = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(value);
 /** The source a workspace `source` URL value names: by slug, then by ID from older links. */
 export function findSource<T extends { id: string; slug: string }>(
   sources: readonly T[] | undefined,

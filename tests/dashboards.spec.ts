@@ -207,9 +207,9 @@ test("dashboards appear under Overview in the server-rendered sidebar and render
     await expect(widget(page, "plans").locator(".breakdown-head")).toHaveText("planEvents");
     await expect(widget(page, "recent-errors")).toContainText("Payment gateway timed out");
     await expect(widget(page, "recent-errors")).not.toContainText("Checkout 0 completed");
-    await expect(
-      widget(page, "recent-errors").getByRole("link", { name: "Open in Logs" }),
-    ).toHaveAttribute("href", /\/logs\?.*service=checkout/);
+    const openLogs = widget(page, "recent-errors").getByRole("link", { name: "Open in Logs" });
+    await expect(openLogs).toHaveAttribute("href", /\/logs\?.*service=checkout/);
+    await expect(openLogs).toHaveAttribute("href", /[?&]minLevel=error(&|$)/);
     await expect(widget(page, "note").locator("strong")).toHaveText("completed / requests");
     await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
     await expect(page.getByRole("alert")).toHaveCount(0);
@@ -927,4 +927,91 @@ test("returning to a dashboard shows its last results while they refresh", async
   }
   await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+});
+
+test("Open in Events and Open in Logs carry every filter the widget reads", async ({ page }) => {
+  const sources = (
+    await admin<(Project & { sources: { id: string; slug: string }[] })[]>("/products")
+  ).find((candidate) => candidate.id === project.id)?.sources;
+  const source = sources?.[0];
+  expect(source).toBeTruthy();
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: {
+      version: 1,
+      name: `Links ${Date.now()}`,
+      widgets: [
+        {
+          id: "pro-checkouts",
+          title: "Pro checkouts",
+          view: { type: "events" },
+          queries: {
+            rows: {
+              signal: "events",
+              event: "checkout_completed",
+              identity_kind: "anonymous",
+              source_id: source?.id,
+              filters: [
+                { property: "plan", op: "eq", value: "pro" },
+                { property: "region", op: "ne", value: "eu" },
+              ],
+            },
+          },
+        },
+        {
+          id: "checkout-errors",
+          title: "Checkout errors",
+          view: { type: "logs" },
+          queries: {
+            rows: {
+              signal: "logs",
+              min_level: "error",
+              service: "checkout",
+              source_id: source?.id,
+              filters: [
+                { attribute: "status", value: 500 },
+                { attribute: "region", value: "tokyo" },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  });
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  const search = async (id: string, name: string) => {
+    const href = await widget(page, id).getByRole("link", { name }).getAttribute("href");
+    return new URL(href ?? "", "https://piko.test").searchParams;
+  };
+  const events = await search("pro-checkouts", "Open in Events");
+  expect(JSON.parse(events.get("query") ?? "null")).toMatchObject({
+    event: "checkout_completed",
+    identityKind: "anonymous",
+    sourceId: source?.id,
+    filterProperty: "plan",
+    filterOp: "eq",
+    filterValue: "pro",
+    moreFilters: [{ property: "region", op: "ne", value: "eu" }],
+  });
+  const logs = await search("checkout-errors", "Open in Logs");
+  // The router writes strings that would read as another type in JSON.
+  const value = (key: string) => {
+    const raw = logs.get(key);
+    try {
+      return JSON.parse(raw ?? "null");
+    } catch {
+      return raw;
+    }
+  };
+  expect(value("minLevel")).toBe("error");
+  expect(value("service")).toBe("checkout");
+  expect(value("logSource")).toBe(source?.id);
+  expect(value("attribute")).toBe("status");
+  expect(value("attributeValue")).toBe("500");
+  expect(value("attributeType")).toBe("number");
+  expect(value("moreFilters")).toEqual([{ attribute: "region", value: "tokyo" }]);
+  // The link opens Logs on the widget's own rows.
+  await widget(page, "checkout-errors").getByRole("link", { name: "Open in Logs" }).click();
+  await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toContainText(
+    "Error and above",
+  );
 });

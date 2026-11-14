@@ -1,4 +1,4 @@
-import { validDate, validKey, validViewSlug } from "./workspace-search";
+import { validDate, validKey, validViewAt, validViewSlug } from "./workspace-search";
 export const logLevels = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 export type LogLevel = (typeof logLevels)[number];
 export const logWindows = {
@@ -52,6 +52,8 @@ export type LogsSearch = {
   moreFilters?: LogAttributeFilter[];
   /** The saved view these filters came from; it marks the active item in the sidebar. */
   view?: string;
+  /** The `updated_at` of the view version applied to the page; without it the view is applied. */
+  viewAt?: string;
   service?: string;
   environment?: string;
   trace?: string;
@@ -111,6 +113,7 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     (s.level !== undefined && s.minLevel !== undefined) ||
     (s.logSource !== undefined && !validKey(s.logSource)) ||
     (s.view !== undefined && !validViewSlug(s.view)) ||
+    (s.viewAt !== undefined && !validViewAt(s.viewAt)) ||
     !validMoreFilters(s.moreFilters) ||
     (s.logWindow !== undefined && !Object.hasOwn(logWindows, String(s.logWindow))) ||
     (s.attributeType !== undefined &&
@@ -139,6 +142,7 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     logSource: s.logSource as string | undefined,
     moreFilters: s.moreFilters as LogAttributeFilter[] | undefined,
     view: s.view as string | undefined,
+    viewAt: s.viewAt as string | undefined,
     service: s.service as string | undefined,
     environment: s.environment as string | undefined,
     trace: s.trace as string | undefined,
@@ -160,6 +164,7 @@ export const clearedLogs: Record<keyof LogsSearch, undefined> = {
   logSource: undefined,
   moreFilters: undefined,
   view: undefined,
+  viewAt: undefined,
   service: undefined,
   environment: undefined,
   trace: undefined,

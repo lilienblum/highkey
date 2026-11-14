@@ -29,8 +29,6 @@ import {
   validTime,
   thresholdColor,
   type CellKind,
-  type EventsQuery,
-  type LogsQuery,
   type QuerySpec,
   type RunResult,
   type SeriesResult,
@@ -42,13 +40,12 @@ import { DAY_MS } from "@/lib/date-range";
 import { growth } from "@/lib/growth";
 import { displayTimestamp } from "@/lib/display-time";
 import { displayValue } from "@/lib/display-values";
-import { defaultSpec } from "@/lib/explore-search";
-import { logLevels, type LogRow } from "@/lib/logs";
+import type { LogRow } from "@/lib/logs";
 import { TypedValue } from "@/lib/highlight";
 import { Markdown } from "@/lib/markdown";
 import { bucketLabels, type TimeBucket } from "@/lib/time-buckets";
 import { useNearViewport, useWidgetRun } from "@/lib/use-widget";
-import { sourceParam, validKey } from "@/lib/workspace-search";
+import { eventsLink, logsLink } from "@/lib/widget-links";
 import { useWorkspace } from "../app-shell";
 import { useDisplayPreferences } from "../display-preferences";
 import { GrowthLine, OverviewWidget, WidgetContent, WidgetValue } from "../overview-widgets";
@@ -162,28 +159,36 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
         return <LogRowsBody {...shared} />;
     }
   })();
-  const link =
-    kind === "events" && query?.signal === "events" ? (
-      <Link
-        to="/projects/$projectSlug/events"
-        params={{ projectSlug: product.slug }}
-        search={exploreSearch(query, span, product, sourceId)}
-        className="widget-link"
-      >
-        Open in Events
-        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" />
-      </Link>
-    ) : kind === "logs" && query?.signal === "logs" ? (
-      <Link
-        to="/projects/$projectSlug/logs"
-        params={{ projectSlug: product.slug }}
-        search={logsSearch(query, span, product, sourceId)}
-        className="widget-link"
-      >
-        Open in Logs
-        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" />
-      </Link>
-    ) : null;
+  // A list opens on its page with the same rows, when that page can show the query.
+  const events =
+    kind === "events" && query?.signal === "events"
+      ? eventsLink(query, span, product, sourceId)
+      : undefined;
+  const logs =
+    kind === "logs" && query?.signal === "logs"
+      ? logsLink(query, span, product, sourceId)
+      : undefined;
+  const link = events ? (
+    <Link
+      to="/projects/$projectSlug/events"
+      params={{ projectSlug: product.slug }}
+      search={events}
+      className="widget-link"
+    >
+      Open in Events
+      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" />
+    </Link>
+  ) : logs ? (
+    <Link
+      to="/projects/$projectSlug/logs"
+      params={{ projectSlug: product.slug }}
+      search={logs}
+      className="widget-link"
+    >
+      Open in Logs
+      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} aria-hidden="true" />
+    </Link>
+  ) : null;
   return (
     <OverviewWidget
       {...placement(widget)}
@@ -720,60 +725,4 @@ function seriesLabel(
 ) {
   if (series.group !== undefined) return groupText(groupBy, series.group, product);
   return seriesDisplayLabel(widget, index) ?? series.label;
-}
-
-const exploreOps = ["eq", "ne", "gt", "gte", "lt", "lte"];
-/** Explore with the widget's event, its first filter and source, over the widget's window. */
-function exploreSearch(
-  query: EventsQuery,
-  span: { from: string; to: string },
-  product: Product,
-  sourceId?: string,
-) {
-  const filter = query.filters?.find(
-    (candidate) => validKey(candidate.property) && exploreOps.includes(candidate.op),
-  );
-  return {
-    source: sourceParam(product.sources, query.source_id ?? sourceId),
-    period: undefined,
-    snapshot: undefined,
-    from: span.from,
-    to: span.to,
-    drilldown: undefined,
-    page: undefined,
-    query: {
-      ...defaultSpec,
-      event: query.event && validKey(query.event) ? query.event : "",
-      filterProperty: filter?.property ?? "",
-      filterOp: filter?.op ?? "eq",
-      filterValue: filter ? JSON.stringify(filter.value) : "",
-    },
-  };
-}
-
-/** Logs with the widget's filters it can express, over the widget's (at most 31-day) window. */
-function logsSearch(
-  query: LogsQuery,
-  span: { from: string; to: string },
-  product: Product,
-  sourceId?: string,
-) {
-  const filter = query.filters?.find((candidate) => candidate.value !== null);
-  const to = Date.parse(span.to);
-  const from = Math.max(Date.parse(span.from), to - 31 * DAY_MS);
-  const level = logLevels.find((candidate) => candidate === query.level);
-  return {
-    source: sourceParam(product.sources, query.source_id ?? sourceId),
-    logq: query.search,
-    level,
-    service: query.service,
-    environment: query.environment,
-    attribute: filter?.attribute,
-    attributeValue: filter ? String(filter.value) : undefined,
-    attributeType: filter ? (typeof filter.value as "string" | "number" | "boolean") : undefined,
-    logWindow: undefined,
-    logBefore: undefined,
-    logFrom: new Date(from).toISOString(),
-    logTo: new Date(to).toISOString(),
-  };
 }

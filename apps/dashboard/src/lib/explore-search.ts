@@ -1,4 +1,4 @@
-import { validKey, validDate, validViewSlug } from "./workspace-search";
+import { validKey, validDate, validViewAt, validViewSlug } from "./workspace-search";
 export type ExploreDrilldown = {
   productId?: string;
   from: string;
@@ -15,6 +15,8 @@ export type ExploreSearch = {
   query?: ExploreSpec;
   /** The saved view this query came from; it marks the active item in the sidebar. */
   view?: string;
+  /** The `updated_at` of the view version applied to the page; without it the view is applied. */
+  viewAt?: string;
   page?: number;
   pageSize?: number;
   invalidQuery?: true;
@@ -114,9 +116,13 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     (search.pageSize !== undefined && ![15, 30, 50].includes(Number(search.pageSize)))
   )
     return { ...result, invalidQuery: true };
-  if (search.view !== undefined && !validViewSlug(search.view))
+  if (
+    (search.view !== undefined && !validViewSlug(search.view)) ||
+    (search.viewAt !== undefined && !validViewAt(search.viewAt))
+  )
     return { ...result, invalidQuery: true };
   result.view = search.view as string | undefined;
+  result.viewAt = search.viewAt as string | undefined;
   result.page = search.page as number | undefined;
   result.pageSize = search.pageSize === undefined ? undefined : Number(search.pageSize);
   if (search.query === undefined) return result;
