@@ -1095,3 +1095,23 @@ async fn delete_removes_dashboard_and_revisions() {
     assert_eq!(left, 0);
     test.close().await;
 }
+
+#[tokio::test]
+async fn the_validate_slug_is_reserved_so_every_dashboard_is_readable_by_slug() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let first = create_dashboard(&test, &project, "Validate").await;
+    assert_eq!(first["slug"], "validate-2");
+    let second = create_dashboard(&test, &project, "Validate").await;
+    assert_eq!(second["slug"], "validate-3");
+    let (status, body) = test
+        .read(
+            "GET",
+            "/api/read/products/shop/dashboards/validate-2",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["id"], first["id"]);
+    test.close().await;
+}

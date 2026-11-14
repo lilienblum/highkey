@@ -174,6 +174,9 @@ pub fn get(db: &rusqlite::Connection, product: &str, key: &str) -> Result<Stored
     load(db, &id)
 }
 
+/// Slugs that collide with a static route segment under `/dashboards`.
+const RESERVED_SLUGS: [&str; 1] = ["validate"];
+
 /// A slug for a dashboard name, by the project rule. Only a name that rule empties (no ASCII
 /// letter or digit) becomes `dashboard`.
 fn dashboard_slug(name: &str) -> String {
@@ -211,11 +214,16 @@ pub fn create(
     let mut suffix = 2;
     loop {
         // The unique index arbitrates the slug; the immediate transaction already
-        // serializes writers, so this also holds for concurrent creators.
-        let inserted = tx.execute(
-            "INSERT INTO dashboards(id,product_id,slug,name,document,revision,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,1,?6,?6) ON CONFLICT(product_id,slug) DO NOTHING",
-            params![id, product, slug, doc.name, json, at],
-        )?;
+        // serializes writers, so this also holds for concurrent creators. A reserved slug
+        // counts as taken: `GET .../dashboards/validate` must never reach a dashboard.
+        let inserted = if RESERVED_SLUGS.contains(&slug.as_str()) {
+            0
+        } else {
+            tx.execute(
+                "INSERT INTO dashboards(id,product_id,slug,name,document,revision,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,1,?6,?6) ON CONFLICT(product_id,slug) DO NOTHING",
+                params![id, product, slug, doc.name, json, at],
+            )?
+        };
         if inserted == 1 {
             break;
         }
