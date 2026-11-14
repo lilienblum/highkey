@@ -48,6 +48,16 @@ Application logs contain the messages, trace/request IDs, and typed attributes s
 
 There is no automatic personal-data classification or per-person erasure workflow in v1. Minimize collection up front, keep retention short, and verify the stored events in Events before rolling out a collector broadly.
 
+## AI agents and MCP
+
+When you connect an AI agent to Piko's [MCP server](dashboards.md#ask-your-ai), what it can read goes to whatever model and service that agent uses. That is your decision, and Piko's collection defaults do not cover it.
+
+- `sample_events` and `sample_logs` return up to 20 raw events or logs from the last 7 days: names, properties, actor IDs, log messages and attributes. They exist so the agent can see real shapes, but they send the actual records to your AI client. `run_widget` with an `events` or `logs` view and SQL over the `events` and `logs` tables can return raw rows as well. `describe_project` returns event names, property keys, services and levels.
+- `create_key`, `create_log_key` and `connect_source` return the new key's secret to the client, once. A full token can also create sources and projects, change retention and revoke keys.
+- **To prevent writes and key secrets, withhold the full token.** Give the agent a read-only Access token and the `/api/read/mcp` path (see [access](access.md#mcp-and-read-only-access)): it has no tool that changes anything or returns a secret. The sample tools and widget runs are still there, because they only read. To stop the agent seeing raw records at all, do not connect it, or connect it to a project that holds no sensitive data.
+- Piko does not redact what the agent reads. Minimize collection and keep retention short, as described above.
+- Dashboards and saved views hold queries and formulas, not data. SQL widgets and views you save are stored in Piko's catalog and shown to anyone who opens the dashboard.
+
 ## Multiple sources
 
 Project sources are named integration metadata, not device or person identifiers. A write-only key attributes an event to exactly one source; callers cannot override it in the payload. Combined analytics do not infer cross-device identity. If collectors deliberately reuse an opaque actor ID with the same identity kind within a project, distinct-actor counts deduplicate it across sources. Use independent random IDs when that linkage is unwanted, or omit identity entirely. Retention applies to the whole project, including all its sources.

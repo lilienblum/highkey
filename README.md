@@ -58,16 +58,17 @@ Without Tako or Docker, use `bun run dev:standalone`, or build with `bun run bui
 
 Under native Tako, data lives in `$TAKO_DATA_DIR` (locally `.tako/data/app`); Compose uses the `piko-data` named volume at `/data`; standalone binaries use `./data` by default (`state.sqlite`, SQLite WAL files, and `products/<product-id>.duckdb` with their WAL files). Application logs live beside them in `logs/<project-id>.duckdb` with their WAL files; include both directories in backups. Mount `PIKO_DATA_DIR` on durable local storage. Run exactly **one API process per data directory**. Stop the API before copying the entire directory for backup; restore the whole directory together. Tako app-data backups do not include Compose named volumes; see [Compose backups and migration](docs/compose.md#backups-and-migration). Do not share the files over a network filesystem. Cleanup logically deletes rows; disk files need not shrink immediately. An eight-instance LRU cache bounds open product databases; active connections pin their instance against eviction. Each instance has a 64 MB DuckDB buffer limit. Query concurrency is bounded globally. Logs have a separate four-instance cache with 32 MB buffers, two query slots, and their own bounded writer and admission. Early shared-database MVP data is imported idempotently at startup; the original `events.duckdb` remains as a backup, outside active retention, and can be removed after verifying the import.
 
-| Setting                  | Default                    | Purpose                                                    |
-| ------------------------ | -------------------------- | ---------------------------------------------------------- |
-| `PIKO_DATA_DIR`          | `TAKO_DATA_DIR` or `data`  | Explicit durable database override                         |
-| `PIKO_BIND`              | `127.0.0.1:3001`           | Standalone API address; Tako owns its listener             |
-| `PIKO_QUERY_CONCURRENCY` | `4` (1–16)                 | Independent DuckDB query connections                       |
-| `PIKO_QUEUE_CAPACITY`    | `64` (1–1024)              | Bounded ingestion request slots/queue                      |
-| `PIKO_API_URL`           | `http://127.0.0.1:3001`    | Dashboard-to-API origin                                    |
-| `HOST`, `PORT`           | `127.0.0.1`, `3000`        | Standalone Bun dashboard listener                          |
-| `PIKO_CHANGE_URL`        | unset outside Tako configs | Optional post-commit notification endpoint                 |
-| `PIKO_CHANGE_TOKEN`      | Tako secret                | Shared API-to-dashboard credential; never sent to browsers |
+| Setting                  | Default                    | Purpose                                                                                        |
+| ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `PIKO_DATA_DIR`          | `TAKO_DATA_DIR` or `data`  | Explicit durable database override                                                             |
+| `PIKO_BIND`              | `127.0.0.1:3001`           | Standalone API address; Tako owns its listener                                                 |
+| `PIKO_QUERY_CONCURRENCY` | `4` (1–16)                 | Independent DuckDB query connections                                                           |
+| `PIKO_QUEUE_CAPACITY`    | `64` (1–1024)              | Bounded ingestion request slots/queue                                                          |
+| `PIKO_API_URL`           | `http://127.0.0.1:3001`    | Dashboard-to-API origin                                                                        |
+| `HOST`, `PORT`           | `127.0.0.1`, `3000`        | Standalone Bun dashboard listener                                                              |
+| `PIKO_CHANGE_URL`        | unset outside Tako configs | Optional post-commit notification endpoint                                                     |
+| `PIKO_CHANGE_TOKEN`      | Tako secret                | Shared API-to-dashboard credential; never sent to browsers                                     |
+| `PIKO_CORS_ORIGINS`      | unset (loopback only)      | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
 
 ## Use it
 
@@ -81,6 +82,16 @@ There is no built-in login, admin token, password, or admin session cookie. Mana
 Click an Overview breakdown row to filter the dashboard in place; **View matching events** opens the filtered event stream. Page and referrer rows offer a separate external-link action on hover or keyboard focus. See [the dashboard guide](docs/dashboard.md) for drilldowns, typed filters, and date behavior.
 
 Project, source, range, chart choices, applied Events queries, and Logs filters live in the URL. For example, `/projects/orbit?source=all&period=month`. One date picker provides presets, custom calendar dates, and previous/next navigation for calendar periods and fixed ranges. Custom dates use inclusive UTC days as explicit `from` / `to` timestamps (the API end is exclusive); they do not archive results. Chart grouping adjusts automatically to the chosen range. Reload, sharing, and browser history restore the view.
+
+## Dashboards and MCP
+
+Dashboards are JSON documents that the API owns, written over MCP by the AI agent you already use (Claude Code, Codex or anything that speaks MCP). Each widget runs typed event and log queries, formulas and guarded read-only SQL; every save is validated and timed, and revisions let you undo. Dashboards appear under Overview in the sidebar, and named queries can be saved as views under Events and Logs.
+
+```sh
+claude mcp add --transport http piko http://127.0.0.1:3000/api/mcp
+```
+
+Remote setups, the Codex config, the document reference, worked examples (including weekly churn in SQL) and the read-only `/api/read` surface for your own local pages are in [custom dashboards, views and MCP](docs/dashboards.md). Give an agent only the read-only token if it should not change anything; see [access](docs/access.md#mcp-and-read-only-access) and [privacy](docs/privacy.md#ai-agents-and-mcp). Errors and endpoints are in the [API reference](docs/api.md#dashboards-views-and-mcp).
 
 See [API and data semantics](docs/api.md), [collection examples and identity](docs/collection.md), and [benchmark methodology/results](docs/benchmark.md).
 
@@ -102,7 +113,7 @@ Piko does not derive analytics identity from IP addresses or user-agent informat
 ## Checks
 
 ```sh
-bun fmt
+bun run fmt
 bun fmt:check
 bun typecheck
 bun lint
@@ -112,7 +123,7 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-`bun test` runs SDK and test-runner validation tests (scoped by `bunfig.toml`). `bun test:e2e` starts two dedicated Tako apps at `https://piko-e2e.test` and `https://piko-e2e-api.test`, runs real Chromium tests, then stops those apps and deletes their temporary databases. Initialize local TLS and the notification secret once with `bun dev`; the preview need not be running during tests. No seed is needed. To run a subset, use `bun test:e2e tests/analytics-chart.spec.ts`.
+Use `bun run fmt`: bare `bun fmt` runs Bun's built-in formatter and reformats unrelated files. `bun test` runs SDK and test-runner validation tests (scoped by `bunfig.toml`). `bun test:e2e` starts two dedicated Tako apps at `https://piko-e2e.test` and `https://piko-e2e-api.test`, runs real Chromium tests, then stops those apps and deletes their temporary databases. Initialize local TLS and the notification secret once with `bun dev`; the preview need not be running during tests. No seed is needed. To run a subset, use `bun test:e2e tests/analytics-chart.spec.ts`.
 
 Every run gets fresh storage under `.tako/e2e/<run-id>/`. Test URLs are set by the runner, existing URL overrides cannot point it at the preview, and direct Playwright runs are rejected. A preflight requires an empty test database before any fixtures are created. Test failure, Ctrl-C, and SIGTERM all run teardown. A lock prevents simultaneous runs from sharing the test hosts. If a process is force-killed, follow the [test recovery instructions](docs/tako.md#browser-tests); its data remains separate from the preview. If Chromium is absent, install it with `bun node_modules/@playwright/test/cli.js install chromium`.
 
@@ -133,7 +144,7 @@ See [the verification record](docs/verification.md) for measured checks and thei
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.
 - Pagination is bounded offset pagination, ordered by time and event ID. Each query uses a consistent database snapshot, but different pages may shift when new events arrive. Top breakdowns are limited to 12 groups, event-name discovery to 100 names, filters to 8, pages to 10,001, and page size to 100.
 - Delivery from browsers/CLIs is best effort with bounded retries. A flush confirms attempted delivery, not guaranteed delivery. Deduplication lasts while the event remains retained, not forever.
-- No logs/search, arbitrary SQL, funnels, replay, dashboard builders, or distributed storage.
+- No funnels, session replay, alerts, or distributed storage. Custom dashboards are written by an agent or by script, not dragged together in the UI, and their SQL is read-only and guarded.
 
 [Liwan](https://github.com/explodingcamera/liwan) informed the embedded-storage direction. Piko has its own implementation and product model, with equal support for websites and tools.
 

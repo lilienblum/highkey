@@ -19,6 +19,19 @@ Use `docker compose logs --tail 100` to inspect startup. After source changes, r
 
 Protect the dashboard with Cloudflare Tunnel and Access before exposing it. Only `/api/ingest` and `/tracker.js` receive public Access bypasses; see [the access boundary](access.md#compose-ingress).
 
+## CORS for read-only pages
+
+The API allows cross-origin requests to `/api/read/*` from loopback origins by default. To let a page served elsewhere read it, set `PIKO_CORS_ORIGINS` on the API service: a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path). `null` is never allowed, and `*` is accepted by the code but should not be used. Add it to the `api` service's `environment` in `compose.yaml`:
+
+```yaml
+services:
+  api:
+    environment:
+      PIKO_CORS_ORIGINS: "https://wall.example.com,http://192.168.1.20:8080"
+```
+
+Recreate the API with `docker compose up -d`. The API restart is brief but interrupts queries and ingestion; see [updates](#updates-and-recovery). See [local pages](dashboards.md#local-pages) and [access](access.md#local-pages-and-cors) for what the allowlist covers and the Access settings it needs. Native Tako sets it under `[vars.production]` in `tako.api.toml`.
+
 ## Deploy with Tako
 
 Use a CLI/server release with [Tako Compose support](https://tako.sh/docs/docker-compose). The target server requires Docker Engine and Compose 2.24.4 or newer, with Docker socket access for the `tako-server` service account. Tako's Podman installation alone is insufficient. Verify `docker info` and `docker compose version` as that account.

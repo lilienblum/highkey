@@ -61,6 +61,10 @@ Open **Logs** from a project's sidebar. Search literal message text, narrow by s
 
 The volume chart shows matching records and errors over the selected window; drag across it to zoom the query to those buckets. **Following** checks every five seconds while visible and online, retaining an open inspector. Scrolling pauses Follow and freezes the interval while older 100-record cursor batches load near the bottom. The virtualized viewport renders only nearby records and buffers at most 10,000. At that limit the footer suggests narrowing the time range or search. Locally appended batches and scroll position are not persisted. **Back to newest** clears the buffer and resumes Follow. Use arrow keys, Home/End, and Page Up/Down to move through loaded records, and Enter to inspect. Older pages use a `(timestamp, log_id)` cursor. Windows are 15 minutes, 1/6/24 hours, or seven days. The API supports positive ranges up to 31 days.
 
+### Saved log views and dashboards
+
+**Save view** names the current filters and time window (15m, 1h, 6h, 24h or 7d) and lists it under Logs in the sidebar; agents can also read and write them over MCP. A view stores `level` or `min_level`, `service`, `environment`, `source_id`, `search` and attribute filters, not a trace ID or a selected range. See [saved views](dashboards.md#saved-views). Dashboard widgets can query logs too (`"signal": "logs"`, with the same `level`/`min_level`, `service`, `environment`, `search` and attribute filters, plus a `count` or numeric `attribute` measure), limited to the newest 31 days; see [custom dashboards](dashboards.md).
+
 ## Management API
 
 Management requests stay behind Cloudflare Access. Mutations also require the existing `X-Piko-Admin: 1` CSRF marker.

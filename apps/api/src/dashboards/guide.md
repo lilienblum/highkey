@@ -127,7 +127,7 @@ A failing tool returns its error body as a tool result marked as an error. Read 
 }
 ```
 
-Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revision_conflict` (re-read the dashboard, merge, save with the new `revision` as `base_revision`), `too_slow`, `busy` and `query_timeout` (retry or narrow the widget), `limit`, `rate_limited`, `ambiguous_view`, `confirm_mismatch`. Warnings never block a save: an unknown event name or property only warns, because the data may arrive later.
+Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revision_conflict` (re-read the dashboard, merge, save with the new `revision` as `base_revision`), `too_slow`, `busy` and `query_timeout` (retry or narrow the widget), `limit`, `rate_limited`, `ambiguous_view`, `confirm_mismatch`, `invalid_argument` (a bad tool argument), `invalid_kind`, `invalid_input`, `conflict` and `internal`. The full table is in the Piko docs, `docs/api.md`. Warnings never block a save: an unknown event name or property only warns, because the data may arrive later.
 
 ## Workspace tools
 
@@ -206,6 +206,31 @@ A table from SQL, bounded by the range parameters:
           "signal": "sql",
           "database": "events",
           "sql": "SELECT name, count(*) AS events FROM events WHERE event_time >= $from AND event_time < $to GROUP BY name ORDER BY events DESC LIMIT 20"
+        }
+      }
+    }
+  ]
+}
+```
+
+Weekly churn, in SQL: actors active the week before and not this week, bucketed by week, leaving the current partial week out:
+
+```json document
+{
+  "version": 1,
+  "name": "Retention",
+  "widgets": [
+    {
+      "id": "weekly-churn",
+      "title": "Weekly churned actors",
+      "view": { "type": "bar", "bucket": "week", "better": "down" },
+      "size": { "w": 12, "h": 2 },
+      "queries": {
+        "churned": {
+          "signal": "sql",
+          "database": "events",
+          "missing": "zero",
+          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
         }
       }
     }

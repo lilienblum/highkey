@@ -28,6 +28,32 @@ Verify from a signed-out browser or unauthenticated client after configuring the
 
 Access configuration is deployment-specific and was not provisioned or verified against a live Cloudflare account during local development. The local tests verify API scoping, the CSRF marker, CORS, and browser tracking; they do not assert that an external Access policy is installed.
 
+## MCP and read-only access
+
+Agents and local pages reach Piko through two API prefixes that you can give separate Access policies. Both authenticate with a Cloudflare Access [service token](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) (a `CF-Access-Client-Id` and `CF-Access-Client-Secret` pair). Piko itself never sees a login: it has no built-in token, and nothing here adds one.
+
+| Access application path     | Policy                                                 | Purpose                                                                                               |
+| --------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `piko.example.com/api/read` | Service Auth: the read-only token                      | Read-only HTTP and `/api/read/mcp`: queries, widget runs, dashboards and views to read, validation    |
+| `piko.example.com`          | Allow your users, plus Service Auth for the full token | Everything else, including `/api/mcp`, which can change dashboards, views, projects, sources and keys |
+
+- **Read-only token.** Add a more specific Access application for `piko.example.com/api/read/*` whose policy is a Service Auth rule for one token (and your users, if you want them to open those URLs). Everything under `/api/read` is non-mutating whatever its method, so this token cannot write or create keys. It can still read your analytics and raw event and log samples; see [privacy](privacy.md#ai-agents-and-mcp).
+- **Full token.** A service token allowed on the main application can use `/api/mcp` and every management endpoint. Treat it as full trust: it is as powerful as a signed-in admin, it can create and revoke keys and see their secrets, and anyone who holds it holds all of that. Keep it in the agent's own configuration, give each agent its own token so you can revoke one, and set a short Access token duration if you can.
+- **Agent setup.** Point the client at `https://piko.example.com/api/mcp` (or `/api/read/mcp` with the read token) and send the two headers. [Claude Code and Codex configuration](dashboards.md#ask-your-ai) is in the dashboards guide. Local development has no Access and needs no headers.
+- The API refuses MCP requests that carry a browser `Origin` header, so a web page cannot use the MCP endpoints even with a leaked token.
+
+### Local pages and CORS
+
+A page you serve on your own machine (see [local pages](dashboards.md#local-pages)) can call `/api/read/*` cross-origin. The API answers loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) by default, and other origins listed in `PIKO_CORS_ORIGINS`: comma-separated exact origins with scheme, host and port, no trailing slash and no path, never `null`. A literal `*` is accepted by the code but should not be used. [Compose](compose.md#cors-for-read-only-pages) shows where to set it. Only the headers `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret` are allowed, credentials are never enabled, and write paths send no CORS headers.
+
+Access answers a browser's preflight itself, without credentials, with a 403. In the `/api/read/*` application's **Advanced settings → Cross-Origin Resource Sharing**, turn on **Bypass options requests to origin** so the preflight reaches Piko, which then applies its own allowlist. The page sends the read-only token's two headers on the real request. Anything in a page's source is readable by the page's visitors, so keep tokens out of pages you share.
+
+Verify from outside after configuring the edge:
+
+- `GET /api/read/products` without the token redirects or denies at Access; with the read-only token it returns the projects.
+- `PUT /api/products/<id>/dashboards/<slug>` and `POST /api/mcp` with the read-only token are denied at Access.
+- `POST /api/read/mcp` with the read-only token lists only the read tools.
+
 ## Native Tako hosts and realtime
 
 With the native Tako configs, route `piko.example.com` to the dashboard and `piko-api.example.com` to the independent API. Both origins must remain private/protected. Keep the dashboard's `/_tako/channels/*` receive endpoint under the same Access user policy as the dashboard: it carries workspace-wide product identifiers, and channel parameters are not an authorization boundary.

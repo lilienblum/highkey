@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Product } from "@/lib/api";
 
-const docsUrl = "https://github.com/lilienblum/piko#readme";
+const docsUrl = "https://github.com/lilienblum/piko/blob/master/docs/dashboards.md#ask-your-ai";
 
 export type GuideDashboard = { slug: string; name: string; revision: number };
 export type GuideView = { slug: string; name: string; kind: "events" | "logs" };

@@ -102,6 +102,96 @@ Set optional `source_id` to a source in the requested project to scope summary, 
 
 Response includes `summary`, zero-filled `series`, top-12 `groups`, paginated `events`, and `event_names`. All components run against one transaction snapshot. JSON values are bound; identifiers and operations are validated. No arbitrary SQL is accepted.
 
+## Dashboards, views and MCP
+
+Custom dashboards are `piko.dashboard/v1` documents stored by the API, and saved views are named queries for the Events and Logs pages. [The dashboards guide](dashboards.md) documents the document, formulas, SQL, limits and examples. Everything takes a project by UUID or slug.
+
+### Read paths
+
+Everything under `/api/read` is non-mutating whatever its method, needs no `X-Piko-Admin` marker, and answers cross-origin requests from loopback origins and `PIKO_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Scope a read-only Access token to this prefix; see [access](access.md#mcp-and-read-only-access).
+
+| Method | Path                                                      | Result                                                                              |
+| ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| GET    | `/api/read/products`                                      | Projects                                                                            |
+| POST   | `/api/read/products/{project}/query`                      | The analytics query above                                                           |
+| POST   | `/api/read/products/{project}/logs/query`                 | The [log query](logs.md)                                                            |
+| POST   | `/api/read/products/{project}/widgets/run`                | Run one widget: `{ widget, from, to, bucket?, source_id? }`                         |
+| GET    | `/api/read/products/{project}/catalog`                    | Event names and properties, log services and levels, sources, SQL columns, limits   |
+| GET    | `/api/read/products/{project}/dashboards`                 | Summaries: `id`, `slug`, `name`, `description`, `revision`, `updated_at`, `widgets` |
+| POST   | `/api/read/products/{project}/dashboards/validate`        | `{ document }` → `{ valid, errors, warnings }`; nothing is saved                    |
+| GET    | `/api/read/products/{project}/dashboards/{key}`           | `{ id, slug, revision, updated_at, document }`                                      |
+| GET    | `/api/read/products/{project}/dashboards/{key}/revisions` | Kept revisions, newest first, with their origin                                     |
+| GET    | `/api/read/products/{project}/views`                      | Saved views; `?kind=events` or `?kind=logs` narrows                                 |
+| GET    | `/api/read/products/{project}/views/{key}`                | One view; pass `kind` when both kinds share the slug                                |
+| GET    | `/api/read/schemas/dashboard.v1.json`                     | The document's JSON Schema                                                          |
+| any    | `/api/read/mcp`                                           | MCP, read tools only                                                                |
+
+Widget runs use the shared query slots but never take the last free one, and each is bounded by the widget's `timeout_ms` (default 5,000; 1,000-10,000), so dashboards cannot starve the other queries.
+
+### Write paths
+
+These sit with the management routes: they need `X-Piko-Admin: 1`, and no CORS headers are sent for them. Send `X-Piko-Origin: dashboard` only from the dashboard proxy; it marks the revision's origin (otherwise the origin is `api`).
+
+| Method | Path                                                     | Body → result                                                              |
+| ------ | -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| POST   | `/api/products/:id/dashboards`                           | `{ document }` → stored dashboard plus `bench` and `warnings`              |
+| PUT    | `/api/products/:id/dashboards/:key`                      | `{ base_revision, document }` → the same; `409 revision_conflict` if stale |
+| POST   | `/api/products/:id/dashboards/:key/revisions/:n/restore` | Writes revision `n` again as a new revision                                |
+| DELETE | `/api/products/:id/dashboards/:key`                      | 204; the dashboard and its revisions are gone                              |
+| POST   | `/api/products/:id/views`                                | `{ document }` → the stored view                                           |
+| PUT    | `/api/products/:id/views/:key`                           | `{ document }` replaces the view in full; its kind cannot change           |
+| DELETE | `/api/products/:id/views/:key`                           | 204; `?kind=` when both kinds share the slug                               |
+| any    | `/api/mcp`                                               | MCP, every tool                                                            |
+
+Every dashboard or view write counts against 30 per minute per project, shared with MCP (see [error codes](#error-codes)). Saves are validated and each new or changed widget is timed before anything is stored. Slugs come from the name; `:key` is a slug or the UUID.
+
+### MCP
+
+`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP with JSON responses. Any request that carries a browser `Origin` header is refused, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`piko://schema/dashboard.v1`, `piko://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
+
+### Error codes
+
+Dashboard, view and MCP errors share one body:
+
+```json
+{
+  "error": "Invalid dashboard document",
+  "code": "invalid_document",
+  "errors": [
+    {
+      "path": "/widgets/0/series/0/expr",
+      "message": "unknown query `requets`",
+      "hint": "did you mean `requests`?"
+    }
+  ],
+  "warnings": []
+}
+```
+
+`error` is the message, `code` is stable and meant for programs, `errors[].path` is a JSON Pointer into what you sent (or the tool argument), and `hint` says how to fix it. `warnings` appear on validation and save results and never block a save. A failing MCP tool returns this body as an error result, plus `retry_after_secs` where HTTP sends `Retry-After`. Older endpoints, and capacity errors from the shared gate, return only `{ "error": "..." }`.
+
+| Code                | HTTP | Meaning                                                                                                         | What to do                                                                     |
+| ------------------- | ---- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `invalid_document`  | 400  | A dashboard or view document failed parsing, a rule or SQL verification                                         | Fix each `errors[].path` using its hint, then resend                           |
+| `invalid_argument`  | 400  | An MCP read tool argument is wrong, such as a time that does not parse                                          | Fix the argument named in `errors[].path`                                      |
+| `invalid_input`     | 400  | An MCP workspace tool (projects, sources, keys, settings) refused its input                                     | Fix the argument named in `errors[].path`                                      |
+| `invalid_kind`      | 400  | `kind` is not `events` or `logs`                                                                                | Use `events` or `logs`                                                         |
+| `confirm_mismatch`  | 400  | MCP `confirm` does not equal the slug or id; nothing changed                                                    | Pass the exact slug (dashboards, views) or id (keys) the hint shows            |
+| `limit`             | 400  | 50 dashboards or 100 views per project reached                                                                  | Delete one first                                                               |
+| `too_slow`          | 400  | A widget exceeded its save-time budget (3 s or its `timeout_ms`; 15 s per save)                                 | Narrow the range, filter earlier or bound SQL with `$from` and `$to`           |
+| `not_found`         | 404  | No such dashboard, view, project or revision; the hint names the nearest slugs                                  | Correct the slug                                                               |
+| `revision_conflict` | 409  | `base_revision` is older than the stored revision; the body carries `revision`                                  | Read the dashboard again, merge, save with the new revision as `base_revision` |
+| `ambiguous_view`    | 409  | An events view and a logs view share the slug                                                                   | Pass `kind` (or write `kind` in the document)                                  |
+| `conflict`          | 409  | An MCP workspace tool hit a conflict, such as a name that already exists                                        | Choose another value                                                           |
+| `rate_limited`      | 429  | More than 30 dashboard or view writes in a minute for the project, HTTP and MCP together; failed attempts count | Wait `Retry-After` seconds (`retry_after_secs` over MCP)                       |
+| `busy`              | 503  | Piko had no free query slot for a save's benchmark (`Retry-After: 5`)                                           | Retry in a few seconds                                                         |
+| `query_timeout`     | 503  | A widget run did not finish within its `timeout_ms`; no `Retry-After`, since it repeats                         | Narrow the widget or raise `timeout_ms` (up to 10,000)                         |
+| `internal`          | 5xx  | An MCP workspace tool failed unexpectedly                                                                       | Retry once; check the API log                                                  |
+
+### Live hints, envelope v2
+
+Dashboard and view writes publish a post-commit hint like ingestion does. The native Tako webhook and the dashboard channel carry `{ "version": 2, "changes": null | [{ "product": "<uuid>", "signals": ["events", "logs", "dashboards"] }] }`. Signals are coalesced per project over 250 ms, and more than 64 projects collapse to `changes: null` (refresh everything). The envelope holds ids and signal names only, never events, logs, documents or credentials. The dashboard still accepts the version 1 envelope (`{ "products": [...] }`, meaning events) from an older API during a rolling update. Compose has no channel and polls instead.
+
 ## Resource model
 
 A dedicated writer thread groups requests by product and drains up to 16 requests over an 8 ms window, appends typed rows into temporary DuckDB staging, deduplicates, and commits one set-based insert. Both the queue and concurrent ingestion body-processing slots default to 64. Envelopes are capped at 100 per request. Queue/body capacity exhaustion returns 503 with `Retry-After: 1`. The dashboard gateway also admits at most 64 pending ingestion uploads per process, with a 13-second total upload/upstream deadline. Oversized uploads return 413; gateway overload returns 503 with `Retry-After: 1` and ingestion CORS headers.

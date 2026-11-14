@@ -33,4 +33,5 @@ piko-sdk = { path = "../../sdk/rust" }
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+jsonschema = { version = "0.60", default-features = false }
 
