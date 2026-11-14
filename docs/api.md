@@ -104,7 +104,7 @@ Response includes `summary`, zero-filled `series`, top-12 `groups`, paginated `e
 
 ## Dashboards, views and MCP
 
-Custom dashboards are `piko.dashboard/v1` documents stored by the API, and saved views are named queries for the Events and Logs pages. [The dashboards guide](dashboards.md) documents the document, formulas, SQL, limits and examples. Everything takes a project by UUID or slug.
+Custom dashboards are `piko.dashboard/v1` documents stored by the API, and saved views are named queries for the Events and Logs pages. [The dashboards guide](dashboards.md) documents the document, formulas, SQL, limits and examples. Read paths and MCP tools take a project by UUID or slug; write paths (`/api/products/:id/...`) take its UUID, like the other management endpoints.
 
 ### Read paths
 
