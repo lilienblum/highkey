@@ -111,15 +111,6 @@ export type StoredDashboard = {
   updated_at: string;
   document: DashboardDocument;
 };
-export type DashboardSummary = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  revision: number;
-  updated_at: string;
-  widgets: number;
-};
 export type RevisionInfo = {
   revision: number;
   origin: "dashboard" | "mcp" | "api";
@@ -161,24 +152,6 @@ export type RunRequest = {
   bucket?: string;
   source_id?: string;
 };
-export type Catalog = {
-  project: { id: string; slug: string; name: string };
-  events: {
-    names: string[];
-    properties: { key: string; type: string; count: number }[];
-  };
-  logs: {
-    levels: string[];
-    services: unknown[];
-    environments: unknown[];
-    attributes?: unknown[];
-    [facet: string]: unknown;
-  };
-  sources: { id: string; name: string }[];
-  retention: { events_days: number; logs_days: number };
-  limits: Record<string, unknown>;
-};
-
 /** A 400 `invalid_document` or 409 `revision_conflict`; carries the issues and the current revision. */
 export class DocumentError extends ApiError {
   constructor(
@@ -218,10 +191,6 @@ const read = (project: string) => `/read/products/${encodeURIComponent(project)}
 const write = (productId: string) => `/products/${encodeURIComponent(productId)}/dashboards`;
 const part = encodeURIComponent;
 
-export const listDashboards = (project: string, signal?: AbortSignal) =>
-  request<DashboardSummary[]>(`${read(project)}/dashboards`, "GET", undefined, signal);
-export const getDashboard = (project: string, key: string, signal?: AbortSignal) =>
-  request<StoredDashboard>(`${read(project)}/dashboards/${part(key)}`, "GET", undefined, signal);
 export const listRevisions = (project: string, key: string, signal?: AbortSignal) =>
   request<RevisionInfo[]>(
     `${read(project)}/dashboards/${part(key)}/revisions`,
@@ -229,29 +198,10 @@ export const listRevisions = (project: string, key: string, signal?: AbortSignal
     undefined,
     signal,
   );
-export const getCatalog = (project: string, signal?: AbortSignal) =>
-  request<Catalog>(`${read(project)}/catalog`, "GET", undefined, signal);
-export const validateDocument = (project: string, document: unknown, signal?: AbortSignal) =>
-  request<{ valid: boolean; errors: Issue[]; warnings: Issue[] }>(
-    `${read(project)}/dashboards/validate`,
-    "POST",
-    { document },
-    signal,
-  );
 export const runWidget = (project: string, body: RunRequest, signal: AbortSignal) =>
   queryReadOnly<RunResult>(`${read(project)}/widgets/run`, body, signal);
 export const createDashboard = (productId: string, document: DashboardDocument) =>
   request<StoredDashboard>(write(productId), "POST", { document });
-export const saveDashboard = (
-  productId: string,
-  key: string,
-  baseRevision: number,
-  document: DashboardDocument,
-) =>
-  request<StoredDashboard>(`${write(productId)}/${part(key)}`, "PUT", {
-    base_revision: baseRevision,
-    document,
-  });
 export const restoreRevision = (productId: string, key: string, revision: number) =>
   request<StoredDashboard>(
     `${write(productId)}/${part(key)}/revisions/${revision}/restore`,
@@ -259,15 +209,6 @@ export const restoreRevision = (productId: string, key: string, revision: number
   );
 export const deleteDashboard = (productId: string, key: string) =>
   request<void>(`${write(productId)}/${part(key)}`, "DELETE");
-
-export const SIZE_PRESETS: { label: "Small" | "Medium" | "Large" | "Wide" | "Tall"; size: Size }[] =
-  [
-    { label: "Small", size: { w: 3, h: 1 } },
-    { label: "Medium", size: { w: 6, h: 2 } },
-    { label: "Large", size: { w: 8, h: 2 } },
-    { label: "Wide", size: { w: 12, h: 2 } },
-    { label: "Tall", size: { w: 12, h: 3 } },
-  ];
 
 export function resolvedSize(widget: Widget): Size {
   if (widget.size) return widget.size;
@@ -476,12 +417,6 @@ export function formatMeasure(
   return `${prefix}${text}${suffix}`;
 }
 
-export const blankDocument = (name: string): DashboardDocument => ({
-  version: 1,
-  name,
-  widgets: [],
-});
-
 /** Today's Overview as fixed, editable widgets. */
 export function overviewTemplate(name: string): DashboardDocument {
   return {
@@ -561,62 +496,4 @@ export function overviewTemplate(name: string): DashboardDocument {
       },
     ],
   };
-}
-
-const MAX_ID = 40;
-/** A free widget id built from `base`: slug characters only, then `-2`, `-3`... within 40 chars. */
-export function uniqueWidgetId(doc: DashboardDocument, base: string): string {
-  const slug =
-    base
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, MAX_ID)
-      .replace(/-+$/g, "") || "widget";
-  const taken = new Set(doc.widgets.map((w) => w.id));
-  if (!taken.has(slug)) return slug;
-  for (let n = 2; ; n++) {
-    const suffix = `-${n}`;
-    const candidate = `${slug.slice(0, MAX_ID - suffix.length).replace(/-+$/g, "")}${suffix}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-}
-
-export function moveWidget(doc: DashboardDocument, id: string, delta: number): DashboardDocument {
-  const from = doc.widgets.findIndex((w) => w.id === id);
-  if (from < 0) return doc;
-  const to = Math.min(doc.widgets.length - 1, Math.max(0, from + delta));
-  if (to === from) return doc;
-  const widgets = [...doc.widgets];
-  const [moved] = widgets.splice(from, 1);
-  widgets.splice(to, 0, moved);
-  return { ...doc, widgets };
-}
-
-export function duplicateWidget(doc: DashboardDocument, id: string): DashboardDocument {
-  const from = doc.widgets.findIndex((w) => w.id === id);
-  if (from < 0) return doc;
-  const source = doc.widgets[from];
-  const copy: Widget = {
-    ...structuredClone(source),
-    id: uniqueWidgetId(doc, source.id),
-    title: `${source.title.slice(0, 73)} (copy)`,
-  };
-  const widgets = [...doc.widgets];
-  widgets.splice(from + 1, 0, copy);
-  return { ...doc, widgets };
-}
-
-export const removeWidget = (doc: DashboardDocument, id: string): DashboardDocument => ({
-  ...doc,
-  widgets: doc.widgets.filter((w) => w.id !== id),
-});
-
-/** Replaces the widget with the same id in place, or appends a new one. */
-export function upsertWidget(doc: DashboardDocument, widget: Widget): DashboardDocument {
-  const index = doc.widgets.findIndex((w) => w.id === widget.id);
-  if (index < 0) return { ...doc, widgets: [...doc.widgets, widget] };
-  const widgets = [...doc.widgets];
-  widgets[index] = widget;
-  return { ...doc, widgets };
 }

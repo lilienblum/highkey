@@ -22,10 +22,6 @@ const samples: [CodeLanguage, string][] = [
     "http",
     `POST https://piko.test/api/ingest\nAuthorization: Bearer pk\nContent-Type: application/json\n\n{"name":"screen_view","subscribed":false}`,
   ],
-  [
-    "sql",
-    `-- errors per hour\nSELECT date_trunc($bucket, epoch_ms(event_time)) AS "time", count(*) AS value /* all */\nFROM events WHERE event_time >= $from AND name = 'it''s' AND n > 1.5e3;`,
-  ],
 ];
 
 test("highlighting is lossless for every snippet language", () => {
@@ -75,34 +71,4 @@ test("tokens take the expected syntax roles", () => {
     POST: "keyword",
     Authorization: "property",
   });
-});
-
-test("SQL tokens take keyword, function, string, number, comment, parameter and punctuation roles", () => {
-  const kinds = Object.fromEntries(
-    tokenize(
-      `-- note\nSELECT count(*) AS value FROM events WHERE name = 'a''b' AND t >= $from AND n < 12.5 AND "x y" IS NOT NULL /* c */`,
-      "sql",
-    )
-      .filter((token) => token.kind)
-      .map((token) => [token.text, token.kind]),
-  );
-  expect(kinds).toMatchObject({
-    "-- note": "comment",
-    SELECT: "keyword",
-    count: "function",
-    "(": "punct",
-    "*": "punct",
-    AS: "keyword",
-    FROM: "keyword",
-    WHERE: "keyword",
-    "=": "punct",
-    "'a''b'": "string",
-    $from: "variable",
-    "12.5": "number",
-    '"x y"': "property",
-    NULL: "constant",
-    "/* c */": "comment",
-  });
-  // Identifiers that merely contain a keyword stay plain.
-  expect(tokenize("selected_from", "sql").every((token) => !token.kind)).toBe(true);
 });

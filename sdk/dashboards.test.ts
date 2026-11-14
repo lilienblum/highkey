@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
 import {
-  blankDocument,
-  duplicateWidget,
   formatMeasure,
   hasSeriesLabel,
   lowerIsBetter,
-  moveWidget,
   overviewTemplate,
   queryLabel,
   cellKind,
@@ -15,15 +12,11 @@ import {
   validTime,
   parseJsonCell,
   TABLE_ROW_LIMIT,
-  removeWidget,
   resolvedSize,
   responsiveWidth,
   seriesDisplayLabel,
   seriesStyle,
-  SIZE_PRESETS,
   thresholdColor,
-  uniqueWidgetId,
-  upsertWidget,
   type Widget,
 } from "../apps/dashboard/src/lib/dashboards";
 
@@ -42,14 +35,7 @@ test("responsiveWidth follows the spec table", () => {
   expect(responsiveWidth(6, "narrow")).toBe(12);
 });
 
-test("size presets and defaults match the spec", () => {
-  expect(SIZE_PRESETS.map((p) => [p.label, p.size.w, p.size.h])).toEqual([
-    ["Small", 3, 1],
-    ["Medium", 6, 2],
-    ["Large", 8, 2],
-    ["Wide", 12, 2],
-    ["Tall", 12, 3],
-  ]);
+test("default sizes match the spec", () => {
   const widget = (type: string, size?: { w: number; h: number }) =>
     ({ id: "w", title: "W", view: { type }, size, queries: {} }) as unknown as Widget;
   expect(resolvedSize(widget("stat"))).toEqual({ w: 3, h: 1 });
@@ -128,54 +114,6 @@ test("overviewTemplate is a valid shape with unique ids and no orange", () => {
     for (const id of Object.keys(widget.queries)) expect(id).toMatch(/^[a-z][a-z0-9_]{0,15}$/);
   }
   expect(JSON.stringify(doc)).not.toContain("orange");
-  expect(blankDocument("Empty")).toEqual({ version: 1, name: "Empty", widgets: [] });
-});
-
-test("moveWidget, duplicateWidget and uniqueWidgetId keep ids unique", () => {
-  const doc = overviewTemplate("D");
-  expect(ids(moveWidget(doc, "events", 2)).slice(0, 3)).toEqual([
-    "activity",
-    "breakdown",
-    "events",
-  ]);
-  expect(ids(moveWidget(doc, "events", -1))).toEqual(ids(doc));
-  expect(ids(moveWidget(doc, "duration", 5))).toEqual(ids(doc));
-  expect(ids(doc)[0]).toBe("events");
-
-  const copy = duplicateWidget(doc, "events");
-  expect(ids(copy).slice(0, 3)).toEqual(["events", "events-2", "activity"]);
-  const again = duplicateWidget(copy, "events");
-  expect(ids(again).slice(0, 3)).toEqual(["events", "events-3", "events-2"]);
-  expect(new Set(ids(again)).size).toBe(ids(again).length);
-
-  expect(uniqueWidgetId(doc, "fresh")).toBe("fresh");
-  expect(uniqueWidgetId(doc, "events")).toBe("events-2");
-  expect(uniqueWidgetId(doc, "Hello World!")).toBe("hello-world");
-  expect(uniqueWidgetId(doc, "")).toBe("widget");
-  const long = "a".repeat(40);
-  const longDoc = upsertWidget(blankDocument("L"), { ...doc.widgets[0], id: long });
-  const next = uniqueWidgetId(longDoc, long);
-  expect(next.length).toBeLessThanOrEqual(40);
-  expect(next).not.toBe(long);
-});
-
-test("upsertWidget replaces by id or appends, removeWidget drops, and inputs are not mutated", () => {
-  const doc = overviewTemplate("D");
-  const before = JSON.stringify(doc);
-  const renamed = upsertWidget(doc, { ...doc.widgets[1], title: "Renamed" });
-  expect(renamed.widgets[1].title).toBe("Renamed");
-  expect(renamed.widgets.length).toBe(7);
-  const added = upsertWidget(doc, { ...doc.widgets[0], id: "extra" });
-  expect(ids(added).at(-1)).toBe("extra");
-  expect(ids(removeWidget(doc, "sources"))).toEqual([
-    "events",
-    "activity",
-    "breakdown",
-    "actors",
-    "success",
-    "duration",
-  ]);
-  expect(JSON.stringify(doc)).toBe(before);
 });
 
 test("queryLabel names what a query measures", () => {
