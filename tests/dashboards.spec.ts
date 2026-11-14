@@ -604,25 +604,29 @@ test("copy JSON puts a valid document on the clipboard", async ({ page, context 
 });
 
 test("delete asks first and returns to Overview", async ({ page }) => {
+  const name = `Doomed ${Date.now()}`;
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
-    document: checkoutDashboard,
+    document: { ...checkoutDashboard, name },
   });
   await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  // A unique name, so the sidebar check below can only pass once the link is gone.
+  const link = sidebar(page).getByRole("link", { name, exact: true });
+  await expect(link).toBeVisible();
   const menu = page.getByRole("button", { name: "Dashboard actions" });
   await menu.click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   const alert = page.getByRole("alertdialog");
-  await expect(alert).toContainText("Delete Checkout health? Its revisions are deleted too.");
+  await expect(alert).toContainText(`Delete ${name}? Its revisions are deleted too.`);
   await alert.getByRole("button", { name: "Cancel" }).click();
   await expect(alert).toBeHidden();
   await expect(menu).toBeFocused();
-  await expect(page.getByRole("heading", { level: 1, name: "Checkout health" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
   await menu.click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete dashboard" }).click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
   await expect(page.locator(".overview-dashboard")).toBeVisible();
-  await expect(sidebar(page).locator(`a[href$="/dashboards/${created.slug}"]`)).toHaveCount(0);
+  await expect(link).toHaveCount(0);
   expect(
     (await admin<{ slug: string }[]>(`/read/products/${project.slug}/dashboards`)).map(
       (d) => d.slug,
