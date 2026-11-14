@@ -4,6 +4,8 @@ use super::{
     error::DashboardError,
     run::{RunRequest, run_widget},
     spec,
+    storage::{self, Origin, origin_from},
+    validate::{Report, check_document, parse_document},
 };
 use crate::{
     AppState,
@@ -12,9 +14,11 @@ use crate::{
 use axum::{
     Json, Router,
     extract::{Path, State, rejection::JsonRejection},
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
 };
-use serde_json::Value;
+use serde::Deserialize;
+use serde_json::{Value, json};
 
 pub fn read_router() -> Router<AppState> {
     Router::new()
@@ -23,6 +27,13 @@ pub fn read_router() -> Router<AppState> {
         .route("/products/{project}/logs/query", post(logs_query))
         .route("/products/{project}/widgets/run", post(run))
         .route("/products/{project}/catalog", get(catalog))
+        .route("/products/{project}/dashboards", get(list))
+        .route("/products/{project}/dashboards/validate", post(validate))
+        .route("/products/{project}/dashboards/{key}", get(show))
+        .route(
+            "/products/{project}/dashboards/{key}/revisions",
+            get(revisions),
+        )
         .route("/schemas/dashboard.v1.json", get(schema))
 }
 
@@ -71,3 +82,169 @@ async fn catalog(
 async fn schema() -> Json<Value> {
     Json(spec::schema())
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Create {
+    document: Value,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Update {
+    base_revision: i64,
+    document: Value,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Validate {
+    document: Value,
+}
+
+type Body<T> = Result<Json<T>, JsonRejection>;
+fn body<T>(body: Body<T>) -> Result<T, DashboardError> {
+    body.map(|Json(v)| v)
+        .map_err(|e| ApiError(e.status(), e.body_text()).into())
+}
+fn document(value: Value) -> Result<spec::Document, DashboardError> {
+    parse_document(value).map_err(DashboardError::Invalid)
+}
+
+async fn list(
+    State(state): State<AppState>,
+    Path(project): Path<String>,
+) -> Result<Json<Value>, DashboardError> {
+    let summaries = state
+        .store
+        .state(move |db| {
+            let id = crate::store::resolve_product(db, &project)?.id;
+            Ok(storage::list(db, &id))
+        })
+        .await??;
+    Ok(Json(json!(summaries)))
+}
+async fn show(
+    State(state): State<AppState>,
+    Path((project, key)): Path<(String, String)>,
+) -> Result<Json<Value>, DashboardError> {
+    let stored = state
+        .store
+        .state(move |db| {
+            let id = crate::store::resolve_product(db, &project)?.id;
+            Ok(storage::get(db, &id, &key))
+        })
+        .await??;
+    Ok(Json(json!(stored)))
+}
+async fn revisions(
+    State(state): State<AppState>,
+    Path((project, key)): Path<(String, String)>,
+) -> Result<Json<Value>, DashboardError> {
+    let revisions = state
+        .store
+        .state(move |db| {
+            let id = crate::store::resolve_product(db, &project)?.id;
+            Ok(storage::revisions(db, &id, &key))
+        })
+        .await??;
+    Ok(Json(json!(revisions)))
+}
+/// Errors fail the document; unknown event names and properties only warn, because the data
+/// may arrive later.
+async fn validate(
+    State(state): State<AppState>,
+    Path(project): Path<String>,
+    request: Body<Validate>,
+) -> Result<Json<Value>, DashboardError> {
+    let Validate { document } = body(request)?;
+    let catalog = super::catalog::catalog(&state, &project).await?;
+    let mut report = match parse_document(document) {
+        Ok(doc) => {
+            let mut report = check_document(&doc);
+            super::catalog::warn_unknown_document(&doc, &catalog, &mut report);
+            report
+        }
+        Err(report) => report,
+    };
+    let Report { errors, warnings } = std::mem::take(&mut report);
+    Ok(Json(
+        json!({"valid": errors.is_empty(), "errors": errors, "warnings": warnings}),
+    ))
+}
+
+pub fn write_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/products/{id}/dashboards", post(create))
+        .route(
+            "/api/products/{id}/dashboards/{key}",
+            axum::routing::put(update).delete(remove),
+        )
+        .route(
+            "/api/products/{id}/dashboards/{key}/revisions/{n}/restore",
+            post(restore),
+        )
+}
+async fn create(
+    State(state): State<AppState>,
+    Path(product): Path<String>,
+    headers: HeaderMap,
+    request: Body<Create>,
+) -> Result<Json<Value>, DashboardError> {
+    let doc = document(body(request)?.document)?;
+    let origin = origin_from(&headers);
+    let id = product.clone();
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::create(db, &id, &doc, origin)))
+        .await??;
+    changed(&state, &product);
+    Ok(Json(json!(stored)))
+}
+async fn update(
+    State(state): State<AppState>,
+    Path((product, key)): Path<(String, String)>,
+    headers: HeaderMap,
+    request: Body<Update>,
+) -> Result<Json<Value>, DashboardError> {
+    let Update {
+        base_revision,
+        document: value,
+    } = body(request)?;
+    let doc = document(value)?;
+    let origin = origin_from(&headers);
+    let id = product.clone();
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::update(db, &id, &key, base_revision, &doc, origin)))
+        .await??;
+    changed(&state, &product);
+    Ok(Json(json!(stored)))
+}
+async fn restore(
+    State(state): State<AppState>,
+    Path((product, key, n)): Path<(String, String, i64)>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, DashboardError> {
+    let origin: Origin = origin_from(&headers);
+    let id = product.clone();
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::restore(db, &id, &key, n, origin)))
+        .await??;
+    changed(&state, &product);
+    Ok(Json(json!(stored)))
+}
+async fn remove(
+    State(state): State<AppState>,
+    Path((product, key)): Path<(String, String)>,
+) -> Result<StatusCode, DashboardError> {
+    let id = product.clone();
+    state
+        .store
+        .state(move |db| Ok(storage::delete(db, &id, &key)))
+        .await??;
+    changed(&state, &product);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Called after every successful dashboard write. A later task turns it into a live hint.
+pub fn changed(_state: &AppState, _product: &str) {}

@@ -97,6 +97,7 @@ pub fn router(state: AppState) -> Router {
             delete(logs::revoke_key),
         )
         .route("/api/cleanup", post(run_cleanup))
+        .merge(dashboards::routes::write_routes())
         .route_layer(middleware::from_fn(management_request));
     let ingest = Router::new()
         .route("/api/ingest", post(ingest_events))

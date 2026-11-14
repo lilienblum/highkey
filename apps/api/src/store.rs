@@ -47,6 +47,7 @@ impl Store {
           ")?;
         crate::sources::migrate(&mut sql)?;
         crate::logs::keys::migrate(&sql)?;
+        crate::dashboards::storage::migrate(&sql)?;
         let analytics = crate::product_db::ProductDatabases::new(path.join("products"))?;
         let migrated = sql
             .query_row(
@@ -275,6 +276,7 @@ pub fn product(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
         .map_err(anyhow::Error::from)?
         .ok_or_else(ApiError::missing)?;
     product.sources = crate::sources::list(db, id)?;
+    product.dashboards = dashboard_links(db, id)?;
     Ok(product)
 }
 fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
@@ -284,6 +286,7 @@ fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
         retention_days: r.get(2)?,
         created_at: r.get(3)?,
         sources: Vec::new(),
+        dashboards: Vec::new(),
         website_url: r.get(4)?,
         favicon_version: r.get(5)?,
         slug: r.get(6)?,
@@ -300,8 +303,29 @@ pub fn products(db: &rusqlite::Connection) -> ApiResult<Vec<Product>> {
         .map_err(anyhow::Error::from)?;
     for product in &mut products {
         product.sources = crate::sources::list(db, &product.id)?;
+        product.dashboards = dashboard_links(db, &product.id)?;
     }
     Ok(products)
+}
+fn dashboard_links(
+    db: &rusqlite::Connection,
+    id: &str,
+) -> ApiResult<Vec<crate::model::DashboardLink>> {
+    let mut q = db
+        .prepare("SELECT id,slug,name FROM dashboards WHERE product_id=? ORDER BY name,id")
+        .map_err(anyhow::Error::from)?;
+    let links = q
+        .query_map([id], |r| {
+            Ok(crate::model::DashboardLink {
+                id: r.get(0)?,
+                slug: r.get(1)?,
+                name: r.get(2)?,
+            })
+        })
+        .map_err(anyhow::Error::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(anyhow::Error::from)?;
+    Ok(links)
 }
 pub fn project_slug(name: &str) -> String {
     let slug = name

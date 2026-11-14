@@ -238,6 +238,8 @@ mod tests {
           PRAGMA user_version=2;").unwrap();
         db.execute("INSERT INTO ingestion_keys VALUES ('key','project','mobile','Release','pk_existing',?,'2026-01-02',0)", [crate::store::hash("pk_existing")]).unwrap();
         migrate(&mut db).unwrap();
+        // `Store::open` creates this table next; `store::product` reads it.
+        crate::dashboards::storage::migrate(&db).unwrap();
         assert_eq!(user_version(&db), 7);
         let sources = list(&db, "project").unwrap();
         assert_eq!(sources.len(), 2);

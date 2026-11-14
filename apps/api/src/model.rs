@@ -106,6 +106,14 @@ pub struct Product {
     pub retention_days: i64,
     pub created_at: String,
     pub sources: Vec<Source>,
+    #[serde(default)]
+    pub dashboards: Vec<DashboardLink>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardLink {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {

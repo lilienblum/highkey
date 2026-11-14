@@ -691,3 +691,394 @@ async fn catalog_lists_typed_keys_facets_retention_and_limits() {
     assert_eq!(run["series"][0]["total"], 2.0);
     test.close().await;
 }
+
+fn document(name: &str) -> Value {
+    json!({
+        "version": 1,
+        "name": name,
+        "widgets": [{
+            "id": "views",
+            "title": "Page views",
+            "view": { "type": "stat" },
+            "queries": { "views": { "signal": "events", "event": "page_view", "measure": "count" } },
+            "series": [{ "expr": "views" }]
+        }]
+    })
+}
+fn dashboards_path(project: &Value) -> String {
+    format!("/api/products/{}/dashboards", id(project))
+}
+async fn create_dashboard(test: &Test, project: &Value, name: &str) -> Value {
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(project),
+            json!({"document": document(name)}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    body
+}
+async fn put(
+    test: &Test,
+    project: &Value,
+    key: &str,
+    base: i64,
+    document: Value,
+    headers: &[(&str, &str)],
+) -> (StatusCode, Value) {
+    let mut all = vec![("x-piko-admin", "1")];
+    all.extend_from_slice(headers);
+    test.send(
+        "PUT",
+        &format!("{}/{key}", dashboards_path(project)),
+        json!({"base_revision": base, "document": document}),
+        &all,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn create_get_update_and_list_by_id_or_slug() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let created = create_dashboard(&test, &project, "Checkout Health").await;
+    assert_eq!(created["revision"], 1);
+    assert_eq!(created["slug"], "checkout-health");
+    assert_eq!(created["document"], document("Checkout Health"));
+    let dashboard_id = created["id"].as_str().unwrap();
+    assert!(
+        uuid::Uuid::parse_str(dashboard_id).is_ok(),
+        "{dashboard_id}"
+    );
+
+    let base = format!("/api/read/products/{}/dashboards", id(&project));
+    let by_slug = test
+        .read("GET", &format!("{base}/checkout-health"), Value::Null)
+        .await;
+    assert_eq!(by_slug.0, 200);
+    let by_project_slug = test
+        .read(
+            "GET",
+            &format!("/api/read/products/shop/dashboards/{dashboard_id}"),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(by_project_slug.1["id"], dashboard_id);
+    assert_eq!(by_slug.1["revision"], 1);
+    assert_eq!(by_slug.1["document"], document("Checkout Health"));
+
+    let (status, updated) = put(
+        &test,
+        &project,
+        "checkout-health",
+        1,
+        document("Checkout Health v2"),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 200, "{updated}");
+    assert_eq!(updated["revision"], 2);
+    assert_eq!(updated["slug"], "checkout-health");
+    assert_eq!(updated["document"]["name"], "Checkout Health v2");
+
+    let (_, list) = test.read("GET", &base, Value::Null).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["id"], dashboard_id);
+    assert_eq!(list[0]["slug"], "checkout-health");
+    assert_eq!(list[0]["name"], "Checkout Health v2");
+    assert!(list[0]["description"].is_null());
+    assert_eq!(list[0]["revision"], 2);
+    assert_eq!(list[0]["widgets"], 1);
+    assert!(list[0]["updated_at"].is_string());
+
+    let (_, products) = test.read("GET", "/api/read/products", Value::Null).await;
+    assert_eq!(
+        products[0]["dashboards"],
+        json!([{"id": dashboard_id, "slug": "checkout-health", "name": "Checkout Health v2"}])
+    );
+    let (_, products) = test.manage("GET", "/api/products", Value::Null).await;
+    assert_eq!(products[0]["dashboards"][0]["slug"], "checkout-health");
+    assert_eq!(
+        test.read("GET", &format!("{base}/nope"), Value::Null)
+            .await
+            .0,
+        404
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn stale_base_revision_conflicts() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    create_dashboard(&test, &project, "Board").await;
+    assert_eq!(
+        put(&test, &project, "board", 1, document("Board"), &[])
+            .await
+            .0,
+        200
+    );
+    let (status, body) = put(&test, &project, "board", 1, document("Other"), &[]).await;
+    assert_eq!(status, 409);
+    assert_eq!(body["code"], "revision_conflict");
+    assert_eq!(body["revision"], 2);
+    let (_, current) = test
+        .read(
+            "GET",
+            "/api/read/products/shop/dashboards/board",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(current["revision"], 2);
+    assert_eq!(current["document"]["name"], "Board");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn concurrent_saves_with_the_same_base_have_one_winner() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    create_dashboard(&test, &project, "Board").await;
+    let (a, b) = tokio::join!(
+        put(&test, &project, "board", 1, document("From A"), &[]),
+        put(&test, &project, "board", 1, document("From B"), &[]),
+    );
+    let mut statuses = [a.0.as_u16(), b.0.as_u16()];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409], "{a:?} {b:?}");
+    let loser = if a.0 == 409 { &a.1 } else { &b.1 };
+    assert_eq!(loser["revision"], 2);
+    let (_, current) = test
+        .read(
+            "GET",
+            "/api/read/products/shop/dashboards/board",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(current["revision"], 2);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn slugs_are_unique_stable_and_never_empty() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    assert_eq!(
+        create_dashboard(&test, &project, "Ünïcode ✨").await["slug"],
+        "dashboard"
+    );
+    assert_eq!(
+        create_dashboard(&test, &project, "Checkout").await["slug"],
+        "checkout"
+    );
+    let second = create_dashboard(&test, &project, "Checkout").await;
+    assert_eq!(second["slug"], "checkout-2");
+    assert_eq!(
+        create_dashboard(&test, &project, "Checkout").await["slug"],
+        "checkout-3"
+    );
+    // Renaming keeps the slug, even to a name another dashboard now has.
+    let (status, renamed) = put(&test, &project, "checkout-2", 1, document("Renamed"), &[]).await;
+    assert_eq!(status, 200, "{renamed}");
+    assert_eq!(renamed["slug"], "checkout-2");
+    // Another project may reuse the same slug.
+    let other = test.project("Other").await;
+    assert_eq!(
+        create_dashboard(&test, &other, "Checkout").await["slug"],
+        "checkout"
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn pruning_keeps_fifty_plus_each_origins_newest() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    create_dashboard(&test, &project, "Board").await;
+    let marked = [("x-piko-origin", "dashboard")];
+    assert_eq!(
+        put(&test, &project, "board", 1, document("By hand"), &marked)
+            .await
+            .0,
+        200
+    );
+    for base in 2..62 {
+        let (status, body) = put(&test, &project, "board", base, document("By api"), &[]).await;
+        assert_eq!(status, 200, "{body}");
+    }
+    let (status, revisions) = test
+        .read(
+            "GET",
+            "/api/read/products/shop/dashboards/board/revisions",
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200);
+    let revisions = revisions.as_array().unwrap();
+    assert_eq!(revisions.len(), 51);
+    assert_eq!(revisions[0]["revision"], 62);
+    assert_eq!(revisions[0]["origin"], "api");
+    assert!(revisions[0]["created_at"].is_string());
+    let last = revisions.last().unwrap();
+    assert_eq!(last["revision"], 2);
+    assert_eq!(last["origin"], "dashboard");
+    assert_eq!(revisions[49]["revision"], 13);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn restore_writes_a_new_revision() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    create_dashboard(&test, &project, "First").await;
+    put(&test, &project, "first", 1, document("Second"), &[]).await;
+    let (status, restored) = test
+        .manage(
+            "POST",
+            &format!("{}/first/revisions/1/restore", dashboards_path(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{restored}");
+    assert_eq!(restored["revision"], 3);
+    assert_eq!(restored["slug"], "first");
+    assert_eq!(restored["document"], document("First"));
+    let (_, list) = test
+        .read("GET", "/api/read/products/shop/dashboards", Value::Null)
+        .await;
+    assert_eq!(list[0]["name"], "First");
+    let missing = test
+        .manage(
+            "POST",
+            &format!("{}/first/revisions/9/restore", dashboards_path(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(missing.0, 404);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn writes_require_marker_and_limits_hold() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let body = json!({"document": document("Board")});
+    let (status, _) = test
+        .send("POST", &dashboards_path(&project), body.clone(), &[])
+        .await;
+    assert_eq!(status, 403);
+    assert_eq!(
+        test.read("GET", "/api/read/products/shop/dashboards", Value::Null)
+            .await
+            .1,
+        json!([])
+    );
+
+    for n in 0..50 {
+        create_dashboard(&test, &project, &format!("Board {n}")).await;
+    }
+    let (status, body) = test.manage("POST", &dashboards_path(&project), body).await;
+    assert_eq!(status, 400);
+    assert_eq!(body["code"], "limit");
+
+    // A document one byte over 64 KiB is refused, on create and on update.
+    let mut big = document("Big");
+    let base = serde_json::to_vec(&big).unwrap().len();
+    big["description"] = json!("");
+    let overhead = serde_json::to_vec(&big).unwrap().len() - base;
+    let filler = 65_536 + 1 - base - overhead;
+    let (other_project, other_key) = (test.project("Big").await, "big");
+    big["description"] = json!("x".repeat(filler));
+    assert_eq!(serde_json::to_vec(&big).unwrap().len(), 65_537);
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&other_project),
+            json!({"document": big}),
+        )
+        .await;
+    assert_eq!(status, 400);
+    assert_eq!(body["code"], "invalid_document", "{body}");
+    create_dashboard(&test, &other_project, "Big").await;
+    let (status, body) = put(&test, &other_project, other_key, 1, big, &[]).await;
+    assert_eq!(status, 400);
+    assert_eq!(body["code"], "invalid_document", "{body}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn validate_endpoint_reports_errors_and_warnings() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let path = format!("/api/read/products/{}/dashboards/validate", id(&project));
+    let (status, body) = test
+        .read("POST", &path, json!({"document": document("Fine")}))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["valid"], true);
+    assert_eq!(body["errors"], json!([]));
+    // The project has no `page_view` events yet: a warning, not an error.
+    assert_eq!(body["warnings"].as_array().unwrap().len(), 1, "{body}");
+    assert_eq!(
+        body["warnings"][0]["path"],
+        "/widgets/0/queries/views/event"
+    );
+
+    let mut broken = document("Broken");
+    broken["widgets"][0]["series"][0]["expr"] = json!("vews");
+    let (status, body) = test.read("POST", &path, json!({"document": broken})).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["valid"], false);
+    assert_eq!(body["errors"][0]["path"], "/widgets/0/series/0/expr");
+
+    let (status, body) = test
+        .read("POST", &path, json!({"document": {"version": 1}}))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["valid"], false);
+    assert!(body["errors"][0]["path"].is_string());
+    let missing = test
+        .read(
+            "POST",
+            "/api/read/products/missing/dashboards/validate",
+            json!({"document": document("Fine")}),
+        )
+        .await;
+    assert_eq!(missing.0, 404);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn delete_removes_dashboard_and_revisions() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let created = create_dashboard(&test, &project, "Board").await;
+    put(&test, &project, "board", 1, document("Board"), &[]).await;
+    let path = format!("{}/board", dashboards_path(&project));
+    let (status, _, _) = test.send_full("DELETE", &path, Value::Null, &[]).await;
+    assert_eq!(status, 403);
+    let (status, _) = test.manage("DELETE", &path, Value::Null).await;
+    assert_eq!(status, 204);
+    assert_eq!(
+        test.read(
+            "GET",
+            "/api/read/products/shop/dashboards/board",
+            Value::Null
+        )
+        .await
+        .0,
+        404
+    );
+    assert_eq!(test.manage("DELETE", &path, Value::Null).await.0, 404);
+    let connection = test.state.store.sqlite().unwrap();
+    let left: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM dashboard_revisions WHERE dashboard_id=?",
+            [created["id"].as_str().unwrap()],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(left, 0);
+    test.close().await;
+}
