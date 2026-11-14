@@ -34,16 +34,17 @@ Recreate the API with `docker compose up -d`. The API restart is brief but inter
 
 ## Memory ceiling
 
-On Linux the API caps its own memory at startup, so a runaway query fails with an Out of Memory error instead of the kernel stopping the API (and ingestion with it) or starving the host. By default the ceiling is 80% of the smaller of the container's memory limit and the host's memory; `docker compose logs api` shows the value chosen. To choose it yourself, set `PIKO_MEMORY_LIMIT` on the API service, in bytes with an optional `K`, `M` or `G` suffix, or `0` or `off` for no ceiling:
+The API sets no memory ceiling by default. A runaway query then grows until the kernel stops the API (and ingestion with it) or the container hits its own limit. On Linux you can opt in to a ceiling, so such a query fails with an Out of Memory error instead. Set `PIKO_MEMORY_LIMIT` on the API service to `auto`, which is 80% of the smaller of the container's memory limit and the host's memory, or to a size in bytes with an optional `K`, `M` or `G` suffix. Unset, empty, `0` and `off` mean no ceiling. `docker compose logs api` shows what the API chose.
 
 ```yaml
 services:
   api:
     environment:
-      PIKO_MEMORY_LIMIT: "2G"
+      PIKO_MEMORY_LIMIT: "auto" # or a size such as "2G"
+    mem_limit: 2g
 ```
 
-Recreate the API with `docker compose up -d`. The ceiling counts reserved as well as resident memory, so it reads higher than the container's RSS; see the [resource model](api.md#resource-model).
+The ceiling counts reserved memory as well as resident memory, and every open project database reserves thread stacks, so it must leave room for all of your projects' databases. Use `auto` only with a container memory limit of a few GiB or more, and see the [resource model](api.md#resource-model) for sizing. Recreate the API with `docker compose up -d`.
 
 ## Deploy with Tako
 

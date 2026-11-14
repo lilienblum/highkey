@@ -148,6 +148,7 @@ Some functions are refused by name, each with a hint that says what to use inste
 | `repeat`                                                             | Write the text out, or join short literals with `\|\|`                                       |
 | `lpad`, `rpad`                                                       | Pad with a literal and cut, as in `right('00' \|\| n::VARCHAR, 2)`; `strftime` for dates     |
 | `printf`, `format`                                                   | Build text with `\|\|` and casts, as in `name \|\| ': ' \|\| count(*)::VARCHAR`              |
+| `bitstring`                                                          | Write the bits as a literal, as in `'0101'::BIT`                                             |
 | `bar`                                                                | A `bar` or `ranking` view                                                                    |
 | `list_resize`, `array_resize`                                        | `list_slice` or `[a:b]`                                                                      |
 | `range(…)` and `generate_series(…)` as values (they return lists)    | Their table forms, as in `SELECT i FROM range(10) t(i)`, with `list(i)` when you need a list |
@@ -156,7 +157,7 @@ Some functions are refused by name, each with a hint that says what to use inste
 | `current_setting`, `getvariable`                                     | The parameters above                                                                         |
 | Built-in macros that call any of these                               | As for the function the macro calls; the hint names it                                       |
 
-A value can still grow by other routes, such as nested `replace` calls that each multiply a string. On Linux the API runs under a memory ceiling (see [the resource model](api.md#resource-model)), so such a query fails with an Out of Memory error instead of taking the API down.
+The list is not exhaustive. A value can still grow by other routes, such as nested `replace` calls that each multiply a string. Unless you opt in to a memory ceiling with `PIKO_MEMORY_LIMIT` on Linux (see [the resource model](api.md#resource-model)), such a query grows until the kernel's OOM killer stops the API; with a ceiling it fails with an Out of Memory error instead.
 
 The `events` table has `name`, `source`, `source_id`, `event_time` (epoch ms), `received_at`, `actor_id`, `identity_kind`, `session_id` and `properties` (JSON). The `logs` table has `log_id`, `source_id`, `timestamp` (epoch ms), `received_at`, `level`, `message`, `service`, `environment`, `trace_id`, `span_id`, `request_id` and `attributes` (JSON). `describe_project` returns the exact columns with their types.
 

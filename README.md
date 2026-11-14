@@ -58,18 +58,18 @@ Without Tako or Docker, use `bun run dev:standalone`, or build with `bun run bui
 
 Under native Tako, data lives in `$TAKO_DATA_DIR` (locally `.tako/data/app`); Compose uses the `piko-data` named volume at `/data`; standalone binaries use `./data` by default (`state.sqlite`, SQLite WAL files, and `products/<product-id>.duckdb` with their WAL files). Application logs live beside them in `logs/<project-id>.duckdb` with their WAL files; include both directories in backups. Mount `PIKO_DATA_DIR` on durable local storage. Run exactly **one API process per data directory**. Stop the API before copying the entire directory for backup; restore the whole directory together. Tako app-data backups do not include Compose named volumes; see [Compose backups and migration](docs/compose.md#backups-and-migration). Do not share the files over a network filesystem. Cleanup logically deletes rows; disk files need not shrink immediately. An eight-instance LRU cache bounds open product databases; active connections pin their instance against eviction. Each instance has a 64 MB DuckDB buffer limit and spills at most 1 GiB to disk. Query concurrency is bounded globally. Logs have a separate four-instance cache with 32 MB buffers, two query slots, and their own bounded writer and admission. Early shared-database MVP data is imported idempotently at startup; the original `events.duckdb` remains as a backup, outside active retention, and can be removed after verifying the import.
 
-| Setting                  | Default                    | Purpose                                                                                        |
-| ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------- |
-| `PIKO_DATA_DIR`          | `TAKO_DATA_DIR` or `data`  | Explicit durable database override                                                             |
-| `PIKO_BIND`              | `127.0.0.1:3001`           | Standalone API address; Tako owns its listener                                                 |
-| `PIKO_QUERY_CONCURRENCY` | `4` (1–16)                 | Independent DuckDB query connections                                                           |
-| `PIKO_QUEUE_CAPACITY`    | `64` (1–1024)              | Bounded ingestion request slots/queue                                                          |
-| `PIKO_MEMORY_LIMIT`      | 80% of cgroup or host RAM  | Linux memory ceiling; `0` or `off` for none ([resource model](docs/api.md#resource-model))     |
-| `PIKO_API_URL`           | `http://127.0.0.1:3001`    | Dashboard-to-API origin                                                                        |
-| `HOST`, `PORT`           | `127.0.0.1`, `3000`        | Standalone Bun dashboard listener                                                              |
-| `PIKO_CHANGE_URL`        | unset outside Tako configs | Optional post-commit notification endpoint                                                     |
-| `PIKO_CHANGE_TOKEN`      | Tako secret                | Shared API-to-dashboard credential; never sent to browsers                                     |
-| `PIKO_CORS_ORIGINS`      | unset (loopback only)      | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
+| Setting                  | Default                    | Purpose                                                                                                   |
+| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `PIKO_DATA_DIR`          | `TAKO_DATA_DIR` or `data`  | Explicit durable database override                                                                        |
+| `PIKO_BIND`              | `127.0.0.1:3001`           | Standalone API address; Tako owns its listener                                                            |
+| `PIKO_QUERY_CONCURRENCY` | `4` (1–16)                 | Independent DuckDB query connections                                                                      |
+| `PIKO_QUEUE_CAPACITY`    | `64` (1–1024)              | Bounded ingestion request slots/queue                                                                     |
+| `PIKO_MEMORY_LIMIT`      | unset (no ceiling)         | Opt-in Linux memory ceiling: `auto` or a size such as `2G` ([resource model](docs/api.md#resource-model)) |
+| `PIKO_API_URL`           | `http://127.0.0.1:3001`    | Dashboard-to-API origin                                                                                   |
+| `HOST`, `PORT`           | `127.0.0.1`, `3000`        | Standalone Bun dashboard listener                                                                         |
+| `PIKO_CHANGE_URL`        | unset outside Tako configs | Optional post-commit notification endpoint                                                                |
+| `PIKO_CHANGE_TOKEN`      | Tako secret                | Shared API-to-dashboard credential; never sent to browsers                                                |
+| `PIKO_CORS_ORIGINS`      | unset (loopback only)      | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages)            |
 
 ## Use it
 

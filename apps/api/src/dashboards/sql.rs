@@ -91,8 +91,9 @@ pub const BLOCKED_FUNCTIONS: [(&str, &str); 8] = [
 /// of `repeat('x', 100000000)` took the process past 1 GB with the limit at 64 MB. `range` and
 /// `generate_series` are refused only as scalars (which build lists); as table functions they
 /// stream rows. This list does not catch every way to build a big value (nine nested
-/// `replace(s, 'x', 'xxxxxxxxxx')` calls make a billion characters), so the API also caps the
-/// process's memory at startup (see `memory`), where a runaway allocation fails inside DuckDB.
+/// `replace(s, 'x', 'xxxxxxxxxx')` calls make a billion characters), so the API can also cap
+/// the process's memory at startup when asked to (see `memory`), where a runaway allocation fails
+/// inside DuckDB.
 pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 11] = [
     (
         "repeat",
