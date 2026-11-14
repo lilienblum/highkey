@@ -611,3 +611,66 @@ test("Save view says a client filter is not part of a view", async ({ page }) =>
     "The client filter isn’t saved.",
   );
 });
+
+test("a view the page cannot show stays put, with its dialog open, while the view refetches", async ({
+  page,
+}) => {
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: {
+      version: 1,
+      kind: "events",
+      name: `Refetched odd view ${run}`,
+      query: { measure: "count" },
+    },
+  });
+  const viewUrl = `**/api/read/products/*/views/${created.slug}?kind=events`;
+  await page.route(viewUrl, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.document.query.group_by = "bogus";
+    await route.fulfill({ response, json: body });
+  });
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.clock.install();
+  const hydrated = page.waitForResponse("**/_piko/runtime");
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await hydrated;
+  const heading = page.getByRole("heading", {
+    level: 1,
+    name: "This view uses settings Events can’t show",
+    // An open dialog hides the page behind it from the accessibility tree.
+    includeHidden: true,
+  });
+  await expect(heading).toBeVisible();
+  await page.getByRole("button", { name: "Edit with your agent" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit view" });
+  await expect(dialog).toBeVisible();
+  const inDialog = () => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
+  expect(await inDialog()).toBe(true);
+  // Hold the next read of the view: the screen has to stay while it is in flight.
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  await page.route(viewUrl, async (route) => {
+    reads++;
+    await gate;
+    await route.fallback();
+  });
+  try {
+    await page.clock.runFor(31_000);
+    await expect.poll(() => reads).toBeGreaterThan(0);
+    await expect(heading).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(page.getByText("Opening the saved view…")).toHaveCount(0);
+    expect(await inDialog()).toBe(true);
+  } finally {
+    release();
+  }
+  await page.clock.runFor(1_000);
+  await expect(heading).toBeVisible();
+  await expect(dialog).toBeVisible();
+  expect(await inDialog()).toBe(true);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});

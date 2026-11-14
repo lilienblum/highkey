@@ -276,13 +276,16 @@ export function OpenSavedView<D extends ViewDocument>({
   const view = useStoredView<D>(product, page.kind, slug);
   const show = useShowView(page, product);
   const [guiding, setGuiding] = useState(false);
-  const stored = !view.isFetching && !view.error ? view.data : undefined;
+  // The screen reads whatever is cached, so a refetch leaves it (and its dialog) alone.
+  const stored = view.error ? undefined : view.data;
   const patch = stored ? page.search(stored) : undefined;
   const version = patch && stored?.updated_at;
+  // Only a version that just finished loading applies, never a cached copy that is revalidating.
+  const settled = !view.isFetching;
   // biome-ignore lint/correctness/useExhaustiveDependencies: applies each readable version once
   useEffect(() => {
-    if (stored && patch) void show(slug, stored, patch);
-  }, [version]);
+    if (settled && stored && patch) void show(slug, stored, patch);
+  }, [version, settled]);
   const clear = (label: string) => (
     <Button
       variant="outline"
