@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
@@ -40,6 +40,10 @@ type Props = {
   logRetentionDays?: number;
   /** Reports whether this widget is loading or refreshing while in view. */
   onPendingChange?: (id: string, pending: boolean) => void;
+  /** Edit mode: these controls replace the header's hint and link. */
+  editControls?: ReactNode;
+  /** Edit mode: this widget is being dragged to a new position. */
+  dragging?: boolean;
 };
 
 /**
@@ -47,21 +51,23 @@ type Props = {
  * view, and a footer for its range, clamping and retention notes, or its error with Retry.
  */
 export function WidgetView(props: Props) {
-  return props.widget.view.type === "text" ? (
-    <TextWidget widget={props.widget} />
-  ) : (
-    <QueryWidget {...props} />
-  );
+  return props.widget.view.type === "text" ? <TextWidget {...props} /> : <QueryWidget {...props} />;
 }
 
 /** Grid placement: the written size and the medium and narrow widths it maps to (spec §5). */
-function placement(widget: Widget) {
+function placement({
+  widget,
+  editControls,
+  dragging,
+}: Pick<Props, "widget" | "editControls" | "dragging">) {
   const { w, h } = resolvedSize(widget);
   return {
     "data-widget": widget.id,
     "data-view": widget.view.type,
     "data-w": w,
     "data-h": h,
+    "data-editing": editControls ? "" : undefined,
+    "data-dragging": dragging ? "" : undefined,
     style: {
       "--widget-span-wide": responsiveWidth(w, "wide"),
       "--widget-span-medium": responsiveWidth(w, "medium"),
@@ -90,13 +96,13 @@ function Hint({ widget }: { widget: Widget }) {
   );
 }
 
-function TextWidget({ widget }: { widget: Widget }) {
+function TextWidget({ widget, editControls, dragging }: Props) {
   return (
     <OverviewWidget
-      {...placement(widget)}
+      {...placement({ widget, editControls, dragging })}
       title={widget.title}
       className="dashboard-widget"
-      controls={<Hint widget={widget} />}
+      controls={editControls ?? <Hint widget={widget} />}
       retry={() => {}}
     >
       <div className="dashboard-markdown">
@@ -106,11 +112,20 @@ function TextWidget({ widget }: { widget: Widget }) {
   );
 }
 
-function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Props) {
+function QueryWidget({
+  widget,
+  product,
+  logRetentionDays,
+  onPendingChange,
+  editControls,
+  dragging,
+}: Props) {
   const { range, sourceId, refreshKey } = useWorkspace();
   const ref = useRef<HTMLElement>(null);
   const near = useNearViewport(ref);
-  const run = useWidgetRun(product.id, widget, range, sourceId, refreshKey, near);
+  // Size is layout only: resizing in edit mode keeps the result instead of running again.
+  const { size: _size, ...runnable } = widget;
+  const run = useWidgetRun(product.id, runnable, range, sourceId, refreshKey, near);
   const pending = near && (run.loading || run.refreshing);
   useEffect(() => {
     onPendingChange?.(widget.id, pending);
@@ -163,16 +178,18 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
     ) : null;
   return (
     <OverviewWidget
-      {...placement(widget)}
+      {...placement({ widget, editControls, dragging })}
       ref={ref}
       aria-busy={pending}
       title={widget.title}
       className="dashboard-widget"
       controls={
-        <>
-          <Hint widget={widget} />
-          {link}
-        </>
+        editControls ?? (
+          <>
+            <Hint widget={widget} />
+            {link}
+          </>
+        )
       }
       error={run.error}
       retry={run.retry}

@@ -1,11 +1,23 @@
 import "./dashboards.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Link, useLoaderData, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { DashboardSquare01Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DashboardSquare01Icon,
+  MoreHorizontalIcon,
+  PencilEdit02Icon,
+} from "@hugeicons/core-free-icons";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -37,13 +49,29 @@ import type { Signal } from "@/lib/change-envelope";
 import {
   createDashboard,
   deleteDashboard,
+  DocumentError,
+  duplicateWidget,
+  getDashboard,
+  moveWidget,
+  removeWidget,
+  saveDashboard,
+  upsertWidget,
   type DashboardDocument,
+  type Issue,
+  type Size,
   type StoredDashboard,
 } from "@/lib/dashboards";
 import { createErrorMessage, useOpenDashboard } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
+import {
+  ConflictBanner,
+  EditBar,
+  UnsavedChangesGuard,
+  useWidgetDrag,
+  WidgetEditControls,
+} from "./edit-controls";
 import { WidgetView } from "./widget";
 
 /** The signals a dashboard's widgets read, so live hints for other signals leave it alone. */
@@ -56,7 +84,7 @@ export function signalsOf(dashboard: DashboardDocument): Signal[] {
 
 /**
  * A named dashboard: its server-rendered document under the shared toolbar, with each widget
- * loading its own data. Edit mode builds on this page.
+ * loading its own data, and an edit mode that saves the layout against the revision it began from.
  */
 export function DashboardPage() {
   const stored = useLoaderData({ from: dashboardRoute });
@@ -66,9 +94,32 @@ export function DashboardPage() {
   return <DashboardView key={`${product.id}:${stored.id}`} stored={stored} product={product} />;
 }
 
+type EditFailure = { title: string; message: string; issues: Issue[] };
+
 function DashboardView({ stored, product }: { stored: StoredDashboard; product: Product }) {
-  const { setLiveSignals } = useWorkspace();
-  const dashboard = stored.document;
+  const { setLiveSignals, reload } = useWorkspace();
+  const router = useRouter();
+  // The newest version this page knows: the loader's, or one it saved or fetched itself, which
+  // the loader catches up with after its next run.
+  const [known, setKnown] = useState(stored);
+  const current = known.revision > stored.revision ? known : stored;
+
+  // Edit mode: the draft, the document and revision it started from, and a newer revision.
+  const [draft, setDraft] = useState<DashboardDocument | null>(null);
+  const [original, setOriginal] = useState<DashboardDocument | null>(null);
+  const [baseRevision, setBaseRevision] = useState(stored.revision);
+  const [conflict, setConflict] = useState<{ revision: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingTheirs, setLoadingTheirs] = useState(false);
+  const [failure, setFailure] = useState<EditFailure | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const editing = draft !== null;
+  const dirty = useMemo(
+    () => draft !== null && JSON.stringify(draft) !== JSON.stringify(original),
+    [draft, original],
+  );
+  const dashboard = draft ?? current.document;
+
   const signals = signalsOf(dashboard).join(",");
   useEffect(() => {
     setLiveSignals(signals ? (signals.split(",") as Signal[]) : []);
@@ -100,22 +151,232 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
     retry: false,
   });
 
+  // Controls appear and disappear with edit mode, and React re-inserts a moved card, so focus is
+  // placed explicitly once the change has rendered.
+  const editButton = useRef<HTMLButtonElement>(null);
+  const editBar = useRef<HTMLElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const focusAfterRender = useRef<(() => HTMLElement | null | undefined) | null>(null);
+  useLayoutEffect(() => {
+    const target = focusAfterRender.current;
+    if (!target) return;
+    focusAfterRender.current = null;
+    target()?.focus();
+  });
+  const control = (id: string, name: string) =>
+    grid.current?.querySelector<HTMLElement>(
+      `[data-widget="${CSS.escape(id)}"] [data-edit-control="${name}"]`,
+    );
+
+  // A newer revision from a live hint (or any loader run): a clean draft simply moves onto it;
+  // changes wait for the reader's choice in the conflict banner.
+  useEffect(() => {
+    if (!editing || saving || stored.revision <= baseRevision) return;
+    if (dirty)
+      setConflict((shown) =>
+        shown && shown.revision >= stored.revision ? shown : { revision: stored.revision },
+      );
+    else {
+      setDraft(stored.document);
+      setOriginal(stored.document);
+      setBaseRevision(stored.revision);
+      setConflict(null);
+    }
+  }, [editing, saving, dirty, stored.revision, stored.document, baseRevision]);
+
+  function startEditing() {
+    setDraft(current.document);
+    setOriginal(current.document);
+    setBaseRevision(current.revision);
+    setConflict(null);
+    setFailure(null);
+    setAnnouncement("");
+    focusAfterRender.current = () => editBar.current;
+  }
+  function stopEditing() {
+    setDraft(null);
+    setOriginal(null);
+    setConflict(null);
+    setFailure(null);
+    focusAfterRender.current = () => editButton.current;
+  }
+  function cancel() {
+    // The view then shows the newest version, which a 409 found before the loader did.
+    if (conflict) void router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+    stopEditing();
+  }
+
+  async function save(base: number) {
+    if (!draft) return;
+    setSaving(true);
+    setFailure(null);
+    try {
+      const saved = await saveDashboard(product.id, current.id, base, draft);
+      setKnown(saved);
+      setBaseRevision(saved.revision);
+      stopEditing();
+      setAnnouncement("Dashboard saved");
+      // Live hints also refresh the document; without channels (Compose) this catches it up.
+      void router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+      if (saved.document.name !== current.document.name) void reload().catch(() => undefined);
+    } catch (error) {
+      if (error instanceof DocumentError && error.code === "revision_conflict")
+        setConflict({ revision: error.revision ?? base + 1 });
+      else
+        setFailure({
+          title: "Could not save this dashboard",
+          message: error instanceof Error ? error.message : "Try again.",
+          issues: error instanceof DocumentError ? error.issues : [],
+        });
+    } finally {
+      setSaving(false);
+    }
+  }
+  function keepMine() {
+    if (!conflict) return;
+    setBaseRevision(conflict.revision);
+    void save(conflict.revision);
+  }
+  async function loadTheirs() {
+    setLoadingTheirs(true);
+    setFailure(null);
+    try {
+      const theirs = await getDashboard(product.slug, current.id);
+      setKnown(theirs);
+      setDraft(theirs.document);
+      setOriginal(theirs.document);
+      setBaseRevision(theirs.revision);
+      setConflict(null);
+      setAnnouncement("Loaded their version");
+    } catch (error) {
+      setFailure({
+        title: "Could not load their version",
+        message: error instanceof Error ? error.message : "Try again.",
+        issues: [],
+      });
+    } finally {
+      setLoadingTheirs(false);
+    }
+  }
+
+  function move(id: string, delta: number, refocus: boolean) {
+    if (!draft) return;
+    const next = moveWidget(draft, id, delta);
+    if (next === draft) return;
+    const index = next.widgets.findIndex((w) => w.id === id);
+    setDraft(next);
+    setAnnouncement(
+      `${next.widgets[index].title} moved to position ${index + 1} of ${next.widgets.length}`,
+    );
+    if (refocus) focusAfterRender.current = () => control(id, delta < 0 ? "earlier" : "later");
+  }
+  function resize(id: string, size: Size) {
+    if (!draft) return;
+    const widget = draft.widgets.find((w) => w.id === id);
+    if (widget) setDraft(upsertWidget(draft, { ...widget, size }));
+  }
+  function duplicate(id: string) {
+    if (!draft) return;
+    const index = draft.widgets.findIndex((w) => w.id === id);
+    const next = duplicateWidget(draft, id);
+    setDraft(next);
+    setAnnouncement(`Added ${next.widgets[index + 1].title} after the original`);
+  }
+  function remove(id: string) {
+    if (!draft) return;
+    const index = draft.widgets.findIndex((w) => w.id === id);
+    const next = removeWidget(draft, id);
+    setDraft(next);
+    setAnnouncement(`Removed ${draft.widgets[index].title}`);
+    // Focus moves to the card that took its place, or the one before, or the edit bar.
+    const neighbour = next.widgets[index] ?? next.widgets[index - 1];
+    focusAfterRender.current = () =>
+      neighbour ? control(neighbour.id, "earlier") : editBar.current;
+  }
+
+  const ids = dashboard.widgets.map((widget) => widget.id);
+  const drag = useWidgetDrag(grid, ids, (id, delta) => move(id, delta, false));
+
   return (
     <>
       <PageHeader title={dashboard.name} description={dashboard.description ?? ""}>
-        <DashboardActions stored={stored} product={product} />
+        {!editing && (
+          <DashboardActions
+            stored={current}
+            product={product}
+            onEdit={startEditing}
+            editRef={editButton}
+          />
+        )}
       </PageHeader>
+      {editing && (
+        <EditBar
+          ref={editBar}
+          dirty={dirty}
+          saving={saving}
+          saveDisabled={!!conflict || loadingTheirs}
+          onSave={() => void save(baseRevision)}
+          onCancel={cancel}
+        />
+      )}
+      {editing && conflict && (
+        <ConflictBanner
+          project={product.slug}
+          dashboard={current.id}
+          revision={conflict.revision}
+          busy={saving || loadingTheirs}
+          onLoadTheirs={() => void loadTheirs()}
+          onKeepMine={keepMine}
+        />
+      )}
+      {editing && failure && (
+        <Alert variant="destructive" className="dashboard-edit-failure">
+          <AlertTitle>{failure.title}</AlertTitle>
+          <AlertDescription>
+            <p>{failure.message}</p>
+            {failure.issues.length > 0 && (
+              <ul>
+                {failure.issues.map((issue) => (
+                  <li key={`${issue.path}:${issue.message}`}>
+                    <code>{issue.path || "/"}</code> {issue.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       {dashboard.widgets.length ? (
-        <div className="dashboard-grid">
-          {dashboard.widgets.map((widget) => (
+        <div
+          className="dashboard-grid"
+          data-editing={editing ? "" : undefined}
+          {...(editing ? drag.gridProps : {})}
+          ref={grid}
+        >
+          {dashboard.widgets.map((widget, index) => (
             <WidgetView
               key={widget.id}
               widget={widget}
               product={product}
               logRetentionDays={retention.data?.retention_days}
               onPendingChange={reportPending}
+              dragging={drag.dragging === widget.id}
+              editControls={
+                editing ? (
+                  <WidgetEditControls
+                    widget={widget}
+                    index={index}
+                    count={dashboard.widgets.length}
+                    onMove={(delta) => move(widget.id, delta, true)}
+                    onResize={(size) => resize(widget.id, size)}
+                    onDuplicate={() => duplicate(widget.id)}
+                    onRemove={() => remove(widget.id)}
+                  />
+                ) : undefined
+              }
             />
           ))}
+          {editing && drag.indicator}
         </div>
       ) : (
         <Empty>
@@ -130,15 +391,29 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
           </EmptyHeader>
         </Empty>
       )}
+      <div className="sr-only" aria-live="polite" aria-atomic="true" data-dashboard-announcer="">
+        {announcement}
+      </div>
+      <UnsavedChangesGuard dirty={dirty} />
     </>
   );
 }
 
 /**
- * The dashboard's overflow menu. Copy JSON hands the stored document to the clipboard; Duplicate
- * saves a copy and opens it; Delete asks first. Failures show under the heading.
+ * Edit, then the dashboard's overflow menu. Copy JSON hands the stored document to the clipboard;
+ * Duplicate saves a copy and opens it; Delete asks first. Failures show under the heading.
  */
-function DashboardActions({ stored, product }: { stored: StoredDashboard; product: Product }) {
+function DashboardActions({
+  stored,
+  product,
+  onEdit,
+  editRef,
+}: {
+  stored: StoredDashboard;
+  product: Product;
+  onEdit: () => void;
+  editRef: Ref<HTMLButtonElement>;
+}) {
   const { reload } = useWorkspace();
   const navigate = useNavigate();
   const open = useOpenDashboard();
@@ -193,6 +468,15 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
           Copied
         </span>
       )}
+      <Button ref={editRef} variant="outline" onClick={onEdit}>
+        <HugeiconsIcon
+          icon={PencilEdit02Icon}
+          strokeWidth={2}
+          aria-hidden="true"
+          data-icon="inline-start"
+        />
+        Edit
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
