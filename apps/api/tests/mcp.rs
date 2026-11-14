@@ -113,12 +113,17 @@ impl Test {
         .await["result"]
             .clone()
     }
-    async fn tool_names(&self, path: &str) -> Vec<String> {
+    async fn tools(&self, path: &str) -> Vec<Value> {
         self.initialize(path).await;
         let listed = self.rpc(path, "tools/list", json!({})).await;
         listed["result"]["tools"]
             .as_array()
             .unwrap_or_else(|| panic!("{listed}"))
+            .clone()
+    }
+    async fn tool_names(&self, path: &str) -> Vec<String> {
+        self.tools(path)
+            .await
             .iter()
             .map(|t| t["name"].as_str().unwrap().to_string())
             .collect()
@@ -271,6 +276,57 @@ async fn read_path_lists_only_read_tools() {
         assert!(full.contains(&name.to_string()), "{name} in {full:?}");
     }
     assert!(full.len() > read.len());
+    test.close().await;
+}
+
+/// Every tool the read path may list. A new tool reaches `/api/read/mcp` only by being added
+/// here, as a deliberate read-only decision.
+const READ_TOOLS: [&str; 13] = [
+    "list_projects",
+    "describe_project",
+    "run_widget",
+    "sample_events",
+    "sample_logs",
+    "list_dashboards",
+    "get_dashboard",
+    "list_revisions",
+    "validate_dashboard",
+    "list_views",
+    "get_view",
+    "list_sources",
+    "get_log_settings",
+];
+
+#[tokio::test]
+async fn tools_say_whether_they_read_change_or_destroy() {
+    let test = Test::new();
+    let mut read = test.tool_names(READ).await;
+    read.sort();
+    let mut allowed = READ_TOOLS.map(String::from).to_vec();
+    allowed.sort();
+    assert_eq!(read, allowed, "the read path lists exactly the allowlist");
+    for tool in test.tools(READ).await {
+        assert_eq!(
+            tool["annotations"]["readOnlyHint"], true,
+            "{} on {READ}: {tool}",
+            tool["name"]
+        );
+    }
+    // Reads that need the full path: key metadata stays off the read path.
+    let full_only_reads = ["list_keys", "list_log_keys"];
+    let full = test.tools(FULL).await;
+    assert!(full.len() > READ_TOOLS.len());
+    for tool in &full {
+        let name = tool["name"].as_str().unwrap();
+        let hints = &tool["annotations"];
+        if READ_TOOLS.contains(&name) || full_only_reads.contains(&name) {
+            assert_eq!(hints["readOnlyHint"], true, "{name}: {tool}");
+            continue;
+        }
+        assert_eq!(hints["readOnlyHint"], false, "{name}: {tool}");
+        let destroys = name.starts_with("delete_") || name.starts_with("revoke_");
+        assert_eq!(hints["destructiveHint"], destroys, "{name}: {tool}");
+    }
     test.close().await;
 }
 

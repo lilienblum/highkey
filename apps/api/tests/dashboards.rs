@@ -1304,6 +1304,8 @@ async fn read_prefix_has_no_mutating_route() {
         format!("{base}/dashboards/validate"),
         format!("{base}/dashboards/d"),
         format!("{base}/dashboards/d/revisions"),
+        format!("{base}/views"),
+        format!("{base}/views/v"),
         "/api/read/schemas/dashboard.v1.json".to_string(),
     ];
     let posts = ["query", "logs/query", "widgets/run", "dashboards/validate"];
@@ -1327,6 +1329,26 @@ async fn read_prefix_has_no_mutating_route() {
         .send("POST", &format!("{base}/dashboards"), json!({}), &[])
         .await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    // MCP takes JSON-RPC over POST only (its tools there are read tools); no other method
+    // reaches a handler.
+    for method in ["GET", "PUT", "PATCH", "DELETE"] {
+        let (status, body) = test
+            .send(
+                method,
+                "/api/read/mcp",
+                json!({}),
+                &[
+                    ("host", "piko.example"),
+                    ("accept", "application/json, text/event-stream"),
+                ],
+            )
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::METHOD_NOT_ALLOWED,
+            "{method} /api/read/mcp: {body}"
+        );
+    }
     test.close().await;
 }
 
