@@ -666,6 +666,24 @@ fn otlp_records_without_uid_get_time_ordered_ids() {
     // UUIDv7 ids sort by creation, so the batch order survives an id sort.
     assert!(logs[0].log_id < logs[1].log_id);
 }
+#[test]
+fn json_logs_without_id_get_time_ordered_ids() {
+    let log = json!({"timestamp":"2026-01-01T00:00:00Z","service":"api","message":"Same instant"});
+    let logs = serde_json::from_value::<piko::logs::model::Payload>(json!({"logs":[log, log]}))
+        .unwrap()
+        .records();
+    assert_eq!(logs.len(), 2);
+    assert_eq!(logs[0].timestamp, logs[1].timestamp);
+    for log in &logs {
+        assert_eq!(
+            uuid::Uuid::parse_str(&log.log_id)
+                .unwrap()
+                .get_version_num(),
+            7
+        );
+    }
+    assert!(logs[0].log_id < logs[1].log_id);
+}
 
 #[tokio::test]
 async fn facets_list_every_known_service_environment_and_typed_attribute() {

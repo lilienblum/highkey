@@ -24,7 +24,7 @@ pub struct Log {
     pub attributes: Map<String, Value>,
 }
 fn new_id() -> String {
-    uuid::Uuid::new_v4().to_string()
+    uuid::Uuid::now_v7().to_string()
 }
 fn info() -> String {
     "info".into()
