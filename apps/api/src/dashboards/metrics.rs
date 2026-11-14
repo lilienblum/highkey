@@ -115,7 +115,7 @@ fn build_query(
         bucket: w.bucket.as_str().into(),
         event: q.event.clone(),
         source: None,
-        source_id: source.map(str::to_string).or_else(|| q.source_id.clone()),
+        source_id: q.source_id.clone().or_else(|| source.map(str::to_string)),
         identity_kind: q.identity_kind.clone(),
         measure: measure.into(),
         property: q.property.clone(),
@@ -487,6 +487,35 @@ mod tests {
         });
         let m = events(&mut db.connection, &id, &q, None, &window(), &Shape::Total).unwrap();
         assert_eq!(m.total, Some(4.0));
+    }
+    #[test]
+    fn pinned_source_wins_over_workspace_source() {
+        let (_d, store, id) = seed();
+        let mut db = store.analytics.connection(&id).unwrap();
+        let s2 = uuid::Uuid::new_v4().to_string();
+        let pinned = query(json!({"source_id": S1}));
+        let m = events(
+            &mut db.connection,
+            &id,
+            &pinned,
+            Some(&s2),
+            &window(),
+            &Shape::Total,
+        )
+        .unwrap();
+        assert_eq!(m.total, Some(6.0));
+        let m = events(
+            &mut db.connection,
+            &id,
+            &query(json!({})),
+            Some(&s2),
+            &window(),
+            &Shape::Total,
+        )
+        .unwrap();
+        assert_eq!(m.total, Some(0.0));
+        let rows = event_rows(&mut db.connection, &id, &pinned, Some(&s2), &window(), 10).unwrap();
+        assert_eq!(rows.len(), 6);
     }
     #[test]
     fn min_and_max_measures() {
