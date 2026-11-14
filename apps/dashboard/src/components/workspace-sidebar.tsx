@@ -83,6 +83,7 @@ export function WorkspaceSidebar({
       search={(previous) => ({
         ...previous,
         view: view.slug,
+        viewAt: undefined,
         query: undefined,
         page: undefined,
         drilldown: undefined,

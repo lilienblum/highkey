@@ -442,3 +442,68 @@ test("a rejected save shows the API's message and hint and creates nothing", asy
   await expect(dialog).toBeVisible();
   expect((await views()).some((view) => view.name === name)).toBe(false);
 });
+
+const replaceView = (slug: string, document: unknown) =>
+  admin<View>(`/products/${project.id}/views/${slug}`, { document }, "PUT");
+
+test("an agent's change to the open view applies in place when nothing changed here", async ({
+  page,
+}) => {
+  const name = `Agent edits ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "signup", measure: "count" } },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  const builder = await page.locator(".query-builder").elementHandle();
+  await replaceView(created.slug, {
+    version: 1,
+    kind: "events",
+    name,
+    query: { event: "page_view", measure: "count" },
+  });
+  await expect(page.getByText("across 4 matching events")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Event", exact: true })).toContainText(
+    "page_view",
+  );
+  await expect(page.getByText("Changed by your agent")).toHaveCount(0);
+  // In place: the page did not reopen the view.
+  expect(await builder?.evaluate((element) => element.isConnected)).toBe(true);
+});
+
+test("an agent's change waits while you have your own, and Update refuses to revert it", async ({
+  page,
+}) => {
+  const name = `Contested ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "signup", measure: "count" } },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+  await page.getByRole("combobox", { name: "Event", exact: true }).click();
+  await page.getByRole("option", { name: "page_view", exact: true }).click();
+  await page.getByRole("button", { name: "Run query", exact: true }).click();
+  await expect(page.getByText("across 4 matching events")).toBeVisible();
+  const agents = {
+    event: "signup",
+    measure: "count",
+    filters: [{ property: "plan", op: "eq", value: "pro" }],
+  };
+  await replaceView(created.slug, { version: 1, kind: "events", name, query: agents });
+  await expect(page.getByText("Changed by your agent")).toBeVisible();
+  await expect(page.getByText("across 4 matching events")).toBeVisible();
+
+  await page.getByRole("button", { name: "View actions" }).click();
+  await page.getByRole("menuitem", { name: "Update view with current query" }).click();
+  await expect(page.getByRole("alert")).toContainText("changed after you opened it");
+  expect((await stored(created.slug)).document.query).toEqual(agents);
+
+  await page.getByRole("button", { name: "Load latest" }).click();
+  await expect(page.getByText("across 2 matching events")).toBeVisible();
+  await expect(page.getByText("Changed by your agent")).toHaveCount(0);
+  await page.getByRole("button", { name: "View actions" }).click();
+  await page.getByRole("menuitem", { name: "Update view with current query" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Updated" })).toBeVisible();
+  expect((await stored(created.slug)).document.query).toEqual(agents);
+});

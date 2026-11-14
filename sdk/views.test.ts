@@ -6,8 +6,13 @@ import {
 } from "../apps/dashboard/src/lib/explore-search";
 import { validateLogsSearch } from "../apps/dashboard/src/lib/logs";
 import {
+  appliedState,
   currentLogView,
+  eventViewState,
   explorable,
+  logViewState,
+  rememberApplied,
+  viewSync,
   logsRunnable,
   logsToQuery,
   queryToLogs,
@@ -263,4 +268,77 @@ test("log search validates a minimum level, a pinned source, more filters and a 
     { moreFilters: Array.from({ length: 8 }, () => ({ attribute: "a", value: 1 })) },
   ])
     expect(validateLogsSearch(value)).toEqual({ invalidLogs: true });
+});
+
+test("an empty-string first filter survives a round trip through the Events page", () => {
+  const query: EventViewQuery = {
+    measure: "count",
+    filters: [
+      { property: "referrer", op: "eq", value: "" },
+      { property: "path", op: "ne", value: "" },
+    ],
+  };
+  expect(queryToSpec(query).filterValue).toBe('""');
+  expect(specToQuery(queryToSpec(query))).toEqual(query);
+});
+
+test("a view's state compares equal after a URL round trip, whatever the key order", () => {
+  const spec = queryToSpec({
+    event: "signup",
+    measure: "max",
+    property: "seats",
+    identity_kind: "anonymous",
+    filters: [{ property: "plan", op: "eq", value: "pro" }],
+  });
+  const shuffled = Object.fromEntries(Object.entries(spec).reverse()) as ExploreSpec;
+  const url = validateExploreSearch({ query: JSON.parse(JSON.stringify(shuffled)) }).query;
+  expect(url && eventViewState(url)).toBe(eventViewState(spec));
+  expect(eventViewState({ ...spec, event: "page_view" })).not.toBe(eventViewState(spec));
+  // The client name is not part of a view, so it is not part of its state.
+  expect(eventViewState({ ...spec, source: "browser" })).toBe(eventViewState(spec));
+
+  const logs = queryToLogs({ level: "error", filters: [{ attribute: "status", value: 500 }] });
+  expect(logViewState(validateLogsSearch({ ...logs }))).toBe(logViewState(logs));
+  // A view that names no window opens on the default one.
+  expect(logViewState({ ...logs, logWindow: undefined })).toBe(logViewState(logs));
+  expect(logViewState({ ...logs, logWindow: "6h" })).not.toBe(logViewState(logs));
+});
+
+test("a newer view version applies in place only when the page shows what it applied", () => {
+  const stored = (at: string, state: string) => ({ at, state });
+  const at = "2026-11-14T10:00:00.123456+00:00";
+  const later = "2026-11-14T10:05:00+00:00";
+  // The page applied this version.
+  expect(viewSync({ appliedAt: at, applied: "a", page: "b", stored: stored(at, "a") })).toBe(
+    "current",
+  );
+  // Nothing changed here: the newer query applies in place.
+  expect(viewSync({ appliedAt: at, applied: "a", page: "a", stored: stored(later, "b") })).toBe(
+    "apply",
+  );
+  // The page already shows the newer query, or the query did not change (a rename).
+  expect(viewSync({ appliedAt: at, page: "b", stored: stored(later, "b") })).toBe("bump");
+  expect(viewSync({ appliedAt: at, applied: "a", page: "c", stored: stored(later, "a") })).toBe(
+    "bump",
+  );
+  // Changes on both sides, or a page that cannot tell (after a reload): the reader chooses.
+  expect(viewSync({ appliedAt: at, applied: "a", page: "c", stored: stored(later, "b") })).toBe(
+    "changed",
+  );
+  expect(viewSync({ appliedAt: at, page: "a", stored: stored(later, "b") })).toBe("changed");
+});
+
+test("the applied state is remembered per view and version", () => {
+  rememberApplied("p:events:plans", "2026-11-14T10:00:00Z", "a");
+  expect(appliedState("p:events:plans", "2026-11-14T10:00:00Z")).toBe("a");
+  expect(appliedState("p:events:plans", "2026-11-14T10:05:00Z")).toBeUndefined();
+  expect(appliedState("p:logs:plans", "2026-11-14T10:00:00Z")).toBeUndefined();
+});
+
+test("search accepts the applied view version and refuses anything else", () => {
+  const at = "2026-11-14T10:00:00.123456789+00:00";
+  expect(validateExploreSearch({ view: "plans", viewAt: at }).viewAt).toBe(at);
+  expect(validateExploreSearch({ view: "plans", viewAt: "yesterday" }).invalidQuery).toBe(true);
+  expect(validateLogsSearch({ view: "errors", viewAt: at }).viewAt).toBe(at);
+  expect(validateLogsSearch({ view: "errors", viewAt: 1 }).invalidLogs).toBe(true);
 });

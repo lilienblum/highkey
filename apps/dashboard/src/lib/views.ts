@@ -116,9 +116,11 @@ function typedValue(text: string): Scalar {
   } catch {}
   return text;
 }
-/** The text that types a value back into the query builder. */
+/** The text that types a value back into the query builder; an empty string stays quoted. */
 function valueText(value: Scalar): string {
-  return typeof value === "string" && typedValue(value) === value ? value : JSON.stringify(value);
+  return typeof value === "string" && value !== "" && typedValue(value) === value
+    ? value
+    : JSON.stringify(value);
 }
 
 /**
@@ -246,3 +248,68 @@ export function currentLogView(stored: LogViewDocument, search: LogsSearch): Log
 
 /** Every cached stored view; an open view's is the active query. */
 export const viewQueries = ["view"] as const;
+
+/** JSON with sorted keys, so equal values compare equal after a URL round trip. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : item,
+  );
+}
+
+/** What the Events page shows of a view: the query it would save, comparable as text. */
+export function eventViewState(spec: ExploreSpec): string {
+  return canonical(specToQuery(spec));
+}
+
+/** What the Logs page shows of a view: its filters and time window, comparable as text. */
+export function logViewState(search: LogsSearch): string {
+  try {
+    return canonical({ query: logsToQuery(search), window: search.logWindow ?? defaultLogWindow });
+  } catch {
+    // An attribute value of the wrong type cannot be a view's.
+    return "";
+  }
+}
+
+/**
+ * How an open view stands against the stored one. `current`: the page applied this version.
+ * `bump`: a newer version whose query the page already shows or started from (a rename, say), so
+ * only the applied marker moves. `apply`: a newer query and nothing changed on the page, so it
+ * applies in place. `changed`: a newer query while the page has changes of its own (or the page
+ * cannot tell), so the reader chooses.
+ */
+export type ViewSync = "current" | "bump" | "apply" | "changed";
+export function viewSync(options: {
+  /** The `updated_at` the page applied. */
+  appliedAt?: string;
+  /** The state the page showed when it applied that version, when this page load knows it. */
+  applied?: string;
+  /** The state the page shows now. */
+  page: string;
+  stored: { at: string; state: string };
+}): ViewSync {
+  const { appliedAt, applied, page, stored } = options;
+  if (appliedAt !== undefined && stored.at === appliedAt) return "current";
+  if (stored.state === page) return "bump";
+  if (applied !== undefined && appliedAt !== undefined) {
+    if (stored.state === applied) return "bump";
+    if (page === applied) return "apply";
+  }
+  return "changed";
+}
+
+/** Each view's last applied version and what the page showed then, for this page load. */
+const applied = new Map<string, { at: string; state: string }>();
+export const viewIdentity = (productId: string, kind: ViewKind, slug: string) =>
+  `${productId}:${kind}:${slug}`;
+/** Remembers what a page showed when it applied a view version (in the browser only). */
+export function rememberApplied(view: string, at: string, state: string) {
+  applied.set(view, { at, state });
+}
+/** What the page showed when it applied version `at`, if this page load applied it. */
+export function appliedState(view: string, at: string | undefined): string | undefined {
+  const entry = applied.get(view);
+  return entry && entry.at === at ? entry.state : undefined;
+}

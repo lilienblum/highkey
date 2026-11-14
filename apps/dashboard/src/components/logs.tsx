@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
@@ -22,10 +22,10 @@ import {
   type LogsSearch,
 } from "@/lib/logs";
 import {
-  getView,
-  logsRunnable,
-  queryToLogs,
   currentLogView,
+  logsRunnable,
+  logViewState,
+  queryToLogs,
   type LogViewDocument,
 } from "@/lib/views";
 import { workspaceTarget } from "@/lib/workspace-route";
@@ -42,8 +42,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ValueSelect } from "./value-select";
 import { ErrorState, PinChip, QueryDraftNotice } from "./shared";
-import { AgentGuideDialog } from "./dashboards/agent-guide";
-import { SaveLogViewButton, ViewActions } from "./saved-views";
+import { OpenSavedView, SaveLogViewButton, ViewActions, type SavedViewPage } from "./saved-views";
 import { LogStream } from "./log-stream";
 import { useLogFeed } from "@/lib/use-log-feed";
 import { MAX_BUFFERED_LOGS } from "@/lib/log-buffer";
@@ -52,119 +51,40 @@ const direction =
   "THESIS: A compact log workspace that keeps investigation beside the stream. OWN-WORLD: Kanagawa Wave, Geist, fine seams, Base UI controls and restrained severity colors. STORY: Search a project, locate a request, inspect its structured context. FIRST VIEWPORT: Query bar, time and follow controls, shallow volume histogram, aligned timestamp/severity/service/message rows. FORM: Extend the existing shell with the requested dense stream and a right-hand inspector.";
 export function Logs() {
   const { product } = useWorkspace();
-  const { view, logWindow, invalidLogs } = validateLogsSearch(useSearch({ strict: false }));
-  // A saved view opens by loading its filters into the URL, so reloads and history keep them. The
-  // window it sets marks it as applied.
-  if (product && view && !logWindow && !invalidLogs)
-    return <OpenLogView key={`${product.id}:${view}`} slug={view} />;
+  const { view, viewAt, invalidLogs } = validateLogsSearch(useSearch({ strict: false }));
+  // A saved view opens by loading its filters, window and version into the URL, so reloads and
+  // history keep them.
+  if (product && view && !viewAt && !invalidLogs)
+    return (
+      <OpenSavedView
+        key={`${product.id}:${view}`}
+        page={logViews}
+        product={product}
+        slug={view}
+        loading={
+          <div className="logs-viewport" aria-hidden="true">
+            <Skeleton className="h-3 w-full" />
+          </div>
+        }
+      />
+    );
   // Only the project remounts the explorer: a source switch keeps the stream, histogram and
   // filters in place and refreshes them.
   return <LogExplorer key={product?.id} />;
 }
-/** Loads the saved view named in the URL and applies its filters and window to the page. */
-function OpenLogView({ slug }: { slug: string }) {
-  const { product } = useWorkspace();
-  const navigate = useNavigate();
-  const [state, setState] = useState<"loading" | "missing" | "failed" | "unsupported">("loading");
-  const [name, setName] = useState("");
-  const [guiding, setGuiding] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const productSlug = product?.slug;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a retry reloads the same view
-  useEffect(() => {
-    if (!productSlug) return;
-    const controller = new AbortController();
-    setState("loading");
-    getView<LogViewDocument>(productSlug, slug, "logs", controller.signal).then(
-      (stored) => {
-        const applied = queryToLogs(stored.document.query, stored.document.window);
-        if (!logsRunnable(applied)) {
-          setName(stored.document.name);
-          setState("unsupported");
-          return;
-        }
-        void navigate({
-          ...workspaceTarget("/logs", productSlug),
-          search: (previous: Record<string, unknown>) => ({
-            ...previous,
-            ...clearedLogs,
-            ...applied,
-            view: slug,
-          }),
-          replace: true,
-          resetScroll: false,
-        });
-      },
-      (error) => {
-        if (!controller.signal.aborted) setState(error?.status === 404 ? "missing" : "failed");
-      },
-    );
-    return () => controller.abort();
-  }, [productSlug, slug, attempt]);
-  const clear = (
-    <Button
-      variant="outline"
-      nativeButton={false}
-      role="link"
-      render={
-        <Link
-          {...workspaceTarget("/logs", productSlug)}
-          search={(previous: Record<string, unknown>) => ({ ...previous, view: undefined })}
-        />
-      }
-    >
-      {state === "unsupported" ? "Clear view" : "Clear selection"}
-    </Button>
-  );
-  if (state === "missing")
-    return (
-      <>
-        <PageHeader
-          title="This view no longer exists"
-          description="It may have been deleted. The project’s other views and its logs are unchanged."
-        />
-        {clear}
-      </>
-    );
-  if (state === "unsupported")
-    return (
-      <>
-        <PageHeader
-          title="This view uses settings Logs can’t show"
-          description={`${name} was saved with filters this page cannot run. Ask your agent to change it, or clear the view.`}
-        />
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => setGuiding(true)}>
-            Edit with your agent
-          </Button>
-          {clear}
-        </div>
-        {product && (
-          <AgentGuideDialog
-            open={guiding}
-            onOpenChange={setGuiding}
-            intent={{ type: "edit-view", view: { slug, name, kind: "logs" } }}
-            project={product}
-          />
-        )}
-      </>
-    );
-  return (
-    <>
-      <PageHeader title="Logs" description="Opening the saved view…" />
-      {state === "failed" ? (
-        <ErrorState
-          message="The saved view could not be loaded."
-          retry={() => setAttempt((n) => n + 1)}
-        />
-      ) : (
-        <div className="logs-viewport" aria-hidden="true">
-          <Skeleton className="h-3 w-full" />
-        </div>
-      )}
-    </>
-  );
-}
+/** Log views on the Logs page: a view's filters and window replace the page's own. */
+const logViews: SavedViewPage<LogViewDocument> = {
+  kind: "logs",
+  path: "/logs",
+  title: "Logs",
+  noun: "filters",
+  search: (stored) => {
+    const applied = queryToLogs(stored.document.query, stored.document.window);
+    return logsRunnable(applied) ? { ...clearedLogs, ...applied } : undefined;
+  },
+  stateOf: (document) => logViewState(queryToLogs(document.query, document.window)),
+  clear: (previous) => ({ ...previous, view: undefined, viewAt: undefined }),
+};
 function LogExplorer() {
   const { product, sourceId, now: workspaceNow } = useWorkspace();
   const { timeZone } = useDisplayPreferences();
@@ -267,9 +187,12 @@ function LogExplorer() {
     hourCycle: "h23",
   });
   const moreFilters = search.moreFilters ?? [];
-  const openView = product.views?.find(
-    (candidate) => candidate.kind === "logs" && candidate.slug === search.view,
-  );
+  // A view is open once the page has applied a version of it.
+  const openView = search.viewAt
+    ? product.views?.find(
+        (candidate) => candidate.kind === "logs" && candidate.slug === search.view,
+      )
+    : undefined;
   const hasFilters = Boolean(
     search.logq ||
       search.level ||
@@ -287,14 +210,16 @@ function LogExplorer() {
         title="Logs"
         description={`${openView ? `Saved view ${openView.name}. ` : ""}Investigate what happened across your services.`}
       >
-        {openView && (
+        {openView && search.viewAt && (
           <ViewActions<LogViewDocument>
             key={openView.id}
             product={product}
             view={openView}
-            noun="filters"
+            page={logViews}
+            appliedAt={search.viewAt}
+            state={logViewState(search)}
             withCurrent={(stored) => currentLogView(stored, search)}
-            onDeleted={() => apply({ view: undefined })}
+            onDeleted={() => apply({ view: undefined, viewAt: undefined })}
           />
         )}
         {!openView && !search.invalidLogs && (

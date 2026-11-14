@@ -327,3 +327,41 @@ test("a log view the page cannot run says so and offers the agent guide", async 
   await expect.poll(() => viewParam(page)).toBeNull();
   await expect(page.getByRole("heading", { level: 1, name: "Logs", exact: true })).toBeVisible();
 });
+
+test("a hand-made link with a window still applies the view", async ({ page }) => {
+  await page.goto(`${logsUrl()}?view=${errorsView.slug}&logWindow=15m`);
+  await expect(severity(page)).toContainText("Warn and above");
+  await expect(windowButton(page, "Last 6 hours")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("2 records", { exact: true })).toBeVisible();
+});
+
+test("without channels, an agent's change to the open log view applies by polling", async ({
+  page,
+}) => {
+  const name = `Polled logs ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "logs", name, query: { level: "error" }, window: "6h" },
+  });
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.clock.install();
+  const hydrated = page.waitForResponse("**/_piko/runtime");
+  await page.goto(`${logsUrl()}?view=${created.slug}`);
+  await hydrated;
+  await expect(severity(page)).toContainText("Error");
+  await admin(
+    `/products/${project.id}/views/${created.slug}`,
+    {
+      document: {
+        version: 1,
+        kind: "logs",
+        name,
+        query: { level: "error", service: "checkout" },
+        window: "6h",
+      },
+    },
+    "PUT",
+  );
+  await page.clock.runFor(31_000);
+  await expect(service(page)).toContainText("checkout");
+  await expect(page.getByText("Changed by your agent")).toHaveCount(0);
+});
