@@ -179,7 +179,7 @@ async fn verify_sql(
     let id = product.to_string();
     state
         .store
-        .state(move |db| crate::store::product(db, &id).map(|_| ()))
+        .state(move |db| crate::store::require_product(db, &id))
         .await?;
     sql::verify_document(state, product, doc, &mut report).await?;
     if report.is_ok() {

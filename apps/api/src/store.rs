@@ -248,7 +248,7 @@ impl Store {
         }
     }
 }
-/// A project by id, or else by slug.
+/// A project by id, or else by slug, as its own row (see `product_row`).
 pub fn resolve_product(db: &rusqlite::Connection, key: &str) -> ApiResult<Product> {
     let id = db
         .query_row("SELECT id FROM products WHERE id=?", [key], |r| {
@@ -266,22 +266,34 @@ pub fn resolve_product(db: &rusqlite::Connection, key: &str) -> ApiResult<Produc
             .map_err(anyhow::Error::from)?
             .ok_or_else(ApiError::missing)?,
     };
-    product(db, &id)
+    product_row(db, &id)
 }
+/// A project with its sources and sidebar links, as the API returns it.
 pub fn product(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
-    let mut product = db
-        .query_row(
-            "SELECT id,name,retention_days,created_at,website_url,favicon_version,slug FROM products WHERE id=?",
-            [id],
-            row_product,
-        )
-        .optional()
-        .map_err(anyhow::Error::from)?
-        .ok_or_else(ApiError::missing)?;
+    let mut product = product_row(db, id)?;
     product.sources = crate::sources::list(db, id)?;
     product.dashboards = dashboard_links(db, id)?;
     product.views = crate::views::links(db, id)?;
     Ok(product)
+}
+/// A project's own row, without its sources and sidebar links, for paths that need only its
+/// id, slug, name or retention, such as ingestion and dashboard runs.
+pub fn product_row(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
+    db.query_row(
+        "SELECT id,name,retention_days,created_at,website_url,favicon_version,slug FROM products WHERE id=?",
+        [id],
+        row_product,
+    )
+    .optional()
+    .map_err(anyhow::Error::from)?
+    .ok_or_else(ApiError::missing)
+}
+/// Fails with 404 unless project `id` exists.
+pub fn require_product(db: &rusqlite::Connection, id: &str) -> ApiResult<()> {
+    db.query_row("SELECT 1 FROM products WHERE id=?", [id], |_| Ok(()))
+        .optional()
+        .map_err(anyhow::Error::from)?
+        .ok_or_else(ApiError::missing)
 }
 fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
     Ok(Product {
@@ -394,7 +406,7 @@ pub fn create_key(
     source_id: Option<&str>,
     allowed_origins: &[String],
 ) -> ApiResult<serde_json::Value> {
-    product(db, id)?;
+    require_product(db, id)?;
     let source_id = source_id.unwrap_or(id);
     crate::sources::get(db, id, source_id)?;
     if label.trim().is_empty() || label.len() > 80 {
@@ -444,7 +456,7 @@ pub fn revoke_key(db: &rusqlite::Connection, id: &str, key: &str) -> ApiResult<(
     Ok(())
 }
 pub fn keys(db: &rusqlite::Connection, id: &str) -> ApiResult<Vec<KeyInfo>> {
-    product(db, id)?;
+    require_product(db, id)?;
     let mut q=db.prepare("SELECT id,label,prefix,created_at,revoked,source_id,allowed_origins FROM ingestion_keys WHERE product_id=? ORDER BY created_at").map_err(anyhow::Error::from)?;
     q.query_map([id], |r| {
         Ok(KeyInfo {
@@ -484,7 +496,7 @@ pub fn resolve_key(
     let allowed: Vec<String> = serde_json::from_str(&allowed).map_err(anyhow::Error::from)?;
     crate::origins::check(&allowed, origin)?;
     crate::sources::get(db, &id, &source_id)?;
-    Ok((product(db, &id)?, source_id))
+    Ok((product_row(db, &id)?, source_id))
 }
 
 pub fn cache_favicon(
@@ -602,6 +614,39 @@ mod slug_tests {
         assert_eq!(slugs.len(), 8);
     }
     #[test]
+    fn ingestion_resolves_keys_without_loading_sidebar_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), 2).unwrap();
+        let db = store.sqlite().unwrap();
+        let shop = save_product(&db, None, input("Shop")).unwrap();
+        let doc = serde_json::from_value(serde_json::json!({
+            "version": 1, "name": "Board",
+            "widgets": [{"id": "w", "title": "W", "view": {"type": "text", "markdown": "x"}}]
+        }))
+        .unwrap();
+        crate::dashboards::storage::create(
+            &db,
+            &shop.id,
+            &doc,
+            crate::dashboards::storage::Origin::Api,
+        )
+        .unwrap();
+        let key = create_key(&db, &shop.id, "test", None, &[]).unwrap();
+        let full = product(&db, &shop.id).unwrap();
+        assert_eq!((full.sources.len(), full.dashboards.len()), (1, 1));
+        // Each ingestion request resolves its key: it needs the project's id and retention,
+        // not the sources and sidebar links the dashboard shows.
+        let (lean, source) = resolve_key(&db, key["key"].as_str().unwrap(), None).unwrap();
+        assert_eq!(
+            (lean.id.as_str(), lean.retention_days),
+            (shop.id.as_str(), 365)
+        );
+        assert_eq!(source, shop.id);
+        assert!(lean.sources.is_empty() && lean.dashboards.is_empty() && lean.views.is_empty());
+        assert!(require_product(&db, &shop.id).is_ok());
+        assert_eq!(require_product(&db, "missing").unwrap_err().0, 404);
+    }
+    #[test]
     fn resolve_product_takes_an_id_or_a_slug() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path(), 2).unwrap();
@@ -609,7 +654,6 @@ mod slug_tests {
         let shop = save_product(&db, None, input("Shop")).unwrap();
         assert_eq!(resolve_product(&db, &shop.id).unwrap().id, shop.id);
         assert_eq!(resolve_product(&db, "shop").unwrap().id, shop.id);
-        assert_eq!(resolve_product(&db, "shop").unwrap().sources.len(), 1);
         assert_eq!(resolve_product(&db, "missing").unwrap_err().0, 404);
     }
 }

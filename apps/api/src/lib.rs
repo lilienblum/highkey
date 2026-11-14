@@ -324,11 +324,11 @@ pub(crate) async fn query_product(
     let source_id = q.source_id.clone();
     s.store
         .state(move |db| {
-            let product = store::product(db, &lookup)?;
+            store::require_product(db, &lookup)?;
             if let Some(source_id) = source_id {
                 sources::get(db, &lookup, &source_id)?;
             }
-            Ok(product)
+            Ok(())
         })
         .await?;
     Ok(Json(
@@ -349,7 +349,10 @@ async fn list_sources(
 ) -> ApiResult<Json<Vec<model::Source>>> {
     Ok(Json(
         s.store
-            .state(move |db| Ok(store::product(db, &id)?.sources))
+            .state(move |db| {
+                store::require_product(db, &id)?;
+                sources::list(db, &id)
+            })
             .await?,
     ))
 }

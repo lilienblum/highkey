@@ -388,7 +388,7 @@ pub fn summaries(
     product: &str,
     kind: Option<ViewKind>,
 ) -> Result<Vec<Summary>> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let mut q = db
         .prepare(
             "SELECT id,slug,name,kind,updated_at,document FROM views WHERE product_id=?1 AND (?2 IS NULL OR kind=?2) ORDER BY name,id",
@@ -428,7 +428,7 @@ pub fn fetch(
     key: &str,
     kind: Option<ViewKind>,
 ) -> Result<Stored> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let (id, _) = resolve(db, product, key, kind)?;
     load(db, &id)
 }
@@ -444,7 +444,7 @@ fn view_slug(name: &str) -> String {
 
 pub fn create(db: &rusqlite::Connection, product: &str, doc: &ViewDocument) -> Result<Stored> {
     let json = validated(doc)?;
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let count: i64 = tx
         .query_row(
@@ -498,7 +498,7 @@ pub fn replace(
     kind_written: bool,
 ) -> Result<Stored> {
     let json = validated(doc)?;
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let (id, kind) = resolve(&tx, product, key, kind_written.then(|| doc.kind())).map_err(|e| {
         // A replace takes its kind from the document, not from `?kind=`.
@@ -558,7 +558,7 @@ pub fn delete(
     key: &str,
     kind: Option<ViewKind>,
 ) -> Result<()> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let (id, _) = resolve(&tx, product, key, kind)?;
     tx.execute("DELETE FROM views WHERE id=?", [&id])

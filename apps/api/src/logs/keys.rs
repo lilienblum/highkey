@@ -12,7 +12,7 @@ pub fn migrate(db: &rusqlite::Connection) -> anyhow::Result<()> {
     Ok(())
 }
 pub fn retention(db: &rusqlite::Connection, id: &str) -> ApiResult<i64> {
-    store::product(db, id)?;
+    store::require_product(db, id)?;
     Ok(db
         .query_row(
             "SELECT retention_days FROM log_settings WHERE product_id=?",
@@ -27,7 +27,7 @@ pub fn settings(db: &rusqlite::Connection, id: &str) -> ApiResult<Value> {
     Ok(json!({"retention_days":retention(db,id)?}))
 }
 pub fn set_retention(db: &rusqlite::Connection, id: &str, days: i64) -> ApiResult<Value> {
-    store::product(db, id)?;
+    store::require_product(db, id)?;
     if !(1..=365).contains(&days) {
         return Err(ApiError::bad("Log retention must be 1–365 days"));
     }
@@ -54,12 +54,12 @@ pub fn create(db: &rusqlite::Connection, id: &str, input: KeyInput) -> ApiResult
     Ok(json!({"id":key_id,"key":key,"source_id":source}))
 }
 pub fn list(db: &rusqlite::Connection, id: &str) -> ApiResult<Vec<Value>> {
-    store::product(db, id)?;
+    store::require_product(db, id)?;
     let mut q = db.prepare("SELECT id,source_id,label,prefix,created_at,revoked FROM log_keys WHERE product_id=? ORDER BY created_at,id").map_err(anyhow::Error::from)?;
     q.query_map([id], |r| Ok(json!({"id":r.get::<_,String>(0)?,"source_id":r.get::<_,String>(1)?,"label":r.get::<_,String>(2)?,"prefix":r.get::<_,String>(3)?,"created_at":r.get::<_,String>(4)?,"revoked":r.get::<_,bool>(5)?}))).map_err(anyhow::Error::from)?.collect::<rusqlite::Result<_>>().map_err(|e| anyhow::Error::from(e).into())
 }
 pub fn revoke(db: &rusqlite::Connection, id: &str, key: &str) -> ApiResult<()> {
-    store::product(db, id)?;
+    store::require_product(db, id)?;
     if db
         .execute(
             "UPDATE log_keys SET revoked=1 WHERE id=? AND product_id=?",

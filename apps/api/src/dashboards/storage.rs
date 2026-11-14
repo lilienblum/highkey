@@ -153,7 +153,7 @@ fn load(db: &rusqlite::Connection, id: &str) -> Result<Stored> {
 }
 
 pub fn list(db: &rusqlite::Connection, product: &str) -> Result<Vec<Summary>> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let mut q = db.prepare(
         "SELECT id,slug,name,revision,updated_at,document FROM dashboards WHERE product_id=? ORDER BY name,id",
     )?;
@@ -184,7 +184,7 @@ pub fn list(db: &rusqlite::Connection, product: &str) -> Result<Vec<Summary>> {
     Ok(out)
 }
 pub fn get(db: &rusqlite::Connection, product: &str, key: &str) -> Result<Stored> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let (id, _) = resolve(db, product, key)?;
     load(db, &id)
 }
@@ -209,7 +209,7 @@ pub fn create(
     origin: Origin,
 ) -> Result<Stored> {
     let json = validated(doc)?;
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let count: i64 = tx.query_row(
         "SELECT COUNT(*) FROM dashboards WHERE product_id=?",
@@ -301,7 +301,7 @@ pub fn update(
     origin: Origin,
 ) -> Result<Stored> {
     let json = validated(doc)?;
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let (id, _) = resolve(&tx, product, key)?;
     save(&tx, &id, base_revision, doc, &json, origin)?;
@@ -317,7 +317,7 @@ pub fn revision(
     key: &str,
     revision: i64,
 ) -> Result<Document> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let (id, _) = resolve(db, product, key)?;
     let text: String = db
         .query_row(
@@ -337,7 +337,7 @@ pub fn restore(
     revision: i64,
     origin: Origin,
 ) -> Result<Stored> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let (id, current) = resolve(&tx, product, key)?;
     let text: String = tx
@@ -357,7 +357,7 @@ pub fn restore(
     Ok(stored)
 }
 pub fn delete(db: &rusqlite::Connection, product: &str, key: &str) -> Result<()> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let tx = begin(db)?;
     let (id, _) = resolve(&tx, product, key)?;
     tx.execute(
@@ -370,7 +370,7 @@ pub fn delete(db: &rusqlite::Connection, product: &str, key: &str) -> Result<()>
 }
 /// Revisions kept, newest first.
 pub fn revisions(db: &rusqlite::Connection, product: &str, key: &str) -> Result<Vec<RevisionInfo>> {
-    store::product(db, product)?;
+    store::require_product(db, product)?;
     let (id, _) = resolve(db, product, key)?;
     let mut q = db.prepare(
         "SELECT revision,origin,created_at FROM dashboard_revisions WHERE dashboard_id=? ORDER BY revision DESC",

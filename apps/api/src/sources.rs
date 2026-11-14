@@ -181,7 +181,7 @@ pub fn save(
     input: SourceInput,
 ) -> ApiResult<Source> {
     input.validate()?;
-    crate::store::product(db, product_id)?;
+    crate::store::require_product(db, product_id)?;
     let name = input.name.trim();
     if let Some(id) = id {
         get(db, product_id, &id)?;

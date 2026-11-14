@@ -335,7 +335,7 @@ impl PikoMcp {
                 let current = self
                     .state
                     .store
-                    .state(move |db| store::product(db, &lookup))
+                    .state(move |db| store::product_row(db, &lookup))
                     .await?;
                 let input = ProductInput {
                     name: p.name.unwrap_or(current.name),
