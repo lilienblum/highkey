@@ -57,29 +57,29 @@ typography:
     lineHeight: 1.3
     letterSpacing: "0"
   title:
-    fontFamily: "Geist Variable, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, monospace"
     fontSize: "15px"
     fontWeight: 650
     lineHeight: 1.5
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "Geist Variable, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, monospace"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   control:
-    fontFamily: "Geist Variable, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, monospace"
     fontSize: "14px"
     fontWeight: 550
     lineHeight: 1.5
     letterSpacing: "normal"
   supporting:
-    fontFamily: "Geist Variable, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, monospace"
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.55
   label:
-    fontFamily: "Geist Variable, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, monospace"
     fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.5
@@ -224,7 +224,7 @@ Analytical regions use flat surfaces, fine seams, aligned labels, and tabular va
 **Key Characteristics:**
 
 - Sumi-ink surfaces, warm text, orange actions, and yellow/violet/aqua data accents.
-- Geist typography: Geist for interface text, Geist Mono for literal code, identifiers, and card headings, and Geist Pixel for page titles and measurements.
+- Geist typography: Geist Mono for all interface text, Geist Pixel for page titles and measurements, and Geist only in the wordmark.
 - Ordered-dither (Bayer 4×4, 2px pixel) screen tones wherever the interface would otherwise use a translucent tint.
 - Flat analytical fields, small square metrics, and rectangular reports; contained forms and inspection.
 - Glossy pill actions and segmented choices, inset fields, one focus outline, and stable geometry.
@@ -268,10 +268,10 @@ Code snippets, raw JSON, and inspected values use Kanagawa Wave syntax roles: st
 ## Typography
 
 **Display Font:** Geist Pixel Variable (single 400 weight, OFL-1.1, self-hosted) for page titles and measurement values, falling back to Geist.
-**Body Font:** Geist Variable, with sans-serif fallback.
-**Code Font:** Geist Mono Variable (self-hosted, OFL-1.1) through the `--font-mono` token, with the platform monospace stack as fallback, for identifiers, keys, properties, snippets, raw values, and card headings.
+**Interface Font:** Geist Mono Variable (self-hosted, OFL-1.1) for every label, control, heading, prose line, identifier, and snippet. Both `--font-sans` and `--font-mono` resolve to it, with the platform monospace stack as fallback.
+**Wordmark Font:** Geist Variable at 800, only in the logo wordmark.
 
-**Character:** one type family in three cuts. Geist carries labels, controls, and prose; Geist Mono sets literal code, identifiers, and the card headings that read as instrument labels; Geist Pixel sets the numbers people come to read, matching the dithered marks around them. Size and alignment carry hierarchy because the pixel cut has a single weight; oversized display typography does not compete with the data.
+**Character:** an instrument set in two cuts of one family. Geist Mono carries the whole interface, so labels, values, and code share one grid-like rhythm; Geist Pixel sets the titles and numbers people come to read, matching the dithered marks around them. Size and alignment carry hierarchy because the pixel cut has a single weight; oversized display typography does not compete with the data.
 
 ### Hierarchy
 
@@ -282,9 +282,9 @@ Code snippets, raw JSON, and inspected values use Kanagawa Wave syntax roles: st
 - **Supporting:** page explanations, with a measured line length of up to (65ch).
 - **Label:** field labels, metadata, legends, and table headers. Labels use sentence case; chart ticks and secondary table annotations can use the observed smaller (11px) treatment.
 
-The logo is a distinct wordmark treatment, not an additional heading scale. Use Geist Mono only where a literal identifier or code structure benefits from it, plus card headings (metric labels and widget titles), which are set as instrument labels at 13px and a level 500 weight without tracking; keycaps and all other labels stay in Geist. The base interface font stays proportional: mono glyphs are wider, so labels, selects, and source names would truncate sooner, and prose would read slower.
+The logo is a distinct wordmark treatment, not an additional heading scale. Mono text is never negatively tracked. Card headings (metric labels and widget titles) sit at 13px and a level 500 weight. Mono glyphs are wider than proportional ones, so short descriptions may wrap in narrow cards; long names truncate with accessible full labels rather than shrinking.
 
-**The Value Alignment Rule.** Use tabular numerals for measurements, percentages, durations, and times that readers compare across rows. Geist Pixel has proportional digits only, so it is reserved for single headline values; anything compared down a column stays in Geist with tabular numerals.
+**The Value Alignment Rule.** Use tabular numerals for measurements, percentages, durations, and times that readers compare across rows. Geist Pixel has proportional digits only, so it is reserved for single headline values; anything compared down a column stays in Geist Mono, whose digits are already tabular.
 
 ## Layout
 

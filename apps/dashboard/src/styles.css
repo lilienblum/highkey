@@ -7,8 +7,8 @@
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {
-  --font-sans: "Geist Variable", sans-serif;
-  /* Literal identifiers, keys, snippets, and raw JSON: the third cut of the Geist family. */
+  /* The interface is set in Geist Mono; Geist Pixel carries titles and measurements. */
+  --font-sans: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -162,7 +162,7 @@
 }
 body {
   margin: 0;
-  font-family: "Geist Variable", sans-serif;
+  font-family: var(--font-mono);
   color: var(--foreground);
   background: var(--background);
   font-size: 14px;
@@ -196,7 +196,6 @@ h3,
   color: var(--heading);
   font-size: 15px;
   font-weight: 650;
-  letter-spacing: -0.01em;
   line-height: 1.5;
 }
 /* Shared component grammar: quiet surfaces, explicit states, and no geometry changes. */
