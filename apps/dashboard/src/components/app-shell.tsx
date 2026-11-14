@@ -1,7 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
-import { dashboardRoute, workspaceTarget, workspaceView } from "@/lib/workspace-route";
+import { workspaceTarget, workspaceView } from "@/lib/workspace-route";
+import { dashboardQueries } from "@/server/dashboards";
+import { viewQueries } from "@/lib/views";
 import { ProjectIcon } from "./project-icon";
 import {
   createContext,
@@ -20,7 +23,6 @@ import {
   useLocation,
   useNavigate,
   useParams,
-  useRouter,
   useSearch,
 } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -45,6 +47,11 @@ type Context = {
   sourceId?: string;
   reload: (select?: string) => Promise<void>;
   range: { from: string; to: string };
+  /**
+   * The selected dates rather than their timestamps: a rolling range keeps one scope while its end
+   * advances, so cached results stay in view while they refresh.
+   */
+  rangeScope: string;
   refresh: () => void;
   refreshKey: number;
   now: number;
@@ -95,7 +102,7 @@ export function AppShell({
   const view = workspaceView(path);
   const { projectSlug, dashboardSlug } = useParams({ strict: false });
   const navigate = useNavigate();
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const search = useSearch({ from: "__root__" });
   const currentSearch = useSearch({ strict: false });
   const drilldown = view === "/events" ? currentSearch.drilldown : undefined;
@@ -237,6 +244,14 @@ export function AppShell({
     return { from: start.toISOString(), to: end.toISOString() };
   }, [days, now, search.period, search.snapshot, search.from, search.to]);
   const range = drilldown ? { from: drilldown.from, to: drilldown.to } : defaultRange;
+  const rangeScope = JSON.stringify([
+    days,
+    search.period,
+    search.snapshot,
+    search.from,
+    search.to,
+    drilldown,
+  ]);
   const refresh = () => {
     refreshBackground();
     if (error) void reload().catch((e) => setError(e.message));
@@ -264,12 +279,12 @@ export function AppShell({
       "/dashboards": "Dashboard",
     } as const
   )[view];
-  // A dashboard changed elsewhere (or while disconnected): refresh the sidebar's list and, on a
-  // dashboard page, its document in the background.
+  // A dashboard, view or source changed elsewhere (or while disconnected): refresh the sidebar's
+  // lists and the open dashboard or saved view in the background. A failed read keeps what is shown.
   const dashboardsChanged = () => {
     void reload().catch(() => undefined);
-    if (view === "/dashboards")
-      void router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+    void queryClient.refetchQueries({ queryKey: dashboardQueries, type: "active" });
+    void queryClient.refetchQueries({ queryKey: viewQueries, type: "active" });
   };
   const projectPicker = (
     <ValueSelect
@@ -298,6 +313,7 @@ export function AppShell({
         sourceId,
         reload,
         range,
+        rangeScope,
         refresh,
         refreshKey,
         now,

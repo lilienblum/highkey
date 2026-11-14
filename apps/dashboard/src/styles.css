@@ -3372,3 +3372,9 @@ button.workspace-dashboards-menu-link {
   width: max-content;
   max-width: min(360px, calc(100vw - 32px));
 }
+/* A dashboard whose last refresh failed keeps its document; the note says so without an alert. */
+.dashboard-stale {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: nowrap;
+}

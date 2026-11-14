@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "./api";
 import { runWidget, type RunResult, type Widget } from "./dashboards";
 
@@ -36,9 +36,12 @@ async function acquire(signal: AbortSignal): Promise<() => void> {
   };
 }
 
+/** A cached run remembers the exact request (range and refresh) that produced it. */
+type Cached = { request: string; result: RunResult };
 class RunFailure extends Error {
   constructor(
     message: string,
+    readonly request: string,
     readonly timedOut: boolean,
     readonly transient: boolean,
   ) {
@@ -46,65 +49,49 @@ class RunFailure extends Error {
   }
 }
 
-type Key = readonly ["widget", string | undefined, string, string, string, string, number];
 /**
- * A refresh (a new `refreshKey`, which also moves a rolling end) keeps the previous result in
- * view while it runs; a different widget, start, end or source never borrows another's data.
- */
-function sameScope(next: QueryKey, previous: QueryKey | undefined) {
-  if (!previous) return false;
-  const [, project, widget, from, to, source, refresh] = next as Key;
-  const [, lastProject, lastWidget, lastFrom, lastTo, lastSource, lastRefresh] = previous as Key;
-  return (
-    project === lastProject &&
-    widget === lastWidget &&
-    from === lastFrom &&
-    source === lastSource &&
-    (to === lastTo || refresh !== lastRefresh)
-  );
-}
-
-/**
- * One widget's run through TanStack Query, keyed by its content, range, source and refresh. Runs
- * start only while the widget is near the viewport and share a page-wide limit of three. A
- * `query_timeout` would repeat on retry, so it waits for the reader's Retry; other transient
- * failures surface at once (keeping known data) and retry a few times while the tab is visible
- * and online, as Overview's queries do.
+ * One widget's run through TanStack Query, cached by project, widget, selected range and source,
+ * so returning to a dashboard shows its last results at once while a rolling end or a refresh
+ * revalidates them in the background; a different scope never borrows another's data. Runs start
+ * only while the widget is near the viewport and share a page-wide limit of three. A
+ * `query_timeout` would repeat on retry, so it holds across refreshes of the same scope until the
+ * reader's Retry; other transient failures surface at once (keeping known data) and retry a few
+ * times while the tab is visible and online, as Overview's queries do.
  */
 export function useWidgetRun(
   project: string | undefined,
   widget: Widget,
   range: { from: string; to: string },
+  rangeScope: string,
   sourceId: string | undefined,
   refreshKey: number,
   near: boolean,
 ) {
   const client = useQueryClient();
-  const queryKey: Key = [
-    "widget",
-    project,
-    JSON.stringify(widget),
-    range.from,
-    range.to,
-    sourceId ?? "",
-    refreshKey,
-  ];
+  const widgetKey = JSON.stringify(widget);
+  const queryKey = ["widget", project, widgetKey, rangeScope, sourceId ?? ""] as const;
   const keyText = JSON.stringify(queryKey);
-  // A timeout would only repeat, so it holds across refreshes of the same scope (live hints,
-  // polling) until the reader presses Retry; a new scope runs normally.
-  const [held, setHeld] = useState<{ key: QueryKey; failure: RunFailure }>();
-  const holding = !!held && JSON.stringify(held.key) !== keyText && sameScope(queryKey, held.key);
-  const query = useQuery<RunResult, RunFailure>({
+  const request = JSON.stringify([range.from, range.to, refreshKey]);
+  // A timeout during this visit holds its scope until Retry; a return visit or a scope that has
+  // not timed out runs as usual. The hold decides whether the query may run, so it reads the
+  // scope's cached state directly.
+  const [holdFrom, setHoldFrom] = useState(() => Date.now());
+  const last = client.getQueryState<Cached, RunFailure>(queryKey);
+  const holding = !!last?.error?.timedOut && last.errorUpdatedAt >= holdFrom;
+  const query = useQuery<Cached, RunFailure>({
     queryKey,
     enabled: near && !!project && !holding,
     queryFn: async ({ signal }) => {
       const release = await acquire(signal);
       try {
-        return await runWidget(
-          project as string,
-          { widget, from: range.from, to: range.to, source_id: sourceId },
-          signal,
-        );
+        return {
+          request,
+          result: await runWidget(
+            project as string,
+            { widget, from: range.from, to: range.to, source_id: sourceId },
+            signal,
+          ),
+        };
       } catch (error) {
         if (signal.aborted) throw error;
         const timedOut =
@@ -113,6 +100,7 @@ export function useWidgetRun(
           error.payload?.code === "query_timeout";
         throw new RunFailure(
           error instanceof Error ? error.message : "Could not run this widget",
+          request,
           timedOut,
           !timedOut &&
             (!(error instanceof ApiError) || error.status >= 500 || error.status === 429),
@@ -121,9 +109,7 @@ export function useWidgetRun(
         release();
       }
     },
-    placeholderData: (previous, previousQuery) =>
-      sameScope(queryKey, previousQuery?.queryKey) ? previous : undefined,
-    // Freshness comes from the key: workspace refreshes and live hints change refreshKey.
+    // Freshness is driven by the request identity below and the workspace's live updates.
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 10 * 60_000,
     retry: false,
@@ -131,28 +117,21 @@ export function useWidgetRun(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
-  const failure = query.error ?? (holding ? held?.failure : undefined);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
-  useEffect(() => {
-    if (query.error?.timedOut) setHeld({ key: queryKey, failure: query.error });
-  }, [query.error, keyText]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
-  useEffect(() => {
-    setHeld((current) => (current && sameScope(queryKey, current.key) ? current : undefined));
-  }, [keyText]);
+  const cached = query.data;
+  const current = cached?.request === request;
+  const failure =
+    query.error && (query.error.request === request || holding) ? query.error : undefined;
 
-  // A failed refresh keeps the last result of the same scope next to its error.
-  const known = useRef<{ key: QueryKey; data: RunResult }>(undefined);
-  if (query.data && !query.isPlaceholderData) known.current = { key: queryKey, data: query.data };
-  const data =
-    query.data ??
-    (failure && known.current && sameScope(queryKey, known.current.key)
-      ? known.current.data
-      : undefined);
+  // Revalidate when this scope's request changed (time advanced or a refresh), as Overview does.
+  useEffect(() => {
+    if (!near || !project || query.isFetching || current || failure) return;
+    void query.refetch();
+  }, [near, project, query, current, failure]);
 
-  const attempts = useRef({ key: keyText, count: 0 });
-  if (attempts.current.key !== keyText) attempts.current = { key: keyText, count: 0 };
-  // Each failed attempt schedules at most one retry; the key text identifies the attempt series.
+  const attempts = useRef({ request: "", count: 0 });
+  if (attempts.current.request !== `${keyText}:${request}`)
+    attempts.current = { request: `${keyText}:${request}`, count: 0 };
+  // Each failed attempt schedules at most one retry; the key and request identify the series.
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
   useEffect(() => {
     if (!failure?.transient || attempts.current.count >= 3) return;
@@ -166,17 +145,17 @@ export function useWidgetRun(
     return () => clearTimeout(timer);
   }, [failure, client, keyText]);
 
+  const data = cached?.result;
   return {
     data,
     error: failure?.message,
     timedOut: !!failure?.timedOut,
     loading: !data && !failure,
-    refreshing: !!data && !failure && (query.isPlaceholderData || query.isFetching),
+    refreshing: !!data && !failure && (!current || query.isFetching),
     retry: () => {
-      // A held timeout runs again once released (the key has no result yet); the failed key
-      // itself refetches.
-      setHeld(undefined);
-      if (query.error) void query.refetch();
+      // Releases a held timeout; a later timeout holds again.
+      setHoldFrom(Date.now());
+      void query.refetch();
     },
   };
 }

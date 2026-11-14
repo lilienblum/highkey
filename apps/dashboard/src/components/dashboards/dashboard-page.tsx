@@ -1,8 +1,14 @@
 import "./dashboards.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { Link, useLoaderData, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import {
+  Link,
+  useLoaderData,
+  useNavigate,
+  useParams,
+  useRouter,
+  type ErrorComponentProps,
+} from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +38,7 @@ import { AgentGuide, AgentGuideDialog } from "./agent-guide";
 import { RevisionsSheet } from "./revisions-sheet";
 import { DashboardNameDialog } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
+import { dashboardQueries, dashboardQuery } from "@/server/dashboards";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
 import { WidgetView } from "./widget";
@@ -47,17 +54,40 @@ export function signalsOf(dashboard: DashboardDocument): Signal[] {
 
 /**
  * A named dashboard: its server-rendered document under the shared toolbar, with each widget
- * loading its own data.
+ * loading its own data. The document lives in the query cache, seeded by the route loader; live
+ * updates refresh it there, and a failed refresh keeps the last document with a quiet note.
  */
 export function DashboardPage() {
-  const stored = useLoaderData({ from: dashboardRoute });
+  const loaded = useLoaderData({ from: dashboardRoute });
+  const { projectSlug, dashboardSlug } = useParams({ from: dashboardRoute });
+  const document = useQuery({ ...dashboardQuery(projectSlug, dashboardSlug), initialData: loaded });
+  const stored = document.data;
   const { product } = useWorkspace();
   if (!product) return <NoProduct />;
   if (!stored) return <MissingDashboard product={product} />;
-  return <DashboardView key={`${product.id}:${stored.id}`} stored={stored} product={product} />;
+  return (
+    <DashboardView
+      key={`${product.id}:${stored.id}`}
+      stored={stored}
+      product={product}
+      stale={document.isError && !document.isFetching}
+      retry={() => void document.refetch()}
+    />
+  );
 }
 
-function DashboardView({ stored, product }: { stored: StoredDashboard; product: Product }) {
+function DashboardView({
+  stored,
+  product,
+  stale,
+  retry,
+}: {
+  stored: StoredDashboard;
+  product: Product;
+  /** The last refresh failed, so this is the last document that loaded. */
+  stale: boolean;
+  retry: () => void;
+}) {
   const { setLiveSignals } = useWorkspace();
   const dashboard = stored.document;
   const signals = signalsOf(dashboard).join(",");
@@ -94,7 +124,7 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
   return (
     <>
       <PageHeader title={dashboard.name} description={dashboard.description ?? ""}>
-        <DashboardActions stored={stored} product={product} />
+        <DashboardActions stored={stored} product={product} stale={stale} retry={retry} />
       </PageHeader>
       {dashboard.widgets.length ? (
         <div className="dashboard-grid">
@@ -130,13 +160,25 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
 }
 
 /**
- * The dashboard's overflow menu. Copy JSON hands the stored document to the clipboard; Duplicate
- * asks for the copy's name and opens it; Edit shows how to change the dashboard through an agent; Delete asks first. Failures show under the heading.
+ * The dashboard's actions. Edit shows how to change the dashboard through an agent; the menu's Copy
+ * JSON hands the stored document to the clipboard, Duplicate asks for the copy's name and opens it,
+ * and Delete asks first. Failures show under the heading; a failed background refresh shows a
+ * quiet note beside the actions.
  */
-function DashboardActions({ stored, product }: { stored: StoredDashboard; product: Product }) {
+function DashboardActions({
+  stored,
+  product,
+  stale,
+  retry,
+}: {
+  stored: StoredDashboard;
+  product: Product;
+  stale: boolean;
+  retry: () => void;
+}) {
   const { reload } = useWorkspace();
   const navigate = useNavigate();
-  const router = useRouter();
+  const client = useQueryClient();
   const trigger = useRef<HTMLButtonElement>(null);
   const [confirming, setConfirming] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -161,7 +203,7 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
     }
   }
   async function refreshDashboard() {
-    await router.invalidate({ filter: (match) => match.routeId === dashboardRoute });
+    await client.refetchQueries({ queryKey: dashboardQueries, type: "active" });
     await reload();
   }
   async function remove() {
@@ -181,10 +223,17 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
   }
   return (
     <div className="dashboard-actions">
-      {copied && (
-        <span role="status" className="dashboard-actions-status">
-          Copied
-        </span>
+      {/* Both are mounted before they speak, so screen readers announce each change. */}
+      <span role="status" className="dashboard-actions-status">
+        {copied ? "Copied" : ""}
+      </span>
+      <span role="status" className={stale ? "dashboard-stale" : "sr-only"}>
+        {stale ? "Couldn’t refresh this dashboard" : ""}
+      </span>
+      {stale && (
+        <Button type="button" variant="ghost" size="sm" onClick={retry}>
+          Try again
+        </Button>
       )}
       <Button type="button" variant="outline" onClick={() => setGuiding(true)}>
         Edit

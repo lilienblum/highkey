@@ -243,3 +243,6 @@ export function currentLogView(stored: LogViewDocument, search: LogsSearch): Log
     ...(window && !unchanged ? { window } : {}),
   };
 }
+
+/** Every cached stored view; an open view's is the active query. */
+export const viewQueries = ["view"] as const;

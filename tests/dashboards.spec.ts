@@ -588,9 +588,13 @@ test("duplicate as dashboard from Overview", async ({ page }) => {
 test("copy JSON puts a valid document on the clipboard", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(dashboardUrl());
+  // The status is in place before it speaks, so screen readers announce "Copied".
+  const status = page.locator(".dashboard-actions-status");
+  await expect(status).toHaveAttribute("role", "status");
+  await expect(status).toHaveText("");
   await page.getByRole("button", { name: "Dashboard actions" }).click();
   await page.getByRole("menuitem", { name: "Copy JSON" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Copied" })).toBeVisible();
+  await expect(status).toHaveText("Copied");
   const text = await page.evaluate(() => navigator.clipboard.readText());
   const parsed = JSON.parse(text);
   expect(parsed.version).toBe(1);
@@ -860,4 +864,67 @@ test("without channels, a dashboard an agent creates or edits appears by polling
   await page.clock.runFor(31_000);
   await expect(sidebar(page).getByRole("link", { name: added, exact: true })).toBeVisible();
   await expect(heading(renamed)).toBeVisible();
+});
+
+test("a failed document refresh keeps the dashboard and says so quietly", async ({ page }) => {
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.clock.install();
+  const hydrated = page.waitForResponse("**/_piko/runtime");
+  await page.goto(dashboardUrl());
+  await hydrated;
+  await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+  // The next poll's document read fails, as it does while the API restarts.
+  let failing = true;
+  await page.route("**/_serverFn/**", (route) =>
+    failing ? route.fulfill({ status: 503, body: "Service Unavailable" }) : route.fallback(),
+  );
+  await page.clock.runFor(31_000);
+  const note = page.getByText("Couldn’t refresh this dashboard");
+  await expect(note).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Checkout health" })).toBeVisible();
+  await expect(page.locator(".dashboard-widget")).toHaveCount(checkoutDashboard.widgets.length);
+  await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+  await expect(page.getByText("Could not load this dashboard")).toHaveCount(0);
+  // The next good read clears the note without a remount.
+  const card = await widget(page, "conversion").elementHandle();
+  failing = false;
+  await page.clock.runFor(31_000);
+  await expect(note).toHaveCount(0);
+  expect(await card?.evaluate((element) => element.isConnected)).toBe(true);
+});
+
+test("returning to a dashboard shows its last results while they refresh", async ({ page }) => {
+  const name = `Return ${Date.now()}`;
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: { ...checkoutDashboard, name },
+  });
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+  await expect(widget(page, "plans")).toContainText("pro");
+  await sidebar(page).getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(page.locator(".overview-dashboard")).toBeVisible();
+  // Hold every widget run: the dashboard has to show what it already knows.
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let runs = 0;
+  await page.route("**/api/read/products/*/widgets/run", async (route) => {
+    runs++;
+    await gate;
+    await route.fallback();
+  });
+  try {
+    await sidebar(page).getByRole("link", { name, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+    await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+    await expect(widget(page, "plans")).toContainText("pro");
+    // They still revalidate in the background.
+    await expect.poll(() => runs).toBeGreaterThan(0);
+    await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "true");
+  } finally {
+    release();
+  }
+  await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
+  await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
 });

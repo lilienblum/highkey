@@ -1,3 +1,4 @@
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { StoredDashboard } from "../lib/dashboards";
 
@@ -5,8 +6,8 @@ import type { StoredDashboard } from "../lib/dashboards";
 const key = /^[A-Za-z0-9-]{1,128}$/;
 
 /**
- * One dashboard document for the server render and client navigation. A missing project or
- * dashboard is `null` so the page can offer a way back; any other failure is an error.
+ * One dashboard document for the server render and the browser. A missing project or dashboard is
+ * `null` so the page can offer a way back; any other failure is an error.
  */
 export const getDashboard = createServerFn({ method: "GET" })
   .validator((input: { project: string; dashboard: string }) => {
@@ -37,3 +38,38 @@ export const getDashboard = createServerFn({ method: "GET" })
       throw new Error("The API returned an invalid dashboard.");
     return dashboard as StoredDashboard;
   });
+
+/** Every cached dashboard document; the open one is the active query. */
+export const dashboardQueries = ["dashboard"] as const;
+
+/**
+ * The open dashboard's document, cached per project and dashboard key. Freshness comes from
+ * navigation and the workspace's dashboards signal, not from time, and a failed refresh keeps the
+ * last document it read.
+ */
+export const dashboardQuery = (project: string, dashboard: string) =>
+  queryOptions({
+    queryKey: [...dashboardQueries, project, dashboard] as const,
+    queryFn: () => getDashboard({ data: { project, dashboard } }),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 30 * 60_000,
+    retry: 2,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+/**
+ * The route loader's document. A known one returns at once and refreshes in the background, so a
+ * return visit never waits and a failed refresh never replaces the page; the first read waits, and
+ * only its failure shows the route's error.
+ */
+export async function loadDashboard(client: QueryClient, project: string, dashboard: string) {
+  const options = dashboardQuery(project, dashboard);
+  const known = client.getQueryData(options.queryKey);
+  if (known !== undefined) {
+    void client.refetchQueries({ queryKey: options.queryKey, exact: true });
+    return known;
+  }
+  return client.fetchQuery({ ...options, retry: false });
+}

@@ -1,7 +1,7 @@
 import { SkulletProvider } from "skullet/react";
 import { DisplayPreferencesProvider } from "@/components/display-preferences";
 import {
-  createRootRoute,
+  createRootRouteWithContext,
   retainSearchParams,
   HeadContent,
   Scripts,
@@ -10,13 +10,13 @@ import {
 } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { getWorkspace } from "@/server/workspace";
-import { useState, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { validateWorkspaceSearch } from "@/lib/workspace-search";
 import { sidebarScript } from "@/lib/preferences";
 import styles from "../styles.css?url";
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   validateSearch: validateWorkspaceSearch,
   search: {
     middlewares: [retainSearchParams(["source", "days", "period", "snapshot", "from", "to"])],
@@ -52,8 +52,8 @@ export const Route = createRootRoute({
 });
 function Root() {
   const { initialProducts, serverNow } = Route.useLoaderData();
-  // One client per page load: analytics and logs results stay cached across navigation.
-  const [queryClient] = useState(() => new QueryClient());
+  // The router's client: one per page load, so results stay cached across navigation.
+  const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
       <DisplayPreferencesProvider>

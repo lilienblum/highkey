@@ -128,10 +128,10 @@ function TextWidget({ widget }: { widget: Widget }) {
 }
 
 function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Props) {
-  const { range, sourceId, refreshKey } = useWorkspace();
+  const { range, rangeScope, sourceId, refreshKey } = useWorkspace();
   const ref = useRef<HTMLElement>(null);
   const near = useNearViewport(ref);
-  const run = useWidgetRun(product.id, widget, range, sourceId, refreshKey, near);
+  const run = useWidgetRun(product.id, widget, range, rangeScope, sourceId, refreshKey, near);
   const pending = near && (run.loading || run.refreshing);
   useEffect(() => {
     onPendingChange?.(widget.id, pending);
