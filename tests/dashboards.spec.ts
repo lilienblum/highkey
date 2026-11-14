@@ -765,3 +765,35 @@ test("a stat shows growth against the previous period without asking for it", as
   await expect(widget(page, "quiet").locator(".widget-value")).toHaveText("3");
   await expect(widget(page, "quiet").locator(".widget-growth")).toHaveCount(0);
 });
+
+test("without channels, a dashboard an agent creates or edits appears by polling", async ({
+  page,
+}) => {
+  const original = `Polled ${Date.now()}`;
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: { ...checkoutDashboard, name: original },
+  });
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.clock.install();
+  // The runtime answer means the page has hydrated and its poll timer is running.
+  const hydrated = page.waitForResponse("**/_piko/runtime");
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await hydrated;
+  const heading = (name: string) => page.getByRole("heading", { level: 1, name });
+  await expect(heading(original)).toBeVisible();
+  const added = `Polled new ${Date.now()}`;
+  await admin(`/products/${project.id}/dashboards`, {
+    document: { ...checkoutDashboard, name: added },
+  });
+  const renamed = `${original} edited`;
+  const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    body: JSON.stringify({ base_revision: 1, document: { ...checkoutDashboard, name: renamed } }),
+  });
+  expect(saved.ok, `save: ${saved.status}`).toBe(true);
+  await expect(sidebar(page).getByRole("link", { name: added, exact: true })).toHaveCount(0);
+  await page.clock.runFor(31_000);
+  await expect(sidebar(page).getByRole("link", { name: added, exact: true })).toBeVisible();
+  await expect(heading(renamed)).toBeVisible();
+});

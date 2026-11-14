@@ -64,6 +64,11 @@ function AutomaticUpdates({
   const lastRefresh = useRef(0);
   const previousScope = useRef(scopeKey);
   const markDirty = useCallback(() => setDirty(true), []);
+  // Read at tick time so a new callback or the runtime answer never restarts the cadence timer.
+  const pollOnly = useRef(!live);
+  pollOnly.current = !live;
+  const dashboardsChanged = useRef(onDashboardsChanged);
+  dashboardsChanged.current = onDashboardsChanged;
   useEffect(() => {
     // The cadence starts with the page (or its new scope), which has just loaded fresh results,
     // so the first catch-up (a connection reconcile, say) also waits minIntervalMs.
@@ -106,6 +111,9 @@ function AutomaticUpdates({
       lastRefresh.current = Date.now();
       setDirty(false);
       onRefresh();
+      // Without channels nothing signals a dashboard, view or source an agent saved, so the poll
+      // does what a dashboards signal does. With channels, those signals arrive on their own.
+      if (pollOnly.current) dashboardsChanged.current?.();
     }, delay);
     return () => clearTimeout(timer);
   }, [dirty, available, busy, productId, view, onRefresh, minIntervalMs]);
