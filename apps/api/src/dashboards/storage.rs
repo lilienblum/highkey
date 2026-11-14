@@ -249,8 +249,10 @@ pub fn create(
         "INSERT INTO dashboard_revisions(dashboard_id,revision,document,origin,created_at) VALUES (?1,1,?2,?3,?4)",
         params![id, json, origin.as_str(), at],
     )?;
+    // Read back inside the transaction, so a writer that commits next cannot be returned.
+    let stored = load(&tx, &id)?;
     tx.commit()?;
-    load(db, &id)
+    Ok(stored)
 }
 
 /// Writes the next revision when the dashboard is still at `expected`.
@@ -303,8 +305,10 @@ pub fn update(
     let tx = begin(db)?;
     let (id, _) = resolve(&tx, product, key)?;
     save(&tx, &id, base_revision, doc, &json, origin)?;
+    // Read back inside the transaction, so a writer that commits next cannot be returned.
+    let stored = load(&tx, &id)?;
     tx.commit()?;
-    load(db, &id)
+    Ok(stored)
 }
 /// The document of one revision, as `restore` would write it.
 pub fn revision(
@@ -347,8 +351,10 @@ pub fn restore(
     let doc: Document = serde_json::from_str(&text)?;
     let json = validated(&doc)?;
     save(&tx, &id, current, &doc, &json, origin)?;
+    // Read back inside the transaction, so a writer that commits next cannot be returned.
+    let stored = load(&tx, &id)?;
     tx.commit()?;
-    load(db, &id)
+    Ok(stored)
 }
 pub fn delete(db: &rusqlite::Connection, product: &str, key: &str) -> Result<()> {
     store::product(db, product)?;
@@ -377,4 +383,65 @@ pub fn revisions(db: &rusqlite::Connection, product: &str, key: &str) -> Result<
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{model::ProductInput, store::Store};
+
+    fn document(name: &str) -> Document {
+        serde_json::from_value(serde_json::json!({
+            "version": 1, "name": name,
+            "widgets": [{"id": "w", "title": "W", "view": {"type": "text", "markdown": "x"}}]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn every_save_returns_the_revision_it_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), 2).unwrap();
+        let db = store.sqlite().unwrap();
+        let input = ProductInput {
+            name: "Race".into(),
+            website_url: None,
+            retention_days: 365,
+        };
+        let product = store::save_product(&db, None, input).unwrap().id;
+        let id = create(&db, &product, &document("Board"), Origin::Api)
+            .unwrap()
+            .id;
+        // Writers race on one dashboard; each save must return its own revision, not one a
+        // writer that committed just after it wrote.
+        let writers: Vec<_> = (0..8)
+            .map(|n| {
+                let (store, product, id) = (store.clone(), product.clone(), id.clone());
+                std::thread::spawn(move || {
+                    let db = store.sqlite().unwrap();
+                    let mut saved = Vec::new();
+                    while saved.len() < 20 {
+                        let base = get(&db, &product, &id).unwrap().revision;
+                        let doc = document(&format!("Board {n} {}", saved.len()));
+                        match update(&db, &product, &id, base, &doc, Origin::Api) {
+                            Ok(stored) => {
+                                assert_eq!(stored.revision, base + 1, "writer {n}");
+                                assert_eq!(stored.document.name, doc.name, "writer {n}");
+                                saved.push(stored.revision);
+                            }
+                            Err(DashboardError::Conflict { .. }) => {}
+                            Err(e) => panic!("{e:?}"),
+                        }
+                    }
+                    saved
+                })
+            })
+            .collect();
+        let mut revisions: Vec<i64> = writers
+            .into_iter()
+            .flat_map(|w| w.join().unwrap())
+            .collect();
+        revisions.sort();
+        assert_eq!(revisions, (2..=161).collect::<Vec<_>>());
+    }
 }

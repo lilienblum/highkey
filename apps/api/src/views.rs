@@ -481,8 +481,10 @@ pub fn create(db: &rusqlite::Connection, product: &str, doc: &ViewDocument) -> R
         slug = format!("{base}-{suffix}");
         suffix += 1;
     }
+    // Read back inside the transaction, so a writer that commits next cannot be returned.
+    let stored = load(&tx, &id)?;
     tx.commit().map_err(db_error)?;
-    load(db, &id)
+    Ok(stored)
 }
 
 /// Replaces the whole document of a view. A view keeps its kind and its slug. `kind_written`
@@ -544,8 +546,10 @@ pub fn replace(
         params![doc.name(), json, now(), id],
     )
     .map_err(db_error)?;
+    // Read back inside the transaction, so a writer that commits next cannot be returned.
+    let stored = load(&tx, &id)?;
     tx.commit().map_err(db_error)?;
-    load(db, &id)
+    Ok(stored)
 }
 
 pub fn delete(
