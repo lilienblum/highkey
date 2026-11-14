@@ -48,6 +48,7 @@ impl Store {
         crate::sources::migrate(&mut sql)?;
         crate::logs::keys::migrate(&sql)?;
         crate::dashboards::storage::migrate(&sql)?;
+        crate::views::migrate(&sql)?;
         let analytics = crate::product_db::ProductDatabases::new(path.join("products"))?;
         let migrated = sql
             .query_row(
@@ -278,6 +279,7 @@ pub fn product(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
         .ok_or_else(ApiError::missing)?;
     product.sources = crate::sources::list(db, id)?;
     product.dashboards = dashboard_links(db, id)?;
+    product.views = crate::views::links(db, id)?;
     Ok(product)
 }
 fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
@@ -288,6 +290,7 @@ fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
         created_at: r.get(3)?,
         sources: Vec::new(),
         dashboards: Vec::new(),
+        views: Vec::new(),
         website_url: r.get(4)?,
         favicon_version: r.get(5)?,
         slug: r.get(6)?,
@@ -305,6 +308,7 @@ pub fn products(db: &rusqlite::Connection) -> ApiResult<Vec<Product>> {
     for product in &mut products {
         product.sources = crate::sources::list(db, &product.id)?;
         product.dashboards = dashboard_links(db, &product.id)?;
+        product.views = crate::views::links(db, &product.id)?;
     }
     Ok(products)
 }

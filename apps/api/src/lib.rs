@@ -11,6 +11,7 @@ pub mod runtime;
 pub mod sources;
 pub mod store;
 pub mod telemetry;
+pub mod views;
 pub mod website;
 use crate::{
     error::{ApiError, ApiResult},
@@ -107,6 +108,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/cleanup", post(run_cleanup))
         .merge(dashboards::routes::write_routes())
+        .merge(views::write_routes())
         .route_layer(middleware::from_fn(management_request));
     let ingest = Router::new()
         .route("/api/ingest", post(ingest_events))

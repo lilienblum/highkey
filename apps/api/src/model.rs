@@ -108,12 +108,21 @@ pub struct Product {
     pub sources: Vec<Source>,
     #[serde(default)]
     pub dashboards: Vec<DashboardLink>,
+    #[serde(default)]
+    pub views: Vec<ViewLink>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardLink {
     pub id: String,
     pub slug: String,
     pub name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewLink {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    pub kind: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {

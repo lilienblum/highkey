@@ -39,6 +39,7 @@ pub fn read_router() -> Router<AppState> {
             get(revisions),
         )
         .route("/schemas/dashboard.v1.json", get(schema))
+        .merge(crate::views::read_routes())
 }
 
 /// CORS for `/api/read`: loopback origins, exact `extra` entries, or any origin when `extra`
@@ -151,8 +152,8 @@ struct Validate {
     document: Value,
 }
 
-type Body<T> = Result<Json<T>, JsonRejection>;
-fn body<T>(body: Body<T>) -> Result<T, DashboardError> {
+pub(crate) type Body<T> = Result<Json<T>, JsonRejection>;
+pub(crate) fn body<T>(body: Body<T>) -> Result<T, DashboardError> {
     body.map(|Json(v)| v)
         .map_err(|e| ApiError(e.status(), e.body_text()).into())
 }
@@ -187,7 +188,7 @@ async fn verify_sql(
 }
 
 /// Counts a write against the project's allowance of dashboard writes per minute.
-fn throttle(state: &AppState, product: &str) -> Result<(), DashboardError> {
+pub(crate) fn throttle(state: &AppState, product: &str) -> Result<(), DashboardError> {
     state
         .write_limit
         .take(product)

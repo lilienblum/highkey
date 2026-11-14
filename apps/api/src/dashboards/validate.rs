@@ -102,7 +102,7 @@ impl Report {
     pub fn is_ok(&self) -> bool {
         self.errors.is_empty()
     }
-    fn error(&mut self, path: impl Into<String>, message: impl Into<String>) {
+    pub(crate) fn error(&mut self, path: impl Into<String>, message: impl Into<String>) {
         self.errors.push(Issue {
             path: path.into(),
             message: message.into(),
@@ -170,7 +170,7 @@ fn path_segments(path: &serde_path_to_error::Path) -> Vec<String> {
         .collect()
 }
 
-fn parse<T: DeserializeOwned>(value: Value) -> Result<T, Report> {
+pub(crate) fn parse<T: DeserializeOwned>(value: Value) -> Result<T, Report> {
     serde_path_to_error::deserialize(value.clone()).map_err(|e| {
         let mut segments = path_segments(e.path());
         let mut message = e.inner().to_string();
@@ -192,7 +192,7 @@ pub fn parse_widget(value: Value) -> Result<Widget, Report> {
 fn chars(s: &str) -> usize {
     s.chars().count()
 }
-fn text_len(r: &mut Report, path: String, s: &str, min: usize, max: usize, what: &str) {
+pub(crate) fn text_len(r: &mut Report, path: String, s: &str, min: usize, max: usize, what: &str) {
     let n = chars(s);
     if n < min || n > max {
         r.error(path, format!("{what} must be {min}–{max} characters"));
@@ -672,7 +672,7 @@ fn check_sql(q: &SqlQuery, p: &str, r: &mut Report) {
     }
 }
 
-fn check_events(q: &EventsQuery, p: &str, r: &mut Report) {
+pub(crate) fn check_events(q: &EventsQuery, p: &str, r: &mut Report) {
     for (name, value) in [
         ("event", &q.event),
         ("source_id", &q.source_id),
@@ -724,7 +724,7 @@ fn check_events(q: &EventsQuery, p: &str, r: &mut Report) {
     }
 }
 
-fn check_logs(q: &LogsQuery, p: &str, r: &mut Report) {
+pub(crate) fn check_logs(q: &LogsQuery, p: &str, r: &mut Report) {
     for (name, value) in [("level", &q.level), ("min_level", &q.min_level)] {
         if value
             .as_ref()
