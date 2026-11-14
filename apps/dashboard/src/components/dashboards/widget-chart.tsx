@@ -15,6 +15,7 @@ import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
 import { useId, useMemo } from "react";
 import {
+  comparesPreviousPeriod,
   formatMeasure,
   thresholdColor,
   type Color,
@@ -103,7 +104,7 @@ export function WidgetChart({
   const kind = view.type === "bar" || view.type === "area" ? view.type : "line";
   const stacked = !!view.stacked && kind !== "line" && series.length > 1;
   const previous = result.series[0]?.previous_points;
-  const compare = view.compare === "previous_period" && !!previous && series.length > 0;
+  const compare = comparesPreviousPeriod(view) && !!previous && series.length > 0;
   const { from, to } = range;
   const buckets = useMemo(() => {
     const times = [...new Set(series.flatMap((s) => [...s.points.keys()]))].sort((a, b) => a - b);

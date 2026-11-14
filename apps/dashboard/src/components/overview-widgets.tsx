@@ -2,6 +2,7 @@ import { useId, type ComponentProps, type ReactNode } from "react";
 import { Skeleton as MeasuredSkeleton } from "skullet/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import type { Growth } from "@/lib/growth";
 
 export function OverviewWidget({
   title,
@@ -50,11 +51,17 @@ export function WidgetValue({
   label,
   loading,
   detail,
+  growth,
+  growthLoading = loading,
 }: {
   value: string;
   label: string;
   loading: boolean;
   detail?: ReactNode;
+  /** Change against the previous period. Its line is reserved while loading so tiles keep their size. */
+  growth?: Growth;
+  /** The previous period often arrives after the value, so its line loads on its own. */
+  growthLoading?: boolean;
 }) {
   return (
     <div className="widget-measurement">
@@ -63,6 +70,13 @@ export function WidgetValue({
           <span>{loading ? "12,345" : value}</span>
         </MeasuredSkeleton>
       </div>
+      {growth && (
+        <span className="widget-growth" data-outcome={growthLoading ? "none" : growth.outcome}>
+          <MeasuredSkeleton loading={growthLoading}>
+            <span>{growthLoading ? "+12% vs previous 30 days" : growth.text}</span>
+          </MeasuredSkeleton>
+        </span>
+      )}
       <span className="widget-measure-label">{label}</span>
       {detail && <span className="widget-measure-detail">{detail}</span>}
     </div>

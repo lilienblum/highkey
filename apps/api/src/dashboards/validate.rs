@@ -267,7 +267,12 @@ pub fn check_document(doc: &Document) -> Report {
 }
 
 fn query_runs(w: &Widget) -> usize {
-    w.queries.len() * if w.view.compare.is_some() { 2 } else { 1 }
+    w.queries.len()
+        * if w.view.effective_compare().is_some() {
+            2
+        } else {
+            1
+        }
 }
 
 fn valid_widget_id(id: &str) -> bool {

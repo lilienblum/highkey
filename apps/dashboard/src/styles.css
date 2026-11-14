@@ -2838,6 +2838,20 @@ html {
   color: var(--muted-foreground);
   font-size: 12px;
 }
+.widget-growth {
+  flex-basis: 100%;
+  min-height: 1.4em;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.widget-growth[data-outcome="good"] {
+  color: var(--success);
+}
+.widget-growth[data-outcome="bad"] {
+  color: var(--destructive);
+}
 .widget-measure-detail {
   flex-basis: 100%;
   margin-top: 6px;

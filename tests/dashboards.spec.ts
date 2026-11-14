@@ -310,7 +310,7 @@ test("empty project renders dashes, not errors", async ({ page }) => {
   });
   await page.goto(`/projects/${empty.slug}/dashboards/${created.slug}`);
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("—");
-  await expect(widget(page, "conversion")).toContainText("— vs previous period");
+  await expect(widget(page, "conversion").locator(".widget-growth")).toHaveText("—");
   await expect(widget(page, "error-rate")).toContainText("No values in this range");
   await expect(widget(page, "plans")).toContainText("No values in this range");
   await expect(widget(page, "recent-errors")).toContainText("No matching logs in this range");
@@ -658,4 +658,47 @@ test("SQL table and line widgets render with a truncation note", async ({ page }
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
   ).toBeLessThanOrEqual(0);
+});
+
+test("a stat shows growth against the previous period without asking for it", async ({ page }) => {
+  const grown = await admin<Project>("/products", {
+    name: `Growth ${Date.now()}`,
+    retention_days: 365,
+  });
+  const { key } = await admin<{ key: string }>(`/products/${grown.id}/keys`, { label: "Web" });
+  const hours = (ago: number) => new Date(Date.now() - ago * 3_600_000).toISOString();
+  const event = (timestamp: string) => ({
+    event_id: crypto.randomUUID(),
+    name: "signup",
+    source: "browser",
+    timestamp,
+    properties: {},
+  });
+  // Three signups this week against two in the week before: +50%.
+  await ingest("/ingest", key, {
+    events: [hours(2), hours(5), hours(30), hours(24 * 9), hours(24 * 10)].map(event),
+  });
+  const view = (compare?: string) => ({ type: "stat", ...(compare && { compare }) });
+  const queries = { signups: { signal: "events", event: "signup" } };
+  const created = await admin<{ slug: string }>(`/products/${grown.id}/dashboards`, {
+    document: {
+      version: 1,
+      name: "Growth",
+      widgets: [
+        { id: "signups", title: "Signups", view: view(), queries },
+        { id: "quiet", title: "Signups, no comparison", view: view("none"), queries },
+      ],
+    },
+  });
+  await page.goto(`/projects/${grown.slug}/dashboards/${created.slug}?days=7`);
+  await expect(widget(page, "signups").locator(".widget-value")).toHaveText("3");
+  await expect(widget(page, "signups").locator(".widget-growth")).toHaveText(
+    "+50% vs previous 7 days",
+  );
+  await expect(widget(page, "signups").locator(".widget-growth")).toHaveAttribute(
+    "data-outcome",
+    "good",
+  );
+  await expect(widget(page, "quiet").locator(".widget-value")).toHaveText("3");
+  await expect(widget(page, "quiet").locator(".widget-growth")).toHaveCount(0);
 });

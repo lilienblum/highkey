@@ -858,7 +858,7 @@ pub async fn run_widget(
                         shape_for(&widget)
                     };
                     // Grouped time series carry no previous period; rankings compare totals only.
-                    let previous_shape = match (&widget.view.compare, grouped, &shape) {
+                    let previous_shape = match (&widget.view.effective_compare(), grouped, &shape) {
                         (Some(Compare::PreviousPeriod), false, Shape::Buckets) => {
                             Some(Shape::Buckets)
                         }
@@ -1255,6 +1255,42 @@ mod tests {
             None,
         );
         assert_eq!(s[0].total, None);
+    }
+
+    #[test]
+    fn compare_defaults_to_previous_period_for_stat_and_chart_views() {
+        let compare = |view: Value| {
+            widget(json!({
+                "id": "w", "title": "W", "view": view,
+                "queries": {"a": {"signal": "events", "event": "e"}}
+            }))
+            .view
+            .effective_compare()
+        };
+        for kind in ["stat", "line", "area", "bar"] {
+            assert_eq!(
+                compare(json!({"type": kind})),
+                Some(Compare::PreviousPeriod),
+                "{kind}"
+            );
+            assert_eq!(compare(json!({"type": kind, "compare": "none"})), None);
+        }
+        assert_eq!(compare(json!({"type": "ranking"})), None);
+        assert_eq!(
+            compare(json!({"type": "ranking", "compare": "previous_period"})),
+            Some(Compare::PreviousPeriod)
+        );
+    }
+
+    #[test]
+    fn compare_none_is_in_the_schema_and_validates() {
+        let schema = super::super::spec::schema().to_string();
+        assert!(schema.contains("\"none\""), "{schema}");
+        let w = widget(json!({
+            "id": "w", "title": "W", "view": {"type": "stat", "compare": "none"},
+            "queries": {"a": {"signal": "events", "event": "e"}}
+        }));
+        assert_eq!(w.view.compare, Some(Compare::None));
     }
 
     #[test]

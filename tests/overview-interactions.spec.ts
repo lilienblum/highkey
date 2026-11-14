@@ -82,3 +82,55 @@ test("live identity widget, in-place filters, and independent external row links
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("0");
   await expect(page.locator(".live-metric .widget-value")).toHaveText("2");
 });
+
+test("Overview tiles and the activity headline show growth against the previous period", async ({
+  page,
+}) => {
+  const post = async (path: string, body: unknown, headers: Record<string, string>) => {
+    const response = await fetch(`${api}/api${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+    expect(response.ok).toBe(true);
+    return response.json();
+  };
+  const project = await post(
+    "/products",
+    { name: `Growth ${Date.now()}`, retention_days: 365 },
+    { "x-piko-admin": "1" },
+  );
+  const { key } = await post(
+    `/products/${project.id}/keys`,
+    { label: "Growth" },
+    { "x-piko-admin": "1" },
+  );
+  const hours = (ago: number) => new Date(Date.now() - ago * 3_600_000).toISOString();
+  // Four events this week against two in the week before: +100%, and no baseline for durations.
+  await post(
+    "/ingest",
+    {
+      events: [hours(3), hours(6), hours(30), hours(50), hours(24 * 9), hours(24 * 10)].map(
+        (timestamp) => ({
+          event_id: crypto.randomUUID(),
+          name: "page_view",
+          source: "sdk",
+          timestamp,
+          properties: {},
+        }),
+      ),
+    },
+    { authorization: `Bearer ${key}` },
+  );
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.goto(`/projects/${project.slug}?source=all&days=7`);
+  const tile = (label: string) => page.locator(".metric-widget", { hasText: label });
+  await expect(tile("Events").locator(".widget-value")).toHaveText("4");
+  await expect(tile("Events").locator(".widget-growth")).toHaveText("+100% vs previous 7 days");
+  await expect(tile("Events").locator(".widget-growth")).toHaveAttribute("data-outcome", "good");
+  await expect(tile("Avg. duration").locator(".widget-growth")).toHaveText("—");
+  await expect(page.locator(".live-metric .widget-growth")).toHaveCount(0);
+  await expect(page.locator(".activity-widget .widget-growth")).toHaveText(
+    "+100% vs previous 7 days",
+  );
+});

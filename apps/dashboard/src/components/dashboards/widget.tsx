@@ -16,6 +16,7 @@ import {
   cellKind,
   formatCell,
   parseJsonCell,
+  comparesPreviousPeriod,
   formatMeasure,
   hasSeriesLabel,
   resolvedSize,
@@ -37,6 +38,7 @@ import {
   type Widget,
 } from "@/lib/dashboards";
 import { DAY_MS } from "@/lib/date-range";
+import { growth } from "@/lib/growth";
 import { displayTimestamp } from "@/lib/display-time";
 import { displayValue } from "@/lib/display-values";
 import { defaultSpec } from "@/lib/explore-search";
@@ -227,7 +229,7 @@ function StatBody({ widget, result, loading }: BodyProps) {
   const thresholds = definition?.thresholds ?? [];
   const fallback = first?.color ?? definition?.color ?? "yellow";
   const color = thresholds.length ? thresholdColor(value, thresholds, fallback) : undefined;
-  const compare = widget.view.compare === "previous_period";
+  const compare = comparesPreviousPeriod(widget.view);
   // A lone unlabelled series needs no sub-label: the widget title already names it.
   const count = widget.series?.length ?? Object.keys(widget.queries).length;
   const name = hasSeriesLabel(widget, 0) || count > 1 ? (seriesDisplayLabel(widget, 0) ?? "") : "";
@@ -235,32 +237,20 @@ function StatBody({ widget, result, loading }: BodyProps) {
     <div className="dashboard-stat" data-color={color}>
       <WidgetValue
         value={formatMeasure(value, view)}
-        label={
+        label={name}
+        growth={
           compare
-            ? result
-              ? delta(value, first?.previous_total ?? null, view.unit)
-              : "vs previous period"
-            : name
+            ? growth(value, first?.previous_total, {
+                range: result?.range,
+                points: view.unit === "percent" ? 1 : view.unit === "ratio" ? 100 : undefined,
+              })
+            : undefined
         }
         loading={loading}
       />
       {widget.view.sparkline && <Sparkline points={first?.points} color={fallback} />}
     </div>
   );
-}
-
-/** Change against the previous period: points for shares, a relative change otherwise. */
-function delta(current: number | null, previous: number | null, unit?: Unit) {
-  const suffix = " vs previous period";
-  if (current === null || previous === null) return `—${suffix}`;
-  const sign = (value: number) => (value > 0 ? "+" : value < 0 ? "−" : "");
-  if (unit === "percent" || unit === "ratio") {
-    const points = (current - previous) * (unit === "ratio" ? 100 : 1);
-    return `${sign(points)}${number(Math.abs(points), 1)} pts${suffix}`;
-  }
-  if (previous === 0) return current === 0 ? `No change${suffix}` : `—${suffix}`;
-  const change = ((current - previous) / Math.abs(previous)) * 100;
-  return `${sign(change)}${number(Math.abs(change), 1)}%${suffix}`;
 }
 
 /** A decorative trend line; the value beside it carries the measurement. */
@@ -324,7 +314,7 @@ function ChartBody({
   );
   const view = useMemo(() => measureView(widget, 0), [widget]);
   const hasValues = series.some((s) => [...s.points.values()].some((value) => value !== null));
-  const compare = widget.view.compare === "previous_period" && !!result?.series[0]?.previous_points;
+  const compare = comparesPreviousPeriod(widget.view) && !!result?.series[0]?.previous_points;
   const bucket = (result?.range.bucket ?? "day") as TimeBucket;
   return (
     <div className="dashboard-chart">

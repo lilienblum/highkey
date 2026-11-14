@@ -31,12 +31,20 @@ export type View = {
   prefix?: string;
   suffix?: string;
   sparkline?: boolean;
-  compare?: "previous_period";
+  /** Absent means the previous period for stat, line, area and bar views. */
+  compare?: "previous_period" | "none";
   bucket?: string;
   stacked?: boolean;
   limit?: number;
   markdown?: string;
 };
+/** Mirrors the API: stat and chart views compare with the previous period unless they opt out. */
+export function comparesPreviousPeriod(view: Pick<View, "type" | "compare">) {
+  if (view.compare) return view.compare === "previous_period";
+  return (
+    view.type === "stat" || view.type === "line" || view.type === "area" || view.type === "bar"
+  );
+}
 export type EventMeasure = "count" | "actors" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
 export type LogMeasure = "count" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
 export type EventsQuery = {

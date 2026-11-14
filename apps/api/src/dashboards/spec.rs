@@ -83,6 +83,8 @@ pub enum ViewKind {
 #[serde(rename_all = "snake_case")]
 pub enum Compare {
     PreviousPeriod,
+    /// Opts out of the previous-period default.
+    None,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -279,6 +281,22 @@ pub fn schema() -> serde_json::Value {
         .expect("the document schema serializes");
     schema["$id"] = SCHEMA_ID.into();
     schema
+}
+
+impl View {
+    /// The comparison this view runs. Stat views and the headline of line, area and bar views
+    /// compare with the previous period unless they say `none`; other views only when asked.
+    pub fn effective_compare(&self) -> Option<Compare> {
+        match self.compare {
+            Some(Compare::PreviousPeriod) => Some(Compare::PreviousPeriod),
+            Some(Compare::None) => None,
+            Option::None => matches!(
+                self.kind,
+                ViewKind::Stat | ViewKind::Line | ViewKind::Area | ViewKind::Bar
+            )
+            .then_some(Compare::PreviousPeriod),
+        }
+    }
 }
 
 impl Widget {

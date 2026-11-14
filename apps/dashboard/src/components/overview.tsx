@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
 import { useQuery } from "@/lib/use-query";
+import { growth, previousRange } from "@/lib/growth";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import {
@@ -33,6 +34,8 @@ type ChartChoice = {
   identity_kind?: "visitor" | "installation";
   property?: "duration_ms";
   unit?: "ms";
+  /** Shorter is better, so a drop is the good outcome. */
+  lowerIsBetter?: boolean;
 };
 const chartChoices: ChartChoice[] = [
   { id: "count", label: "Events", measure: "count" },
@@ -44,8 +47,22 @@ const chartChoices: ChartChoice[] = [
     measure: "actors",
     identity_kind: "installation",
   },
-  { id: "average", label: "Average duration", measure: "avg", property: "duration_ms", unit: "ms" },
-  { id: "p95", label: "p95 duration", measure: "p95", property: "duration_ms", unit: "ms" },
+  {
+    id: "average",
+    label: "Average duration",
+    measure: "avg",
+    property: "duration_ms",
+    unit: "ms",
+    lowerIsBetter: true,
+  },
+  {
+    id: "p95",
+    label: "p95 duration",
+    measure: "p95",
+    property: "duration_ms",
+    unit: "ms",
+    lowerIsBetter: true,
+  },
 ];
 const dimensions = [
   ["name", "Top events"],
@@ -183,7 +200,29 @@ function ProductOverview() {
     `${scope}:${choice.id}:${bucket}`,
   );
   const activity = separateChart ? chartQuery : query;
+  // The previous window is the equal span just before the range; its scope keeps navigation instant.
+  const before = previousRange(range);
+  const previous = useQuery(
+    product?.id,
+    { ...body, ...before, page_size: 1 },
+    refreshKey,
+    `${scope}:previous`,
+  );
+  const previousChart = useQuery(
+    choice.id !== "count" ? product?.id : undefined,
+    {
+      ...body,
+      ...before,
+      measure: choice.measure,
+      identity_kind: choice.identity_kind,
+      property: choice.property,
+      page_size: 1,
+    },
+    refreshKey,
+    `${scope}:${choice.id}:previous`,
+  );
   const s = query.data?.summary;
+  const p = previous.data?.summary;
   const hasDuration = s?.avg_duration != null;
   const activeRange = {
     from: new Date(now - 5 * 60_000).toISOString(),
@@ -200,6 +239,8 @@ function ProductOverview() {
       (needsSourceQuery && sources.refreshing) ||
       (separateBreakdown && secondary.refreshing) ||
       (separateChart && chartQuery.refreshing) ||
+      previous.refreshing ||
+      (choice.id !== "count" && previousChart.refreshing) ||
       active.refreshing,
   );
   const sourceSlices = useMemo(
@@ -308,22 +349,35 @@ function ProductOverview() {
             />
           </article>
           {[
-            { label: "Events", value: number(s?.total), detail: "In selected period" },
-            { label: "Visitors", value: number(s?.visitors), detail: "Unique visitor IDs" },
+            {
+              label: "Events",
+              value: number(s?.total),
+              detail: "In selected period",
+              change: growth(s?.total, p?.total, { range }),
+            },
+            {
+              label: "Visitors",
+              value: number(s?.visitors),
+              detail: "Unique visitor IDs",
+              change: growth(s?.visitors, p?.visitors, { range }),
+            },
             {
               label: "Installations",
               value: number(s?.installations),
               detail: "Unique installation IDs",
+              change: growth(s?.installations, p?.installations, { range }),
             },
             {
               label: "Success rate",
               value: s?.success_rate == null ? "—" : `${number(s.success_rate, 1)}%`,
               detail: "Among reported outcomes",
+              change: growth(s?.success_rate, p?.success_rate, { range, points: 1 }),
             },
             {
               label: "Avg. duration",
               value: s?.avg_duration == null ? "—" : `${number(s.avg_duration)} ms`,
               detail: "Numeric durations only",
+              change: growth(s?.avg_duration, p?.avg_duration, { range, lowerIsBetter: true }),
             },
           ].map((item) => (
             <article className="metric-widget" key={item.label}>
@@ -331,7 +385,9 @@ function ProductOverview() {
               <WidgetValue
                 value={query.error && !s ? "—" : item.value}
                 label={item.detail}
+                growth={item.change}
                 loading={query.loading}
+                growthLoading={query.loading || previous.loading}
               />
             </article>
           ))}
@@ -352,7 +408,15 @@ function ProductOverview() {
               <WidgetValue
                 value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
                 label={choice.label}
+                growth={growth(
+                  activity.data?.summary.value,
+                  (choice.id === "count" ? previous : previousChart).data?.summary.value,
+                  { range, lowerIsBetter: choice.lowerIsBetter },
+                )}
                 loading={activity.loading}
+                growthLoading={
+                  activity.loading || (choice.id === "count" ? previous : previousChart).loading
+                }
               />
               <ValueSelect
                 label="Chart metric"
