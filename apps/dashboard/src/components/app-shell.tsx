@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { validateExploreSearch } from "@/lib/explore-search";
 import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
@@ -352,7 +353,9 @@ export function AppShell({
             void navigate({
               ...workspaceTarget(view === "/settings" ? "/" : view, product.slug, dashboardSlug),
               search: {
-                // The log query and filters carry over to the new source; its cursor does not.
+                // The Events query and open view, or the log filters, carry over to the new
+                // source; a page number or log cursor does not.
+                ...(view === "/events" ? eventFilters(currentSearch) : {}),
                 ...(view === "/logs" ? logFilters(currentSearch) : {}),
                 project: undefined,
                 source: sourceParam(product.sources, id),
@@ -469,6 +472,10 @@ export function AppShell({
       </SidebarProvider>
     </Workspace.Provider>
   );
+}
+function eventFilters(current: Record<string, unknown>) {
+  const { query, view, viewAt, pageSize } = validateExploreSearch(current);
+  return { query, view, viewAt, pageSize };
 }
 function logFilters(current: Record<string, unknown>) {
   const { logBefore: _cursor, invalidLogs: _invalid, ...filters } = validateLogsSearch(current);

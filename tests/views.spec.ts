@@ -507,3 +507,22 @@ test("an agent's change waits while you have your own, and Update refuses to rev
   await expect(page.getByRole("status").filter({ hasText: "Updated" })).toBeVisible();
   expect((await stored(created.slug)).document.query).toEqual(agents);
 });
+
+test("switching source keeps the open view and its query", async ({ page }) => {
+  await page.goto(`${eventsUrl()}?view=${planView.slug}`);
+  await expect(page.getByText("across 2 matching events")).toBeVisible();
+  const sources = page.getByRole("navigation", { name: "Project sources" });
+  const first = sources.getByRole("button").nth(1);
+  await first.click();
+  await expect(first).toHaveAttribute("aria-pressed", "true");
+  expect(viewParam(page)).toBe(planView.slug);
+  await expect(page.getByText("across 2 matching events")).toBeVisible();
+  await expect(sidebar(page).getByRole("link", { name: planName, exact: true })).toHaveAttribute(
+    "data-active",
+    "",
+  );
+  expect(JSON.parse(new URL(page.url()).searchParams.get("query") ?? "null")).toMatchObject({
+    event: "signup",
+    filterProperty: "plan",
+  });
+});
