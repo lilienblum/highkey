@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Copy01Icon, Tick01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { api, type Product } from "@/lib/api";
 import { highlight } from "@/lib/highlight";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
+import { CopyButton } from "./ui/copy-button";
 import { Input } from "./ui/input";
 import { Field, FieldLabel, FieldDescription } from "./ui/field";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
@@ -33,7 +34,6 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
   const [origin, setOrigin] = useState("");
   const [label, setLabel] = useState("");
   const [created, setCreated] = useState<string>();
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -89,7 +89,6 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
       });
       setCreated(result.key);
       setLabel("");
-      setCopied(false);
       await load();
     } catch (error) {
       setError((error as Error).message);
@@ -201,21 +200,13 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
               <p>This key is shown once. Store it securely before dismissing.</p>
               <code className="block break-all py-3 select-all">{created}</code>
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(created);
-                      setCopied(true);
-                    } catch {
-                      setError("Could not copy the key. Select and copy it above.");
-                    }
-                  }}
+                <CopyButton
+                  key={created}
+                  content={created}
+                  onCopyError={() => setError("Could not copy the key. Select and copy it above.")}
                 >
-                  <HugeiconsIcon icon={copied ? Tick01Icon : Copy01Icon} aria-hidden="true" />
-                  {copied ? "Copied" : "Copy key"}
-                </Button>
+                  Copy key
+                </CopyButton>
                 <Button size="sm" variant="ghost" onClick={() => setCreated(undefined)}>
                   I’ve saved it
                 </Button>

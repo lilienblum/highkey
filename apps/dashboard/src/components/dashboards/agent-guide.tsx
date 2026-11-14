@@ -1,15 +1,5 @@
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Copy01Icon } from "@hugeicons/core-free-icons";
-import { Button } from "@/components/ui/button";
+import { Fragment, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
   DialogContent,
@@ -138,53 +128,21 @@ function Marked({ text }: { text: string }) {
   ));
 }
 
-/**
- * The guide's copy controls share one polite live region that stays mounted, so "Copied" is
- * announced without moving focus or shifting the layout.
- */
-function useCopy() {
-  const [status, setStatus] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  async function copy(text: string) {
-    let message = "Copied";
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      message = "Could not copy. Allow clipboard access and try again.";
-    }
-    clearTimeout(timer.current);
-    setStatus(message);
-    timer.current = setTimeout(() => setStatus(""), 2500);
-  }
-  return { status, copy };
-}
-
 function CopyBlock({
   label,
   text,
   children,
-  onCopy,
 }: {
   label: string;
   text: string;
   children?: ReactNode;
-  onCopy: (text: string) => void;
 }) {
   return (
     <div className="agent-guide-block">
       <pre className="agent-guide-text">
         <code>{children ?? text}</code>
       </pre>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-sm"
-        aria-label={label}
-        onClick={() => onCopy(text)}
-      >
-        <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} aria-hidden="true" />
-      </Button>
+      <CopyButton aria-label={label} content={text} />
     </div>
   );
 }
@@ -204,7 +162,6 @@ export function AgentGuide({
   headingLevel?: 2 | 3;
 }) {
   const origin = useOrigin();
-  const { status, copy } = useCopy();
   const [agent, setAgent] = useAgent();
   const ids = useId();
   const Heading = `h${headingLevel}` as "h2" | "h3";
@@ -227,19 +184,11 @@ export function AgentGuide({
           </TabsList>
           <TabsContent value="claude" className="agent-guide-panel">
             <p className="agent-guide-label">Run in your terminal</p>
-            <CopyBlock
-              label="Copy Claude Code command"
-              text={claudeCommand(origin)}
-              onCopy={(text) => void copy(text)}
-            />
+            <CopyBlock label="Copy Claude Code command" text={claudeCommand(origin)} />
           </TabsContent>
           <TabsContent value="codex" className="agent-guide-panel">
             <p className="agent-guide-label">Add to ~/.codex/config.toml</p>
-            <CopyBlock
-              label="Copy Codex config"
-              text={codexConfig(origin)}
-              onCopy={(text) => void copy(text)}
-            />
+            <CopyBlock label="Copy Codex config" text={codexConfig(origin)} />
           </TabsContent>
         </Tabs>
         <p className="agent-guide-note">
@@ -254,7 +203,7 @@ export function AgentGuide({
         <Heading id={`${ids}-ask`} className="agent-guide-heading">
           Ask it
         </Heading>
-        <CopyBlock label="Copy prompt" text={prompt} onCopy={(text) => void copy(text)}>
+        <CopyBlock label="Copy prompt" text={prompt}>
           <Marked text={prompt} />
         </CopyBlock>
       </section>
@@ -267,17 +216,10 @@ export function AgentGuide({
             <p className="agent-guide-label">
               {example.title} <span>{example.note}</span>
             </p>
-            <CopyBlock
-              label={`Copy example: ${example.title}`}
-              text={example.prompt}
-              onCopy={(text) => void copy(text)}
-            />
+            <CopyBlock label={`Copy example: ${example.title}`} text={example.prompt} />
           </div>
         ))}
       </section>
-      <p role="status" aria-live="polite" className="agent-guide-status">
-        {status}
-      </p>
     </div>
   );
 }

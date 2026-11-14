@@ -3,8 +3,6 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
-  Copy01Icon,
-  Tick01Icon,
   PlayIcon,
   PauseIcon,
   FilterHorizontalIcon,
@@ -35,6 +33,7 @@ import { displayTimestamp } from "@/lib/display-time";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { useDisplayPreferences } from "./display-preferences";
 import { Button } from "./ui/button";
+import { CopyButton } from "./ui/copy-button";
 import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
 import { Field, FieldLabel } from "./ui/field";
@@ -802,7 +801,6 @@ function LogInspector({
   finalFocus: () => HTMLElement | null;
 }) {
   const { timeZone } = useDisplayPreferences();
-  const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
   return (
     <Sheet
@@ -881,23 +879,15 @@ function LogInspector({
                 </pre>
               </TabsContent>
             </Tabs>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(JSON.stringify(log, null, 2));
-                  setCopied(true);
-                } catch {
-                  setCopyError(
-                    "Could not copy this record. Select the JSON from the Raw JSON tab.",
-                  );
-                }
-              }}
+            <CopyButton
+              key={log.log_id}
+              content={JSON.stringify(log, null, 2)}
+              onCopyError={() =>
+                setCopyError("Could not copy this record. Select the JSON from the Raw JSON tab.")
+              }
             >
-              <HugeiconsIcon icon={copied ? Tick01Icon : Copy01Icon} aria-hidden="true" />
-              {copied ? "Copied" : "Copy JSON"}
-            </Button>
+              Copy JSON
+            </CopyButton>
             {copyError && <p role="alert">{copyError}</p>}
           </div>
         )}

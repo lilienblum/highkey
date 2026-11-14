@@ -417,15 +417,19 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await expect(dialog).toBeVisible();
   for (const heading of ["Connect your agent", "Ask it", "Examples"])
     await expect(dialog.getByRole("heading", { name: heading })).toBeVisible();
-  const status = dialog.getByRole("status");
   const agents = dialog.getByRole("tablist", { name: "Agent" });
   await expect(agents.getByRole("tab", { name: "Claude Code" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
   await expect(dialog.getByRole("button", { name: "Copy Codex config" })).toBeHidden();
-  await dialog.getByRole("button", { name: "Copy Claude Code command" }).click();
-  await expect(status).toHaveText("Copied");
+  const claude = dialog.getByRole("button", { name: "Copy Claude Code command" });
+  await expect(claude).toHaveAttribute("data-state", "idle");
+  await claude.click();
+  // The copy icon turns into a check, announces it, and turns back.
+  await expect(claude).toHaveAttribute("data-state", "copied");
+  await expect(dialog.getByRole("status").filter({ hasText: "Copied" })).toHaveCount(1);
+  await expect(claude).toHaveAttribute("data-state", "idle", { timeout: 5_000 });
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     `claude mcp add --transport http piko ${new URL(page.url()).origin}/mcp`,
   );
@@ -449,6 +453,21 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await trigger.click();
   await expect(agents.getByRole("tab", { name: "Codex" })).toHaveAttribute("aria-selected", "true");
   await expect(dialog.getByRole("button", { name: "Copy Codex config" })).toBeVisible();
+});
+
+test("a copy button shows a cross when the clipboard refuses", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) },
+    });
+  });
+  await page.goto(`/projects/${project.slug}`);
+  await sidebar(page).getByRole("button", { name: "New dashboard" }).click();
+  const dialog = page.getByRole("dialog", { name: "New dashboard" });
+  const prompt = dialog.getByRole("button", { name: "Copy prompt" });
+  await prompt.click();
+  await expect(prompt).toHaveAttribute("data-state", "failed");
+  await expect(dialog.getByRole("status").filter({ hasText: "Couldn’t copy" })).toHaveCount(1);
 });
 
 test("/mcp on the dashboard host is the API's MCP server and still refuses browsers", async ({

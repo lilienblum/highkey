@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
-  Copy01Icon,
   Delete02Icon,
   Key01Icon,
   SecurityCheckIcon,
@@ -14,6 +13,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Spinner } from "@/components/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -280,7 +280,6 @@ function ProductSettings({ product }: { product: Product }) {
   const [pending, setPending] = useState<"save" | "create-key" | "revoke" | null>(null);
   const busy = pending !== null;
   const [integration, setIntegration] = useState("browser");
-  const [copied, setCopied] = useState(false);
   const [revoke, setRevoke] = useState<KeyInfo | null>(null);
   const [revokeError, setRevokeError] = useState("");
   const loadKeys = useCallback(
@@ -328,15 +327,6 @@ function ProductSettings({ product }: { product: Product }) {
         : integration === "typescript"
           ? `import { Piko } from "./sdk/typescript/client";\n\nconst piko = new Piko({\n  endpoint: "${origin}",\n  key: "${key}",\n  timeoutMs: 800,\n});\n\nawait piko.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`
           : `PIKO_TELEMETRY=1 \\\nPIKO_ENDPOINT="${origin}" \\\nPIKO_INGESTION_KEY="${key}" \\\ncargo run -p piko --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms timeout and 900 ms shutdown deadline.`;
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setError("Clipboard unavailable. Select the snippet and copy it manually.");
-    }
-  }
   return (
     <>
       {error && !revoke && <ErrorState message={error} />}
@@ -418,15 +408,14 @@ function ProductSettings({ product }: { product: Product }) {
                 <AlertDescription>
                   This is the only time the full key is shown.
                   <code className="new-key">{newKey}</code>
-                  <Button variant="outline" size="sm" onClick={() => void copy(newKey)}>
-                    <HugeiconsIcon
-                      icon={Copy01Icon}
-                      strokeWidth={2}
-                      aria-hidden="true"
-                      data-icon="inline-start"
-                    />
-                    {copied ? "Copied" : "Copy key"}
-                  </Button>
+                  <CopyButton
+                    content={newKey}
+                    onCopyError={() =>
+                      setError("Clipboard unavailable. Select the key and copy it manually.")
+                    }
+                  >
+                    Copy key
+                  </CopyButton>
                 </AlertDescription>
               </Alert>
             )}
@@ -535,7 +524,6 @@ function ProductSettings({ product }: { product: Product }) {
                     onValueChange={(id) => {
                       setKeySourceId(id);
                       setCreatedKey(null);
-                      setCopied(false);
                     }}
                   />
                 </Field>
@@ -624,15 +612,15 @@ function ProductSettings({ product }: { product: Product }) {
                         ? "HTTP request"
                         : "analytics.ts"}
                 </span>
-                <Button variant="ghost" size="sm" onClick={() => void copy(snippet)}>
-                  <HugeiconsIcon
-                    icon={Copy01Icon}
-                    strokeWidth={2}
-                    aria-hidden="true"
-                    data-icon="inline-start"
-                  />
-                  {copied ? "Copied" : "Copy snippet"}
-                </Button>
+                <CopyButton
+                  variant="ghost"
+                  content={snippet}
+                  onCopyError={() =>
+                    setError("Clipboard unavailable. Select the snippet and copy it manually.")
+                  }
+                >
+                  Copy snippet
+                </CopyButton>
               </div>
               <pre className="integration-code">
                 <code>

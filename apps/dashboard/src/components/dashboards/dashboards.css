@@ -397,12 +397,6 @@
   color: var(--primary);
   font-weight: 600;
 }
-.agent-guide-status {
-  min-height: 1.25em;
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
 .agent-guide-dialog {
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
