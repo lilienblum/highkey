@@ -24,8 +24,10 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-pub fn read_router() -> Router<AppState> {
+pub fn read_router(state: AppState) -> Router<AppState> {
     Router::new()
+        // Read tools only: MCP's mutating tools do not exist on this path.
+        .nest_service("/mcp", super::mcp::service(state, false))
         .route("/products", get(crate::list_products))
         .route("/products/{project}/query", post(query))
         .route("/products/{project}/logs/query", post(logs_query))
@@ -216,10 +218,11 @@ fn saved(stored: storage::Stored, bench: Bench) -> Value {
     body
 }
 
-async fn list(
-    State(state): State<AppState>,
-    Path(project): Path<String>,
-) -> Result<Json<Value>, DashboardError> {
+/// The dashboards of a project (by id or slug), as the list endpoint returns them.
+pub(crate) async fn list_dashboards(
+    state: &AppState,
+    project: String,
+) -> Result<Value, DashboardError> {
     let summaries = state
         .store
         .state(move |db| {
@@ -227,12 +230,14 @@ async fn list(
             Ok(storage::list(db, &id))
         })
         .await??;
-    Ok(Json(json!(summaries)))
+    Ok(json!(summaries))
 }
-async fn show(
-    State(state): State<AppState>,
-    Path((project, key)): Path<(String, String)>,
-) -> Result<Json<Value>, DashboardError> {
+/// One dashboard of a project, by id or slug.
+pub(crate) async fn get_dashboard(
+    state: &AppState,
+    project: String,
+    key: String,
+) -> Result<Value, DashboardError> {
     let stored = state
         .store
         .state(move |db| {
@@ -240,12 +245,14 @@ async fn show(
             Ok(storage::get(db, &id, &key))
         })
         .await??;
-    Ok(Json(json!(stored)))
+    Ok(json!(stored))
 }
-async fn revisions(
-    State(state): State<AppState>,
-    Path((project, key)): Path<(String, String)>,
-) -> Result<Json<Value>, DashboardError> {
+/// The revisions kept of a dashboard, newest first.
+pub(crate) async fn list_revisions(
+    state: &AppState,
+    project: String,
+    key: String,
+) -> Result<Value, DashboardError> {
     let revisions = state
         .store
         .state(move |db| {
@@ -253,31 +260,54 @@ async fn revisions(
             Ok(storage::revisions(db, &id, &key))
         })
         .await??;
-    Ok(Json(json!(revisions)))
+    Ok(json!(revisions))
+}
+async fn list(
+    State(state): State<AppState>,
+    Path(project): Path<String>,
+) -> Result<Json<Value>, DashboardError> {
+    Ok(Json(list_dashboards(&state, project).await?))
+}
+async fn show(
+    State(state): State<AppState>,
+    Path((project, key)): Path<(String, String)>,
+) -> Result<Json<Value>, DashboardError> {
+    Ok(Json(get_dashboard(&state, project, key).await?))
+}
+async fn revisions(
+    State(state): State<AppState>,
+    Path((project, key)): Path<(String, String)>,
+) -> Result<Json<Value>, DashboardError> {
+    Ok(Json(list_revisions(&state, project, key).await?))
 }
 /// Errors fail the document; unknown event names and properties only warn, because the data
-/// may arrive later.
+/// may arrive later. The report is `{valid, errors, warnings}`.
+pub(crate) async fn validate_document(
+    state: &AppState,
+    project: &str,
+    document: Value,
+) -> Result<Value, DashboardError> {
+    let catalog = super::catalog::catalog(state, project).await?;
+    let mut report = match parse_document(document) {
+        Ok(doc) => {
+            let mut report = check_document(&doc);
+            super::catalog::warn_unknown_document(&doc, &catalog, &mut report);
+            let product = catalog["project"]["id"].as_str().unwrap_or_default();
+            sql::verify_document(state, product, &doc, &mut report).await?;
+            report
+        }
+        Err(report) => report,
+    };
+    let Report { errors, warnings } = std::mem::take(&mut report);
+    Ok(json!({"valid": errors.is_empty(), "errors": errors, "warnings": warnings}))
+}
 async fn validate(
     State(state): State<AppState>,
     Path(project): Path<String>,
     request: Body<Validate>,
 ) -> Result<Json<Value>, DashboardError> {
     let Validate { document } = body(request)?;
-    let catalog = super::catalog::catalog(&state, &project).await?;
-    let mut report = match parse_document(document) {
-        Ok(doc) => {
-            let mut report = check_document(&doc);
-            super::catalog::warn_unknown_document(&doc, &catalog, &mut report);
-            let product = catalog["project"]["id"].as_str().unwrap_or_default();
-            sql::verify_document(&state, product, &doc, &mut report).await?;
-            report
-        }
-        Err(report) => report,
-    };
-    let Report { errors, warnings } = std::mem::take(&mut report);
-    Ok(Json(
-        json!({"valid": errors.is_empty(), "errors": errors, "warnings": warnings}),
-    ))
+    Ok(Json(validate_document(&state, &project, document).await?))
 }
 
 pub fn write_routes() -> Router<AppState> {
@@ -292,24 +322,106 @@ pub fn write_routes() -> Router<AppState> {
             post(restore),
         )
 }
+/// Creates a dashboard in project `product` (an id). `origin` is who wrote it.
+pub(crate) async fn create_dashboard(
+    state: &AppState,
+    product: &str,
+    document: Value,
+    origin: Origin,
+) -> Result<Value, DashboardError> {
+    throttle(state, product)?;
+    let doc = self::document(document)?;
+    verify_sql(state, product, &doc).await?;
+    let bench = bench_document(state, product, &doc, None).await?;
+    let id = product.to_string();
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::create(db, &id, &doc, origin)))
+        .await??;
+    changed(state, product);
+    Ok(saved(stored, bench))
+}
+/// Replaces a dashboard of project `product` (an id). A save based on an older revision is
+/// refused; `base_revision` of `None` means whatever is current.
+pub(crate) async fn update_dashboard(
+    state: &AppState,
+    product: &str,
+    key: &str,
+    base_revision: Option<i64>,
+    document: Value,
+    origin: Origin,
+) -> Result<Value, DashboardError> {
+    throttle(state, product)?;
+    let doc = self::document(document)?;
+    verify_sql(state, product, &doc).await?;
+    let current = current(state, product, key).await?;
+    let base_revision = base_revision.unwrap_or(current.revision);
+    if current.revision != base_revision {
+        return Err(DashboardError::Conflict {
+            revision: current.revision,
+        });
+    }
+    let bench = bench_document(state, product, &doc, Some(&current.document)).await?;
+    let (id, key) = (product.to_string(), key.to_string());
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::update(db, &id, &key, base_revision, &doc, origin)))
+        .await??;
+    changed(state, product);
+    Ok(saved(stored, bench))
+}
+/// Writes a new revision of a dashboard equal to revision `n`.
+pub(crate) async fn restore_dashboard(
+    state: &AppState,
+    product: &str,
+    key: &str,
+    n: i64,
+    origin: Origin,
+) -> Result<Value, DashboardError> {
+    throttle(state, product)?;
+    let (id, revision_key) = (product.to_string(), key.to_string());
+    let doc = state
+        .store
+        .state(move |db| Ok(storage::revision(db, &id, &revision_key, n)))
+        .await??;
+    verify_sql(state, product, &doc).await?;
+    let current = current(state, product, key).await?;
+    let bench = bench_document(state, product, &doc, Some(&current.document)).await?;
+    let (id, key) = (product.to_string(), key.to_string());
+    let stored = state
+        .store
+        .state(move |db| Ok(storage::restore(db, &id, &key, n, origin)))
+        .await??;
+    changed(state, product);
+    Ok(saved(stored, bench))
+}
+/// Deletes a dashboard and its revisions.
+pub(crate) async fn remove_dashboard(
+    state: &AppState,
+    product: &str,
+    key: &str,
+) -> Result<(), DashboardError> {
+    throttle(state, product)?;
+    let (id, key) = (product.to_string(), key.to_string());
+    state
+        .store
+        .state(move |db| Ok(storage::delete(db, &id, &key)))
+        .await??;
+    changed(state, product);
+    Ok(())
+}
+
 async fn create(
     State(state): State<AppState>,
     Path(product): Path<String>,
     headers: HeaderMap,
     request: Body<Create>,
 ) -> Result<Json<Value>, DashboardError> {
-    throttle(&state, &product)?;
-    let doc = document(body(request)?.document)?;
-    verify_sql(&state, &product, &doc).await?;
-    let bench = bench_document(&state, &product, &doc, None).await?;
+    let Create { document } = body(request)?;
     let origin = origin_from(&headers);
-    let id = product.clone();
-    let stored = state
-        .store
-        .state(move |db| Ok(storage::create(db, &id, &doc, origin)))
-        .await??;
-    changed(&state, &product);
-    Ok(Json(saved(stored, bench)))
+    Ok(Json(
+        create_dashboard(&state, &product, document, origin).await?,
+    ))
 }
 async fn update(
     State(state): State<AppState>,
@@ -319,61 +431,36 @@ async fn update(
 ) -> Result<Json<Value>, DashboardError> {
     let Update {
         base_revision,
-        document: value,
+        document,
     } = body(request)?;
-    throttle(&state, &product)?;
-    let doc = document(value)?;
-    verify_sql(&state, &product, &doc).await?;
-    let current = current(&state, &product, &key).await?;
-    if current.revision != base_revision {
-        return Err(DashboardError::Conflict {
-            revision: current.revision,
-        });
-    }
-    let bench = bench_document(&state, &product, &doc, Some(&current.document)).await?;
     let origin = origin_from(&headers);
-    let id = product.clone();
-    let stored = state
-        .store
-        .state(move |db| Ok(storage::update(db, &id, &key, base_revision, &doc, origin)))
-        .await??;
-    changed(&state, &product);
-    Ok(Json(saved(stored, bench)))
+    Ok(Json(
+        update_dashboard(
+            &state,
+            &product,
+            &key,
+            Some(base_revision),
+            document,
+            origin,
+        )
+        .await?,
+    ))
 }
 async fn restore(
     State(state): State<AppState>,
     Path((product, key, n)): Path<(String, String, i64)>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, DashboardError> {
-    throttle(&state, &product)?;
-    let origin: Origin = origin_from(&headers);
-    let (id, revision_key) = (product.clone(), key.clone());
-    let doc = state
-        .store
-        .state(move |db| Ok(storage::revision(db, &id, &revision_key, n)))
-        .await??;
-    verify_sql(&state, &product, &doc).await?;
-    let current = current(&state, &product, &key).await?;
-    let bench = bench_document(&state, &product, &doc, Some(&current.document)).await?;
-    let id = product.clone();
-    let stored = state
-        .store
-        .state(move |db| Ok(storage::restore(db, &id, &key, n, origin)))
-        .await??;
-    changed(&state, &product);
-    Ok(Json(saved(stored, bench)))
+    let origin = origin_from(&headers);
+    Ok(Json(
+        restore_dashboard(&state, &product, &key, n, origin).await?,
+    ))
 }
 async fn remove(
     State(state): State<AppState>,
     Path((product, key)): Path<(String, String)>,
 ) -> Result<StatusCode, DashboardError> {
-    throttle(&state, &product)?;
-    let id = product.clone();
-    state
-        .store
-        .state(move |db| Ok(storage::delete(db, &id, &key)))
-        .await??;
-    changed(&state, &product);
+    remove_dashboard(&state, &product, &key).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

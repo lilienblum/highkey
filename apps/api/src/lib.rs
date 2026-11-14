@@ -132,9 +132,13 @@ pub fn router(state: AppState) -> Router {
         // Outside `admin`, so read routes need no X-Piko-Admin marker.
         .nest(
             "/api/read",
-            dashboards::routes::read_router()
+            dashboards::routes::read_router(state.clone())
                 .layer(dashboards::routes::read_cors(state.cors_origins.clone())),
         )
+        // The full MCP changes dashboards, so it sits where the management routes do, behind
+        // Cloudflare Access. It is outside the `X-Piko-Admin` marker, which is for browsers:
+        // the MCP refuses any request that carries a browser `Origin` itself.
+        .nest_service("/api/mcp", dashboards::mcp::service(state.clone(), true))
         .route("/api/{*path}", get(|| async { ApiError::missing() }))
         .route("/health", get(|| async { Json(json!({"status":"ok"})) }))
         .layer(DefaultBodyLimit::max(256 * 1024))

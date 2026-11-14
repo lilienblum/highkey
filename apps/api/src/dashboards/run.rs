@@ -717,18 +717,34 @@ fn unknown_events(
         .prepare("SELECT 1 FROM events WHERE product_id = ? AND name = ? LIMIT 1")
         .map_err(anyhow::Error::from)?;
     let mut unknown = Vec::new();
+    // Only a miss pays for the names the project does have, to suggest the nearest.
+    let mut known: Option<Vec<String>> = None;
     for (id, name) in named {
         let found = statement
             .exists(duckdb::params![product, name])
             .map_err(anyhow::Error::from)?;
         if !found {
+            if known.is_none() {
+                known = Some(event_names(db, product)?);
+            }
             unknown.push(super::catalog::unknown_event(
                 format!("/queries/{id}/event"),
                 name,
+                known.iter().flatten().map(String::as_str),
             ));
         }
     }
     Ok(unknown)
+}
+
+/// Some of the event names the project has, for "did you mean" suggestions.
+fn event_names(db: &Connection, product: &str) -> ApiResult<Vec<String>> {
+    db.prepare("SELECT DISTINCT name FROM events WHERE product_id = ? ORDER BY name LIMIT 100")
+        .map_err(anyhow::Error::from)?
+        .query_map(duckdb::params![product], |r| r.get::<_, String>(0))
+        .map_err(anyhow::Error::from)?
+        .collect::<duckdb::Result<Vec<_>>>()
+        .map_err(|e| anyhow::Error::from(e).into())
 }
 
 /// What one widget run produced inside its deadline.

@@ -32,7 +32,7 @@ pub const MAX_VIEWS_PER_PROJECT: usize = 100;
 /// Slugs that collide with a static route segment under `/views`.
 const RESERVED_SLUGS: [&str; 1] = ["validate"];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ViewKind {
     Events,
@@ -595,24 +595,24 @@ fn document(value: Value) -> Result<ViewDocument> {
 
 pub fn read_routes() -> Router<AppState> {
     Router::new()
-        .route("/products/{project}/views", get(list_views))
+        .route("/products/{project}/views", get(list_handler))
         .route("/products/{project}/views/{key}", get(show))
 }
 pub fn write_routes() -> Router<AppState> {
     Router::new()
-        .route("/api/products/{id}/views", post(create_view))
+        .route("/api/products/{id}/views", post(create_handler))
         .route(
             "/api/products/{id}/views/{key}",
-            put(replace_view).delete(remove),
+            put(replace_handler).delete(remove),
         )
 }
 
-async fn list_views(
-    State(state): State<AppState>,
-    Path(project): Path<String>,
-    query: std::result::Result<Query<KindParam>, QueryRejection>,
-) -> Result<Json<Value>> {
-    let kind = kind_param(query)?;
+/// A project's views (by id or slug), optionally of one kind.
+pub(crate) async fn list_views(
+    state: &AppState,
+    project: String,
+    kind: Option<ViewKind>,
+) -> Result<Value> {
     let views = state
         .store
         .state(move |db| {
@@ -620,14 +620,15 @@ async fn list_views(
             Ok(summaries(db, &id, kind))
         })
         .await??;
-    Ok(Json(json!(views)))
+    Ok(json!(views))
 }
-async fn show(
-    State(state): State<AppState>,
-    Path((project, key)): Path<(String, String)>,
-    query: std::result::Result<Query<KindParam>, QueryRejection>,
-) -> Result<Json<Value>> {
-    let kind = kind_param(query)?;
+/// One view of a project (by id or slug), by id or slug.
+pub(crate) async fn get_view(
+    state: &AppState,
+    project: String,
+    key: String,
+    kind: Option<ViewKind>,
+) -> Result<Value> {
     let stored = state
         .store
         .state(move |db| {
@@ -635,39 +636,87 @@ async fn show(
             Ok(fetch(db, &id, &key, kind))
         })
         .await??;
-    Ok(Json(json!(stored)))
+    Ok(json!(stored))
 }
-async fn create_view(
-    State(state): State<AppState>,
-    Path(product): Path<String>,
-    request: Body<Write>,
-) -> Result<Json<Value>> {
-    throttle(&state, &product)?;
-    let doc = document(body(request)?.document)?;
-    let id = product.clone();
+/// Creates a view in project `product` (an id).
+pub(crate) async fn create_view(state: &AppState, product: &str, document: Value) -> Result<Value> {
+    throttle(state, product)?;
+    let doc = self::document(document)?;
+    let id = product.to_string();
     let stored = state
         .store
         .state(move |db| Ok(create(db, &id, &doc)))
         .await??;
-    changed(&state, &product);
-    Ok(Json(json!(stored)))
+    changed(state, product);
+    Ok(json!(stored))
 }
-async fn replace_view(
-    State(state): State<AppState>,
-    Path((product, key)): Path<(String, String)>,
-    request: Body<Write>,
-) -> Result<Json<Value>> {
-    throttle(&state, &product)?;
-    let value = body(request)?.document;
-    let kind_written = value.get("kind").is_some();
-    let doc = document(value)?;
-    let id = product.clone();
+/// Replaces the view `key` of project `product` (an id) with `document`.
+pub(crate) async fn replace_view(
+    state: &AppState,
+    product: &str,
+    key: &str,
+    document: Value,
+) -> Result<Value> {
+    throttle(state, product)?;
+    let kind_written = document.get("kind").is_some();
+    let doc = self::document(document)?;
+    let (id, key) = (product.to_string(), key.to_string());
     let stored = state
         .store
         .state(move |db| Ok(replace(db, &id, &key, &doc, kind_written)))
         .await??;
-    changed(&state, &product);
-    Ok(Json(json!(stored)))
+    changed(state, product);
+    Ok(json!(stored))
+}
+/// Deletes the view `key` of project `product` (an id).
+pub(crate) async fn delete_view(
+    state: &AppState,
+    product: &str,
+    key: &str,
+    kind: Option<ViewKind>,
+) -> Result<()> {
+    throttle(state, product)?;
+    let (id, key) = (product.to_string(), key.to_string());
+    state
+        .store
+        .state(move |db| Ok(delete(db, &id, &key, kind)))
+        .await??;
+    changed(state, product);
+    Ok(())
+}
+
+async fn list_handler(
+    State(state): State<AppState>,
+    Path(project): Path<String>,
+    query: std::result::Result<Query<KindParam>, QueryRejection>,
+) -> Result<Json<Value>> {
+    Ok(Json(list_views(&state, project, kind_param(query)?).await?))
+}
+async fn show(
+    State(state): State<AppState>,
+    Path((project, key)): Path<(String, String)>,
+    query: std::result::Result<Query<KindParam>, QueryRejection>,
+) -> Result<Json<Value>> {
+    let kind = kind_param(query)?;
+    Ok(Json(get_view(&state, project, key, kind).await?))
+}
+async fn create_handler(
+    State(state): State<AppState>,
+    Path(product): Path<String>,
+    request: Body<Write>,
+) -> Result<Json<Value>> {
+    Ok(Json(
+        create_view(&state, &product, body(request)?.document).await?,
+    ))
+}
+async fn replace_handler(
+    State(state): State<AppState>,
+    Path((product, key)): Path<(String, String)>,
+    request: Body<Write>,
+) -> Result<Json<Value>> {
+    Ok(Json(
+        replace_view(&state, &product, &key, body(request)?.document).await?,
+    ))
 }
 async fn remove(
     State(state): State<AppState>,
@@ -675,12 +724,6 @@ async fn remove(
     query: std::result::Result<Query<KindParam>, QueryRejection>,
 ) -> Result<StatusCode> {
     let kind = kind_param(query)?;
-    throttle(&state, &product)?;
-    let id = product.clone();
-    state
-        .store
-        .state(move |db| Ok(delete(db, &id, &key, kind)))
-        .await??;
-    changed(&state, &product);
+    delete_view(&state, &product, &key, kind).await?;
     Ok(StatusCode::NO_CONTENT)
 }

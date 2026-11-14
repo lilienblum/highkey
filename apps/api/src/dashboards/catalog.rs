@@ -3,6 +3,7 @@
 //! Every scan is bounded, so the catalog stays cheap on large projects.
 use super::{
     spec::{Document, QuerySpec, Widget},
+    suggest::nearest,
     validate::{Issue, Report, limits_json},
 };
 use crate::{AppState, error::ApiResult, logs::model::LEVELS};
@@ -185,13 +186,30 @@ fn issue(path: String, message: String, hint: &str) -> Issue {
     }
 }
 
-/// The warning for an event name that has no events behind it.
-pub fn unknown_event(path: String, name: &str) -> Issue {
+/// The warning for an event name that has no events behind it. `known` are the event names the
+/// project does have, which the name is compared with for a "did you mean".
+pub fn unknown_event<'a>(
+    path: String,
+    name: &str,
+    known: impl IntoIterator<Item = &'a str>,
+) -> Issue {
     issue(
         path,
         format!("No events named \"{name}\" have been received for this project"),
-        "Check the spelling against the catalog's events.names; the widget runs and stays empty until such events arrive",
+        &spelling(
+            name,
+            known,
+            "Check the spelling against the catalog's events.names; the widget runs and stays empty until such events arrive",
+        ),
     )
+}
+
+/// `hint`, led by "did you mean" when `name` is a near miss of one of `known`.
+fn spelling<'a>(name: &str, known: impl IntoIterator<Item = &'a str>, hint: &str) -> String {
+    match nearest(name, known) {
+        Some(close) => format!("did you mean `{close}`? {hint}"),
+        None => hint.to_string(),
+    }
 }
 
 fn strings<'a>(catalog: &'a Value, pointer: &str, field: Option<&str>) -> BTreeSet<&'a str> {
@@ -219,7 +237,11 @@ pub fn warn_unknown(widget: &Widget, base: &str, catalog: &Value, report: &mut R
             report.warnings.push(issue(
                 path,
                 format!("No recent events carry a property \"{key}\""),
-                "Check the spelling against the catalog's events.properties (newest 1,000 events)",
+                &spelling(
+                    key,
+                    properties.iter().copied(),
+                    "Check the spelling against the catalog's events.properties (newest 1,000 events)",
+                ),
             ));
         }
     };
@@ -232,9 +254,11 @@ pub fn warn_unknown(widget: &Widget, base: &str, catalog: &Value, report: &mut R
             && names_complete
             && !names.contains(name.as_str())
         {
-            report
-                .warnings
-                .push(unknown_event(format!("{at}/event"), name));
+            report.warnings.push(unknown_event(
+                format!("{at}/event"),
+                name,
+                names.iter().copied(),
+            ));
         }
         if let Some(key) = &q.property {
             property(report, format!("{at}/property"), key);
@@ -310,6 +334,38 @@ mod tests {
         let mut report = Report::default();
         warn_unknown(&w, "/widgets/3", &catalog, &mut report);
         assert_eq!(report.warnings[0].path, "/widgets/3/queries/a/event");
+    }
+
+    #[test]
+    fn unknown_names_and_properties_suggest_the_nearest_known_one() {
+        let catalog = json!({
+            "events": {
+                "names": ["checkout", "signup"],
+                "properties": [{"key": "plan", "type": "string", "count": 2}]
+            }
+        });
+        let w = widget(json!({
+            "a": {
+                "signal": "events", "event": "checkot", "measure": "sum", "property": "amout",
+                "filters": [{"property": "plna", "op": "eq", "value": "pro"}]
+            },
+            "b": {"signal": "events", "event": "unrelated-name"}
+        }));
+        let mut report = Report::default();
+        warn_unknown(&w, "", &catalog, &mut report);
+        let hint = |path: &str| {
+            report
+                .warnings
+                .iter()
+                .find(|i| i.path == path)
+                .and_then(|i| i.hint.clone())
+                .unwrap_or_default()
+        };
+        assert!(hint("/queries/a/event").starts_with("did you mean `checkout`? "));
+        assert!(hint("/queries/a/filters/0/property").starts_with("did you mean `plan`? "));
+        // Nothing close, nothing suggested.
+        assert!(hint("/queries/b/event").starts_with("Check the spelling"));
+        assert!(hint("/queries/a/property").starts_with("Check the spelling"));
     }
 
     #[test]

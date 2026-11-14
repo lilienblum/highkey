@@ -106,6 +106,48 @@ test("gateway preserves API semantics while stripping browser identity and cooki
   }
 });
 
+test("gateway forwards MCP headers", async () => {
+  const received: Headers[] = [];
+  const upstream = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      received.push(request.headers);
+      return Response.json({ jsonrpc: "2.0", id: 1, result: {} });
+    },
+  });
+  const previous = process.env.PIKO_API_URL;
+  process.env.PIKO_API_URL = upstream.url.toString();
+  try {
+    await proxyApi(
+      new Request("https://dashboard.example/api/mcp", {
+        method: "POST",
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          "mcp-protocol-version": "2025-06-18",
+          "mcp-session-id": "session-1",
+          "last-event-id": "7",
+          "x-piko-origin": "dashboard",
+          cookie: "session=browser-session",
+        },
+        body: "{}",
+      }),
+    );
+    expect(received).toHaveLength(1);
+    expect(received[0].get("mcp-protocol-version")).toBe("2025-06-18");
+    expect(received[0].get("mcp-session-id")).toBe("session-1");
+    expect(received[0].get("last-event-id")).toBe("7");
+    expect(received[0].get("x-piko-origin")).toBe("dashboard");
+    expect(received[0].get("accept")).toBe("application/json, text/event-stream");
+    expect(received[0].has("cookie")).toBe(false);
+  } finally {
+    if (previous === undefined) delete process.env.PIKO_API_URL;
+    else process.env.PIKO_API_URL = previous;
+    upstream.stop(true);
+  }
+});
+
 test("gateway bounds pending uploads, cancels them, and releases admission slots", async () => {
   const controllers = Array.from({ length: 64 }, () => new AbortController());
   const pending = controllers.map((controller) =>
