@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
@@ -15,38 +23,65 @@ const docsUrl = "https://github.com/lilienblum/piko/blob/master/docs/dashboards.
 
 export type GuideDashboard = { slug: string; name: string; revision: number };
 export type GuideView = { slug: string; name: string; kind: "events" | "logs" };
-export type GuideMode = "create" | "edit" | "view";
 
-const noopSubscribe = () => () => {};
-/** The page's origin; a placeholder on the server so hydration agrees. */
-function useOrigin(): string {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => window.location.origin,
-    () => "https://your-piko-host",
-  );
-}
+/** What the agent is asked to do. The guide's steps are the same for each; the words differ. */
+export type GuideIntent =
+  | { type: "new-dashboard" }
+  | { type: "edit-dashboard"; dashboard: GuideDashboard }
+  | { type: "new-view"; kind: "events" | "logs" }
+  | { type: "edit-view"; view: GuideView };
 
-export function claudeCommand(origin: string) {
-  return `claude mcp add --transport http piko ${origin}/mcp`;
-}
-export function codexConfig(origin: string) {
-  return `[mcp_servers.piko]\nurl = "${origin}/mcp"`;
-}
-export function askPrompt(
-  mode: GuideMode,
-  project: string,
-  dashboard?: GuideDashboard,
-  view?: GuideView,
-) {
-  if (mode === "view" && view)
-    return `In Piko project "${project}", change the saved ${view.kind} view "${view.slug}": … . Read it with get_view (kind ${view.kind}), then save the change with save_view, keeping its name unless asked.`;
-  if (mode === "edit" && dashboard)
-    return `In Piko project "${project}", update dashboard "${dashboard.slug}" (revision ${dashboard.revision}): … . Read it with get_dashboard, preview changes with run_widget, and save with base_revision ${dashboard.revision}.`;
-  return `In Piko project "${project}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`;
-}
+type Example = { title: string; note: string; prompt: string };
 
-const viewExamples = {
+const dashboardExamples: Example[] = [
+  {
+    title: "Checkout error rate",
+    note: "Events and logs",
+    prompt:
+      "Add a line widget, Checkout error rate, that divides error logs from the checkout service by checkout_request events, as a percent.",
+  },
+  {
+    title: "Weekly churn by cohort",
+    note: "SQL",
+    prompt:
+      "Add a SQL widget showing weekly churn by signup cohort, with one series per cohort, over the last 90 days.",
+  },
+  {
+    title: "Slowest routes",
+    note: "SQL table",
+    prompt:
+      "Add a SQL table widget listing the 10 slowest routes by p95 duration, with their request counts.",
+  },
+];
+
+const newViewExamples: Record<GuideView["kind"], Example[]> = {
+  events: [
+    {
+      title: "Pro plan signups",
+      note: "Filter",
+      prompt: "Save a view of signup events where the plan property is pro, grouped by path.",
+    },
+    {
+      title: "Slow commands",
+      note: "Measure",
+      prompt: "Save a view of the 95th percentile of duration_ms for command events, by command.",
+    },
+  ],
+  logs: [
+    {
+      title: "Checkout errors",
+      note: "Severity",
+      prompt: "Save a view of errors and worse from the checkout service over the last 24 hours.",
+    },
+    {
+      title: "Deploy warnings",
+      note: "Search",
+      prompt: "Save a view of warnings whose message mentions deploy, over the last 7 days.",
+    },
+  ],
+};
+
+const editViewExamples: Record<GuideView["kind"], Example[]> = {
   events: [
     {
       title: "Narrow to a plan",
@@ -73,26 +108,66 @@ const viewExamples = {
   ],
 };
 
-const examples = [
-  {
-    title: "Checkout error rate",
-    note: "Events and logs",
-    prompt:
-      "Add a line widget, Checkout error rate, that divides error logs from the checkout service by checkout_request events, as a percent.",
-  },
-  {
-    title: "Weekly churn by cohort",
-    note: "SQL",
-    prompt:
-      "Add a SQL widget showing weekly churn by signup cohort, with one series per cohort, over the last 90 days.",
-  },
-  {
-    title: "Slowest routes",
-    note: "SQL table",
-    prompt:
-      "Add a SQL table widget listing the 10 slowest routes by p95 duration, with their request counts.",
-  },
-];
+const viewPlace = { events: "Events", logs: "Logs" } as const;
+
+/** The words for one intent: the dialog's title and description, the prompt, and the examples. */
+export function guideCopy(intent: GuideIntent, project: string) {
+  switch (intent.type) {
+    case "edit-dashboard": {
+      const { slug, name, revision } = intent.dashboard;
+      return {
+        title: "Edit dashboard",
+        description: `Your agent changes ${name} over MCP. Every save is a revision you can restore.`,
+        prompt: `In Piko project "${project}", update dashboard "${slug}" (revision ${revision}): … . Read it with get_dashboard, preview changes with run_widget, and save with base_revision ${revision}.`,
+        examples: dashboardExamples,
+      };
+    }
+    case "new-view":
+      return {
+        title: intent.kind === "logs" ? "New log view" : "New event view",
+        description: `Your agent saves views over MCP. Describe what to keep an eye on, and the view appears under ${viewPlace[intent.kind]}.`,
+        prompt:
+          intent.kind === "logs"
+            ? `In Piko project "${project}", save a log view named "…" that shows … . Use describe_project to find log services and attributes, then save_view with kind "logs".`
+            : `In Piko project "${project}", save an event view named "…" that shows … . Use describe_project to find event names and properties, then save_view with kind "events".`,
+        examples: newViewExamples[intent.kind],
+      };
+    case "edit-view": {
+      const { slug, name, kind } = intent.view;
+      return {
+        title: "Edit view",
+        description: `Your agent changes ${name} over MCP. Describe the change, and the view updates under ${viewPlace[kind]}.`,
+        prompt: `In Piko project "${project}", change the saved ${kind} view "${slug}": … . Read it with get_view (kind ${kind}), then save the change with save_view, keeping its name unless asked.`,
+        examples: editViewExamples[kind],
+      };
+    }
+    default:
+      return {
+        title: "New dashboard",
+        description:
+          "Your agent builds dashboards over MCP. Connect it once, then describe what you want to see.",
+        prompt: `In Piko project "${project}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`,
+        examples: dashboardExamples,
+      };
+  }
+}
+
+const noopSubscribe = () => () => {};
+/** The page's origin; a placeholder on the server so hydration agrees. */
+function useOrigin(): string {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => window.location.origin,
+    () => "https://your-piko-host",
+  );
+}
+
+export function claudeCommand(origin: string) {
+  return `claude mcp add --transport http piko ${origin}/mcp`;
+}
+export function codexConfig(origin: string) {
+  return `[mcp_servers.piko]\nurl = "${origin}/mcp"`;
+}
 
 type Agent = "claude" | "codex";
 const agentKey = "piko:agent";
@@ -128,51 +203,66 @@ function Marked({ text }: { text: string }) {
   ));
 }
 
-function CopyBlock({
-  label,
+/** A snippet under a caption bar that names it and copies it, like Settings' code blocks. */
+function GuideCode({
+  caption,
+  copyLabel,
   text,
   children,
 }: {
-  label: string;
+  caption: ReactNode;
+  copyLabel: string;
   text: string;
   children?: ReactNode;
 }) {
   return (
-    <div className="agent-guide-block">
-      <pre className="agent-guide-text">
+    <figure className="agent-guide-code">
+      <figcaption>
+        <span>{caption}</span>
+        <CopyButton variant="ghost" aria-label={copyLabel} content={text} />
+      </figcaption>
+      <pre>
         <code>{children ?? text}</code>
       </pre>
-      <CopyButton aria-label={label} content={text} />
-    </div>
+    </figure>
   );
 }
 
-/** The three sections: connect an agent, a prompt to ask it, and examples. */
-export function AgentGuide({
-  mode,
-  project,
-  dashboard,
-  view,
-  headingLevel = 3,
+function Step({
+  number,
+  heading,
+  id,
+  children,
 }: {
-  mode: GuideMode;
-  project: Product;
-  dashboard?: GuideDashboard;
-  view?: GuideView;
-  headingLevel?: 2 | 3;
+  number: number;
+  heading: string;
+  id: string;
+  children: ReactNode;
 }) {
+  return (
+    <li className="agent-guide-step">
+      <span className="agent-guide-step-number" aria-hidden="true">
+        {number}
+      </span>
+      <section aria-labelledby={id}>
+        <h3 id={id} className="agent-guide-heading">
+          {heading}
+        </h3>
+        {children}
+      </section>
+    </li>
+  );
+}
+
+/** Three steps: connect an agent, ask it, or start from an example. */
+export function AgentGuide({ intent, project }: { intent: GuideIntent; project: Product }) {
   const origin = useOrigin();
   const [agent, setAgent] = useAgent();
   const ids = useId();
-  const Heading = `h${headingLevel}` as "h2" | "h3";
-  const prompt = askPrompt(mode, project.slug, dashboard, view);
-  const shown = mode === "view" ? viewExamples[view?.kind ?? "events"] : examples;
+  const { prompt, examples } = guideCopy(intent, project.slug);
   return (
-    <div className="agent-guide">
-      <section aria-labelledby={`${ids}-connect`}>
-        <Heading id={`${ids}-connect`} className="agent-guide-heading">
-          Connect your agent
-        </Heading>
+    <ol className="agent-guide">
+      <Step number={1} heading="Connect your agent" id={`${ids}-connect`}>
         <Tabs
           value={agent}
           onValueChange={(value) => setAgent(value as Agent)}
@@ -182,80 +272,79 @@ export function AgentGuide({
             <TabsTrigger value="claude">Claude Code</TabsTrigger>
             <TabsTrigger value="codex">Codex</TabsTrigger>
           </TabsList>
-          <TabsContent value="claude" className="agent-guide-panel">
-            <p className="agent-guide-label">Run in your terminal</p>
-            <CopyBlock label="Copy Claude Code command" text={claudeCommand(origin)} />
+          <TabsContent value="claude">
+            <GuideCode
+              caption="Terminal"
+              copyLabel="Copy Claude Code command"
+              text={claudeCommand(origin)}
+            />
           </TabsContent>
-          <TabsContent value="codex" className="agent-guide-panel">
-            <p className="agent-guide-label">Add to ~/.codex/config.toml</p>
-            <CopyBlock label="Copy Codex config" text={codexConfig(origin)} />
+          <TabsContent value="codex">
+            <GuideCode
+              caption="~/.codex/config.toml"
+              copyLabel="Copy Codex config"
+              text={codexConfig(origin)}
+            />
           </TabsContent>
         </Tabs>
         <p className="agent-guide-note">
-          Behind Cloudflare Access, add the CF-Access-Client-Id and CF-Access-Client-Secret headers.{" "}
+          Once per machine. Behind Cloudflare Access, add the CF-Access-Client-Id and
+          CF-Access-Client-Secret headers;{" "}
           <a href={docsUrl} target="_blank" rel="noreferrer">
-            See the docs
+            see the docs
           </a>
           .
         </p>
-      </section>
-      <section aria-labelledby={`${ids}-ask`}>
-        <Heading id={`${ids}-ask`} className="agent-guide-heading">
-          Ask it
-        </Heading>
-        <CopyBlock label="Copy prompt" text={prompt}>
+      </Step>
+      <Step number={2} heading="Ask it" id={`${ids}-ask`}>
+        <GuideCode caption="Prompt" copyLabel="Copy prompt" text={prompt}>
           <Marked text={prompt} />
-        </CopyBlock>
-      </section>
-      <section aria-labelledby={`${ids}-examples`}>
-        <Heading id={`${ids}-examples`} className="agent-guide-heading">
-          Examples
-        </Heading>
-        {shown.map((example) => (
-          <div key={example.title}>
-            <p className="agent-guide-label">
-              {example.title} <span>{example.note}</span>
-            </p>
-            <CopyBlock label={`Copy example: ${example.title}`} text={example.prompt} />
-          </div>
+        </GuideCode>
+        <p className="agent-guide-note">
+          Replace each <span className="agent-guide-blank">…</span> with your own words.
+        </p>
+      </Step>
+      <Step number={3} heading="Examples" id={`${ids}-examples`}>
+        {examples.map((example) => (
+          <GuideCode
+            key={example.title}
+            caption={
+              <>
+                {example.title} <span className="agent-guide-caption-note">{example.note}</span>
+              </>
+            }
+            copyLabel={`Copy example: ${example.title}`}
+            text={example.prompt}
+          />
         ))}
-      </section>
-    </div>
+      </Step>
+    </ol>
   );
 }
 
-/** The guide as a dialog, for creating a dashboard or changing the open dashboard or view. */
+/** The guide as a dialog. Opening it never navigates: it shows the steps where you are. */
 export function AgentGuideDialog({
   open,
   onOpenChange,
-  mode,
+  intent,
   project,
-  dashboard,
-  view,
+  finalFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mode: GuideMode;
+  intent: GuideIntent;
   project: Product;
-  dashboard?: GuideDashboard;
-  view?: GuideView;
+  finalFocus?: RefObject<HTMLElement | null>;
 }) {
+  const { title, description } = guideCopy(intent, project.slug);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="agent-guide-dialog">
+      <DialogContent className="agent-guide-dialog" finalFocus={finalFocus}>
         <DialogHeader>
-          <DialogTitle>
-            {mode === "view" ? "Edit view" : mode === "edit" ? "Edit dashboard" : "New dashboard"}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === "view"
-              ? `Saved views are changed by your agent over MCP. Ask it to update ${view?.name ?? "this view"}.`
-              : mode === "edit"
-                ? `Piko dashboards are changed by your agent over MCP. Ask it to update ${dashboard?.name ?? "this dashboard"}.`
-                : "Piko dashboards are created by your agent over MCP. Connect it, then describe what you want to see."}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <AgentGuide mode={mode} project={project} dashboard={dashboard} view={view} />
+        <AgentGuide intent={intent} project={project} />
       </DialogContent>
     </Dialog>
   );

@@ -13,7 +13,7 @@ import {
   type SpecTextKey,
 } from "@/lib/explore-search";
 import { explorable, getView, queryToSpec, specToQuery, type EventViewDocument } from "@/lib/views";
-import { ViewActions } from "./saved-views";
+import { SaveEventViewButton, ViewActions } from "./saved-views";
 import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, FilterHorizontalIcon, PlayIcon } from "@hugeicons/core-free-icons";
@@ -158,9 +158,8 @@ function OpenView({ slug }: { slug: string }) {
           <AgentGuideDialog
             open={guiding}
             onOpenChange={setGuiding}
-            mode="view"
+            intent={{ type: "edit-view", view: { slug, name, kind: "events" } }}
             project={product}
-            view={{ slug, name, kind: "events" }}
           />
         )}
       </>
@@ -285,6 +284,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             }
           />
         )}
+        {product && !openView && <SaveEventViewButton product={product} spec={applied} />}
       </PageHeader>
       {drilldown && (
         <section className="drilldown-context" aria-label="Overview selection">

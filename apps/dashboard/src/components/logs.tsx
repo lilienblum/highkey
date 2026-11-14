@@ -43,7 +43,7 @@ import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ValueSelect } from "./value-select";
 import { ErrorState, PinChip, QueryDraftNotice } from "./shared";
 import { AgentGuideDialog } from "./dashboards/agent-guide";
-import { ViewActions } from "./saved-views";
+import { SaveLogViewButton, ViewActions } from "./saved-views";
 import { LogStream } from "./log-stream";
 import { useLogFeed } from "@/lib/use-log-feed";
 import { MAX_BUFFERED_LOGS } from "@/lib/log-buffer";
@@ -143,9 +143,8 @@ function OpenLogView({ slug }: { slug: string }) {
           <AgentGuideDialog
             open={guiding}
             onOpenChange={setGuiding}
-            mode="view"
+            intent={{ type: "edit-view", view: { slug, name, kind: "logs" } }}
             project={product}
-            view={{ slug, name, kind: "logs" }}
           />
         )}
       </>
@@ -297,6 +296,9 @@ function LogExplorer() {
             withCurrent={(stored) => currentLogView(stored, search)}
             onDeleted={() => apply({ view: undefined })}
           />
+        )}
+        {!openView && !search.invalidLogs && (
+          <SaveLogViewButton product={product} search={search} />
         )}
       </PageHeader>
       <section className="logs-workspace" aria-label="Project logs">

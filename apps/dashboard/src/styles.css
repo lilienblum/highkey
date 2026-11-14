@@ -4,6 +4,7 @@
 @import "@fontsource-variable/geist-pixel/index.css";
 @import "@fontsource-variable/geist-mono/index.css";
 @import "./logs.css";
+@import "./agent-guide.css";
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {

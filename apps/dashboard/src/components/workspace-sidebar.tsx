@@ -1,6 +1,6 @@
 import { workspaceTarget } from "@/lib/workspace-route";
 import { useState, type ReactNode } from "react";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -33,18 +33,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { DashboardLink, Product } from "@/lib/api";
-import { appliedSpec, type ExploreSearch } from "@/lib/explore-search";
-import { clearedLogs, validateLogsSearch } from "@/lib/logs";
-import { AgentGuideDialog } from "./dashboards/agent-guide";
+import { clearedLogs } from "@/lib/logs";
+import { AgentGuideDialog, type GuideIntent } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
-import {
-  CollapsedGroup,
-  SaveEventViewDialog,
-  SaveLogViewDialog,
-  ViewList,
-  useCollapsedRail,
-  type ViewLinkRenderer,
-} from "./saved-views";
+import { CollapsedGroup, ViewList, useCollapsedRail, type ViewLinkRenderer } from "./saved-views";
 import { SourceIcon } from "./source-icon";
 
 export function WorkspaceSidebar({
@@ -75,14 +67,16 @@ export function WorkspaceSidebar({
   const sources = [{ id: "", name: "All sources", icon: null }, ...(product?.sources ?? [])];
   const dashboards = product?.dashboards ?? [];
   const eventViews = (product?.views ?? []).filter((view) => view.kind === "events");
-  const [creating, setCreating] = useState(false);
+  // New dashboard and New view open the guide where you are; creating is not a navigation.
+  const [guide, setGuide] = useState<GuideIntent>({ type: "new-dashboard" });
+  const [guiding, setGuiding] = useState(false);
+  const openGuide = (intent: GuideIntent) => {
+    setOpenMobile(false);
+    setGuide(intent);
+    setGuiding(true);
+  };
   const logViews = (product?.views ?? []).filter((view) => view.kind === "logs");
-  const [savingView, setSavingView] = useState(false);
-  const [savingLogView, setSavingLogView] = useState(false);
   const collapsedRail = useCollapsedRail();
-  const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as ExploreSearch;
-  const logsSearch = validateLogsSearch(search as Record<string, unknown>);
   const eventViewLink: ViewLinkRenderer = (view, props) => (
     <Link
       {...workspaceTarget("/events", product?.slug)}
@@ -107,16 +101,8 @@ export function WorkspaceSidebar({
       {...(props as object)}
     />
   );
-  // A query is built on the Events page; elsewhere, Save view goes there to build one.
-  const saveEventView = () => {
-    if (path === "/events") setSavingView(true);
-    else if (product) void navigate({ ...workspaceTarget("/events", product.slug) });
-  };
-  // Filters are set on the Logs page; elsewhere, Save view goes there to set some.
-  const saveLogView = () => {
-    if (path === "/logs") setSavingLogView(true);
-    else if (product) void navigate({ ...workspaceTarget("/logs", product.slug) });
-  };
+  const newEventView = () => openGuide({ type: "new-view", kind: "events" });
+  const newLogView = () => openGuide({ type: "new-view", kind: "logs" });
   return (
     <>
       <Sidebar collapsible="icon" className="workspace-sidebar">
@@ -177,7 +163,7 @@ export function WorkspaceSidebar({
                           dashboards={dashboards}
                           active={path === "/"}
                           activeDashboard={dashboardSlug}
-                          onNew={() => setCreating(true)}
+                          onNew={() => openGuide({ type: "new-dashboard" })}
                         />
                       ) : to === "/events" && eventViews.length > 0 && collapsedRail ? (
                         <CollapsedGroup
@@ -197,8 +183,8 @@ export function WorkspaceSidebar({
                             active: view.slug === eventViewSlug,
                             link: (props) => eventViewLink(view, props),
                           }))}
-                          actionLabel="Save view"
-                          onAction={saveEventView}
+                          actionLabel="New view"
+                          onAction={newEventView}
                         />
                       ) : to === "/logs" && logViews.length > 0 && collapsedRail ? (
                         <CollapsedGroup
@@ -218,8 +204,8 @@ export function WorkspaceSidebar({
                             active: view.slug === logViewSlug,
                             link: (props) => logViewLink(view, props),
                           }))}
-                          actionLabel="Save view"
-                          onAction={saveLogView}
+                          actionLabel="New view"
+                          onAction={newLogView}
                         />
                       ) : (
                         <SidebarMenuButton
@@ -261,7 +247,7 @@ export function WorkspaceSidebar({
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton
                               render={<button type="button" />}
-                              onClick={() => setCreating(true)}
+                              onClick={() => openGuide({ type: "new-dashboard" })}
                             >
                               <HugeiconsIcon
                                 icon={Add01Icon}
@@ -280,7 +266,7 @@ export function WorkspaceSidebar({
                           views={logViews}
                           activeSlug={logViewSlug}
                           link={logViewLink}
-                          onSave={saveLogView}
+                          onNew={newLogView}
                           onNavigate={() => setOpenMobile(false)}
                         />
                       )}
@@ -290,7 +276,7 @@ export function WorkspaceSidebar({
                           views={eventViews}
                           activeSlug={eventViewSlug}
                           link={eventViewLink}
-                          onSave={saveEventView}
+                          onNew={newEventView}
                           onNavigate={() => setOpenMobile(false)}
                         />
                       )}
@@ -388,26 +374,10 @@ export function WorkspaceSidebar({
         </SidebarFooter>
       </Sidebar>
       {product && (
-        <SaveLogViewDialog
-          open={savingLogView}
-          onOpenChange={setSavingLogView}
-          product={product}
-          search={logsSearch}
-        />
-      )}
-      {product && (
-        <SaveEventViewDialog
-          open={savingView}
-          onOpenChange={setSavingView}
-          product={product}
-          spec={appliedSpec(search)}
-        />
-      )}
-      {product && (
         <AgentGuideDialog
-          open={creating}
-          onOpenChange={setCreating}
-          mode="create"
+          open={guiding}
+          onOpenChange={setGuiding}
+          intent={guide}
           project={product}
         />
       )}

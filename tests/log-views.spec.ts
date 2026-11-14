@@ -107,7 +107,7 @@ test("the sidebar lists log views under Logs from the server render", async ({ p
     await page.goto(logsUrl(), { waitUntil: "commit" });
     await expect(logViews(page).getByRole("link", { name: errorsName, exact: true })).toBeVisible();
     await expect(logViews(page).getByRole("link")).toHaveCount(1);
-    await expect(logViews(page).getByRole("button", { name: "Save view" })).toBeVisible();
+    await expect(logViews(page).getByRole("button", { name: "New view" })).toBeVisible();
     release();
     await runtime;
   } finally {
@@ -159,7 +159,7 @@ test("Save view stores the current filters and window and opens it", async ({ pa
   await page.getByRole("option", { name: "api", exact: true }).click();
   await windowButton(page, "Last 24 hours").click();
   await expect(page.getByText("1 record", { exact: true })).toBeVisible();
-  await logViews(page).getByRole("button", { name: "Save view", exact: true }).click();
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save view" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(name);
@@ -180,9 +180,9 @@ test("Save view stores the current filters and window and opens it", async ({ pa
     "data-active",
     "",
   );
-  // Views sort by name with Save view last.
+  // Views sort by name with New view last.
   const items = await logViews(page).locator("> li").allInnerTexts();
-  expect(items.at(-1)).toBe("Save view");
+  expect(items.at(-1)).toBe("New view");
   expect(items.slice(0, -1)).toEqual([...items.slice(0, -1)].sort((a, b) => a.localeCompare(b)));
 });
 

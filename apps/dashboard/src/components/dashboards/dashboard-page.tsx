@@ -117,9 +117,11 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
             Your agent adds widgets over MCP. Connect it, then ask for what you want to see.
           </p>
           <AgentGuide
-            mode="edit"
+            intent={{
+              type: "edit-dashboard",
+              dashboard: { slug: stored.slug, name: dashboard.name, revision: stored.revision },
+            }}
             project={product}
-            dashboard={{ slug: stored.slug, name: dashboard.name, revision: stored.revision }}
           />
         </section>
       )}
@@ -208,9 +210,11 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
       <AgentGuideDialog
         open={guiding}
         onOpenChange={setGuiding}
-        mode="edit"
+        intent={{
+          type: "edit-dashboard",
+          dashboard: { slug: stored.slug, name: stored.document.name, revision: stored.revision },
+        }}
         project={product}
-        dashboard={{ slug: stored.slug, name: stored.document.name, revision: stored.revision }}
       />
       <RevisionsSheet
         productId={product.id}

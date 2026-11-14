@@ -56,24 +56,25 @@ import { NameDialog } from "./name-dialog";
 export type ViewLinkRenderer = (view: ViewLink, props?: ComponentProps<"a">) => ReactElement;
 
 /**
- * The saved views nested under Events or Logs, by name, with the active one marked and a button
- * that saves the current query last.
+ * The saved views nested under Events or Logs, by name, with the active one marked and New view
+ * last.
  */
 export function ViewList({
   label,
   views,
   activeSlug,
   link,
-  saveLabel = "Save view",
-  onSave,
+  newLabel = "New view",
+  onNew,
   onNavigate,
 }: {
   label: string;
   views: ViewLink[];
   activeSlug?: string;
   link: ViewLinkRenderer;
-  saveLabel?: string;
-  onSave: () => void;
+  newLabel?: string;
+  /** Opens the agent guide for a new view; it never navigates. */
+  onNew: () => void;
   onNavigate: () => void;
 }) {
   return (
@@ -90,9 +91,9 @@ export function ViewList({
         </SidebarMenuSubItem>
       ))}
       <SidebarMenuSubItem>
-        <SidebarMenuSubButton render={<button type="button" />} onClick={onSave}>
+        <SidebarMenuSubButton render={<button type="button" />} onClick={onNew}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" className="size-3.5" />
-          <span>{saveLabel}</span>
+          <span>{newLabel}</span>
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
     </SidebarMenuSub>
@@ -232,6 +233,32 @@ export function SaveEventViewDialog({
         });
       }}
     />
+  );
+}
+
+/** The Events header's action when no view is open: saves the query on screen as a view. */
+export function SaveEventViewButton({ product, spec }: { product: Product; spec: ExploreSpec }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+        Save view
+      </Button>
+      <SaveEventViewDialog open={open} onOpenChange={setOpen} product={product} spec={spec} />
+    </>
+  );
+}
+
+/** The Logs header's action when no view is open: saves the filters on screen as a view. */
+export function SaveLogViewButton({ product, search }: { product: Product; search: LogsSearch }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+        Save view
+      </Button>
+      <SaveLogViewDialog open={open} onOpenChange={setOpen} product={product} search={search} />
+    </>
   );
 }
 
@@ -410,9 +437,9 @@ export function ViewActions<D extends ViewDocument>({
       <AgentGuideDialog
         open={guiding}
         onOpenChange={setGuiding}
-        mode="view"
+        intent={{ type: "edit-view", view: { slug: view.slug, name: view.name, kind: view.kind } }}
         project={product}
-        view={{ slug: view.slug, name: view.name, kind: view.kind }}
+        finalFocus={trigger}
       />
       {error && (
         <Alert variant="destructive" role="alert" className="dashboard-actions-error">

@@ -122,7 +122,7 @@ test("the sidebar says Events and lists saved views from the server render", asy
     const link = sidebar(page).getByRole("link", { name: planName, exact: true });
     await expect(link).toBeVisible();
     await expect(
-      eventViews(page).getByRole("button", { name: "Save view", exact: true }),
+      eventViews(page).getByRole("button", { name: "New view", exact: true }),
     ).toBeVisible();
     release();
     await runtime;
@@ -166,6 +166,21 @@ test("a view that no longer exists says so and offers a way back", async ({ page
   await expect(page.getByRole("heading", { level: 1, name: "Events", exact: true })).toBeVisible();
 });
 
+test("New view opens the agent guide where you are, without navigating", async ({ page }) => {
+  await page.goto(`/projects/${project.slug}/logs`);
+  const path = new URL(page.url()).pathname;
+  await eventViews(page).getByRole("button", { name: "New view", exact: true }).click();
+  const guide = page.getByRole("dialog", { name: "New event view" });
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText('save_view with kind "events"');
+  for (const heading of ["Connect your agent", "Ask it", "Examples"])
+    await expect(guide.getByRole("heading", { name: heading })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(path);
+  await page.keyboard.press("Escape");
+  await expect(guide).toBeHidden();
+  expect(new URL(page.url()).pathname).toBe(path);
+});
+
 test("Save view stores the current query and opens it", async ({ page }) => {
   const name = `Page views ${run}`;
   await page.goto(eventsUrl());
@@ -173,7 +188,7 @@ test("Save view stores the current query and opens it", async ({ page }) => {
   await page.getByRole("option", { name: "page_view", exact: true }).click();
   await page.getByRole("button", { name: "Run query", exact: true }).click();
   await expect(page.getByText("across 4 matching events")).toBeVisible();
-  await eventViews(page).getByRole("button", { name: "Save view", exact: true }).click();
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save view" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(name);
@@ -194,9 +209,11 @@ test("Save view stores the current query and opens it", async ({ page }) => {
     "data-active",
     "",
   );
-  // The new view sorts by name among the others, with Save view still last.
+  // The new view sorts by name among the others, with New view still last.
   const items = await eventViews(page).locator("> li").allInnerTexts();
-  expect(items.at(-1)).toBe("Save view");
+  expect(items.at(-1)).toBe("New view");
+  // With a view open, the header offers its actions instead of Save view.
+  await expect(page.getByRole("button", { name: "Save view", exact: true })).toHaveCount(0);
   expect(items.slice(0, -1)).toEqual([...items.slice(0, -1)].sort((a, b) => a.localeCompare(b)));
 });
 
@@ -295,7 +312,7 @@ test("the collapsed rail reaches views from Events by keyboard", async ({ page }
   const menu = page.getByRole("dialog", { name: "Events" });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("link", { name: "Events", exact: true })).toBeFocused();
-  await expect(menu.getByRole("button", { name: "Save view" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "New view" })).toBeVisible();
   // Tab walks the views in name order.
   const names = await menu.getByRole("list", { name: "Views" }).getByRole("link").allInnerTexts();
   await page.keyboard.press("Tab", { delay: 0 });
@@ -415,7 +432,7 @@ test("a rejected save shows the API's message and hint and creates nothing", asy
     });
   });
   await page.goto(eventsUrl());
-  await eventViews(page).getByRole("button", { name: "Save view", exact: true }).click();
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save view" });
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByRole("button", { name: "Save view", exact: true }).click();
