@@ -437,7 +437,10 @@ mod tests {
     }
     #[test]
     fn limits_and_syntax_errors() {
-        assert!(parse(&"a+".repeat(101), &["a"]).is_err());
+        assert!(parse(&("a+".repeat(99) + "a"), &["a"]).is_ok());
+        let too_long = parse(&("a+".repeat(100) + "a"), &["a"]).unwrap_err();
+        assert_eq!(too_long.column, 201);
+        assert!(too_long.message.contains("200"), "{}", too_long.message);
         assert!(parse(&format!("{}a{}", "(".repeat(17), ")".repeat(17)), &["a"]).is_err());
         assert!(parse(&format!("{}a{}", "(".repeat(16), ")".repeat(16)), &["a"]).is_ok());
         assert_eq!(parse("a +", &["a"]).unwrap_err().column, 4);
@@ -448,6 +451,18 @@ mod tests {
                 .contains("min, max, abs")
         );
         assert!(parse("min(a)", &["a"]).is_err());
+    }
+    #[test]
+    fn columns_count_characters_not_bytes() {
+        // `é` is two bytes but one character; the error is the fourth character.
+        assert_eq!(parse("a +é", &["a"]).unwrap_err().column, 4);
+        // A leading `é` is rejected at the first character.
+        let err = parse("é + zz", &["a"]).unwrap_err();
+        assert_eq!(err.column, 1);
+        let err = parse("a + b é", &["a", "b"]).unwrap_err();
+        assert_eq!(err.column, 7);
+        // A multi-byte character after a valid prefix.
+        assert_eq!(parse("-é", &["a"]).unwrap_err().column, 2);
     }
     #[test]
     fn references_lists_query_ids() {
