@@ -8,6 +8,7 @@ import {
   PlayIcon,
   PauseIcon,
   FilterHorizontalIcon,
+  Cancel01Icon,
 } from "@hugeicons/core-free-icons";
 import { number } from "@/lib/api";
 import { highlight, TypedValue } from "@/lib/highlight";
@@ -30,6 +31,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Field, FieldLabel } from "./ui/field";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "./ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ValueSelect } from "./value-select";
 import { ErrorState, QueryDraftNotice } from "./shared";
 import { LogStream } from "./log-stream";
@@ -176,22 +178,45 @@ function LogExplorer() {
           <Button type="submit" disabled={pending}>
             Search
           </Button>
-          <ValueSelect
-            label="Log time range"
-            className="logs-window"
-            value={search.logFrom ? "custom" : window}
-            onValueChange={(value) => {
-              if (value !== "custom") apply({ logWindow: value as LogsSearch["logWindow"] });
-            }}
-            options={[
-              ...(search.logFrom ? ([["custom", "Selected range"]] as [string, string][]) : []),
-              ["15m", "Last 15 minutes"],
-              ["1h", "Last hour"],
-              ["6h", "Last 6 hours"],
-              ["24h", "Last 24 hours"],
-              ["7d", "Last 7 days"],
-            ]}
-          />
+          <div className="logs-window">
+            {search.logFrom && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="logs-selected-range"
+                aria-label="Clear selected range"
+                onClick={() => apply({ logWindow: window })}
+              >
+                Selected range
+                <HugeiconsIcon icon={Cancel01Icon} aria-hidden="true" />
+              </Button>
+            )}
+            <ToggleGroup
+              aria-label="Log time range"
+              variant="outline"
+              spacing={0}
+              value={search.logFrom ? [] : [window]}
+              onValueChange={(values) => {
+                const next = values[0];
+                if (next) apply({ logWindow: next as LogsSearch["logWindow"] });
+              }}
+            >
+              {(
+                [
+                  ["15m", "Last 15 minutes"],
+                  ["1h", "Last hour"],
+                  ["6h", "Last 6 hours"],
+                  ["24h", "Last 24 hours"],
+                  ["7d", "Last 7 days"],
+                ] as const
+              ).map(([value, label]) => (
+                <ToggleGroupItem key={value} value={value} aria-label={label} title={label}>
+                  {value}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
           <Button
             type="button"
             variant={follow && !search.logBefore ? "secondary" : "outline"}

@@ -2090,12 +2090,6 @@ h1 {
 }
 
 @media (min-width: 1151px) {
-  .page-content[data-page="explore"] {
-    padding-top: 20px;
-  }
-  .page-content[data-page="explore"] .page-heading {
-    margin-bottom: 14px;
-  }
   .query-builder {
     padding-bottom: 12px;
   }
@@ -2662,7 +2656,8 @@ html {
 }
 /*
  * Card headings are instrument labels: Geist Mono at a level weight, led by a braille strip of
- * even six-dot cells (2px dither dots on the 4px pitch, 4px between cells).
+ * even six-dot cells (2px dither dots on the 4px pitch, 4px between cells) in a quiet ink that
+ * dissolves toward the edge of the card, so long headings do not end in a solid band.
  */
 :is(.metric-label, .widget-header h2) {
   font-family: var(--font-mono);
@@ -2674,10 +2669,12 @@ html {
   flex: 1;
   min-width: 12px;
   height: 10px;
-  background: var(--rule-ink);
+  background: color-mix(in oklab, var(--border) 84%, var(--muted-foreground));
   mask:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M0 0h2v2H0zM4 0h2v2H4zM0 4h2v2H0zM4 4h2v2H4zM0 8h2v2H0zM4 8h2v2H4z'/%3E%3C/svg%3E")
-    0 0 / 10px 10px repeat-x;
+    0 0 / 10px 10px repeat-x,
+    linear-gradient(90deg, #000 min(120px, 50%), transparent);
+  mask-composite: intersect;
 }
 .widget-header > [data-slot="select-trigger"] {
   max-width: 148px;

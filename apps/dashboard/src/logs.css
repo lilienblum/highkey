@@ -4,8 +4,10 @@
   gap: 8px;
 }
 .logs-querybar .logs-window {
-  flex: 0 0 155px;
-  width: 155px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .log-short-time {
   display: none;
@@ -410,7 +412,8 @@
     min-width: 0;
   }
   .logs-querybar .logs-window {
-    width: 100%;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
   }
 }
 @media (max-width: 600px) {

@@ -423,9 +423,9 @@ test("dragging across the log volume histogram narrows the query to those bucket
   await page.mouse.move(bars.x + bars.width * 0.99, y, { steps: 4 });
   await page.mouse.up();
   await expect(page).toHaveURL(/logFrom=.*logTo=/);
-  await expect(page.getByRole("combobox", { name: "Log time range" })).toContainText(
-    "Selected range",
-  );
+  const windows = page.getByRole("group", { name: "Log time range" });
+  await expect(page.getByRole("button", { name: "Clear selected range" })).toBeVisible();
+  await expect(windows.locator('[aria-pressed="true"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveAttribute(
     "aria-pressed",
     "false",
@@ -436,7 +436,10 @@ test("dragging across the log volume histogram narrows the query to those bucket
   expect(to - from).toBeGreaterThan(0);
   expect(to - from).toBeLessThanOrEqual(31 * 60_000);
   // Choosing a preset returns to a rolling window.
-  await page.getByRole("combobox", { name: "Log time range" }).click();
-  await page.getByRole("option", { name: "Last hour", exact: true }).click();
+  await windows.getByRole("button", { name: "Last 6 hours", exact: true }).click();
   await expect(page).not.toHaveURL(/logFrom=/);
+  await expect(windows.getByRole("button", { name: "Last 6 hours", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
