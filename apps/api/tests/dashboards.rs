@@ -1590,6 +1590,7 @@ async fn sql_refuses_every_non_select_and_leaves_data_alone() {
         "SELECT 1; SELECT 2",
         "SELECT count(*) AS value FROM events; DELETE FROM events",
         "WITH gone AS (SELECT 1) DELETE FROM events",
+        "SELECT 1; ATTACH ':memory:' AS x",
     ];
     for sql in statements {
         let issue = refused(&test, &project, "stat", sql).await;
@@ -1703,6 +1704,93 @@ async fn sql_refuses_escaping_functions_and_other_catalogs() {
         .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(total(&body), 2.0 + 3.0 + 2.0 + 4.0 + 1.0);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_cannot_reach_another_projects_database() {
+    let test = Test::new();
+    let project = test.project("Tenant A").await;
+    let other = test.project("Tenant B").await;
+    test.seed_events(&project, None, "mine", 2).await;
+    test.seed_events(&other, None, "theirs", 3).await;
+    let theirs = test.state.store.analytics.path(id(&other)).unwrap();
+    assert!(theirs.exists());
+    let file = theirs.display();
+    let folder = theirs.parent().unwrap().display();
+    // Statements that open, attach or redefine anything are refused before anything runs.
+    for sql in [
+        format!("ATTACH '{file}' AS theirs"),
+        format!("SELECT count(*) AS value FROM events; ATTACH '{file}' AS theirs"),
+        format!("ATTACH '{file}' AS all_events (READ_ONLY)"),
+        "SELECT 1; ATTACH ':memory:' AS x".into(),
+        "USE memory".into(),
+        "SET enable_external_access = true".into(),
+        "CREATE OR REPLACE TEMP VIEW all_events AS SELECT 1 AS value".into(),
+        "CREATE OR REPLACE TEMP MACRO bucket(t) AS 0".into(),
+        "SET VARIABLE piko_run = 1".into(),
+    ] {
+        let issue = refused(&test, &project, "stat", &sql).await;
+        assert!(
+            format!("{issue}").contains("single SELECT"),
+            "{sql}: {issue}"
+        );
+    }
+    // Readers of files and other catalogs are refused, under any name.
+    let catalog = id(&other);
+    for (sql, needle) in [
+        (format!("SELECT count(*) AS value FROM read_blob('{file}')"), "read_blob"),
+        (format!("SELECT count(*) AS value FROM read_text('{file}')"), "read_text"),
+        (format!("SELECT count(*) AS value FROM read_json('{file}')"), "read_json"),
+        (format!("SELECT count(*) AS value FROM read_parquet('{file}')"), "read_parquet"),
+        (format!("SELECT count(*) AS value FROM parquet_scan('{file}')"), "parquet_scan"),
+        (format!("SELECT count(*) AS value FROM sqlite_scan('{file}', 'events')"), "sqlite_scan"),
+        (format!("SELECT count(*) AS value FROM glob('{folder}/*')"), "glob"),
+        (format!("SELECT count(*) AS value FROM '{file}'"), "duckdb"),
+        (format!("SELECT count(*) AS value FROM \"{catalog}\".main.events"), catalog),
+        (format!("SELECT count(*) AS value FROM \"{catalog}\".main.all_events"), catalog),
+        ("SELECT count(*) AS value FROM memory.main.all_events".into(), "memory"),
+        ("SELECT count(*) AS value FROM system.main.all_events".into(), "system"),
+        ("SELECT count(*) AS value FROM temp.main.all_events".into(), "temp"),
+        ("SELECT count(*) AS value FROM temp.all_events".into(), "temp"),
+        ("SELECT count(*) AS value FROM theirs.all_events".into(), "theirs"),
+        (
+            "WITH all_events AS (SELECT * FROM memory.main.events) SELECT count(*) AS value FROM all_events".into(),
+            "memory",
+        ),
+        (
+            "WITH events AS (SELECT * FROM duckdb_tables()) SELECT count(*) AS value FROM events".into(),
+            "duckdb_tables",
+        ),
+        ("SELECT count(*) AS value FROM duckdb_tables()".into(), "duckdb_tables"),
+        ("SELECT count(*) AS value FROM duckdb_databases".into(), "duckdb_databases"),
+        ("SELECT count(*) AS value FROM main.other_table".into(), "other_table"),
+        ("SELECT count(*) AS value FROM all_logs".into(), "all_logs"),
+        ("SELECT getvariable('piko_run') AS value".into(), "getvariable"),
+    ] {
+        let issue = refused(&test, &project, "stat", &sql).await;
+        assert!(format!("{issue}").contains(needle), "{sql}: {issue}");
+    }
+    // What is allowed reads this project's rows alone, however it is named or aliased.
+    for sql in [
+        "SELECT count(*) AS value FROM events",
+        "SELECT count(*) AS value FROM all_events",
+        "SELECT count(*) AS value FROM main.all_events",
+        "SELECT count(*) AS value FROM all_events AS memory",
+        "SELECT count(*) AS value FROM (SELECT * FROM all_events) theirs",
+    ] {
+        assert_eq!(stat_total(&test, &project, sql, None).await, 2.0, "{sql}");
+    }
+    assert_eq!(
+        stat_total(
+            &test,
+            &other,
+            "SELECT count(*) AS value FROM all_events",
+            None
+        )
+        .await,
+        3.0
+    );
     test.close().await;
 }
 

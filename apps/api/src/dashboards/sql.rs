@@ -2327,6 +2327,17 @@ mod tests {
             "SELECT 1; SELECT 2",
             "SELECT 1 AS value; DROP TABLE events",
             "WITH x AS (SELECT 1) INSERT INTO events SELECT * FROM x",
+            // Another database, before or after a SELECT, under any name.
+            "SELECT 1; ATTACH ':memory:' AS x",
+            "ATTACH '/data/products/other.duckdb' AS all_events",
+            "SELECT 1 AS value; ATTACH '/data/products/other.duckdb' (READ_ONLY)",
+            "COPY FROM DATABASE memory TO x",
+            // Nothing a query writes can redefine what the scoped names and bucket mean.
+            "CREATE OR REPLACE TEMP VIEW events AS SELECT * FROM all_events",
+            "CREATE OR REPLACE TEMP MACRO bucket(t) AS 0",
+            "SELECT 1 AS value; CREATE MACRO bucket(t) AS 0",
+            "SET VARIABLE piko_run = {'from': 0, 'to': 9e18}",
+            "RESET VARIABLE piko_run",
         ] {
             let issue = refusal(sql);
             assert!(issue.message.contains("single SELECT"), "{sql}: {issue:?}");
@@ -2379,6 +2390,37 @@ mod tests {
             ("SELECT x.main.f(1)", "x"),
             ("SELECT * FROM 'data.csv'", "data.csv"),
             ("SELECT * FROM duckdb_databases", "duckdb_databases"),
+            // Every file reader, whatever its name.
+            ("SELECT * FROM read_text('/etc/passwd')", "read_text"),
+            ("SELECT * FROM read_blob('x.duckdb')", "read_blob"),
+            ("SELECT * FROM read_json('x.json')", "read_json"),
+            ("SELECT * FROM read_json_auto('x.json')", "read_json_auto"),
+            ("SELECT * FROM read_ndjson('x.json')", "read_ndjson"),
+            ("SELECT * FROM read_csv_auto('x.csv')", "read_csv_auto"),
+            ("SELECT * FROM glob('/data/products/*')", "glob"),
+            ("SELECT * FROM sqlite_scan('x.db', 't')", "sqlite_scan"),
+            ("SELECT * FROM parquet_scan('x.parquet')", "parquet_scan"),
+            ("SELECT * FROM 'x.duckdb'", "x.duckdb"),
+            // The scoped names and the whole tables live in this database alone.
+            ("SELECT * FROM memory.main.all_events", "memory"),
+            ("SELECT * FROM system.main.all_events", "system"),
+            ("SELECT * FROM temp.main.all_events", "temp"),
+            ("SELECT * FROM temp.all_logs", "temp"),
+            ("SELECT * FROM other.all_events", "other"),
+            (
+                "SELECT * FROM \"01a1da82-664f-72d9-a17c-cbc9b6b27ed9\".main.events",
+                "01a1da82",
+            ),
+            (
+                "WITH all_events AS (SELECT * FROM memory.main.events) SELECT * FROM all_events",
+                "memory",
+            ),
+            (
+                "WITH events AS (SELECT * FROM duckdb_tables()) SELECT * FROM events",
+                "duckdb_tables",
+            ),
+            ("SELECT * FROM main.other_table", "other_table"),
+            ("SELECT getvariable('piko_run') AS run", "getvariable"),
             // A WITH name covers only its own query, not a same-named table outside it.
             (
                 "SELECT * FROM (WITH duckdb_databases AS (SELECT 1) SELECT * FROM duckdb_databases) t, duckdb_databases",
@@ -3020,6 +3062,55 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn without_the_guard_a_run_still_cannot_open_another_project() {
+        // The guard refuses all of this at step 1. Were it bypassed, `execute` would run every
+        // statement before the last one (see `check_statement`), and the engine refuses them.
+        let (dir, dbs, id) = events_db();
+        let theirs = uuid::Uuid::now_v7().to_string();
+        drop(dbs.connection(&theirs).unwrap());
+        let path = dbs.path(&theirs).unwrap();
+        assert!(path.exists());
+        let logs = ProductDatabases::for_logs(dir.path().join("logs")).unwrap();
+        drop(logs.connection(&theirs).unwrap());
+        let mut lease = dbs.connection(&id).unwrap();
+        let db = &mut lease.connection;
+        for file in [path, logs.path(&theirs).unwrap()] {
+            let file = file.display();
+            for sql in [
+                format!("ATTACH '{file}' AS theirs; SELECT 1 AS value"),
+                format!("ATTACH '{file}' AS all_events (READ_ONLY); SELECT 1 AS value"),
+                format!("SELECT count(*) AS value FROM read_blob('{file}')"),
+                format!("SELECT count(*) AS value FROM read_text('{file}')"),
+            ] {
+                let error = execute(db, &sql, &params(), SqlDatabase::Events, 10).unwrap_err();
+                assert!(
+                    error.1.contains("disabled by configuration"),
+                    "{sql}: {}",
+                    error.1
+                );
+            }
+        }
+        let error = execute(
+            db,
+            "SET enable_external_access=true; SELECT 1 AS value",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap_err();
+        assert!(error.1.contains("locked"), "{}", error.1);
+        let result = execute(
+            db,
+            "SELECT count(*) AS value FROM all_events",
+            &params(),
+            SqlDatabase::Events,
+            10,
+        )
+        .unwrap();
+        assert_eq!(result.rows, vec![vec![Value::from(3)]]);
     }
 
     #[test]

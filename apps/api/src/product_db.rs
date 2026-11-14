@@ -9,6 +9,15 @@ use std::{
     time::Instant,
 };
 const MAX_OPEN: usize = 8;
+// Tenant isolation invariant: guarded dashboard SQL (`dashboards::sql`) runs only on a DuckDB
+// instance that holds exactly one project's database, opened here with external access off and
+// the configuration locked. The engine itself then refuses to open any other file, through
+// ATTACH or a file reader, whatever SQL reaches it, so the SQL guard is not the only barrier
+// between projects. Never attach several projects' databases to one instance (to share an
+// instance across an organization's projects, say): the guard would then be the only thing
+// keeping one project's SQL out of another's data. The engine does allow `ATTACH ':memory:'`,
+// a new empty database that holds no project's data; the guard refuses it with every other
+// statement that is not a single SELECT.
 /// Settings that keep queries inside the database, applied to every product database (and the
 /// SQL parser) after its own settings. `max_expression_depth` is a per-connection setting, so
 /// it is set GLOBAL to reach the cloned connections leases use; 250 bounds how deep DuckDB's
@@ -209,6 +218,59 @@ mod tests {
         leases.pop();
         assert!(db.connection(&uuid::Uuid::new_v4().to_string()).is_ok());
         assert_eq!(db.cache.lock().unwrap().len(), MAX_OPEN);
+    }
+    #[test]
+    fn a_locked_connection_cannot_reach_another_projects_file() {
+        // Raw statements on a lease, as if every guard in `dashboards::sql` were bypassed.
+        let dir = tempfile::tempdir().unwrap();
+        for dbs in [
+            ProductDatabases::new(dir.path().join("products")).unwrap(),
+            ProductDatabases::for_logs(dir.path().join("logs")).unwrap(),
+        ] {
+            let mine = uuid::Uuid::now_v7().to_string();
+            let theirs = uuid::Uuid::now_v7().to_string();
+            drop(dbs.connection(&theirs).unwrap());
+            let file = dbs.path(&theirs).unwrap();
+            assert!(file.exists());
+            let folder = dir.path().display();
+            let file = file.display();
+            let lease = dbs.connection(&mine).unwrap();
+            let db = &lease.connection;
+            for statement in [
+                format!("ATTACH '{file}' AS theirs"),
+                format!("ATTACH '{file}' AS theirs (READ_ONLY)"),
+                format!("ATTACH IF NOT EXISTS '{file}'"),
+                format!("SELECT * FROM read_blob('{file}')"),
+                format!("SELECT * FROM read_text('{file}')"),
+                format!("SELECT * FROM glob('{folder}/*/*')"),
+            ] {
+                let error = db.execute_batch(&statement).unwrap_err().to_string();
+                assert!(
+                    error.contains("disabled by configuration"),
+                    "{statement}: {error}"
+                );
+            }
+            for statement in [
+                "SET enable_external_access=true".to_string(),
+                "SET GLOBAL enable_external_access=true".into(),
+                "RESET enable_external_access".into(),
+                "SET lock_configuration=false".into(),
+                format!("SET allowed_paths=['{file}']"),
+                format!("SET allowed_directories=['{folder}']"),
+            ] {
+                let error = db.execute_batch(&statement).unwrap_err().to_string();
+                assert!(error.contains("locked"), "{statement}: {error}");
+            }
+            // The instance holds this project's database and DuckDB's own catalogs, nothing more.
+            let attached: Vec<String> = db
+                .prepare("SELECT database_name FROM duckdb_databases() WHERE NOT internal")
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<duckdb::Result<_>>()
+                .unwrap();
+            assert_eq!(attached, [mine]);
+        }
     }
     #[test]
     fn legacy_import_is_idempotent_and_files_are_isolated() {
