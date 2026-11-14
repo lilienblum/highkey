@@ -93,7 +93,7 @@ pub const BLOCKED_FUNCTIONS: [(&str, &str); 8] = [
 /// stream rows. This list does not catch every way to build a big value (nine nested
 /// `replace(s, 'x', 'xxxxxxxxxx')` calls make a billion characters), so the API also caps the
 /// process's memory at startup (see `memory`), where a runaway allocation fails inside DuckDB.
-pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 10] = [
+pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 11] = [
     (
         "repeat",
         "repeat can build values larger than the server's memory; write the text out, or join short literals with || instead",
@@ -113,6 +113,10 @@ pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 10] = [
     (
         "format",
         "format can build values larger than the server's memory; build text with || and casts, as in name || ': ' || count(*)::VARCHAR, and format dates with strftime instead",
+    ),
+    (
+        "bitstring",
+        "bitstring pads to any length and can build values larger than the server's memory; write the bits as a literal, as in '0101'::BIT, instead",
     ),
     (
         "bar",
@@ -184,13 +188,17 @@ fn unavailable() -> Issue {
     )
 }
 
-/// The catalog's macros, lowercase, with their definitions. Built-in macros such as
+/// The catalog's scalar macros, lowercase, with their definitions. Built-in macros such as
 /// `pg_catalog.pg_sleep` keep their own name in the serialized tree, so a macro over a refused
-/// function would pass the name check.
+/// function would pass the name check. Table macros are left out, since a scalar call never
+/// reaches them, and so is any name that also has a non-macro overload: `histogram` is an
+/// aggregate as well as a table macro over `bar`, and refusing it would refuse the aggregate.
 fn catalog_macros(db: &Connection) -> duckdb::Result<Vec<(String, String)>> {
     db.prepare(
         "SELECT DISTINCT lower(function_name), macro_definition FROM duckdb_functions()
-         WHERE function_type IN ('macro', 'table_macro') AND macro_definition IS NOT NULL",
+         WHERE function_type = 'macro' AND macro_definition IS NOT NULL
+           AND lower(function_name) NOT IN (
+               SELECT lower(function_name) FROM duckdb_functions() WHERE function_type <> 'macro')",
     )?
     .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
     .collect()
@@ -235,7 +243,7 @@ fn derive_macros(refused: &mut BTreeMap<String, String>, macros: &[(String, Stri
 
 impl Parser {
     pub fn open() -> anyhow::Result<Self> {
-        let db = Connection::open_in_memory()?;
+        let db = Connection::open_in_memory_with_flags(crate::product_db::database_config()?)?;
         db.execute_batch(&format!(
             "SET threads=1; SET memory_limit='32MB'; {}",
             crate::product_db::LOCKED_SETTINGS
@@ -2334,6 +2342,7 @@ mod tests {
             ("SELECT main.repeat('x', 3) AS v", "repeat"),
             ("SELECT lpad('x', 100000000, 'y') AS v", "lpad"),
             ("SELECT rpad('x', 100000000, 'y') AS v", "rpad"),
+            ("SELECT bitstring('0101', 100000000) AS v", "bitstring"),
             ("SELECT printf('%0100000000d', 1) AS v", "printf"),
             ("SELECT format('{:>100000000}', 1) AS v", "format"),
             ("SELECT bar(1, 0, 2, 100000000) AS v", "bar"),
@@ -2382,6 +2391,17 @@ mod tests {
         // The catalog's macros are read with their definitions.
         let db = Connection::open_in_memory().unwrap();
         let macros = catalog_macros(&db).unwrap();
+        // histogram is an aggregate that shares its name with a table macro over bar; the
+        // aggregate passes, and no scalar macro or overloaded name is derived from it.
+        assert!(!macros.iter().any(|(name, _)| name == "histogram"));
+        for sql in [
+            "SELECT histogram(name) AS value FROM events",
+            "SELECT histogram(name) AS value FROM events GROUP BY source",
+        ] {
+            if let Err(issue) = parser().verify_static(sql) {
+                panic!("{sql}: {issue:?}");
+            }
+        }
         assert!(
             macros
                 .iter()
