@@ -17,7 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Product } from "@/lib/api";
+import { readPreference, savePreference } from "@/lib/preferences";
 
 const docsUrl = "https://github.com/lilienblum/piko/blob/master/docs/dashboards.md#ask-your-ai";
 
@@ -102,6 +104,27 @@ const examples = [
   },
 ];
 
+type Agent = "claude" | "codex";
+const agentKey = "piko:agent";
+
+/**
+ * The agent tab the viewer last picked. It starts on Claude Code for the server render and
+ * switches after hydration, so the markup agrees.
+ */
+function useAgent(): [Agent, (agent: Agent) => void] {
+  const [agent, setAgent] = useState<Agent>("claude");
+  useEffect(() => {
+    if (readPreference(agentKey) === "codex") setAgent("codex");
+  }, []);
+  return [
+    agent,
+    (next) => {
+      setAgent(next);
+      savePreference(agentKey, next);
+    },
+  ];
+}
+
 /** A prompt with its “…” placeholders marked, so they read as blanks to fill in. */
 function Marked({ text }: { text: string }) {
   const parts = text.split("…");
@@ -182,6 +205,7 @@ export function AgentGuide({
 }) {
   const origin = useOrigin();
   const { status, copy } = useCopy();
+  const [agent, setAgent] = useAgent();
   const ids = useId();
   const Heading = `h${headingLevel}` as "h2" | "h3";
   const prompt = askPrompt(mode, project.slug, dashboard, view);
@@ -192,18 +216,32 @@ export function AgentGuide({
         <Heading id={`${ids}-connect`} className="agent-guide-heading">
           Connect your agent
         </Heading>
-        <p className="agent-guide-label">Claude Code</p>
-        <CopyBlock
-          label="Copy Claude Code command"
-          text={claudeCommand(origin)}
-          onCopy={(text) => void copy(text)}
-        />
-        <p className="agent-guide-label">Codex, in ~/.codex/config.toml</p>
-        <CopyBlock
-          label="Copy Codex config"
-          text={codexConfig(origin)}
-          onCopy={(text) => void copy(text)}
-        />
+        <Tabs
+          value={agent}
+          onValueChange={(value) => setAgent(value as Agent)}
+          className="agent-guide-tabs"
+        >
+          <TabsList variant="line" aria-label="Agent">
+            <TabsTrigger value="claude">Claude Code</TabsTrigger>
+            <TabsTrigger value="codex">Codex</TabsTrigger>
+          </TabsList>
+          <TabsContent value="claude" className="agent-guide-panel">
+            <p className="agent-guide-label">Run in your terminal</p>
+            <CopyBlock
+              label="Copy Claude Code command"
+              text={claudeCommand(origin)}
+              onCopy={(text) => void copy(text)}
+            />
+          </TabsContent>
+          <TabsContent value="codex" className="agent-guide-panel">
+            <p className="agent-guide-label">Add to ~/.codex/config.toml</p>
+            <CopyBlock
+              label="Copy Codex config"
+              text={codexConfig(origin)}
+              onCopy={(text) => void copy(text)}
+            />
+          </TabsContent>
+        </Tabs>
         <p className="agent-guide-note">
           Behind Cloudflare Access, add the CF-Access-Client-Id and CF-Access-Client-Secret headers.{" "}
           <a href={docsUrl} target="_blank" rel="noreferrer">

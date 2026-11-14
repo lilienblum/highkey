@@ -348,6 +348,18 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
+.agent-guide-tabs {
+  gap: 8px;
+  min-width: 0;
+}
+.agent-guide-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.agent-guide-panel .agent-guide-label {
+  margin-top: 0;
+}
 .agent-guide-label span::before {
   content: "· ";
 }

@@ -418,11 +418,19 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   for (const heading of ["Connect your agent", "Ask it", "Examples"])
     await expect(dialog.getByRole("heading", { name: heading })).toBeVisible();
   const status = dialog.getByRole("status");
+  const agents = dialog.getByRole("tablist", { name: "Agent" });
+  await expect(agents.getByRole("tab", { name: "Claude Code" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(dialog.getByRole("button", { name: "Copy Codex config" })).toBeHidden();
   await dialog.getByRole("button", { name: "Copy Claude Code command" }).click();
   await expect(status).toHaveText("Copied");
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     `claude mcp add --transport http piko ${new URL(page.url()).origin}/api/mcp`,
   );
+  await agents.getByRole("tab", { name: "Codex" }).click();
+  await expect(dialog.getByRole("button", { name: "Copy Claude Code command" })).toBeHidden();
   await dialog.getByRole("button", { name: "Copy Codex config" }).click();
   const codex = await page.evaluate(() => navigator.clipboard.readText());
   expect(codex).toContain("[mcp_servers.piko]");
@@ -437,6 +445,10 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+  // The agent picked last time is the one shown next time.
+  await trigger.click();
+  await expect(agents.getByRole("tab", { name: "Codex" })).toHaveAttribute("aria-selected", "true");
+  await expect(dialog.getByRole("button", { name: "Copy Codex config" })).toBeVisible();
 });
 
 test("Edit opens the agent guide with the dashboard slug and revision", async ({
