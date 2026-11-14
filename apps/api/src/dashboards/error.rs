@@ -90,9 +90,7 @@ impl DashboardError {
                 .into_parts()
             }
             Self::Api(ApiError(status, message)) => {
-                let retry = (status == StatusCode::SERVICE_UNAVAILABLE
-                    || status == StatusCode::TOO_MANY_REQUESTS)
-                    .then_some(1);
+                let retry = (status == StatusCode::TOO_MANY_REQUESTS).then_some(1);
                 (status, json!({"error": message}), retry)
             }
             Self::Invalid(report) => (
