@@ -122,7 +122,10 @@ test("visitor chart excludes installation identities without shrinking overview 
   await page.goto("/");
   await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("6");
-  expect(new Set(queries.map((query) => JSON.stringify(query))).size).toBe(3);
+  // Four distinct queries, each with its own job: the range summary and chart, the source
+  // breakdown, the equal-length previous period (for the growth line) and the last five minutes
+  // (active visitors).
+  expect(new Set(queries.map((query) => JSON.stringify(query))).size).toBe(4);
   const visitors = chartResponse(page, "actors");
   await select(page, "Chart metric", "Unique visitors");
   const daily = await result(visitors);
