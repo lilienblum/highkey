@@ -100,11 +100,11 @@ pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 10] = [
     ),
     (
         "lpad",
-        "Padding can build values larger than the server's memory; pad with a literal and cut, as in right('00' || n::VARCHAR, 2), or format dates with strftime instead",
+        "Padding can build values larger than the server's memory; pad with a literal and cut instead, as in right('00' || n::VARCHAR, 2), or format dates with strftime",
     ),
     (
         "rpad",
-        "Padding can build values larger than the server's memory; pad with a literal and cut, as in left(name || '          ', 10), instead",
+        "Padding can build values larger than the server's memory; pad with a literal and cut instead, as in left(name || '          ', 10)",
     ),
     (
         "printf",
