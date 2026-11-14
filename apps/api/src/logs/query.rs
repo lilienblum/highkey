@@ -108,6 +108,46 @@ pub async fn run(store: Arc<Store>, project: String, query: Query) -> ApiResult<
     .await
     .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?
 }
+/// JSON Pointer for a top-level attribute key.
+pub(crate) fn attribute_pointer(attribute: &str) -> String {
+    format!("/{}", attribute.replace('~', "~0").replace('/', "~1"))
+}
+
+/// WHERE conditions (and their parameters, in order) shared by the log list and widget queries.
+pub(crate) fn conditions(
+    source: Option<&str>,
+    level: Option<&str>,
+    service: Option<&str>,
+    environment: Option<&str>,
+    trace_id: Option<&str>,
+    search: Option<&str>,
+    filters: &[(String, Value)],
+) -> (Vec<String>, Vec<SqlValue>) {
+    let mut conditions = Vec::new();
+    let mut values = Vec::new();
+    for (column, value) in [
+        ("source_id", source),
+        ("level", level),
+        ("service", service),
+        ("environment", environment),
+        ("trace_id", trace_id),
+    ] {
+        if let Some(value) = value {
+            conditions.push(format!("{column} = ?"));
+            values.push(SqlValue::Text(value.to_string()));
+        }
+    }
+    if let Some(search) = search.filter(|s| !s.is_empty()) {
+        conditions.push("contains(lower(message), lower(?))".into());
+        values.push(SqlValue::Text(search.to_string()));
+    }
+    for (attribute, value) in filters {
+        conditions.push("json_extract(attributes, ?) = ?::JSON".into());
+        values.push(SqlValue::Text(attribute_pointer(attribute)));
+        values.push(SqlValue::Text(value.to_string()));
+    }
+    (conditions, values)
+}
 fn execute(db: &mut Connection, query: Query) -> ApiResult<Value> {
     let tx = db.transaction().map_err(anyhow::Error::from)?;
     let mut conditions = vec!["timestamp >= ?".to_string(), "timestamp < ?".to_string()];
@@ -128,30 +168,23 @@ fn execute(db: &mut Connection, query: Query) -> ApiResult<Value> {
     } else {
         Value::Null
     };
-    for (column, value) in [
-        ("source_id", &query.source_id),
-        ("level", &query.level),
-        ("service", &query.service),
-        ("environment", &query.environment),
-        ("trace_id", &query.trace_id),
-    ] {
-        if let Some(value) = value {
-            conditions.push(format!("{column} = ?"));
-            values.push(SqlValue::Text(value.clone()));
-        }
-    }
-    if let Some(search) = query.search.as_ref().filter(|s| !s.is_empty()) {
-        conditions.push("contains(lower(message), lower(?))".into());
-        values.push(SqlValue::Text(search.clone()));
-    }
-    for filter in query.filters.as_deref().unwrap_or_default() {
-        conditions.push("json_extract(attributes, ?) = ?::JSON".into());
-        values.push(SqlValue::Text(format!(
-            "/{}",
-            filter.attribute.replace('~', "~0").replace('/', "~1")
-        )));
-        values.push(SqlValue::Text(filter.value.to_string()));
-    }
+    let filters: Vec<(String, Value)> = query
+        .filters
+        .iter()
+        .flatten()
+        .map(|f| (f.attribute.clone(), f.value.clone()))
+        .collect();
+    let (extra, extra_values) = self::conditions(
+        query.source_id.as_deref(),
+        query.level.as_deref(),
+        query.service.as_deref(),
+        query.environment.as_deref(),
+        query.trace_id.as_deref(),
+        query.search.as_deref(),
+        &filters,
+    );
+    conditions.extend(extra);
+    values.extend(extra_values);
     let where_sql = conditions.join(" AND ");
     let bucket = ((query.to - query.from).num_milliseconds() / 60).max(1);
     let mut series_values = vec![
@@ -238,7 +271,11 @@ fn execute(db: &mut Connection, query: Query) -> ApiResult<Value> {
 /// Known services and environments in the window, and top-level attribute keys with the scalar
 /// type their values usually have. Attribute keys come from the newest 1,000 records so the cost
 /// stays bounded while Follow refreshes.
-fn facets(tx: &duckdb::Transaction, base: &str, values: &[SqlValue]) -> ApiResult<Value> {
+pub(crate) fn facets(
+    tx: &duckdb::Transaction,
+    base: &str,
+    values: &[SqlValue],
+) -> ApiResult<Value> {
     const LIMIT: usize = 50;
     let mut services = Vec::new();
     let mut environments = Vec::new();
