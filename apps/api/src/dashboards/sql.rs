@@ -51,7 +51,7 @@ pub const TABLE_FUNCTIONS: [&str; 5] = [
 /// Scalar functions refused by name, each with what to do instead. They change state, hold a
 /// query slot doing nothing, or read the server's settings and variables (such as its temp
 /// and home paths). File and network scalars already fail with external access off.
-pub const BLOCKED_FUNCTIONS: [(&str, &str); 7] = [
+pub const BLOCKED_FUNCTIONS: [(&str, &str); 8] = [
     (
         "nextval",
         "Sequences change the database; number rows with row_number() OVER (ORDER BY ...) instead",
@@ -70,6 +70,10 @@ pub const BLOCKED_FUNCTIONS: [(&str, &str); 7] = [
     ),
     (
         "sleep_ms",
+        "Sleeping only holds a query slot; remove it, since widgets refresh on their own instead",
+    ),
+    (
+        "pg_sleep",
         "Sleeping only holds a query slot; remove it, since widgets refresh on their own instead",
     ),
     (
@@ -146,8 +150,8 @@ const READS: [&str; 7] = [
 /// The DuckDB parser, on a private in-memory database whose settings are locked.
 pub struct Parser {
     connection: Mutex<Connection>,
-    /// Every scalar function refused by name, lowercase, with its hint: `BLOCKED_FUNCTIONS`
-    /// and `AMPLIFYING_FUNCTIONS`.
+    /// Every scalar function refused by name, lowercase, with its hint: `BLOCKED_FUNCTIONS`,
+    /// `AMPLIFYING_FUNCTIONS`, and the catalog's macros that call one of them.
     refused: BTreeMap<String, String>,
 }
 
@@ -180,6 +184,55 @@ fn unavailable() -> Issue {
     )
 }
 
+/// The catalog's macros, lowercase, with their definitions. Built-in macros such as
+/// `pg_catalog.pg_sleep` keep their own name in the serialized tree, so a macro over a refused
+/// function would pass the name check.
+fn catalog_macros(db: &Connection) -> duckdb::Result<Vec<(String, String)>> {
+    db.prepare(
+        "SELECT DISTINCT lower(function_name), macro_definition FROM duckdb_functions()
+         WHERE function_type IN ('macro', 'table_macro') AND macro_definition IS NOT NULL",
+    )?
+    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+    .collect()
+}
+
+/// Whether `body` calls one of `names`: a name followed by an opening parenthesis.
+fn calls<'a>(body: &str, names: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+    let lower = body.to_ascii_lowercase();
+    let b = lower.as_bytes();
+    let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    names.into_iter().find(|name| {
+        lower.match_indices(name.as_str()).any(|(at, _)| {
+            let end = at + name.len();
+            let rest = lower[end..].trim_start();
+            (at == 0 || !word(b[at - 1])) && rest.starts_with('(')
+        })
+    })
+}
+
+/// Adds every macro of `macros` that calls a refused function, directly or through another
+/// such macro, to `refused`, with a hint that names what it calls.
+fn derive_macros(refused: &mut BTreeMap<String, String>, macros: &[(String, String)]) {
+    loop {
+        let found = macros.iter().find_map(|(name, body)| {
+            if refused.contains_key(name) {
+                return None;
+            }
+            let callee = calls(body, refused.keys())?;
+            Some((
+                name.clone(),
+                format!("{name} calls {callee}: {}", refused[callee]),
+            ))
+        });
+        match found {
+            Some((name, hint)) => {
+                refused.insert(name, hint);
+            }
+            None => break,
+        }
+    }
+}
+
 impl Parser {
     pub fn open() -> anyhow::Result<Self> {
         let db = Connection::open_in_memory()?;
@@ -187,11 +240,12 @@ impl Parser {
             "SET threads=1; SET memory_limit='32MB'; {}",
             crate::product_db::LOCKED_SETTINGS
         ))?;
-        let refused = BLOCKED_FUNCTIONS
+        let mut refused = BLOCKED_FUNCTIONS
             .iter()
             .chain(&AMPLIFYING_FUNCTIONS)
             .map(|(name, hint)| (name.to_string(), hint.to_string()))
             .collect();
+        derive_macros(&mut refused, &catalog_macros(&db)?);
         Ok(Self {
             connection: Mutex::new(db),
             refused,
@@ -2307,6 +2361,46 @@ mod tests {
                 panic!("{sql}: {issue:?}");
             }
         }
+    }
+
+    #[test]
+    fn refuses_macros_over_refused_functions() {
+        // pg_catalog.pg_sleep is a macro over sleep_ms, and the serialized tree keeps its name.
+        let issue = refusal("SELECT pg_sleep(1)::VARCHAR AS value");
+        assert!(
+            issue.message.starts_with("pg_sleep is not allowed"),
+            "{issue:?}"
+        );
+        assert!(issue.hint.unwrap().contains("instead"));
+        // The catalog's macros are read with their definitions.
+        let db = Connection::open_in_memory().unwrap();
+        let macros = catalog_macros(&db).unwrap();
+        assert!(
+            macros
+                .iter()
+                .any(|(name, body)| name == "pg_sleep" && body.contains("sleep_ms(")),
+            "{macros:?}"
+        );
+        // A macro that calls a refused function, directly or through another macro, is
+        // refused; a parameter that merely shares a refused name is not a call.
+        let mut refused = BTreeMap::from([("sleep_ms".to_string(), "Remove it".to_string())]);
+        let macros = [
+            ("nap", "sleep_ms(CAST((seconds * 1000) AS BIGINT))"),
+            ("doze", "nap (seconds) + 1"),
+            ("stamp", "strftime(x, format)"),
+            ("sleep_msx", "1"),
+        ]
+        .map(|(n, b)| (n.to_string(), b.to_string()));
+        derive_macros(&mut refused, &macros);
+        assert_eq!(
+            refused.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["doze", "nap", "sleep_ms"]
+        );
+        assert_eq!(refused["nap"], "nap calls sleep_ms: Remove it");
+        assert_eq!(
+            refused["doze"],
+            "doze calls nap: nap calls sleep_ms: Remove it"
+        );
     }
 
     #[test]

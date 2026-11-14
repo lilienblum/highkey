@@ -143,17 +143,18 @@ Piko checks the statement before every save, validation and run. DuckDB's own pa
 
 Some functions are refused by name, each with a hint that says what to use instead. DuckDB's memory limit covers its buffers and aggregates but not a single string or list value, so functions that can build one larger than the server's memory are refused along with those that change state or read the server's settings:
 
-| Refused                                                           | Use instead                                                                                  |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `repeat`                                                          | Write the text out, or join short literals with `\|\|`                                       |
-| `lpad`, `rpad`                                                    | Pad with a literal and cut, as in `right('00' \|\| n::VARCHAR, 2)`; `strftime` for dates     |
-| `printf`, `format`                                                | Build text with `\|\|` and casts, as in `name \|\| ': ' \|\| count(*)::VARCHAR`              |
-| `bar`                                                             | A `bar` or `ranking` view                                                                    |
-| `list_resize`, `array_resize`                                     | `list_slice` or `[a:b]`                                                                      |
-| `range(…)` and `generate_series(…)` as values (they return lists) | Their table forms, as in `SELECT i FROM range(10) t(i)`, with `list(i)` when you need a list |
-| `WITH RECURSIVE`                                                  | A table function such as `range`, and window functions for running totals                    |
-| `nextval`, `currval`, `setseed`, `write_log`, `sleep_ms`          | `row_number() OVER (…)` to number rows; the others have no use in a widget                   |
-| `current_setting`, `getvariable`                                  | The parameters above                                                                         |
+| Refused                                                              | Use instead                                                                                  |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `repeat`                                                             | Write the text out, or join short literals with `\|\|`                                       |
+| `lpad`, `rpad`                                                       | Pad with a literal and cut, as in `right('00' \|\| n::VARCHAR, 2)`; `strftime` for dates     |
+| `printf`, `format`                                                   | Build text with `\|\|` and casts, as in `name \|\| ': ' \|\| count(*)::VARCHAR`              |
+| `bar`                                                                | A `bar` or `ranking` view                                                                    |
+| `list_resize`, `array_resize`                                        | `list_slice` or `[a:b]`                                                                      |
+| `range(…)` and `generate_series(…)` as values (they return lists)    | Their table forms, as in `SELECT i FROM range(10) t(i)`, with `list(i)` when you need a list |
+| `WITH RECURSIVE`                                                     | A table function such as `range`, and window functions for running totals                    |
+| `nextval`, `currval`, `setseed`, `write_log`, `sleep_ms`, `pg_sleep` | `row_number() OVER (…)` to number rows; the others have no use in a widget                   |
+| `current_setting`, `getvariable`                                     | The parameters above                                                                         |
+| Built-in macros that call any of these                               | As for the function the macro calls; the hint names it                                       |
 
 A value can still grow by other routes, such as a chain of WITH tables that each double a string with `x || x`. On Linux the API runs under a memory ceiling (see [the resource model](api.md#resource-model)), so such a query fails with an Out of Memory error instead of taking the API down.
 
