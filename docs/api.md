@@ -147,7 +147,7 @@ Every dashboard or view write counts against 30 per minute per project, shared w
 
 ### MCP
 
-`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP with JSON responses. Any request that carries a browser `Origin` header is refused, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`piko://schema/dashboard.v1`, `piko://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
+`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP with JSON responses. The dashboard also serves `/mcp`, a short address that forwards to `/api/mcp`; it is the one the agent guide shows. Any request that carries a browser `Origin` header is refused, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`piko://schema/dashboard.v1`, `piko://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
 
 ### Error codes
 

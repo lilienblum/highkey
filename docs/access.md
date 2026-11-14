@@ -35,11 +35,11 @@ Agents and local pages reach Piko through two API prefixes that you can give sep
 | Access application path     | Policy                                                                                                                  | Purpose                                                                                                      |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `piko.example.com/api/read` | Two policies: Allow your users and groups (the same as the main application), plus Service Auth for the read-only token | The dashboard UI itself calls these paths as the signed-in user; the token serves read-only agents and pages |
-| `piko.example.com`          | Allow your users, plus Service Auth for the full token                                                                  | Everything else, including `/api/mcp`, which can change dashboards, views, projects, sources and keys        |
+| `piko.example.com`          | Allow your users, plus Service Auth for the full token                                                                  | Everything else, including `/mcp`, which can change dashboards, views, projects, sources and keys            |
 
 - **Read-only token.** Add a more specific Access application for `piko.example.com/api/read/*` with two policies: an Allow policy for the same users and groups as the main application, and a Service Auth policy for one token. The dashboard UI loads dashboards, widget runs, the catalog and saved views from `/api/read/*` as the signed-in user, and a more specific application replaces the main policy for its paths, so an application that allows only the token locks every signed-in person out of dashboards and views. Everything under `/api/read` is non-mutating whatever its method, so the token cannot write or create keys. It can still read your analytics and raw event and log samples; see [privacy](privacy.md#ai-agents-and-mcp).
-- **Full token.** A service token allowed on the main application can use `/api/mcp` and every management endpoint. Treat it as full trust: it is as powerful as a signed-in admin, it can create and revoke keys and see their secrets, and anyone who holds it holds all of that. Keep it in the agent's own configuration, give each agent its own token so you can revoke one, and set a short Access token duration if you can.
-- **Agent setup.** Point the client at `https://piko.example.com/api/mcp` (or `/api/read/mcp` with the read token) and send the two headers. [Claude Code and Codex configuration](dashboards.md#ask-your-ai) is in the dashboards guide. Local development has no Access and needs no headers.
+- **Full token.** A service token allowed on the main application can use `/mcp` and every management endpoint. Treat it as full trust: it is as powerful as a signed-in admin, it can create and revoke keys and see their secrets, and anyone who holds it holds all of that. Keep it in the agent's own configuration, give each agent its own token so you can revoke one, and set a short Access token duration if you can.
+- **Agent setup.** Point the client at `https://piko.example.com/mcp` (or `/api/read/mcp` with the read token) and send the two headers. [Claude Code and Codex configuration](dashboards.md#ask-your-ai) is in the dashboards guide. Local development has no Access and needs no headers.
 - The API refuses MCP requests that carry a browser `Origin` header, so a web page cannot use the MCP endpoints even with a leaked token.
 
 ### Local pages and CORS
@@ -52,7 +52,7 @@ Verify from outside after configuring the edge:
 
 - `GET /api/read/products` without the token redirects or denies at Access; with the read-only token it returns the projects.
 - A signed-in user can still open a dashboard in the UI, run its widgets and open saved views.
-- `PUT /api/products/<id>/dashboards/<slug>` and `POST /api/mcp` with the read-only token are denied at Access.
+- `PUT /api/products/<id>/dashboards/<slug>` and `POST /mcp` with the read-only token are denied at Access.
 - `POST /api/read/mcp` with the read-only token lists only the read tools.
 
 ## Native Tako hosts and realtime

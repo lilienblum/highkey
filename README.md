@@ -88,7 +88,7 @@ Project, source, range, chart choices, applied Events queries, and Logs filters 
 Dashboards are JSON documents that the API owns, written over MCP by the AI agent you already use (Claude Code, Codex or anything that speaks MCP). Each widget runs typed event and log queries, formulas and guarded read-only SQL; every save is validated and timed, and revisions let you undo. Dashboards appear under Overview in the sidebar, and named queries can be saved as views under Events and Logs.
 
 ```sh
-claude mcp add --transport http piko http://127.0.0.1:3000/api/mcp
+claude mcp add --transport http piko http://127.0.0.1:3000/mcp
 ```
 
 Remote setups, the Codex config, the document reference, worked examples (including weekly churn in SQL) and the read-only `/api/read` surface for your own local pages are in [custom dashboards, views and MCP](docs/dashboards.md). Give an agent only the read-only token if it should not change anything; see [access](docs/access.md#mcp-and-read-only-access) and [privacy](docs/privacy.md#ai-agents-and-mcp). Errors and endpoints are in the [API reference](docs/api.md#dashboards-views-and-mcp).

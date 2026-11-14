@@ -12,23 +12,25 @@ Piko serves an MCP server (streamable HTTP) in the API. It has two paths:
 
 | Path            | Tools                                                                                       | Use it with                 |
 | --------------- | ------------------------------------------------------------------------------------------- | --------------------------- |
-| `/api/mcp`      | Everything: read, build and save dashboards and views, manage projects, sources and keys    | A full Access service token |
+| `/mcp`          | Everything: read, build and save dashboards and views, manage projects, sources and keys    | A full Access service token |
 | `/api/read/mcp` | Read only: projects, catalog, `run_widget`, samples, dashboards and views to read, validate | A read-only token           |
+
+`/mcp` is served by the dashboard and forwards to the API's own `/api/mcp`. Use `/api/mcp` only when an agent reaches the API directly, without the dashboard in front. The read-only server stays at `/api/read/mcp` so Access can scope a read token to `/api/read/*`.
 
 Piko has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev`, standalone or Compose) there is no Access and the agent needs no headers.
 
 ### Claude Code
 
-Locally, through the dashboard's proxy or straight to the API:
+Locally, through the dashboard:
 
 ```sh
-claude mcp add --transport http piko http://127.0.0.1:3000/api/mcp
+claude mcp add --transport http piko http://127.0.0.1:3000/mcp
 ```
 
 Against a deployment behind Access, add the service token's two headers:
 
 ```sh
-claude mcp add --transport http piko https://piko.example.com/api/mcp \
+claude mcp add --transport http piko https://piko.example.com/mcp \
   --header "CF-Access-Client-Id: <client id>.access" \
   --header "CF-Access-Client-Secret: <client secret>"
 ```
@@ -41,7 +43,7 @@ Add a server to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.piko]
-url = "https://piko.example.com/api/mcp"
+url = "https://piko.example.com/mcp"
 http_headers = { "CF-Access-Client-Id" = "<client id>.access", "CF-Access-Client-Secret" = "<client secret>" }
 ```
 
@@ -49,12 +51,12 @@ To keep the secret out of the file, use `env_http_headers`, which maps a header 
 
 ```toml
 [mcp_servers.piko]
-url = "https://piko.example.com/api/mcp"
+url = "https://piko.example.com/mcp"
 http_headers = { "CF-Access-Client-Id" = "<client id>.access" }
 env_http_headers = { "CF-Access-Client-Secret" = "PIKO_ACCESS_CLIENT_SECRET" }
 ```
 
-Locally, `url = "http://127.0.0.1:3000/api/mcp"` is enough.
+Locally, `url = "http://127.0.0.1:3000/mcp"` is enough.
 
 ### What the agent can do
 

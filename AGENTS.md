@@ -5,7 +5,7 @@
 - Keep ingestion acknowledgments after commit, bounded queues, product-scoped deduplication, and typed properties intact.
 - Run `bun run fmt` (bare `bun fmt` runs Bun's built-in formatter), `bun typecheck`, `bun lint`, `bun test`, `bun run build`, `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings` for relevant changes.
 - Dashboard primitives use shadcn/ui on Base UI (`@base-ui/react`), with Hugeicons and the local single-theme Kanagawa Wave styles (orange primary, yellow/violet/aqua data accents). Keep `components.json` on `base-vega`; use `render` composition, not Radix or `asChild`. Preserve keyboard/focus behavior, SSR labels, and stable refresh geometry.
-- Custom dashboards are API-owned `piko.dashboard/v1` documents, written by agents over MCP, never edited by hand in the dashboard UI. `/api/read/*` is the only credential-free CORS surface (loopback plus `PIKO_CORS_ORIGINS`), and MCP lives in the API (`/api/mcp`, `/api/read/mcp`).
+- Custom dashboards are API-owned `piko.dashboard/v1` documents, written by agents over MCP, never edited by hand in the dashboard UI. `/api/read/*` is the only credential-free CORS surface (loopback plus `PIKO_CORS_ORIGINS`), and MCP lives in the API (`/api/mcp`, `/api/read/mcp`); the dashboard's `/mcp` forwards to `/api/mcp` and is the address users are shown.
 - MIT license. Keep documentation and collection examples aligned with API changes.
 - For dashboard UI work, read `apps/dashboard/PRODUCT.md` and `apps/dashboard/DESIGN.md`; the normative design sidecar is `apps/dashboard/.impeccable/design.json`.
 

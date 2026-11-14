@@ -427,14 +427,14 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await dialog.getByRole("button", { name: "Copy Claude Code command" }).click();
   await expect(status).toHaveText("Copied");
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    `claude mcp add --transport http piko ${new URL(page.url()).origin}/api/mcp`,
+    `claude mcp add --transport http piko ${new URL(page.url()).origin}/mcp`,
   );
   await agents.getByRole("tab", { name: "Codex" }).click();
   await expect(dialog.getByRole("button", { name: "Copy Claude Code command" })).toBeHidden();
   await dialog.getByRole("button", { name: "Copy Codex config" }).click();
   const codex = await page.evaluate(() => navigator.clipboard.readText());
   expect(codex).toContain("[mcp_servers.piko]");
-  expect(codex).toContain("/api/mcp");
+  expect(codex).toContain(`url = "${new URL(page.url()).origin}/mcp"`);
   await expect(dialog.getByRole("link", { name: "See the docs" })).toBeVisible();
   await dialog.getByRole("button", { name: "Copy prompt" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
@@ -449,6 +449,39 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await trigger.click();
   await expect(agents.getByRole("tab", { name: "Codex" })).toHaveAttribute("aria-selected", "true");
   await expect(dialog.getByRole("button", { name: "Copy Codex config" })).toBeVisible();
+});
+
+test("/mcp on the dashboard host is the API's MCP server and still refuses browsers", async ({
+  page,
+}) => {
+  const initialize = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "e2e", version: "1" },
+    },
+  };
+  const headers = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+  };
+  const agent = await page.request.post("/mcp", { headers, data: initialize });
+  expect(agent.status()).toBe(200);
+  expect((await agent.json()).result.serverInfo.name).toBe("piko");
+  const tools = await page.request.post("/mcp", {
+    headers,
+    data: { jsonrpc: "2.0", id: 2, method: "tools/list" },
+  });
+  const names = (await tools.json()).result.tools.map((tool: { name: string }) => tool.name);
+  expect(names).toContain("save_dashboard");
+  const browser = await page.request.post("/mcp", {
+    headers: { ...headers, origin: "https://evil.example" },
+    data: initialize,
+  });
+  expect(browser.status()).toBe(403);
 });
 
 test("Edit opens the agent guide with the dashboard slug and revision", async ({

@@ -38,10 +38,10 @@ function useOrigin(): string {
 }
 
 export function claudeCommand(origin: string) {
-  return `claude mcp add --transport http piko ${origin}/api/mcp`;
+  return `claude mcp add --transport http piko ${origin}/mcp`;
 }
 export function codexConfig(origin: string) {
-  return `[mcp_servers.piko]\nurl = "${origin}/api/mcp"`;
+  return `[mcp_servers.piko]\nurl = "${origin}/mcp"`;
 }
 export function askPrompt(
   mode: GuideMode,

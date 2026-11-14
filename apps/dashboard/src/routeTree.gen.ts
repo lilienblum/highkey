@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
 import { Route as PikoChangesRouteImport } from './routes/[_]piko.changes'
@@ -44,6 +45,11 @@ const ExploreRoute = ExploreRouteImport.update({
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
   '/_piko/changes': typeof PikoChangesRoute
@@ -173,6 +182,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/explore'
     | '/logs'
+    | '/mcp'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/explore'
     | '/logs'
+    | '/mcp'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/explore'
     | '/logs'
+    | '/mcp'
     | '/settings'
     | '/tracker.js'
     | '/_piko/changes'
@@ -227,6 +239,7 @@ export interface RootRouteChildren {
   EventsRoute: typeof EventsRoute
   ExploreRoute: typeof ExploreRoute
   LogsRoute: typeof LogsRoute
+  McpRoute: typeof McpRoute
   SettingsRoute: typeof SettingsRoute
   TrackerDotjsRoute: typeof TrackerDotjsRoute
   PikoChangesRoute: typeof PikoChangesRoute
@@ -263,6 +276,13 @@ declare module '@tanstack/react-router' {
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -379,6 +399,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventsRoute: EventsRoute,
   ExploreRoute: ExploreRoute,
   LogsRoute: LogsRoute,
+  McpRoute: McpRoute,
   SettingsRoute: SettingsRoute,
   TrackerDotjsRoute: TrackerDotjsRoute,
   PikoChangesRoute: PikoChangesRoute,

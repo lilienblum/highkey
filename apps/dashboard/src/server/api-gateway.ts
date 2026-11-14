@@ -5,8 +5,13 @@ import { readBoundedBody } from "./request-body";
 const maxPendingIngestions = 64;
 let pendingIngestions = 0;
 
-export async function proxyApi(request: Request): Promise<Response> {
+/**
+ * Forwards a request to the API. `pathname` defaults to the request's own path; aliases such as
+ * `/mcp` pass the API path they stand for.
+ */
+export async function proxyApi(request: Request, pathname?: string): Promise<Response> {
   const url = new URL(request.url);
+  if (pathname !== undefined) url.pathname = pathname;
   const isIngest = ["/api/ingest", "/api/logs/ingest", "/api/logs/v1/logs"].includes(url.pathname);
   const isUpload = isIngest && request.method === "POST";
   const unavailable = (message: string) =>
