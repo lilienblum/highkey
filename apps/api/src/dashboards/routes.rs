@@ -103,18 +103,18 @@ async fn query(
     State(state): State<AppState>,
     Path(project): Path<String>,
     body: Json<crate::query::Query>,
-) -> ApiResult<Json<Value>> {
+) -> Result<Json<Value>, DashboardError> {
     let id = project_id(&state, project).await?;
-    crate::query_product(State(state), Path(id), body).await
+    Ok(crate::query_product(State(state), Path(id), body).await?)
 }
 
 async fn logs_query(
     State(state): State<AppState>,
     Path(project): Path<String>,
     body: Json<crate::logs::query::Query>,
-) -> ApiResult<Json<Value>> {
+) -> Result<Json<Value>, DashboardError> {
     let id = project_id(&state, project).await?;
-    crate::logs::query(State(state), Path(id), body).await
+    Ok(crate::logs::query(State(state), Path(id), body).await?)
 }
 
 async fn run(
@@ -129,7 +129,7 @@ async fn run(
 async fn catalog(
     State(state): State<AppState>,
     Path(project): Path<String>,
-) -> ApiResult<Json<Value>> {
+) -> Result<Json<Value>, DashboardError> {
     Ok(Json(super::catalog::catalog(&state, &project).await?))
 }
 

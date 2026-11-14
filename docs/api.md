@@ -168,7 +168,7 @@ Dashboard, view and MCP errors share one body:
 }
 ```
 
-`error` is the message, `code` is stable and meant for programs, `errors[].path` is a JSON Pointer into what you sent (or the tool argument), and `hint` says how to fix it. `warnings` appear on validation and save results and never block a save. A failing MCP tool returns this body as an error result, plus `retry_after_secs` where HTTP sends `Retry-After`. Older endpoints, and capacity errors from the shared gate, return only `{ "error": "..." }`.
+`error` is the message, `code` is stable and meant for programs, `errors[].path` is a JSON Pointer into what you sent (or the tool argument), and `hint` says how to fix it. `warnings` appear on validation and save results and never block a save. A failing MCP tool returns this body as an error result, plus `retry_after_secs` where HTTP sends `Retry-After`. Older endpoints, such as management and ingestion, return only `{ "error": "..." }`; ingestion's capacity error keeps its wording, `Capacity exhausted; retry with the same event IDs`.
 
 | Code                | HTTP | Meaning                                                                                                         | What to do                                                                     |
 | ------------------- | ---- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -179,12 +179,12 @@ Dashboard, view and MCP errors share one body:
 | `confirm_mismatch`  | 400  | MCP `confirm` does not equal the slug or id; nothing changed                                                    | Pass the exact slug (dashboards, views) or id (keys) the hint shows            |
 | `limit`             | 400  | 50 dashboards or 100 views per project reached                                                                  | Delete one first                                                               |
 | `too_slow`          | 400  | A widget exceeded its save-time budget (3 s or its `timeout_ms`; 15 s per save)                                 | Narrow the range, filter earlier or bound SQL with `$from` and `$to`           |
-| `not_found`         | 404  | No such dashboard, view, project or revision; the hint names the nearest slugs                                  | Correct the slug                                                               |
+| `not_found`         | 404  | No such dashboard, view, project, source or revision; the hint names the nearest slugs                          | Correct the slug                                                               |
 | `revision_conflict` | 409  | `base_revision` is older than the stored revision; the body carries `revision`                                  | Read the dashboard again, merge, save with the new revision as `base_revision` |
 | `ambiguous_view`    | 409  | An events view and a logs view share the slug                                                                   | Pass `kind` (or write `kind` in the document)                                  |
 | `conflict`          | 409  | An MCP workspace tool hit a conflict, such as a name that already exists                                        | Choose another value                                                           |
 | `rate_limited`      | 429  | More than 30 dashboard or view writes in a minute for the project, HTTP and MCP together; failed attempts count | Wait `Retry-After` seconds (`retry_after_secs` over MCP)                       |
-| `busy`              | 503  | Piko had no free query slot for a save's benchmark (`Retry-After: 5`)                                           | Retry in a few seconds                                                         |
+| `busy`              | 503  | Piko had no free query slot: for a save's benchmark (`Retry-After: 5`) or any other request (`Retry-After: 1`)  | Retry in a few seconds                                                         |
 | `query_timeout`     | 503  | A widget run did not finish within its `timeout_ms`; no `Retry-After`, since it repeats                         | Narrow the widget or raise `timeout_ms` (up to 10,000)                         |
 | `internal`          | 5xx  | An MCP workspace tool failed unexpectedly                                                                       | Retry once; check the API log                                                  |
 

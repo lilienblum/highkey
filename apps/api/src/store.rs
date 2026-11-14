@@ -264,7 +264,7 @@ pub fn resolve_product(db: &rusqlite::Connection, key: &str) -> ApiResult<Produc
             })
             .optional()
             .map_err(anyhow::Error::from)?
-            .ok_or_else(ApiError::missing)?,
+            .ok_or_else(ApiError::project_missing)?,
     };
     product_row(db, &id)
 }
@@ -286,14 +286,14 @@ pub fn product_row(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
     )
     .optional()
     .map_err(anyhow::Error::from)?
-    .ok_or_else(ApiError::missing)
+    .ok_or_else(ApiError::project_missing)
 }
 /// Fails with 404 unless project `id` exists.
 pub fn require_product(db: &rusqlite::Connection, id: &str) -> ApiResult<()> {
     db.query_row("SELECT 1 FROM products WHERE id=?", [id], |_| Ok(()))
         .optional()
         .map_err(anyhow::Error::from)?
-        .ok_or_else(ApiError::missing)
+        .ok_or_else(ApiError::project_missing)
 }
 fn row_product(r: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
     Ok(Product {

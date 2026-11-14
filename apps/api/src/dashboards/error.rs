@@ -1,6 +1,6 @@
 //! Errors from dashboard reads, runs and writes, with typed JSON bodies.
 use super::validate::{Issue, Report};
-use crate::error::ApiError;
+use crate::error::{ApiError, PROJECT_MISSING};
 use axum::{
     Json,
     http::{StatusCode, header},
@@ -67,6 +67,28 @@ impl DashboardError {
     /// disagree.
     pub fn into_parts(self) -> (StatusCode, Value, Option<u64>) {
         match self {
+            // The shared capacity error is worded for ingestion, whose SDKs resend the same
+            // events; a dashboard, catalog or MCP caller only needs to retry.
+            Self::Api(ApiError(StatusCode::SERVICE_UNAVAILABLE, _)) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({
+                    "error": "Piko is busy; retry shortly",
+                    "code": "busy",
+                    "errors": [{
+                        "path": "",
+                        "message": "Every query slot is in use",
+                        "hint": "Retry after 1 s",
+                    }],
+                }),
+                Some(1),
+            ),
+            Self::Api(ApiError(StatusCode::NOT_FOUND, message)) if message == PROJECT_MISSING => {
+                Self::not_found(
+                    "Project",
+                    Some("List the projects with list_projects or GET /api/read/products, and pass an id or slug".into()),
+                )
+                .into_parts()
+            }
             Self::Api(ApiError(status, message)) => {
                 let retry = (status == StatusCode::SERVICE_UNAVAILABLE
                     || status == StatusCode::TOO_MANY_REQUESTS)
@@ -259,16 +281,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn api_errors_keep_their_shape_and_retry_hint() {
+    async fn capacity_and_missing_projects_are_worded_for_dashboards() {
+        // Ingestion's busy error tells SDKs to resend the same events; a dashboard, catalog or
+        // MCP caller sends none, so it gets its own wording, a code and a hint.
         let (status, headers, body) = parts(ApiError::busy().into()).await;
         assert_eq!(status, 503);
         assert_eq!(headers["retry-after"], "1");
         assert_eq!(
             body,
-            json!({"error":"Capacity exhausted; retry with the same event IDs"})
+            json!({
+                "error": "Piko is busy; retry shortly",
+                "code": "busy",
+                "errors": [{"path": "", "message": "Every query slot is in use", "hint": "Retry after 1 s"}],
+            })
         );
+        let (status, _, body) = parts(ApiError::project_missing().into()).await;
+        assert_eq!(status, 404);
+        assert_eq!(body["error"], "Project not found");
+        assert_eq!(body["code"], "not_found");
+        assert_eq!(body["errors"][0]["path"], "/project");
+        assert!(
+            body["errors"][0]["hint"]
+                .as_str()
+                .unwrap()
+                .contains("list_projects")
+        );
+        // Other API errors keep their shape.
         let (status, _, body) = parts(ApiError::missing().into()).await;
         assert_eq!(status, 404);
         assert_eq!(body, json!({"error":"Product or key not found"}));
+        let (status, _, body) = parts(ApiError::bad("`to` must be after `from`").into()).await;
+        assert_eq!(status, 400);
+        assert_eq!(body, json!({"error":"`to` must be after `from`"}));
     }
 }

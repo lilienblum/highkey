@@ -25,6 +25,12 @@ const INTEGRATIONS: [&str; 4] = ["browser", "typescript", "http", "rust"];
 /// The tool error for an `ApiError`: `{error, code, errors}`, with the argument at fault in
 /// `errors` when the message names one.
 fn tool_error(error: ApiError) -> DashboardError {
+    // Capacity and a missing project are worded for dashboards and MCP there.
+    if error.0 == StatusCode::SERVICE_UNAVAILABLE
+        || (error.0 == StatusCode::NOT_FOUND && error.1 == crate::error::PROJECT_MISSING)
+    {
+        return error.into();
+    }
     let ApiError(status, message) = error;
     let code = match status {
         StatusCode::BAD_REQUEST => "invalid_input",

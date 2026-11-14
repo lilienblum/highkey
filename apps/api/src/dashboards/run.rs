@@ -776,6 +776,22 @@ struct Outcome {
     verified: Vec<Issue>,
 }
 
+/// A `source_id` that is not one of the project's sources.
+fn unknown_source() -> DashboardError {
+    DashboardError::Detailed {
+        status: StatusCode::NOT_FOUND,
+        message: "Source not found".into(),
+        code: "not_found",
+        errors: vec![Issue {
+            path: "/source_id".into(),
+            message: "No source of this project has that id".into(),
+            hint: Some(
+                "Use a source id from the project's sources (describe_project or the catalog lists them), or omit source_id for all sources".into(),
+            ),
+        }],
+    }
+}
+
 /// Validates and runs one widget for a project (by id or slug) and returns its series or rows.
 ///
 /// The widget's `timeout_ms` (default 5,000) counts from the start of the request and covers
@@ -813,11 +829,15 @@ pub async fn run_widget(
         .state(move |db| {
             let product = crate::store::resolve_product(db, &key)?;
             if let Some(source) = &source {
-                crate::sources::get(db, &product.id, source)?;
+                match crate::sources::get(db, &product.id, source) {
+                    Ok(_) => {}
+                    Err(ApiError(StatusCode::NOT_FOUND, _)) => return Ok(Err(unknown_source())),
+                    Err(e) => return Err(e),
+                }
             }
-            Ok(product.id)
+            Ok(Ok(product.id))
         })
-        .await?;
+        .await??;
 
     let effective = effective_window(&widget, request.from, request.to, request.bucket.as_deref());
     let events = widget.queries.values().any(QuerySpec::reads_events);

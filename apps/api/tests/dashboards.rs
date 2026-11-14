@@ -884,6 +884,80 @@ async fn stale_base_revision_conflicts() {
 }
 
 #[tokio::test]
+async fn missing_projects_and_sources_are_named_on_dashboard_paths() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    let unknown = uuid::Uuid::now_v7().to_string();
+    let (from, to) = window(7);
+    for (method, path, body) in [
+        (
+            "GET",
+            "/api/read/products/nope/dashboards".to_string(),
+            Value::Null,
+        ),
+        (
+            "GET",
+            "/api/read/products/nope/catalog".to_string(),
+            Value::Null,
+        ),
+        (
+            "GET",
+            "/api/read/products/nope/views".to_string(),
+            Value::Null,
+        ),
+        (
+            "POST",
+            "/api/read/products/nope/query".to_string(),
+            json!({"from": from, "to": to}),
+        ),
+        (
+            "POST",
+            "/api/read/products/nope/widgets/run".to_string(),
+            run_body(error_rate(), 7),
+        ),
+        (
+            "POST",
+            format!("/api/products/{unknown}/dashboards"),
+            json!({"document": document("Board")}),
+        ),
+        (
+            "POST",
+            format!("/api/products/{unknown}/views"),
+            json!({"document": {"version": 1, "name": "View", "query": {"measure": "count"}}}),
+        ),
+    ] {
+        let (status, body) = test
+            .send(method, &path, body, &[("x-piko-admin", "1")])
+            .await;
+        assert_eq!(status, 404, "{method} {path}: {body}");
+        assert_eq!(
+            body["error"], "Project not found",
+            "{method} {path}: {body}"
+        );
+        assert_eq!(body["code"], "not_found", "{method} {path}: {body}");
+        assert_eq!(
+            body["errors"][0]["path"], "/project",
+            "{method} {path}: {body}"
+        );
+    }
+    // A source that is not the project's is named as the argument at fault.
+    let mut request = run_body(error_rate(), 7);
+    request["source_id"] = json!(unknown);
+    let (status, body) = test.run(id(&project), request).await;
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["error"], "Source not found");
+    assert_eq!(body["errors"][0]["path"], "/source_id", "{body}");
+    assert!(
+        body["errors"][0]["hint"]
+            .as_str()
+            .unwrap()
+            .contains("sources"),
+        "{body}"
+    );
+    test.close().await;
+}
+
+#[tokio::test]
 async fn dashboards_and_views_sort_by_name_ignoring_case() {
     let test = Test::new();
     let project = test.project("Shop").await;
