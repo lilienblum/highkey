@@ -961,6 +961,48 @@ async fn sql_widget_runs_over_mcp() {
 }
 
 #[tokio::test]
+async fn run_widget_keeps_the_first_fifty_table_rows() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    let widget = json!({
+        "id": "numbers", "title": "Numbers", "view": {"type": "table"},
+        "queries": {"q": {"signal": "sql", "database": "events",
+            "sql": "SELECT i, i * 2 AS twice FROM range(120) t(i) WHERE $from < $to ORDER BY i"}}
+    });
+    let run = test
+        .ok("run_widget", json!({"project": "orbit", "widget": widget}))
+        .await;
+    let rows = run["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 50, "{run}");
+    assert_eq!(rows[0], json!([0, 0]));
+    assert_eq!(rows[49], json!([49, 98]));
+    assert!(
+        run["warnings"].as_array().unwrap().contains(&json!({
+            "path": "/rows",
+            "message": "Showing the first 50 of 120 rows",
+            "hint": "Add a LIMIT, aggregate, or narrow from and to to see the rest; saved widgets show up to 10,000 rows",
+        })),
+        "{run}"
+    );
+    // A short result is returned whole, without a warning.
+    let mut short = widget;
+    short["queries"]["q"]["sql"] = json!("SELECT i FROM range(3) t(i) WHERE $from < $to");
+    let run = test
+        .ok("run_widget", json!({"project": "orbit", "widget": short}))
+        .await;
+    assert_eq!(run["rows"].as_array().unwrap().len(), 3, "{run}");
+    assert!(
+        !run["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w["path"] == "/rows"),
+        "{run}"
+    );
+    test.close().await;
+}
+
+#[tokio::test]
 async fn run_widget_takes_a_range_and_trims_long_series() {
     let test = Test::new();
     let project = test.project("Orbit").await;

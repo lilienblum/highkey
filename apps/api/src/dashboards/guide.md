@@ -2,7 +2,7 @@
 
 A dashboard is one JSON document of widgets. Each widget runs typed queries over a project's events and logs (or one guarded SQL query), combines them with formulas, and picks a view. Piko validates every document, times every widget before it saves, and answers mistakes with JSON paths and hints.
 
-Work in this order: `describe_project`, then `run_widget` for each widget, then `validate_dashboard`, then `save_dashboard`. `sample_events` and `sample_logs` show real rows when a name or property is unclear.
+Work in this order: `describe_project`, then `run_widget` for each widget, then `validate_dashboard`, then `save_dashboard`. `run_widget` returns the newest 200 points of each series and the first 50 rows of a table, with a warning when it trims. `sample_events` and `sample_logs` show real rows when a name or property is unclear.
 
 ## The document
 

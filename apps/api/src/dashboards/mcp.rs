@@ -49,6 +49,8 @@ const GUIDE: &str = include_str!("guide.md");
 
 /// Points kept per series by `run_widget`; a long series is trimmed to its newest points.
 const MAX_POINTS: usize = 200;
+/// Rows kept by `run_widget`; a longer table is trimmed to its first rows.
+const MAX_ROWS: usize = 50;
 /// Rows a sample tool returns at most.
 const MAX_SAMPLE_ROWS: u8 = 20;
 /// How far back `run_widget` and the sample tools look when no range is given.
@@ -179,9 +181,21 @@ fn range(
     Ok((from, to))
 }
 
-/// Keeps the newest `MAX_POINTS` of every series, and says so in the warnings.
-fn trim_points(run: &mut Value) {
+/// Keeps the newest `MAX_POINTS` of every series and the first `MAX_ROWS` rows, and says so in
+/// the warnings, so a preview stays small enough for an agent to read.
+fn trim(run: &mut Value) {
     let mut trimmed = Vec::new();
+    if let Some(rows) = run["rows"].as_array_mut()
+        && rows.len() > MAX_ROWS
+    {
+        let returned = rows.len();
+        rows.truncate(MAX_ROWS);
+        trimmed.push(json!({
+            "path": "/rows",
+            "message": format!("Showing the first {MAX_ROWS} of {returned} rows"),
+            "hint": "Add a LIMIT, aggregate, or narrow from and to to see the rest; saved widgets show up to 10,000 rows",
+        }));
+    }
     if let Some(series) = run["series"].as_array_mut() {
         for (i, series) in series.iter_mut().enumerate() {
             let mut longest = 0;
@@ -400,7 +414,7 @@ impl PikoMcp {
     }
 
     #[tool(
-        description = "Runs one widget definition and returns its series (or rows and columns for lists and tables), the range actually used, any warnings and elapsed_ms. Series are trimmed to their newest 200 points. Use it to preview every widget before saving.",
+        description = "Runs one widget definition and returns its series (or rows and columns for lists and tables), the range actually used, any warnings and elapsed_ms. Series are trimmed to their newest 200 points and tables to their first 50 rows, with a warning. Use it to preview every widget before saving.",
         annotations(read_only_hint = true)
     )]
     async fn run_widget(
@@ -419,7 +433,7 @@ impl PikoMcp {
                     source_id: p.source_id,
                 };
                 let mut run = run_widget(&self.state, &id, request).await?;
-                trim_points(&mut run);
+                trim(&mut run);
                 Ok(run)
             }
             .await,

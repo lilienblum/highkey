@@ -65,7 +65,7 @@ Every tool takes `project` as an id or slug. Start with `describe_project`.
 | Tool                                                          | Path | What it does                                                                                           |
 | ------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
 | `list_projects`, `describe_project`                           | both | Projects. Event names and properties, log services and levels, sources, retention, SQL columns, limits |
-| `run_widget`                                                  | both | Runs one widget and returns series or rows, the range used, warnings and `elapsed_ms`                  |
+| `run_widget`                                                  | both | Runs one widget; returns the newest 200 points per series or the first 50 rows, the range, warnings    |
 | `sample_events`, `sample_logs`                                | both | Up to 20 of the newest raw events or logs of the last 7 days                                           |
 | `list_dashboards`, `get_dashboard`, `list_revisions`          | both | Read dashboards and their revisions                                                                    |
 | `validate_dashboard`                                          | both | Checks a document without saving; returns `{valid, errors, warnings}`                                  |
