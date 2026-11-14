@@ -214,6 +214,11 @@ function DashboardActions({
       setConfirming(false);
       await reload();
       await navigate(workspaceTarget("/", product.slug));
+      // History can return to this address; it must not show the deleted document from cache.
+      client.removeQueries({
+        queryKey: dashboardQueries,
+        predicate: (query) => (query.state.data as StoredDashboard | null)?.id === stored.id,
+      });
     } catch (e) {
       setConfirming(false);
       setError(e instanceof Error ? e.message : "Could not delete the dashboard.");

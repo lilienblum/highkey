@@ -635,6 +635,12 @@ test("delete asks first and returns to Overview", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
   await expect(page.locator(".overview-dashboard")).toBeVisible();
   await expect(link).toHaveCount(0);
+  // Going back finds it gone rather than showing the cached document.
+  await page.goBack();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "This dashboard no longer exists" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name })).toHaveCount(0);
   expect(
     (await admin<{ slug: string }[]>(`/read/products/${project.slug}/dashboards`)).map(
       (d) => d.slug,
