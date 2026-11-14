@@ -1,4 +1,5 @@
 use crate::{
+    dashboards::error::DashboardError,
     error::{ApiError, ApiResult},
     model::{KeyInfo, Product, ProductInput},
 };
@@ -30,6 +31,9 @@ pub struct Store {
     pub log_query_slots: Arc<tokio::sync::Semaphore>,
     pub query_slots: Arc<tokio::sync::Semaphore>,
     pub state_slots: Arc<tokio::sync::Semaphore>,
+    /// Widget runs pass these before taking a query slot, so dashboards never hold the last one.
+    pub dashboard_event_gate: Arc<tokio::sync::Semaphore>,
+    pub dashboard_log_gate: Arc<tokio::sync::Semaphore>,
 }
 impl Store {
     pub fn open(path: &Path, queries: usize) -> Result<Arc<Self>> {
@@ -70,6 +74,10 @@ impl Store {
             log_query_slots: Arc::new(tokio::sync::Semaphore::new(2)),
             query_slots: Arc::new(tokio::sync::Semaphore::new(queries)),
             state_slots: Arc::new(tokio::sync::Semaphore::new(16)),
+            dashboard_event_gate: Arc::new(tokio::sync::Semaphore::new(
+                queries.saturating_sub(1).max(1),
+            )),
+            dashboard_log_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         }))
     }
     pub fn sqlite(&self) -> Result<rusqlite::Connection> {
@@ -116,6 +124,130 @@ impl Store {
         .await
         .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?
     }
+    /// Runs dashboard work on the events and/or logs connection of `product`, within `deadline`.
+    ///
+    /// The deadline covers waiting at the dashboard gates and for query slots as well as the
+    /// work itself. Gates keep the last event slot and one log slot for interactive queries,
+    /// which keep `try_acquire`. At the deadline the run returns `Timeout` and its statements
+    /// are interrupted; the permits stay with the blocking work until it really ends.
+    pub async fn widget_query<T: Send + 'static>(
+        self: &Arc<Self>,
+        product: String,
+        events: bool,
+        logs: bool,
+        deadline: tokio::time::Instant,
+        f: impl FnOnce(Option<&mut Connection>, Option<&mut Connection>) -> ApiResult<T>
+        + Send
+        + 'static,
+    ) -> Result<T, DashboardError> {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let started = tokio::time::Instant::now();
+        let timeout = move || DashboardError::Timeout {
+            after_ms: started.elapsed().as_millis() as u64,
+        };
+        // Acquire in one fixed order (event gate, event slot, log gate, log slot) so runs that
+        // need both signals cannot deadlock each other.
+        let mut permits = Vec::with_capacity(4);
+        let mut stages = Vec::new();
+        if events {
+            stages.push(&self.dashboard_event_gate);
+            stages.push(&self.query_slots);
+        }
+        if logs {
+            stages.push(&self.dashboard_log_gate);
+            stages.push(&self.log_query_slots);
+        }
+        for semaphore in stages {
+            let permit = tokio::time::timeout_at(deadline, semaphore.clone().acquire_owned())
+                .await
+                .map_err(|_| timeout())?
+                .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?;
+            permits.push(permit);
+        }
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (handles_tx, handles_rx) = tokio::sync::oneshot::channel();
+        let store = self.clone();
+        let stop = cancelled.clone();
+        let mut work = tokio::task::spawn_blocking(move || {
+            let _permits = permits;
+            // Nobody reads this result: the caller already answered with a timeout.
+            let gone = || {
+                ApiError(
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    "Widget run passed its deadline".into(),
+                )
+            };
+            if stop.load(Ordering::SeqCst) {
+                return Err(gone());
+            }
+            let mut event_lease = events
+                .then(|| store.analytics.connection(&product))
+                .transpose()?;
+            let mut log_lease = logs.then(|| store.logs.connection(&product)).transpose()?;
+            let handles: Vec<_> = event_lease
+                .iter()
+                .chain(log_lease.iter())
+                .map(|lease| lease.connection.interrupt_handle())
+                .collect();
+            let _ = handles_tx.send(handles);
+            // Checked after the handles are out, so a run that times out here is either
+            // skipped or interrupted, never left running unwatched.
+            if stop.load(Ordering::SeqCst) {
+                return Err(gone());
+            }
+            f(
+                event_lease.as_mut().map(|lease| &mut lease.connection),
+                log_lease.as_mut().map(|lease| &mut lease.connection),
+            )
+        });
+        match tokio::time::timeout_at(deadline, &mut work).await {
+            Ok(joined) => joined
+                .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?
+                .map_err(DashboardError::Api),
+            Err(_) => {
+                cancelled.store(true, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    let Ok(handles) = handles_rx.await else {
+                        return;
+                    };
+                    // DuckDB clears an interrupt when a statement starts, so one interrupt can
+                    // land between statements and be lost. Keep signalling until the work ends.
+                    loop {
+                        for handle in &handles {
+                            handle.interrupt();
+                        }
+                        if tokio::time::timeout(Duration::from_millis(50), &mut work)
+                            .await
+                            .is_ok()
+                        {
+                            break;
+                        }
+                    }
+                });
+                Err(timeout())
+            }
+        }
+    }
+}
+/// A project by id, or else by slug.
+pub fn resolve_product(db: &rusqlite::Connection, key: &str) -> ApiResult<Product> {
+    let id = db
+        .query_row("SELECT id FROM products WHERE id=?", [key], |r| {
+            r.get::<_, String>(0)
+        })
+        .optional()
+        .map_err(anyhow::Error::from)?;
+    let id = match id {
+        Some(id) => id,
+        None => db
+            .query_row("SELECT id FROM products WHERE slug=?", [key], |r| {
+                r.get::<_, String>(0)
+            })
+            .optional()
+            .map_err(anyhow::Error::from)?
+            .ok_or_else(ApiError::missing)?,
+    };
+    product(db, &id)
 }
 pub fn product(db: &rusqlite::Connection, id: &str) -> ApiResult<Product> {
     let mut product = db
@@ -388,5 +520,191 @@ mod slug_tests {
         let slugs: std::collections::HashSet<_> =
             jobs.into_iter().map(|job| job.join().unwrap()).collect();
         assert_eq!(slugs.len(), 8);
+    }
+    #[test]
+    fn resolve_product_takes_an_id_or_a_slug() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), 2).unwrap();
+        let db = store.sqlite().unwrap();
+        let shop = save_product(&db, None, input("Shop")).unwrap();
+        assert_eq!(resolve_product(&db, &shop.id).unwrap().id, shop.id);
+        assert_eq!(resolve_product(&db, "shop").unwrap().id, shop.id);
+        assert_eq!(resolve_product(&db, "shop").unwrap().sources.len(), 1);
+        assert_eq!(resolve_product(&db, "missing").unwrap_err().0, 404);
+    }
+}
+
+#[cfg(test)]
+mod widget_tests {
+    use super::*;
+    use crate::dashboards::error::DashboardError;
+    use std::sync::mpsc;
+    use tokio::time::Instant;
+
+    fn open(queries: usize) -> (tempfile::TempDir, Arc<Store>, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), queries).unwrap();
+        (dir, store, uuid::Uuid::now_v7().to_string())
+    }
+    async fn eventually(what: &str, check: impl Fn() -> bool) {
+        let until = Instant::now() + Duration::from_secs(3);
+        while !check() {
+            assert!(Instant::now() < until, "{what}");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+    fn timed_out<T: std::fmt::Debug>(result: &Result<T, DashboardError>) -> bool {
+        matches!(result, Err(DashboardError::Timeout { .. }))
+    }
+
+    #[tokio::test]
+    async fn widget_query_interrupts_at_deadline_and_releases_slots() {
+        let (_dir, store, product) = open(4);
+        let started = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_secs(3),
+            store.widget_query(
+                product,
+                true,
+                false,
+                started + Duration::from_secs(1),
+                |events, logs| {
+                    assert!(logs.is_none());
+                    events
+                        .expect("an events connection")
+                        .query_row(
+                            "SELECT count(*) FROM range(10000000000) a, range(10) b",
+                            [],
+                            |r| r.get::<_, i64>(0),
+                        )
+                        .map_err(|e| anyhow::Error::from(e).into())
+                },
+            ),
+        )
+        .await
+        .expect("the run returns at its deadline");
+        assert!(timed_out(&result), "{result:?}");
+        assert!(started.elapsed() >= Duration::from_secs(1));
+        // Permits live in the blocking work, so they return once the interrupt ends it.
+        eventually("query slots return", || {
+            store.query_slots.available_permits() == 4
+        })
+        .await;
+        eventually("the gate reopens", || {
+            store.dashboard_event_gate.available_permits() == 3
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn dashboard_gate_leaves_one_event_and_one_log_slot() {
+        let (_dir, store, product) = open(4);
+        assert_eq!(store.dashboard_event_gate.available_permits(), 3);
+        assert_eq!(store.dashboard_log_gate.available_permits(), 1);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (started_tx, mut started) = tokio::sync::mpsc::unbounded_channel();
+        // Each held run blocks until its release sender is dropped.
+        let mut releases = Vec::new();
+        let mut hold = |events: bool, logs: bool| {
+            let (release, wait) = mpsc::channel::<()>();
+            releases.push(release);
+            let (store, product, started_tx) = (store.clone(), product.clone(), started_tx.clone());
+            tokio::spawn(async move {
+                store
+                    .widget_query(product, events, logs, deadline, move |e, l| {
+                        assert_eq!((e.is_some(), l.is_some()), (events, logs));
+                        started_tx.send(()).unwrap();
+                        let _ = wait.recv_timeout(Duration::from_secs(10));
+                        Ok(())
+                    })
+                    .await
+            })
+        };
+        let mut held: Vec<_> = (0..3).map(|_| hold(true, false)).collect();
+        let mut begin = async || {
+            tokio::time::timeout(Duration::from_secs(5), started.recv())
+                .await
+                .expect("a held run starts")
+                .unwrap()
+        };
+        for _ in 0..3 {
+            begin().await;
+        }
+        assert_eq!(store.query_slots.available_permits(), 1);
+        // A fourth widget run waits at the gate until its deadline...
+        let short = || Instant::now() + Duration::from_millis(200);
+        let blocked = store
+            .widget_query(product.clone(), true, false, short(), |_, _| Ok(()))
+            .await;
+        assert!(timed_out(&blocked), "{blocked:?}");
+        // ...while interactive queries keep the last slot.
+        let answer = store
+            .query(product.clone(), |db| {
+                db.query_row("SELECT 42", [], |r| r.get::<_, i64>(0))
+                    .map_err(|e| anyhow::Error::from(e).into())
+            })
+            .await
+            .unwrap();
+        assert_eq!(answer, 42);
+        assert!(store.query_slots.try_acquire().is_ok());
+
+        held.push(hold(false, true));
+        begin().await;
+        assert_eq!(store.log_query_slots.available_permits(), 1);
+        let blocked = store
+            .widget_query(product.clone(), false, true, short(), |_, _| Ok(()))
+            .await;
+        assert!(timed_out(&blocked), "{blocked:?}");
+        assert!(store.log_query_slots.try_acquire().is_ok());
+
+        drop(releases);
+        for run in held {
+            run.await.unwrap().unwrap();
+        }
+        assert_eq!(store.query_slots.available_permits(), 4);
+        assert_eq!(store.log_query_slots.available_permits(), 2);
+        assert_eq!(store.dashboard_event_gate.available_permits(), 3);
+        assert_eq!(store.dashboard_log_gate.available_permits(), 1);
+    }
+
+    #[tokio::test]
+    async fn widget_query_deadline_covers_waiting_for_a_slot() {
+        // With one slot, dashboards pass the gate and then share the slot with everyone else.
+        let (_dir, store, product) = open(1);
+        assert_eq!(store.dashboard_event_gate.available_permits(), 1);
+        let interactive = store.query_slots.clone().try_acquire_owned().unwrap();
+        let started = Instant::now();
+        let result = store
+            .widget_query(
+                product.clone(),
+                true,
+                false,
+                started + Duration::from_millis(300),
+                |_, _| Ok(()),
+            )
+            .await;
+        assert!(timed_out(&result), "{result:?}");
+        assert!(started.elapsed() >= Duration::from_millis(300));
+        assert_eq!(store.dashboard_event_gate.available_permits(), 1);
+        drop(interactive);
+        let both = store
+            .widget_query(
+                product,
+                true,
+                true,
+                Instant::now() + Duration::from_secs(5),
+                |events, logs| {
+                    let one = |db: &mut Connection| {
+                        db.query_row("SELECT 1", [], |r| r.get::<_, i64>(0))
+                            .map_err(|e| ApiError::from(anyhow::Error::from(e)))
+                    };
+                    Ok(one(events.unwrap())? + one(logs.unwrap())?)
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(both, 2);
+        assert_eq!(store.query_slots.available_permits(), 1);
+        assert_eq!(store.log_query_slots.available_permits(), 2);
     }
 }

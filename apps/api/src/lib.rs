@@ -117,6 +117,8 @@ pub fn router(state: AppState) -> Router {
         )
         .merge(admin)
         .merge(ingest)
+        // Outside `admin`, so read routes need no X-Piko-Admin marker.
+        .nest("/api/read", dashboards::routes::read_router())
         .route("/api/{*path}", get(|| async { ApiError::missing() }))
         .route("/health", get(|| async { Json(json!({"status":"ok"})) }))
         .layer(DefaultBodyLimit::max(256 * 1024))
@@ -207,7 +209,7 @@ async fn ingest_events(
     }
     Ok(Json(state.writer.ingest(p.id, source_id, events).await?))
 }
-async fn list_products(State(s): State<AppState>) -> ApiResult<Json<Vec<Product>>> {
+pub(crate) async fn list_products(State(s): State<AppState>) -> ApiResult<Json<Vec<Product>>> {
     Ok(Json(s.store.state(store::products).await?))
 }
 async fn with_favicon(s: &AppState, product: Product) -> Product {
@@ -347,7 +349,7 @@ async fn revoke_key(
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
-async fn query_product(
+pub(crate) async fn query_product(
     State(s): State<AppState>,
     Path(id): Path<String>,
     Json(q): Json<query::Query>,

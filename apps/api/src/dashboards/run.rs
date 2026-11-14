@@ -1,17 +1,24 @@
-//! Pure evaluation of a widget: its effective window, and series built from measured queries.
+//! Widget runs: the effective window, series built from measured queries, and `run_widget`,
+//! which measures them under the widget's deadline.
 use super::{
+    error::DashboardError,
     formula,
     metrics::{
-        Bucket, GroupValue, Measured, Point, Shape, Window, log_measure_name, measure_name,
+        self, Bucket, GroupValue, Measured, Point, Shape, Window, log_measure_name, measure_name,
         missing_is_zero,
     },
-    spec::{Color, QuerySpec, ViewKind, Widget},
-    validate::{Issue, range_hours},
+    spec::{Color, Compare, QuerySpec, ViewKind, Widget},
+    validate::{Issue, Limits, Report, check_widget, parse_widget, range_hours},
+};
+use crate::{
+    AppState,
+    error::{ApiError, ApiResult},
 };
 use chrono::{DateTime, Duration, Utc};
+use duckdb::Connection;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
 const LOG_RANGE_DAYS: i64 = 31;
@@ -354,6 +361,229 @@ pub fn evaluate(
         out.push(r);
     }
     out
+}
+
+const LIST_ROWS: usize = 50;
+const BUCKETS: [&str; 5] = ["auto", "hour", "day", "week", "month"];
+
+/// The leased connections one run measures on, with the scope every query shares.
+struct Measurer<'a> {
+    product: &'a str,
+    source: Option<&'a str>,
+    events: Option<&'a mut Connection>,
+    logs: Option<&'a mut Connection>,
+}
+
+impl Measurer<'_> {
+    fn connection<'c>(c: &'c mut Option<&mut Connection>) -> ApiResult<&'c mut Connection> {
+        c.as_deref_mut()
+            .ok_or_else(|| anyhow::anyhow!("The widget run has no connection for a query").into())
+    }
+
+    fn one(&mut self, q: &QuerySpec, w: &Window, shape: &Shape) -> ApiResult<Measured> {
+        match q {
+            QuerySpec::Events(q) => metrics::events(
+                Self::connection(&mut self.events)?,
+                self.product,
+                q,
+                self.source,
+                w,
+                shape,
+            ),
+            QuerySpec::Logs(q) => {
+                metrics::logs(Self::connection(&mut self.logs)?, q, self.source, w, shape)
+            }
+        }
+    }
+
+    /// Every query over `w`. The first query picks the groups that the others are measured
+    /// for: the top six for grouped time series, the ranking's rows for rankings.
+    fn all(
+        &mut self,
+        widget: &Widget,
+        w: &Window,
+        shape: &Shape,
+        grouped: bool,
+    ) -> ApiResult<IndexMap<String, Measured>> {
+        let mut queries = widget.queries.iter();
+        let mut out = IndexMap::new();
+        let Some((first_id, first)) = queries.next() else {
+            return Ok(out);
+        };
+        let rest = if grouped {
+            let top = Shape::Groups {
+                limit: GROUPED_SERIES,
+                labels: None,
+            };
+            let labels = self.one(first, w, &top)?.groups;
+            let shape = Shape::GroupedBuckets {
+                labels: labels.into_iter().map(|g| g.label).collect(),
+            };
+            out.insert(first_id.clone(), self.one(first, w, &shape)?);
+            shape
+        } else {
+            let measured = self.one(first, w, shape)?;
+            let rest = match shape {
+                Shape::Groups {
+                    limit,
+                    labels: None,
+                } => Shape::Groups {
+                    limit: *limit,
+                    labels: Some(measured.groups.iter().map(|g| g.label.clone()).collect()),
+                },
+                other => other.clone(),
+            };
+            out.insert(first_id.clone(), measured);
+            rest
+        };
+        for (id, q) in queries {
+            out.insert(id.clone(), self.one(q, w, &rest)?);
+        }
+        Ok(out)
+    }
+
+    /// Rows for an events or logs list view, newest first.
+    fn rows(&mut self, widget: &Widget, w: &Window) -> ApiResult<Vec<Value>> {
+        match widget.queries.values().next() {
+            Some(QuerySpec::Events(q)) => metrics::event_rows(
+                Self::connection(&mut self.events)?,
+                self.product,
+                q,
+                self.source,
+                w,
+                LIST_ROWS,
+            ),
+            Some(QuerySpec::Logs(q)) => metrics::log_rows(
+                Self::connection(&mut self.logs)?,
+                q,
+                self.source,
+                w,
+                LIST_ROWS,
+            ),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+/// Validates and runs one widget for a project (by id or slug) and returns its series or rows.
+///
+/// The widget's `timeout_ms` (default 5,000) counts from the start of the request and covers
+/// waiting for a query slot. The request's `source_id` scopes every query without its own.
+pub async fn run_widget(
+    state: &AppState,
+    project: &str,
+    request: RunRequest,
+) -> Result<Value, DashboardError> {
+    let started = tokio::time::Instant::now();
+    let widget = parse_widget(request.widget).map_err(DashboardError::Invalid)?;
+    let mut report = Report::default();
+    check_widget(&widget, "", &mut report);
+    if !report.is_ok() {
+        return Err(DashboardError::Invalid(report));
+    }
+    if request.to <= request.from {
+        return Err(ApiError::bad("`to` must be after `from`").into());
+    }
+    if request
+        .bucket
+        .as_deref()
+        .is_some_and(|b| !BUCKETS.contains(&b))
+    {
+        return Err(ApiError::bad("bucket must be auto, hour, day, week or month").into());
+    }
+    let timeout_ms = widget.timeout_ms.unwrap_or(Limits::DEFAULT_TIMEOUT_MS);
+    let deadline = started + std::time::Duration::from_millis(timeout_ms);
+
+    let key = project.to_string();
+    let source = request.source_id.clone();
+    let product = state
+        .store
+        .state(move |db| {
+            let product = crate::store::resolve_product(db, &key)?;
+            if let Some(source) = &source {
+                crate::sources::get(db, &product.id, source)?;
+            }
+            Ok(product.id)
+        })
+        .await?;
+
+    let effective = effective_window(&widget, request.from, request.to, request.bucket.as_deref());
+    let (shape, grouped) = shape_for(&widget);
+    let events = widget
+        .queries
+        .values()
+        .any(|q| matches!(q, QuerySpec::Events(_)));
+    let logs = widget
+        .queries
+        .values()
+        .any(|q| matches!(q, QuerySpec::Logs(_)));
+    let list = matches!(widget.view.kind, ViewKind::Events | ViewKind::Logs);
+    // Grouped time series carry no previous period; rankings compare totals only.
+    let previous_shape = match (&widget.view.compare, grouped, &shape) {
+        (Some(Compare::PreviousPeriod), false, Shape::Buckets) => Some(Shape::Buckets),
+        (Some(Compare::PreviousPeriod), false, _) => Some(Shape::Total),
+        _ => None,
+    };
+
+    let id = widget.id.clone();
+    let window = effective.window.clone();
+    let scope = (product.clone(), request.source_id);
+    let (series, rows) = if events || logs {
+        state
+            .store
+            .widget_query(product, events, logs, deadline, move |e, l| {
+                let mut measurer = Measurer {
+                    product: &scope.0,
+                    source: scope.1.as_deref(),
+                    events: e,
+                    logs: l,
+                };
+                if list {
+                    return Ok((Vec::new(), Some(measurer.rows(&widget, &window)?)));
+                }
+                let current = measurer.all(&widget, &window, &shape, grouped)?;
+                let before = match &previous_shape {
+                    Some(shape) => Some(measurer.all(&widget, &previous(&window), shape, false)?),
+                    None => None,
+                };
+                Ok((evaluate(&widget, &current, before.as_ref()), None))
+            })
+            .await
+            .map_err(|e| match e {
+                // Report the widget's own budget, which is what its author set.
+                DashboardError::Timeout { .. } => DashboardError::Timeout {
+                    after_ms: timeout_ms,
+                },
+                e => e,
+            })?
+    } else {
+        // Text widgets read nothing.
+        (Vec::new(), None)
+    };
+
+    // The run's own warnings say what actually happened, so they replace validation warnings
+    // at the same path.
+    let mut warnings = effective.warnings;
+    for issue in report.warnings {
+        if !warnings.iter().any(|w| w.path == issue.path) {
+            warnings.push(issue);
+        }
+    }
+    Ok(json!({
+        "widget": id,
+        "range": {
+            "from": effective.window.from,
+            "to": effective.window.to,
+            "bucket": effective.window.bucket.as_str(),
+            "clamped": effective.clamped,
+            "requested_from": effective.requested.0,
+            "requested_to": effective.requested.1,
+        },
+        "series": series,
+        "rows": rows,
+        "elapsed_ms": started.elapsed().as_millis() as u64,
+        "warnings": warnings,
+    }))
 }
 
 #[cfg(test)]
