@@ -1853,6 +1853,21 @@ async fn sql_shapes_are_checked_against_the_view() {
         hint.starts_with("bucket takes one time") && hint.contains("TIMESTAMP"),
         "{issue}"
     );
+    // A time with a time zone needs a cast, and the hint names it; the cast keeps UTC.
+    let zoned = "TIMESTAMPTZ '2026-11-15 23:30:00+00'";
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        &format!("SELECT bucket({zoned}) AS value"),
+    )
+    .await;
+    assert!(
+        issue["hint"].as_str().unwrap().contains("::TIMESTAMP"),
+        "{issue}"
+    );
+    let cast = format!("SELECT bucket(({zoned})::TIMESTAMP) - bucket(epoch_ms({zoned})) AS value");
+    assert_eq!(stat_total(&test, &project, &cast, None).await, 0.0);
 
     // The right shapes run; a series takes time and value, a ranking label and value.
     let (status, body) = test
@@ -2919,7 +2934,7 @@ async fn a_slow_sql_cross_join_is_refused_and_nothing_is_saved() {
     assert_eq!(body["code"], "too_slow", "{body}");
     assert_eq!(
         body["errors"][0]["hint"],
-        "This widget took over 3 s on the last 7 days of data. Narrow it with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins."
+        "This widget took over 3 s on the last 7 days of data. Narrow it with a widget range, read events or logs (only the dashboard's range) rather than all_events or all_logs, filter by event or service, or avoid unbounded joins."
     );
     let (_, list) = test
         .read(

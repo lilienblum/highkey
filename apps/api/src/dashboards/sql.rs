@@ -78,7 +78,7 @@ pub const TABLES: [(&str, SqlDatabase, bool, &str); 4] = [
 pub const FUNCTIONS: [(&str, &str, &str); 1] = [(
     "bucket",
     "bucket(event_time)",
-    "The start (epoch milliseconds) of the dashboard's $bucket that holds a time, in UTC with weeks starting on Monday: the same buckets the chart draws, so SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1 lands on them. It takes epoch milliseconds (event_time, or timestamp over logs), a TIMESTAMP or a DATE",
+    "The start (epoch milliseconds) of the dashboard's $bucket that holds a time, in UTC with weeks starting on Monday: the same buckets the chart draws, so SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1 lands on them. It takes epoch milliseconds (event_time, or timestamp over logs), a TIMESTAMP or a DATE; cast a TIMESTAMP WITH TIME ZONE, such as now(), with ::TIMESTAMP",
 )];
 /// The table functions a query may call. They generate rows from values; none reads files,
 /// the network or SQL text (as `query` and `query_table` do).
@@ -1279,7 +1279,8 @@ fn quoted(name: &str) -> String {
 /// - `all_events` (or `all_logs`): the whole table, for history such as cohorts;
 /// - `bucket(t)`: the epoch-ms start of the run's `$bucket` holding `t`, an epoch-ms time (or a
 ///   TIMESTAMP or DATE), in UTC with weeks starting on Monday, as DuckDB's `date_trunc` and
-///   Piko's bucket grid have it.
+///   Piko's bucket grid have it. A TIMESTAMP WITH TIME ZONE takes a `::TIMESTAMP` cast, which
+///   keeps UTC: this build has no time zone extension.
 ///
 /// They are temporary views and a temporary macro, so they belong to this connection alone and
 /// vanish when the transaction rolls back; the typed queries that share a widget's connection
@@ -1292,7 +1293,10 @@ fn quoted(name: &str) -> String {
 /// The run's values are bound into a variable, never written into SQL text, and the views and
 /// the macro read it with `getvariable`, which DuckDB folds into a constant while binding: the
 /// window still prunes the table scan, as a literal would. Variables belong to the connection
-/// too. The guard refuses `getvariable` and `SET` in queries, so only this reads or writes it.
+/// too, but unlike the views and the macro they are not transactional: `piko_run` outlives the
+/// rollback and holds the last run's values until the next scope sets it again, before anything
+/// reads it. The guard refuses `getvariable` and `SET` in queries, and the typed queries never
+/// read it, so only the objects made here read it, and only this writes it.
 fn scope(tx: &Transaction<'_>, database: SqlDatabase, params: &SqlParams) -> ApiResult<String> {
     let source = params.source.clone().map_or(DbValue::Null, DbValue::Text);
     let values = [
@@ -2013,7 +2017,7 @@ pub fn verify_widget(
                     too_deep().hint.unwrap_or_default()
                 } else if message.contains("Macro bucket()") {
                     format!(
-                        "bucket takes one time: epoch milliseconds, such as bucket({}), or a TIMESTAMP or DATE",
+                        "bucket takes one time: epoch milliseconds, such as bucket({}), or a TIMESTAMP or DATE. Cast a TIMESTAMP WITH TIME ZONE, such as now(), with ::TIMESTAMP",
                         time_column(q.database)
                     )
                 } else {

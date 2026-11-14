@@ -24,7 +24,7 @@ pub const WARN_MS: u64 = 1_000;
 /// The shortest `timeout_ms` a widget may carry, so the smallest budget that can be given.
 const MIN_BUDGET_MS: u64 = 1_000;
 
-const HINT: &str = "This widget took over 3 s on the last 7 days of data. Narrow it with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins.";
+const HINT: &str = "This widget took over 3 s on the last 7 days of data. Narrow it with a widget range, read events or logs (only the dashboard's range) rather than all_events or all_logs, filter by event or service, or avoid unbounded joins.";
 
 pub struct Bench {
     /// `[{ widget, elapsed_ms }]` for each widget that ran.
@@ -178,7 +178,7 @@ fn slow_hint(widget: &Widget, budget: u64, remaining: u64) -> String {
         "The save's combined benchmark budget (15 s) is nearly used up; save fewer or lighter widgets at once".into()
     } else {
         format!(
-            "This widget's own timeout is {} s. Raise `timeout_ms` or narrow the query with $from/$to (or a widget range), filter by event or service, or avoid unbounded joins.",
+            "This widget's own timeout is {} s. Raise `timeout_ms`, or narrow the query with a widget range, read events or logs (only the dashboard's range) rather than all_events or all_logs, filter by event or service, or avoid unbounded joins.",
             own as f64 / 1000.0
         )
     }
