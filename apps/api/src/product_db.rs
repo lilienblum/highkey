@@ -1,7 +1,7 @@
 //! One physical analytical database per product, with a bounded, pinned LRU cache.
 use crate::error::{ApiError, ApiResult};
 use anyhow::Result;
-use duckdb::{Connection, params};
+use duckdb::{Config, Connection, params};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -18,6 +18,15 @@ const MAX_OPEN: usize = 8;
 /// `lock_configuration` comes last, so no query, dashboard SQL included, can change any setting
 /// afterwards; nothing in the API sets one later.
 pub const LOCKED_SETTINGS: &str = "SET GLOBAL max_expression_depth=250; SET enable_external_access=false; SET autoload_known_extensions=false; SET autoinstall_known_extensions=false; SET max_temp_directory_size='1GiB'; SET lock_configuration=true;";
+/// The configuration every database the API opens starts with. DuckDB 2.0 starts 40
+/// `async_threads` per instance by default, for remote file IO that `enable_external_access`
+/// rules out here. Each is a thread with an 8 MiB stack, about 330 MiB of address space per
+/// open database, which `RLIMIT_DATA` counts. Setting it at open means the threads are never
+/// spawned; a SET afterwards starts them first. One stays, so no async task could wait for a
+/// thread that does not exist.
+pub fn database_config() -> duckdb::Result<Config> {
+    Config::default().with("async_threads", "1")
+}
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS events(product_id VARCHAR NOT NULL, event_id VARCHAR NOT NULL, name VARCHAR NOT NULL, source VARCHAR NOT NULL, event_time BIGINT NOT NULL, received_at BIGINT NOT NULL, actor_id VARCHAR, identity_kind VARCHAR, session_id VARCHAR, properties JSON NOT NULL, PRIMARY KEY(product_id,event_id));";
 const LOG_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS logs(log_id VARCHAR PRIMARY KEY, source_id VARCHAR NOT NULL, timestamp BIGINT NOT NULL, received_at BIGINT NOT NULL, level VARCHAR NOT NULL, message VARCHAR NOT NULL, service VARCHAR NOT NULL, environment VARCHAR, trace_id VARCHAR, span_id VARCHAR, request_id VARCHAR, attributes JSON NOT NULL);";
 enum DatabaseKind {
@@ -80,7 +89,9 @@ impl ProductDatabases {
                     .ok_or_else(ApiError::busy)?;
                 cache.remove(&victim);
             }
-            let db = Connection::open(path).map_err(anyhow::Error::from)?;
+            let db =
+                Connection::open_with_flags(path, database_config().map_err(anyhow::Error::from)?)
+                    .map_err(anyhow::Error::from)?;
             match self.kind {
                 DatabaseKind::Events => {
                     db.execute_batch(&format!(
@@ -140,7 +151,7 @@ impl ProductDatabases {
     }
     /// Idempotent import from early MVP builds. Keep the original file as a backup.
     pub fn import_legacy(&self, path: &Path) -> Result<usize> {
-        let legacy = Connection::open(path)?;
+        let legacy = Connection::open_with_flags(path, database_config()?)?;
         let ids = legacy
             .prepare("SELECT DISTINCT product_id FROM events")?
             .query_map([], |r| r.get::<_, String>(0))?
