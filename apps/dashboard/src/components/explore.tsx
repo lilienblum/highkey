@@ -33,7 +33,7 @@ import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
 import { useQuery } from "@/lib/use-query";
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
-import { Breakdown, ErrorState, NoEvents, PinChip, SeriesChart } from "./shared";
+import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared";
 import { ExploreLoading } from "./loading";
 import { Spinner } from "@/components/ui/spinner";
 export function Explore() {
@@ -367,7 +367,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                   />
                 </Field>
                 <div className="query-actions">
-                  <CollapsibleTrigger render={<Button type="button" variant="outline" />}>
+                  <CollapsibleTrigger
+                    render={<Button type="button" variant="outline" id="query-filter-toggle" />}
+                  >
                     <HugeiconsIcon
                       icon={FilterHorizontalIcon}
                       strokeWidth={2}
@@ -451,35 +453,37 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                 </FieldGroup>
               </CollapsibleContent>
             </Collapsible>
-            {(applied.identityKind || applied.sourceId || moreFilters.length > 0) && (
-              <section className="drilldown-filters query-pins" aria-label="Also applied">
-                {applied.sourceId && (
-                  <PinChip
-                    label={`Source · ${product?.sources.find((s) => s.id === applied.sourceId)?.name ?? "unavailable"}`}
-                    remove="Remove source"
-                    onRemove={() => dropPin({ sourceId: undefined })}
-                  />
-                )}
-                {applied.identityKind && (
-                  <PinChip
-                    label={`Identity kind · ${applied.identityKind}`}
-                    remove="Remove identity kind"
-                    onRemove={() => dropPin({ identityKind: undefined })}
-                  />
-                )}
-                {moreFilters.map((filter, index) => (
-                  <PinChip
-                    key={`${filter.property}:${filter.op}:${JSON.stringify(filter.value)}`}
-                    label={filterText(filter)}
-                    remove={`Remove filter ${filterText(filter)}`}
-                    onRemove={() => {
-                      const next = moreFilters.filter((_, i) => i !== index);
-                      dropPin({ moreFilters: next.length ? next : undefined });
-                    }}
-                  />
-                ))}
-              </section>
-            )}
+            <PinChips
+              fallback={() => document.getElementById("query-filter-toggle")}
+              pins={[
+                ...(applied.sourceId
+                  ? [
+                      {
+                        label: `Source · ${product?.sources.find((s) => s.id === applied.sourceId)?.name ?? "unavailable"}`,
+                        remove: "Remove source",
+                        onRemove: () => dropPin({ sourceId: undefined }),
+                      },
+                    ]
+                  : []),
+                ...(applied.identityKind
+                  ? [
+                      {
+                        label: `Identity kind · ${applied.identityKind}`,
+                        remove: "Remove identity kind",
+                        onRemove: () => dropPin({ identityKind: undefined }),
+                      },
+                    ]
+                  : []),
+                ...moreFilters.map((filter, index) => ({
+                  label: filterText(filter),
+                  remove: `Remove filter ${filterText(filter)}`,
+                  onRemove: () => {
+                    const next = moreFilters.filter((_, i) => i !== index);
+                    dropPin({ moreFilters: next.length ? next : undefined });
+                  },
+                })),
+              ]}
+            />
             {validation && (
               <p role="alert" className="form-error">
                 {validation}

@@ -1,7 +1,7 @@
 import { workspaceTarget } from "@/lib/workspace-route";
 import { Skeleton } from "@/components/ui/skeleton";
 import { bucketLabels, partialBucketNote, type TimeBucket } from "@/lib/time-buckets";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AnalyticsUpIcon,
@@ -324,5 +324,46 @@ export function PinChip({
         <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" className="size-3" />
       </button>
     </Badge>
+  );
+}
+
+export type Pin = { label: string; remove: string; onRemove: () => void };
+/**
+ * What a query applies beyond its controls, as removable chips. Removing one moves focus to the
+ * chip that takes its place (or the one before it), and to `fallback` when none remain, so the
+ * keyboard never drops to the page. Renders nothing without pins but stays mounted to place focus.
+ */
+export function PinChips({ pins, fallback }: { pins: Pin[]; fallback: () => HTMLElement | null }) {
+  const section = useRef<HTMLElement>(null);
+  const removed = useRef<{ index: number; count: number } | null>(null);
+  // Removal re-renders after the URL changes; focus moves once the chip is gone.
+  useLayoutEffect(() => {
+    const last = removed.current;
+    if (!last || pins.length >= last.count) return;
+    removed.current = null;
+    const buttons = section.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
+    (buttons[Math.min(last.index, buttons.length - 1)] ?? fallback())?.focus();
+  });
+  if (!pins.length) return null;
+  // A filter written twice is two chips, so keys count repeats.
+  const seen = new Map<string, number>();
+  return (
+    <section ref={section} className="drilldown-filters query-pins" aria-label="Also applied">
+      {pins.map((pin, index) => {
+        const repeat = seen.get(pin.label) ?? 0;
+        seen.set(pin.label, repeat + 1);
+        return (
+          <PinChip
+            key={`${pin.label}#${repeat}`}
+            label={pin.label}
+            remove={pin.remove}
+            onRemove={() => {
+              removed.current = { index, count: pins.length };
+              pin.onRemove();
+            }}
+          />
+        );
+      })}
+    </section>
   );
 }

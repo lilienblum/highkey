@@ -370,9 +370,12 @@ test("an agent-written view opens with every field shown and Update keeps them",
   await expect(page.getByRole("status").filter({ hasText: "Updated" })).toBeVisible();
   expect((await stored(created.slug)).document.query).toEqual(agentQuery(source));
 
-  // Removing a chip and updating drops only that field.
+  // Removing a chip and updating drops only that field. Focus moves to the chip in its place.
   await pins.getByRole("button", { name: 'Remove filter region ≠ "eu"' }).click();
+  const seats = pins.getByRole("button", { name: "Remove filter seats ≥ 2" });
+  await expect(seats).toBeFocused();
   await pins.getByRole("button", { name: "Remove identity kind" }).click();
+  await expect(seats).toBeFocused();
   await page.getByRole("button", { name: "View actions" }).click();
   await page.getByRole("menuitem", { name: "Update view with current query" }).click();
   const expected = agentQuery(source);
@@ -525,4 +528,59 @@ test("switching source keeps the open view and its query", async ({ page }) => {
     event: "signup",
     filterProperty: "plan",
   });
+});
+
+test("repeated filters are separate chips, and the last one hands focus to Filter", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: {
+      version: 1,
+      kind: "events",
+      name: `Repeats ${run}`,
+      query: {
+        event: "signup",
+        measure: "count",
+        filters: [
+          { property: "plan", op: "eq", value: "pro" },
+          { property: "region", op: "ne", value: "eu" },
+          { property: "region", op: "ne", value: "eu" },
+        ],
+      },
+    },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  const pins = page.getByRole("region", { name: "Also applied" });
+  const repeated = pins.getByRole("button", { name: 'Remove filter region ≠ "eu"' });
+  await expect(repeated).toHaveCount(2);
+  await repeated.first().click();
+  await expect(repeated).toHaveCount(1);
+  await expect(repeated).toBeFocused();
+  await repeated.click();
+  await expect(pins).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Filter · 1" })).toBeFocused();
+  expect(errors.filter((error) => error.includes("same key"))).toEqual([]);
+});
+
+test("New view from the collapsed rail returns focus to the rail", async ({ page }) => {
+  await page.addInitScript((id) => {
+    localStorage.setItem("piko:product", id);
+    localStorage.setItem("piko:sidebar", "collapsed");
+  }, project.id);
+  await page.goto(eventsUrl());
+  const events = sidebar(page).getByRole("button", { name: "Events", exact: true });
+  await events.click();
+  await page
+    .getByRole("dialog", { name: "Events" })
+    .getByRole("button", { name: "New view" })
+    .click();
+  const guide = page.getByRole("dialog", { name: "New event view" });
+  await expect(guide).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(guide).toBeHidden();
+  await expect(events).toBeFocused();
 });

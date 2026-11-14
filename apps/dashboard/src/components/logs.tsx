@@ -41,7 +41,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ValueSelect } from "./value-select";
-import { ErrorState, PinChip, QueryDraftNotice } from "./shared";
+import { ErrorState, PinChips, QueryDraftNotice } from "./shared";
 import { OpenSavedView, SaveLogViewButton, ViewActions, type SavedViewPage } from "./saved-views";
 import { LogStream } from "./log-stream";
 import { useLogFeed } from "@/lib/use-log-feed";
@@ -341,6 +341,7 @@ function LogExplorer() {
             ]}
           />
           <Button
+            id="log-filters-toggle"
             variant="ghost"
             size="sm"
             aria-expanded={advanced}
@@ -359,28 +360,28 @@ function LogExplorer() {
                   : "Loading logs…"}
           </span>
         </div>
-        {(search.logSource || moreFilters.length > 0) && (
-          <section className="drilldown-filters query-pins" aria-label="Also applied">
-            {search.logSource && (
-              <PinChip
-                label={`Source · ${product.sources.find((s) => s.id === search.logSource)?.name ?? "unavailable"}`}
-                remove="Remove source"
-                onRemove={() => apply({ logSource: undefined })}
-              />
-            )}
-            {moreFilters.map((filter, index) => (
-              <PinChip
-                key={`${filter.attribute}:${JSON.stringify(filter.value)}`}
-                label={`${filter.attribute} = ${JSON.stringify(filter.value)}`}
-                remove={`Remove filter ${filter.attribute} = ${JSON.stringify(filter.value)}`}
-                onRemove={() => {
-                  const next = moreFilters.filter((_, i) => i !== index);
-                  apply({ moreFilters: next.length ? next : undefined });
-                }}
-              />
-            ))}
-          </section>
-        )}
+        <PinChips
+          fallback={() => document.getElementById("log-filters-toggle")}
+          pins={[
+            ...(search.logSource
+              ? [
+                  {
+                    label: `Source · ${product.sources.find((s) => s.id === search.logSource)?.name ?? "unavailable"}`,
+                    remove: "Remove source",
+                    onRemove: () => apply({ logSource: undefined }),
+                  },
+                ]
+              : []),
+            ...moreFilters.map((filter, index) => ({
+              label: `${filter.attribute} = ${JSON.stringify(filter.value)}`,
+              remove: `Remove filter ${filter.attribute} = ${JSON.stringify(filter.value)}`,
+              onRemove: () => {
+                const next = moreFilters.filter((_, i) => i !== index);
+                apply({ moreFilters: next.length ? next : undefined });
+              },
+            })),
+          ]}
+        />
         {advanced && (
           <LogFilters key={viewKey} search={search} facets={data?.facets} onApply={apply} />
         )}

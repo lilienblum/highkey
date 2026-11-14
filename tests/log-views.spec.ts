@@ -297,7 +297,10 @@ test("an agent-written log view opens with every field shown and Update keeps th
 
   // Removing a chip and updating drops only that field.
   await also.getByRole("button", { name: 'Remove filter region = "tokyo"' }).click();
+  // Focus moves to the chip before it, then to the Filters control once none remain.
+  await expect(also.getByRole("button", { name: "Remove source" })).toBeFocused();
   await also.getByRole("button", { name: "Remove source" }).click();
+  await expect(page.locator("#log-filters-toggle")).toBeFocused();
   await page.getByRole("button", { name: "View actions" }).click();
   await page.getByRole("menuitem", { name: "Update view with current filters" }).click();
   const { source_id: _source, ...withoutSource } = query;

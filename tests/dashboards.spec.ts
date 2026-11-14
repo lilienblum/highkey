@@ -247,6 +247,14 @@ test("collapsed rail reaches dashboards from Overview by keyboard", async ({ pag
   await expect(menu).toBeHidden();
   await page.keyboard.press("Escape");
   await expect(overview).toBeVisible();
+  // New dashboard closes the menu; once its guide closes, focus is back on the rail.
+  await overview.click();
+  await menu.getByRole("button", { name: "New dashboard" }).click();
+  const guide = page.getByRole("dialog", { name: "New dashboard" });
+  await expect(guide).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(guide).toBeHidden();
+  await expect(overview).toBeFocused();
 });
 
 test("widgets lay out in one column on a phone", async ({ page }) => {
