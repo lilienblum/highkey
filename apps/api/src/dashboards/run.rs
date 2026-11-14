@@ -469,6 +469,31 @@ impl Measurer<'_> {
 ///
 /// The widget's `timeout_ms` (default 5,000) counts from the start of the request and covers
 /// waiting for a query slot. The request's `source_id` scopes every query without its own.
+/// Warnings for event names with no events at all. One `LIMIT 1` probe per named
+/// query keeps this cheap; property keys are only checked against the catalog when validating.
+fn unknown_events(
+    db: &Connection,
+    product: &str,
+    named: &[(String, String)],
+) -> ApiResult<Vec<Issue>> {
+    let mut statement = db
+        .prepare("SELECT 1 FROM events WHERE product_id = ? AND name = ? LIMIT 1")
+        .map_err(anyhow::Error::from)?;
+    let mut unknown = Vec::new();
+    for (id, name) in named {
+        let found = statement
+            .exists(duckdb::params![product, name])
+            .map_err(anyhow::Error::from)?;
+        if !found {
+            unknown.push(super::catalog::unknown_event(
+                format!("/queries/{id}/event"),
+                name,
+            ));
+        }
+    }
+    Ok(unknown)
+}
+
 pub async fn run_widget(
     state: &AppState,
     project: &str,
@@ -528,10 +553,23 @@ pub async fn run_widget(
     let id = widget.id.clone();
     let window = effective.window.clone();
     let scope = (product.clone(), request.source_id);
-    let (series, rows) = if events || logs {
+    // Event names to check for existence: at most one per query, so at most 4.
+    let named: Vec<(String, String)> = widget
+        .queries
+        .iter()
+        .filter_map(|(id, q)| match q {
+            QuerySpec::Events(q) => q.event.clone().map(|name| (id.clone(), name)),
+            _ => None,
+        })
+        .collect();
+    let (series, rows, unknown) = if events || logs {
         state
             .store
             .widget_query(product, events, logs, deadline, move |e, l| {
+                let unknown = match e.as_deref() {
+                    Some(db) => unknown_events(db, &scope.0, &named)?,
+                    None => Vec::new(),
+                };
                 let mut measurer = Measurer {
                     product: &scope.0,
                     source: scope.1.as_deref(),
@@ -539,14 +577,14 @@ pub async fn run_widget(
                     logs: l,
                 };
                 if list {
-                    return Ok((Vec::new(), Some(measurer.rows(&widget, &window)?)));
+                    return Ok((Vec::new(), Some(measurer.rows(&widget, &window)?), unknown));
                 }
                 let current = measurer.all(&widget, &window, &shape, grouped)?;
                 let before = match &previous_shape {
                     Some(shape) => Some(measurer.all(&widget, &previous(&window), shape, false)?),
                     None => None,
                 };
-                Ok((evaluate(&widget, &current, before.as_ref()), None))
+                Ok((evaluate(&widget, &current, before.as_ref()), None, unknown))
             })
             .await
             .map_err(|e| match e {
@@ -558,12 +596,17 @@ pub async fn run_widget(
             })?
     } else {
         // Text widgets read nothing.
-        (Vec::new(), None)
+        (Vec::new(), None, Vec::new())
     };
 
     // The run's own warnings say what actually happened, so they replace validation warnings
     // at the same path.
     let mut warnings = effective.warnings;
+    for issue in unknown {
+        if !warnings.iter().any(|w| w.path == issue.path) {
+            warnings.push(issue);
+        }
+    }
     for issue in report.warnings {
         if !warnings.iter().any(|w| w.path == issue.path) {
             warnings.push(issue);

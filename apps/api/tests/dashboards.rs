@@ -607,3 +607,87 @@ async fn a_full_dashboard_gate_times_out_widgets_but_not_interactive_queries() {
     assert_eq!(body["series"][0]["total"], 2.0);
     test.close().await;
 }
+
+#[tokio::test]
+async fn catalog_lists_typed_keys_facets_retention_and_limits() {
+    let test = Test::new();
+    let project = test.project("Shop").await;
+    test.ingest_events(
+        &project,
+        None,
+        vec![
+            json!({"name":"checkout","properties":{"plan":"pro","amount":12.5}}),
+            json!({"name":"checkout","properties":{"plan":"free","amount":3.0}}),
+            json!({"name":"signup","properties":{"plan":"pro"}}),
+        ],
+    )
+    .await;
+    test.seed_logs(&project, "checkout", "info", 3).await;
+    test.seed_logs(&project, "search", "error", 1).await;
+
+    let (status, body) = test
+        .read("GET", "/api/read/products/shop/catalog", Value::Null)
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["project"]["id"], id(&project));
+    assert_eq!(body["project"]["slug"], "shop");
+    assert_eq!(body["project"]["name"], "Shop");
+    assert_eq!(body["events"]["names"], json!(["checkout", "signup"]));
+    assert_eq!(
+        body["events"]["properties"],
+        json!([
+            {"key":"plan","type":"string","count":3},
+            {"key":"amount","type":"number","count":2},
+        ])
+    );
+    assert_eq!(body["logs"]["services"][0]["name"], "checkout");
+    assert_eq!(body["logs"]["services"][0]["count"], 3);
+    assert_eq!(body["logs"]["services"][1]["name"], "search");
+    assert_eq!(body["logs"]["levels"], json!(["info", "error"]));
+    assert_eq!(body["sources"].as_array().unwrap().len(), 1);
+    assert!(body["sources"][0]["id"].is_string());
+    assert!(body["sources"][0]["name"].is_string());
+    assert_eq!(
+        body["retention"],
+        json!({"events_days": 365, "logs_days": 7})
+    );
+    assert_eq!(body["limits"]["max_widgets"], 24);
+    assert_eq!(body["limits"]["max_query_runs_per_widget"], 8);
+
+    // The id works too, and an unknown project is a 404.
+    let (status, by_id) = test
+        .read(
+            "GET",
+            &format!("/api/read/products/{}/catalog", id(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{by_id}");
+    assert_eq!(by_id["events"], body["events"]);
+    assert_eq!(
+        test.read("GET", "/api/read/products/missing/catalog", Value::Null)
+            .await
+            .0,
+        404
+    );
+
+    // A misspelled event name still runs, with a warning at its path; a real one has none.
+    let widget = |event: &str| {
+        json!({
+            "id": "w", "title": "W",
+            "view": {"type": "stat"},
+            "queries": {"a": {"signal": "events", "event": event}},
+            "series": [{"expr": "a"}]
+        })
+    };
+    let (status, run) = test.run("shop", run_body(widget("checkot"), 7)).await;
+    assert_eq!(status, 200, "{run}");
+    let warnings = run["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 1, "{run}");
+    assert_eq!(warnings[0]["path"], "/queries/a/event");
+    let (status, run) = test.run("shop", run_body(widget("checkout"), 7)).await;
+    assert_eq!(status, 200, "{run}");
+    assert_eq!(run["warnings"], json!([]));
+    assert_eq!(run["series"][0]["total"], 2.0);
+    test.close().await;
+}

@@ -22,6 +22,7 @@ pub fn read_router() -> Router<AppState> {
         .route("/products/{project}/query", post(query))
         .route("/products/{project}/logs/query", post(logs_query))
         .route("/products/{project}/widgets/run", post(run))
+        .route("/products/{project}/catalog", get(catalog))
         .route("/schemas/dashboard.v1.json", get(schema))
 }
 
@@ -58,6 +59,13 @@ async fn run(
 ) -> Result<Json<Value>, DashboardError> {
     let Json(request) = request.map_err(|e| ApiError(e.status(), e.body_text()))?;
     Ok(Json(run_widget(&state, &project, request).await?))
+}
+
+async fn catalog(
+    State(state): State<AppState>,
+    Path(project): Path<String>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(super::catalog::catalog(&state, &project).await?))
 }
 
 async fn schema() -> Json<Value> {
