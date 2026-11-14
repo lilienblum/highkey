@@ -291,6 +291,25 @@ pub fn update(
     tx.commit()?;
     load(db, &id)
 }
+/// The document of one revision, as `restore` would write it.
+pub fn revision(
+    db: &rusqlite::Connection,
+    product: &str,
+    key: &str,
+    revision: i64,
+) -> Result<Document> {
+    store::product(db, product)?;
+    let (id, _) = resolve(db, product, key)?;
+    let text: String = db
+        .query_row(
+            "SELECT document FROM dashboard_revisions WHERE dashboard_id=? AND revision=?",
+            params![id, revision],
+            |r| r.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| not_found("Revision"))?;
+    Ok(serde_json::from_str(&text)?)
+}
 /// Writes a new revision equal to `revision`.
 pub fn restore(
     db: &rusqlite::Connection,

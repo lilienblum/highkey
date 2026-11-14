@@ -5,5 +5,6 @@ pub mod metrics;
 pub mod routes;
 pub mod run;
 pub mod spec;
+pub mod sql;
 pub mod storage;
 pub mod validate;

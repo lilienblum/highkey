@@ -7,14 +7,16 @@ use super::{
         self, Bucket, GroupValue, Measured, Point, Shape, Window, log_measure_name, measure_name,
         missing_is_zero,
     },
-    spec::{Color, Compare, QuerySpec, ViewKind, Widget},
+    spec::{Color, Compare, Missing, QuerySpec, SqlDatabase, SqlQuery, ViewKind, Widget},
+    sql::{self, MAX_SQL_ROWS, SqlParams, SqlResult},
     validate::{Issue, Limits, Report, check_widget, parse_widget, range_hours},
 };
 use crate::{
     AppState,
     error::{ApiError, ApiResult},
 };
-use chrono::{DateTime, Duration, Utc};
+use axum::http::StatusCode;
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use duckdb::Connection;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -70,10 +72,7 @@ pub fn effective_window(
     let requested = (from, to);
     let mut warnings = Vec::new();
 
-    let has_logs = widget
-        .queries
-        .values()
-        .any(|q| matches!(q, QuerySpec::Logs(_)));
+    let has_logs = widget.queries.values().any(QuerySpec::reads_logs);
     let days = if has_logs {
         LOG_RANGE_DAYS
     } else {
@@ -153,7 +152,7 @@ fn grouped_time_series(widget: &Widget) -> bool {
     let grouped = match widget.queries.values().next() {
         Some(QuerySpec::Events(q)) => q.group_by.is_some(),
         Some(QuerySpec::Logs(q)) => q.group_by.is_some(),
-        None => false,
+        Some(QuerySpec::Sql(_)) | None => false,
     };
     grouped
         && matches!(
@@ -180,15 +179,17 @@ pub fn shape_for(widget: &Widget) -> (Shape, bool) {
     (shape, false)
 }
 
-fn measure_of(q: &QuerySpec) -> &'static str {
+/// Whether an absent bucket or group of `q` counts as zero rather than a gap.
+fn fills_zero(q: &QuerySpec) -> bool {
     match q {
-        QuerySpec::Events(q) => measure_name(&q.measure),
-        QuerySpec::Logs(q) => log_measure_name(&q.measure),
+        QuerySpec::Events(q) => missing_is_zero(measure_name(&q.measure)),
+        QuerySpec::Logs(q) => missing_is_zero(log_measure_name(&q.measure)),
+        QuerySpec::Sql(q) => q.missing == Missing::Zero,
     }
 }
 
-fn fill(value: Option<f64>, measure: &str) -> Option<f64> {
-    value.or(missing_is_zero(measure).then_some(0.0))
+fn fill(value: Option<f64>, zero: bool) -> Option<f64> {
+    value.or(zero.then_some(0.0))
 }
 
 fn label_text(v: &Value) -> String {
@@ -198,17 +199,15 @@ fn label_text(v: &Value) -> String {
     }
 }
 
-/// Everything one evaluation pass reads: the widget's queries with their measures.
+/// Everything one evaluation pass reads: the widget's queries, and whether each fills absent
+/// values with zero.
 struct Run<'a> {
-    measures: Vec<(&'a str, &'static str)>,
+    zero: Vec<(&'a str, bool)>,
 }
 
 impl Run<'_> {
-    fn measure(&self, id: &str) -> &'static str {
-        self.measures
-            .iter()
-            .find(|(q, _)| *q == id)
-            .map_or("", |(_, m)| m)
+    fn zero(&self, id: &str) -> bool {
+        self.zero.iter().any(|(q, zero)| *q == id && *zero)
     }
 
     fn eval(
@@ -219,7 +218,7 @@ impl Run<'_> {
     ) -> Option<f64> {
         expr.eval(&|id| {
             let measured = set.get(id)?;
-            fill(value(measured), self.measure(id))
+            fill(value(measured), self.zero(id))
         })
     }
 
@@ -287,22 +286,32 @@ impl Run<'_> {
 }
 
 /// Turns per-query measurements into the widget's series. A missing bucket or group counts as
-/// zero for count, actors and sum, and stays a gap for every other measure.
+/// zero for count, actors and sum (and SQL with `missing: zero`), and stays a gap otherwise.
 pub fn evaluate(
     widget: &Widget,
     current: &IndexMap<String, Measured>,
     previous: Option<&IndexMap<String, Measured>>,
 ) -> Vec<SeriesResult> {
+    evaluate_as(widget, current, previous, grouped_time_series(widget))
+}
+
+/// `evaluate`, told whether the widget draws one series per group, which a grouped SQL query
+/// decides by its columns.
+pub fn evaluate_as(
+    widget: &Widget,
+    current: &IndexMap<String, Measured>,
+    previous: Option<&IndexMap<String, Measured>>,
+    grouped: bool,
+) -> Vec<SeriesResult> {
     let run = Run {
-        measures: widget
+        zero: widget
             .queries
             .iter()
-            .map(|(id, q)| (id.as_str(), measure_of(q)))
+            .map(|(id, q)| (id.as_str(), fills_zero(q)))
             .collect(),
     };
     let known: Vec<&str> = widget.queries.keys().map(String::as_str).collect();
     let first = widget.queries.keys().next().and_then(|id| current.get(id));
-    let grouped = grouped_time_series(widget);
     let ranking = widget.view.kind == ViewKind::Ranking;
     let limit = widget.view.limit.map_or(DEFAULT_RANKING_LIMIT, usize::from);
 
@@ -366,12 +375,16 @@ pub fn evaluate(
 const LIST_ROWS: usize = 50;
 const BUCKETS: [&str; 5] = ["auto", "hour", "day", "week", "month"];
 
-/// The leased connections one run measures on, with the scope every query shares.
+/// The leased connections one run measures on, with the scope every query shares. SQL that
+/// fails while running is collected as issues at its `sql` path.
 struct Measurer<'a> {
     product: &'a str,
     source: Option<&'a str>,
     events: Option<&'a mut Connection>,
     logs: Option<&'a mut Connection>,
+    issues: Vec<Issue>,
+    /// SQL queries whose result was cut at `MAX_SQL_ROWS`.
+    truncated: Vec<String>,
 }
 
 impl Measurer<'_> {
@@ -380,7 +393,41 @@ impl Measurer<'_> {
             .ok_or_else(|| anyhow::anyhow!("The widget run has no connection for a query").into())
     }
 
-    fn one(&mut self, q: &QuerySpec, w: &Window, shape: &Shape) -> ApiResult<Measured> {
+    fn refuse(&mut self, id: &str, message: String, hint: &str) {
+        let path = format!("/queries/{id}/sql");
+        if !self.issues.iter().any(|i| i.path == path) {
+            self.issues.push(Issue {
+                path,
+                message,
+                hint: Some(hint.into()),
+            });
+        }
+    }
+
+    /// Runs one SQL query over `w`, or `None` when it failed (and was recorded as an issue).
+    fn sql(&mut self, id: &str, q: &SqlQuery, w: &Window) -> ApiResult<Option<SqlResult>> {
+        let params = SqlParams::new(w, self.source);
+        let db = match q.database {
+            SqlDatabase::Events => Self::connection(&mut self.events)?,
+            SqlDatabase::Logs => Self::connection(&mut self.logs)?,
+        };
+        match sql::execute(db, &q.sql, &params, MAX_SQL_ROWS) {
+            Ok(result) => {
+                if result.truncated && !self.truncated.iter().any(|t| t == id) {
+                    self.truncated.push(id.to_string());
+                }
+                Ok(Some(result))
+            }
+            Err(ApiError(StatusCode::BAD_REQUEST, message)) => {
+                let hint = "DuckDB stopped this query while running it; fix what the message names";
+                self.refuse(id, message, hint);
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn one(&mut self, id: &str, q: &QuerySpec, w: &Window, shape: &Shape) -> ApiResult<Measured> {
         match q {
             QuerySpec::Events(q) => metrics::events(
                 Self::connection(&mut self.events)?,
@@ -393,7 +440,36 @@ impl Measurer<'_> {
             QuerySpec::Logs(q) => {
                 metrics::logs(Self::connection(&mut self.logs)?, q, self.source, w, shape)
             }
+            QuerySpec::Sql(q) => {
+                let Some(result) = self.sql(id, q, w)? else {
+                    return Ok(Measured::default());
+                };
+                match sql_measured(&result, q.missing, w, shape) {
+                    Ok(measured) => Ok(measured),
+                    Err(message) => {
+                        let hint = "Aggregate to one row, as with count(*) or sum(...), or use a ranking or table view";
+                        self.refuse(id, message, hint);
+                        Ok(Measured::default())
+                    }
+                }
+            }
         }
+    }
+
+    /// The columns and rows of a table view's one SQL query.
+    fn table(&mut self, widget: &Widget, w: &Window) -> ApiResult<Option<(Value, Value)>> {
+        let Some((id, QuerySpec::Sql(q))) = widget.queries.first() else {
+            return Ok(None);
+        };
+        let Some(result) = self.sql(id, q, w)? else {
+            return Ok(None);
+        };
+        let columns = result
+            .columns
+            .iter()
+            .map(|(name, kind)| json!({"name": name, "type": kind}))
+            .collect();
+        Ok(Some((columns, json!(result.rows))))
     }
 
     /// Every query over `w`. The first query picks the groups that the others are measured
@@ -411,18 +487,28 @@ impl Measurer<'_> {
             return Ok(out);
         };
         let rest = if grouped {
-            let top = Shape::Groups {
-                limit: GROUPED_SERIES,
-                labels: None,
+            // A grouped SQL query picks its own six largest groups in one run.
+            let measured = if matches!(first, QuerySpec::Sql(_)) {
+                let shape = Shape::GroupedBuckets { labels: Vec::new() };
+                self.one(first_id, first, w, &shape)?
+            } else {
+                let top = Shape::Groups {
+                    limit: GROUPED_SERIES,
+                    labels: None,
+                };
+                let labels = self.one(first_id, first, w, &top)?.groups;
+                let shape = Shape::GroupedBuckets {
+                    labels: labels.into_iter().map(|g| g.label).collect(),
+                };
+                self.one(first_id, first, w, &shape)?
             };
-            let labels = self.one(first, w, &top)?.groups;
             let shape = Shape::GroupedBuckets {
-                labels: labels.into_iter().map(|g| g.label).collect(),
+                labels: measured.grouped.iter().map(|(l, _)| l.clone()).collect(),
             };
-            out.insert(first_id.clone(), self.one(first, w, &shape)?);
+            out.insert(first_id.clone(), measured);
             shape
         } else {
-            let measured = self.one(first, w, shape)?;
+            let measured = self.one(first_id, first, w, shape)?;
             let rest = match shape {
                 Shape::Groups {
                     limit,
@@ -437,7 +523,7 @@ impl Measurer<'_> {
             rest
         };
         for (id, q) in queries {
-            out.insert(id.clone(), self.one(q, w, &rest)?);
+            out.insert(id.clone(), self.one(id, q, w, &rest)?);
         }
         Ok(out)
     }
@@ -460,15 +546,160 @@ impl Measurer<'_> {
                 w,
                 LIST_ROWS,
             ),
-            None => Ok(Vec::new()),
+            Some(QuerySpec::Sql(_)) | None => Ok(Vec::new()),
         }
     }
 }
 
-/// Validates and runs one widget for a project (by id or slug) and returns its series or rows.
-///
-/// The widget's `timeout_ms` (default 5,000) counts from the start of the request and covers
-/// waiting for a query slot. The request's `source_id` scopes every query without its own.
+/// The start of every bucket in `w`, as the typed queries' bucket grid has them: from the
+/// bucket holding `from` up to `to`, in UTC, with weeks starting on Monday.
+fn bucket_starts(w: &Window) -> Vec<i64> {
+    let from = w.from.naive_utc();
+    let date = from.date();
+    let first = match w.bucket {
+        Bucket::Hour => date.and_hms_opt(from.hour(), 0, 0),
+        Bucket::Day => date.and_hms_opt(0, 0, 0),
+        Bucket::Week => (date - Duration::days(i64::from(date.weekday().num_days_from_monday())))
+            .and_hms_opt(0, 0, 0),
+        Bucket::Month => date.with_day(1).and_then(|d| d.and_hms_opt(0, 0, 0)),
+    };
+    let mut out = Vec::new();
+    let mut at = first.map(|t| t.and_utc());
+    while let Some(t) = at.filter(|t| *t < w.to) {
+        out.push(t.timestamp_millis());
+        at = match w.bucket {
+            Bucket::Hour => Some(t + Duration::hours(1)),
+            Bucket::Day => Some(t + Duration::days(1)),
+            Bucket::Week => Some(t + Duration::days(7)),
+            Bucket::Month => t.checked_add_months(chrono::Months::new(1)),
+        };
+    }
+    out
+}
+
+/// A row of a time series: its bucket time and value.
+type Sample = (i64, Option<f64>);
+
+fn sum(values: impl Iterator<Item = Option<f64>>) -> Option<f64> {
+    values
+        .flatten()
+        .fold(None, |total, v| Some(total.unwrap_or(0.0) + v))
+}
+
+/// Points on the window's bucket grid: each bucket takes the summed value of the rows at its
+/// time, an absent one counts as `missing`, and rows off the grid are kept where they are.
+fn on_grid(rows: impl Iterator<Item = Sample>, grid: &[i64], missing: Missing) -> Vec<Point> {
+    let mut points = std::collections::BTreeMap::new();
+    for (time, value) in rows {
+        let slot: &mut Option<Option<f64>> = points.entry(time).or_default();
+        *slot = Some(sum([slot.flatten(), value].into_iter()));
+    }
+    let fill = (missing == Missing::Zero).then_some(0.0);
+    for time in grid {
+        points.entry(*time).or_insert(Some(fill));
+    }
+    points
+        .into_iter()
+        .map(|(time, value)| Point {
+            time,
+            value: value.flatten(),
+        })
+        .collect()
+}
+
+/// What an SQL result measures, by its columns: `value` is a total; `time` and `value` (with
+/// an optional `group`) are a time series whose total is the sum of its points; `label` and
+/// `value` are groups whose total is their sum. Columns were checked against the view.
+fn sql_measured(
+    result: &SqlResult,
+    missing: Missing,
+    w: &Window,
+    shape: &Shape,
+) -> Result<Measured, String> {
+    let column = |name: &str| {
+        result
+            .columns
+            .iter()
+            .position(|(n, _)| n.eq_ignore_ascii_case(name))
+    };
+    let mut out = Measured::default();
+    let Some(value) = column("value") else {
+        return Ok(out);
+    };
+    let number = |row: &[Value]| row[value].as_f64();
+    if let Some(time) = column("time") {
+        let grid = bucket_starts(w);
+        let rows = || {
+            result
+                .rows
+                .iter()
+                .filter_map(|row| Some((row[time].as_i64()?, row)))
+        };
+        out.total = sum(rows().map(|(_, row)| number(row)));
+        let Some(group) = column("group") else {
+            out.points = on_grid(rows().map(|(t, row)| (t, number(row))), &grid, missing);
+            return Ok(out);
+        };
+        let mut groups: Vec<(Value, Vec<Sample>)> = Vec::new();
+        for (t, row) in rows() {
+            let label = &row[group];
+            match groups.iter_mut().find(|(l, _)| l == label) {
+                Some((_, points)) => points.push((t, number(row))),
+                None => groups.push((label.clone(), vec![(t, number(row))])),
+            }
+        }
+        // First in a widget, a grouped query draws its six largest groups by summed value.
+        if matches!(shape, Shape::GroupedBuckets { labels } if labels.is_empty()) {
+            let total = |points: &[Sample]| sum(points.iter().map(|(_, v)| *v));
+            groups.sort_by(|a, b| {
+                let (a, b) = (total(&a.1), total(&b.1));
+                b.partial_cmp(&a).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            groups.truncate(GROUPED_SERIES);
+        }
+        out.grouped = groups
+            .into_iter()
+            .map(|(label, points)| (label, on_grid(points.into_iter(), &grid, missing)))
+            .collect();
+        return Ok(out);
+    }
+    if let Some(label) = column("label") {
+        let mut groups: Vec<GroupValue> = Vec::new();
+        for row in &result.rows {
+            let value = number(row);
+            match groups.iter_mut().find(|g| g.label == row[label]) {
+                Some(g) => g.value = sum([g.value, value].into_iter()),
+                None => groups.push(GroupValue {
+                    label: row[label].clone(),
+                    value,
+                }),
+            }
+        }
+        out.total = sum(groups.iter().map(|g| g.value));
+        // First in a ranking, the query's own order picks the rows.
+        if let Shape::Groups {
+            limit,
+            labels: None,
+        } = shape
+        {
+            groups.truncate(*limit);
+        }
+        out.groups = groups;
+        return Ok(out);
+    }
+    match result.rows.as_slice() {
+        [] => {}
+        [row] => out.total = number(row),
+        rows => {
+            return Err(format!(
+                "A query with only a value column must return one row; this one returned {}",
+                rows.len()
+            ));
+        }
+    }
+    Ok(out)
+}
+
 /// Warnings for event names with no events at all. One `LIMIT 1` probe per named
 /// query keeps this cheap; property keys are only checked against the catalog when validating.
 fn unknown_events(
@@ -494,6 +725,23 @@ fn unknown_events(
     Ok(unknown)
 }
 
+/// What one widget run produced inside its deadline.
+#[derive(Default)]
+struct Outcome {
+    series: Vec<SeriesResult>,
+    rows: Option<Value>,
+    columns: Option<Value>,
+    /// Warnings from the run itself, which win over validation warnings at the same path.
+    ran: Vec<Issue>,
+    /// Warnings from verifying the widget's SQL.
+    verified: Vec<Issue>,
+}
+
+/// Validates and runs one widget for a project (by id or slug) and returns its series or rows.
+///
+/// The widget's `timeout_ms` (default 5,000) counts from the start of the request and covers
+/// waiting for a query slot. The request's `source_id` scopes every query without its own.
+/// SQL queries are verified again (all three steps) before they run.
 pub async fn run_widget(
     state: &AppState,
     project: &str,
@@ -533,26 +781,15 @@ pub async fn run_widget(
         .await?;
 
     let effective = effective_window(&widget, request.from, request.to, request.bucket.as_deref());
-    let (shape, grouped) = shape_for(&widget);
-    let events = widget
-        .queries
-        .values()
-        .any(|q| matches!(q, QuerySpec::Events(_)));
-    let logs = widget
-        .queries
-        .values()
-        .any(|q| matches!(q, QuerySpec::Logs(_)));
-    let list = matches!(widget.view.kind, ViewKind::Events | ViewKind::Logs);
-    // Grouped time series carry no previous period; rankings compare totals only.
-    let previous_shape = match (&widget.view.compare, grouped, &shape) {
-        (Some(Compare::PreviousPeriod), false, Shape::Buckets) => Some(Shape::Buckets),
-        (Some(Compare::PreviousPeriod), false, _) => Some(Shape::Total),
-        _ => None,
-    };
+    let events = widget.queries.values().any(QuerySpec::reads_events);
+    let logs = widget.queries.values().any(QuerySpec::reads_logs);
+    let kind = widget.view.kind;
+    let list = matches!(kind, ViewKind::Events | ViewKind::Logs);
 
     let id = widget.id.clone();
     let window = effective.window.clone();
     let scope = (product.clone(), request.source_id);
+    let parser = state.sql_parser.clone();
     // Event names to check for existence: at most one per query, so at most 4.
     let named: Vec<(String, String)> = widget
         .queries
@@ -562,29 +799,88 @@ pub async fn run_widget(
             _ => None,
         })
         .collect();
-    let (series, rows, unknown) = if events || logs {
+    let outcome = if events || logs {
         state
             .store
-            .widget_query(product, events, logs, deadline, move |e, l| {
-                let unknown = match e.as_deref() {
-                    Some(db) => unknown_events(db, &scope.0, &named)?,
-                    None => Vec::new(),
+            .widget_query(product, events, logs, deadline, move |mut e, mut l| {
+                let params = SqlParams::new(&window, scope.1.as_deref());
+                let check = sql::verify_widget(
+                    &parser,
+                    &widget,
+                    "",
+                    e.as_deref_mut(),
+                    l.as_deref_mut(),
+                    &params,
+                )?;
+                if !check.errors.is_empty() {
+                    return Ok(Err(Report {
+                        errors: check.errors,
+                        warnings: check.warnings,
+                    }));
+                }
+                let sql_grouped = matches!(kind, ViewKind::Line | ViewKind::Area | ViewKind::Bar)
+                    && widget
+                        .queries
+                        .first()
+                        .is_some_and(|(id, q)| matches!(q, QuerySpec::Sql(_)) && check.grouped(id));
+                let mut outcome = Outcome {
+                    ran: match e.as_deref() {
+                        Some(db) => unknown_events(db, &scope.0, &named)?,
+                        None => Vec::new(),
+                    },
+                    verified: check.warnings,
+                    ..Outcome::default()
                 };
                 let mut measurer = Measurer {
                     product: &scope.0,
                     source: scope.1.as_deref(),
                     events: e,
                     logs: l,
+                    issues: Vec::new(),
+                    truncated: Vec::new(),
                 };
-                if list {
-                    return Ok((Vec::new(), Some(measurer.rows(&widget, &window)?), unknown));
+                if kind == ViewKind::Table {
+                    if let Some((columns, rows)) = measurer.table(&widget, &window)? {
+                        (outcome.columns, outcome.rows) = (Some(columns), Some(rows));
+                    }
+                } else if list {
+                    outcome.rows = Some(json!(measurer.rows(&widget, &window)?));
+                } else {
+                    let (shape, grouped) = if sql_grouped {
+                        (Shape::GroupedBuckets { labels: Vec::new() }, true)
+                    } else {
+                        shape_for(&widget)
+                    };
+                    // Grouped time series carry no previous period; rankings compare totals only.
+                    let previous_shape = match (&widget.view.compare, grouped, &shape) {
+                        (Some(Compare::PreviousPeriod), false, Shape::Buckets) => {
+                            Some(Shape::Buckets)
+                        }
+                        (Some(Compare::PreviousPeriod), false, _) => Some(Shape::Total),
+                        _ => None,
+                    };
+                    let current = measurer.all(&widget, &window, &shape, grouped)?;
+                    let before = match &previous_shape {
+                        Some(shape) => {
+                            Some(measurer.all(&widget, &previous(&window), shape, false)?)
+                        }
+                        None => None,
+                    };
+                    outcome.series = evaluate_as(&widget, &current, before.as_ref(), grouped);
                 }
-                let current = measurer.all(&widget, &window, &shape, grouped)?;
-                let before = match &previous_shape {
-                    Some(shape) => Some(measurer.all(&widget, &previous(&window), shape, false)?),
-                    None => None,
-                };
-                Ok((evaluate(&widget, &current, before.as_ref()), None, unknown))
+                if !measurer.issues.is_empty() {
+                    return Ok(Err(Report {
+                        errors: measurer.issues,
+                        warnings: Vec::new(),
+                    }));
+                }
+                let truncated = measurer.truncated.iter().map(|id| Issue {
+                    path: format!("/queries/{id}/sql"),
+                    message: sql::TRUNCATED.into(),
+                    hint: None,
+                });
+                outcome.ran = truncated.chain(outcome.ran).collect();
+                Ok(Ok(outcome))
             })
             .await
             .map_err(|e| match e {
@@ -594,20 +890,26 @@ pub async fn run_widget(
                 },
                 e => e,
             })?
+            .map_err(|mut refused| {
+                refused
+                    .warnings
+                    .extend(std::mem::take(&mut report.warnings));
+                DashboardError::Invalid(refused)
+            })?
     } else {
         // Text widgets read nothing.
-        (Vec::new(), None, Vec::new())
+        Outcome::default()
     };
 
     // The run's own warnings say what actually happened, so they replace validation warnings
     // at the same path.
     let mut warnings = effective.warnings;
-    for issue in unknown {
-        if !warnings.iter().any(|w| w.path == issue.path) {
-            warnings.push(issue);
-        }
-    }
-    for issue in report.warnings {
+    for issue in outcome
+        .ran
+        .into_iter()
+        .chain(outcome.verified)
+        .chain(report.warnings)
+    {
         if !warnings.iter().any(|w| w.path == issue.path) {
             warnings.push(issue);
         }
@@ -622,8 +924,9 @@ pub async fn run_widget(
             "requested_from": effective.requested.0,
             "requested_to": effective.requested.1,
         },
-        "series": series,
-        "rows": rows,
+        "series": outcome.series,
+        "rows": outcome.rows,
+        "columns": outcome.columns,
         "elapsed_ms": started.elapsed().as_millis() as u64,
         "warnings": warnings,
     }))
@@ -1108,6 +1411,151 @@ mod tests {
             first(json!({"type": "ranking", "limit": 3})),
             Shape::Groups { limit: 3, .. }
         ));
+    }
+
+    #[test]
+    fn sql_bucket_grid_matches_duckdb() {
+        let db = duckdb::Connection::open_in_memory().unwrap();
+        let windows = [
+            ("2026-11-11T13:45:10Z", "2026-11-12T02:00:00Z", Bucket::Hour),
+            ("2026-11-11T13:45:10Z", "2026-11-14T00:00:01Z", Bucket::Day),
+            ("2026-08-03T00:00:00Z", "2026-11-14T09:30:00Z", Bucket::Week),
+            ("2026-11-15T23:59:59Z", "2027-01-01T00:00:00Z", Bucket::Week),
+            (
+                "2025-11-30T10:00:00Z",
+                "2026-11-14T00:00:00Z",
+                Bucket::Month,
+            ),
+        ];
+        for (from, to, bucket) in windows {
+            let w = Window {
+                from: from.parse().unwrap(),
+                to: to.parse().unwrap(),
+                bucket,
+            };
+            // The grid the typed queries build (see `metrics::bucket_points`).
+            let b = bucket.as_str();
+            let expected: Vec<i64> = db
+                .prepare(&format!(
+                    "SELECT epoch_ms(t) FROM generate_series(date_trunc('{b}', epoch_ms(?)),
+                     epoch_ms(?) - INTERVAL '1 millisecond', INTERVAL '1 {b}') AS ticks(t)"
+                ))
+                .unwrap()
+                .query_map(
+                    duckdb::params![w.from.timestamp_millis(), w.to.timestamp_millis()],
+                    |r| r.get(0),
+                )
+                .unwrap()
+                .collect::<duckdb::Result<_>>()
+                .unwrap();
+            assert!(!expected.is_empty());
+            assert_eq!(bucket_starts(&w), expected, "{from} {to} {b}");
+        }
+    }
+
+    fn sql_result(columns: &[&str], rows: Vec<Value>) -> SqlResult {
+        SqlResult {
+            columns: columns
+                .iter()
+                .map(|c| (c.to_string(), "BIGINT".to_string()))
+                .collect(),
+            rows: rows
+                .into_iter()
+                .map(|r| r.as_array().unwrap().clone())
+                .collect(),
+            truncated: false,
+        }
+    }
+
+    #[test]
+    fn sql_results_measure_by_their_columns() {
+        let w = Window {
+            from: at("2026-11-10"),
+            to: at("2026-11-13"),
+            bucket: Bucket::Day,
+        };
+        let day = |d: &str| at(d).timestamp_millis();
+        // Rows at one time add up, rows off the grid stay, and absent buckets follow `missing`.
+        let series = sql_result(
+            &["time", "value"],
+            vec![
+                json!([day("2026-11-10"), 2]),
+                json!([day("2026-11-10"), 3]),
+                json!([day("2026-11-12") + 5, 1]),
+                json!([null, 100]),
+            ],
+        );
+        let m = sql_measured(&series, Missing::Zero, &w, &Shape::Buckets).unwrap();
+        assert_eq!(m.total, Some(6.0));
+        assert_eq!(
+            m.points,
+            pts(&[
+                (day("2026-11-10"), Some(5.0)),
+                (day("2026-11-11"), Some(0.0)),
+                (day("2026-11-12"), Some(0.0)),
+                (day("2026-11-12") + 5, Some(1.0)),
+            ])
+        );
+        let m = sql_measured(&series, Missing::Null, &w, &Shape::Buckets).unwrap();
+        assert_eq!(m.points[1].value, None);
+
+        // First in a grouped widget, the six largest groups by summed value, largest first.
+        let grouped = sql_result(
+            &["time", "group", "value"],
+            (0..8)
+                .map(|g| json!([day("2026-11-11"), g, g]))
+                .chain([json!([day("2026-11-12"), 0, 10])])
+                .collect(),
+        );
+        let first = Shape::GroupedBuckets { labels: Vec::new() };
+        let m = sql_measured(&grouped, Missing::Null, &w, &first).unwrap();
+        let labels: Vec<Value> = m.grouped.iter().map(|(l, _)| l.clone()).collect();
+        assert_eq!(labels, [0, 7, 6, 5, 4, 3].map(|g| json!(g)).to_vec());
+        assert_eq!(m.total, Some(38.0));
+        assert_eq!(m.grouped[0].1.len(), 3);
+        let rest = Shape::GroupedBuckets {
+            labels: vec![json!(1)],
+        };
+        assert_eq!(
+            sql_measured(&grouped, Missing::Null, &w, &rest)
+                .unwrap()
+                .grouped
+                .len(),
+            8
+        );
+
+        // Rankings keep the query's order, add up repeated labels, and cut to the limit first.
+        let ranking = sql_result(
+            &["label", "value"],
+            vec![
+                json!(["b", 1]),
+                json!(["a", 5]),
+                json!(["b", 2]),
+                json!([null, 1]),
+            ],
+        );
+        let first = Shape::Groups {
+            limit: 2,
+            labels: None,
+        };
+        let m = sql_measured(&ranking, Missing::Null, &w, &first).unwrap();
+        assert_eq!(m.groups, groups(&[(json!("b"), 3.0), (json!("a"), 5.0)]));
+        assert_eq!(m.total, Some(9.0));
+
+        // A lone value is the total; more than one row is refused.
+        let value = |rows| sql_result(&["value"], rows);
+        let m = sql_measured(&value(vec![json!([4])]), Missing::Null, &w, &Shape::Total).unwrap();
+        assert_eq!(m.total, Some(4.0));
+        let m = sql_measured(&value(vec![]), Missing::Null, &w, &Shape::Total).unwrap();
+        assert_eq!(m.total, None);
+        let error = sql_measured(
+            &value(vec![json!([1]), json!([2])]),
+            Missing::Null,
+            &w,
+            &Shape::Total,
+        )
+        .unwrap_err();
+        assert!(error.contains("one row"), "{error}");
     }
 
     #[test]

@@ -9,6 +9,10 @@ use std::{
     time::Instant,
 };
 const MAX_OPEN: usize = 8;
+/// Settings that keep queries inside the database, applied to every product database (and the
+/// SQL parser) after its own settings. `lock_configuration` comes last, so no query, dashboard
+/// SQL included, can change any setting afterwards; nothing in the API sets one later.
+pub const LOCKED_SETTINGS: &str = "SET enable_external_access=false; SET autoload_known_extensions=false; SET autoinstall_known_extensions=false; SET lock_configuration=true;";
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS events(product_id VARCHAR NOT NULL, event_id VARCHAR NOT NULL, name VARCHAR NOT NULL, source VARCHAR NOT NULL, event_time BIGINT NOT NULL, received_at BIGINT NOT NULL, actor_id VARCHAR, identity_kind VARCHAR, session_id VARCHAR, properties JSON NOT NULL, PRIMARY KEY(product_id,event_id));";
 const LOG_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS logs(log_id VARCHAR PRIMARY KEY, source_id VARCHAR NOT NULL, timestamp BIGINT NOT NULL, received_at BIGINT NOT NULL, level VARCHAR NOT NULL, message VARCHAR NOT NULL, service VARCHAR NOT NULL, environment VARCHAR, trace_id VARCHAR, span_id VARCHAR, request_id VARCHAR, attributes JSON NOT NULL);";
 enum DatabaseKind {
@@ -74,18 +78,18 @@ impl ProductDatabases {
             let db = Connection::open(path).map_err(anyhow::Error::from)?;
             match self.kind {
                 DatabaseKind::Events => {
-                    db.execute_batch(
-                        "SET threads=2; SET memory_limit='64MB'; SET enable_external_access=false;",
-                    )
+                    db.execute_batch(&format!(
+                        "SET threads=2; SET memory_limit='64MB'; {LOCKED_SETTINGS}"
+                    ))
                     .map_err(anyhow::Error::from)?;
                     db.execute_batch(SCHEMA).map_err(anyhow::Error::from)?;
                     // IDs are UUID-validated by path(); existing rows belong to the initial source.
                     db.execute_batch(&format!("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_id VARCHAR DEFAULT '{id}';")).map_err(anyhow::Error::from)?;
                 }
                 DatabaseKind::Logs => {
-                    db.execute_batch(
-                        "SET threads=1; SET memory_limit='32MB'; SET enable_external_access=false;",
-                    )
+                    db.execute_batch(&format!(
+                        "SET threads=1; SET memory_limit='32MB'; {LOCKED_SETTINGS}"
+                    ))
                     .map_err(anyhow::Error::from)?;
                     db.execute_batch(LOG_SCHEMA).map_err(anyhow::Error::from)?;
                 }

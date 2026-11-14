@@ -32,7 +32,7 @@ pub async fn catalog(state: &AppState, project: &str) -> ApiResult<Value> {
 
     let cutoff = (Utc::now() - Duration::days(product.retention_days)).timestamp_millis();
     let id = product.id.clone();
-    let events = state
+    let (events, event_columns) = state
         .store
         .query(product.id.clone(), move |db| event_catalog(db, &id, cutoff))
         .await?;
@@ -44,7 +44,7 @@ pub async fn catalog(state: &AppState, project: &str) -> ApiResult<Value> {
         .clone()
         .try_acquire_owned()
         .map_err(|_| crate::error::ApiError::busy())?;
-    let logs = tokio::task::spawn_blocking(move || {
+    let (logs, log_columns) = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut lease = store.logs.connection(&id)?;
         log_catalog(&mut lease.connection)
@@ -58,12 +58,36 @@ pub async fn catalog(state: &AppState, project: &str) -> ApiResult<Value> {
         "logs": logs,
         "sources": sources.iter().map(|s| json!({"id": s.id, "name": s.name})).collect::<Vec<_>>(),
         "retention": {"events_days": product.retention_days, "logs_days": logs_days},
+        "sql": {
+            "events": event_columns,
+            "logs": log_columns,
+            "parameters": super::sql::PARAMETERS,
+        },
         "limits": limits_json(),
     }))
 }
 
-fn event_catalog(db: &mut duckdb::Connection, product: &str, cutoff: i64) -> ApiResult<Value> {
+/// The columns of `table` as SQL queries see them, as `{ name, type }`.
+fn columns(tx: &duckdb::Transaction, table: &'static str) -> ApiResult<Vec<Value>> {
+    tx.prepare(&format!(
+        "SELECT name, type FROM pragma_table_info('{table}') ORDER BY cid"
+    ))
+    .map_err(anyhow::Error::from)?
+    .query_map([], |r| {
+        Ok(json!({"name": r.get::<_, String>(0)?, "type": r.get::<_, String>(1)?}))
+    })
+    .map_err(anyhow::Error::from)?
+    .collect::<duckdb::Result<Vec<_>>>()
+    .map_err(|e| anyhow::Error::from(e).into())
+}
+
+fn event_catalog(
+    db: &mut duckdb::Connection,
+    product: &str,
+    cutoff: i64,
+) -> ApiResult<(Value, Vec<Value>)> {
     let tx = db.transaction().map_err(anyhow::Error::from)?;
+    let table = columns(&tx, "events")?;
     let names = tx
         .prepare(&format!(
             "SELECT DISTINCT name FROM events WHERE product_id = ? AND event_time >= ?
@@ -125,11 +149,12 @@ fn event_catalog(db: &mut duckdb::Connection, product: &str, cutoff: i64) -> Api
         .take(MAX_KEYS)
         .map(|(key, (count, _, kind))| json!({"key": key, "type": kind, "count": count}))
         .collect();
-    Ok(json!({"names": names, "properties": properties}))
+    Ok((json!({"names": names, "properties": properties}), table))
 }
 
-fn log_catalog(db: &mut duckdb::Connection) -> ApiResult<Value> {
+fn log_catalog(db: &mut duckdb::Connection) -> ApiResult<(Value, Vec<Value>)> {
     let tx = db.transaction().map_err(anyhow::Error::from)?;
+    let table = columns(&tx, "logs")?;
     let base = "timestamp >= ?";
     let values = [SqlValue::BigInt(
         (Utc::now() - Duration::days(LOG_DAYS)).timestamp_millis(),
@@ -149,7 +174,7 @@ fn log_catalog(db: &mut duckdb::Connection) -> ApiResult<Value> {
         .filter(|l| present.contains(*l))
         .collect();
     facets["levels"] = json!(levels);
-    Ok(facets)
+    Ok((facets, table))
 }
 
 fn issue(path: String, message: String, hint: &str) -> Issue {

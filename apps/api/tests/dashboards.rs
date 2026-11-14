@@ -1281,3 +1281,764 @@ async fn read_prefix_has_no_mutating_route() {
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
     test.close().await;
 }
+
+// SQL queries: read-only DuckDB SELECTs over one of a project's databases.
+
+fn sql_query(database: &str, sql: &str) -> Value {
+    json!({"signal": "sql", "database": database, "sql": sql})
+}
+/// A one-query SQL widget over the events database.
+fn sql_widget(view: &str, sql: &str) -> Value {
+    json!({
+        "id": "sql", "title": "SQL", "view": {"type": view},
+        "queries": {"q": sql_query("events", sql)}
+    })
+}
+fn total(body: &Value) -> Value {
+    body["series"][0]["total"].clone()
+}
+/// Events in the project, counted through the interactive query.
+async fn event_count(test: &Test, project: &Value) -> Value {
+    let (from, to) = window(30);
+    let (status, body) = test
+        .read(
+            "POST",
+            &format!("/api/read/products/{}/query", id(project)),
+            json!({"from": from, "to": to}),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    body["summary"]["total"].clone()
+}
+/// Runs `sql` in a stat widget and expects a refusal at the query's `sql` path.
+async fn refused(test: &Test, project: &Value, view: &str, sql: &str) -> Value {
+    let (status, body) = test
+        .run(id(project), run_body(sql_widget(view, sql), 7))
+        .await;
+    assert_eq!(status, 400, "{sql}: {body}");
+    assert_eq!(body["code"], "invalid_document", "{sql}: {body}");
+    assert_eq!(body["errors"][0]["path"], "/queries/q/sql", "{sql}: {body}");
+    assert!(body["errors"][0]["message"].is_string(), "{sql}: {body}");
+    assert!(body["errors"][0]["hint"].is_string(), "{sql}: {body}");
+    body["errors"][0].clone()
+}
+/// Writes events straight into the project's events database, `n` rows named `name`.
+fn bulk_events(test: &Test, project: &Value, name: &str, n: usize) {
+    let lease = test.state.store.analytics.connection(id(project)).unwrap();
+    let now = Utc::now().timestamp_millis();
+    lease
+        .connection
+        .execute(
+            "INSERT INTO events(product_id,event_id,name,source,event_time,received_at,properties,source_id)
+             SELECT ?, concat(?, i), ?, 'web', ?, ?, '{}', ? FROM range(?) t(i)",
+            duckdb::params![id(project), name, name, now, now, id(project), n as i64],
+        )
+        .unwrap();
+}
+
+#[tokio::test]
+async fn sql_refuses_every_non_select_and_leaves_data_alone() {
+    let test = Test::new();
+    let project = test.project("Guarded").await;
+    test.seed_events(&project, None, "checkout", 3).await;
+    let statements = [
+        "INSERT INTO events SELECT * FROM events",
+        "UPDATE events SET name = 'x'",
+        "DELETE FROM events",
+        "CREATE TABLE copy AS SELECT * FROM events",
+        "DROP TABLE events",
+        "ALTER TABLE events ADD COLUMN x INTEGER",
+        "ATTACH ':memory:' AS x",
+        "DETACH x",
+        "COPY events TO 'x.csv'",
+        "EXPORT DATABASE 'dump'",
+        "IMPORT DATABASE 'dump'",
+        "INSTALL httpfs",
+        "LOAD json",
+        "SET threads=8",
+        "RESET threads",
+        "PRAGMA version",
+        "CALL pragma_version()",
+        "CHECKPOINT",
+        "VACUUM",
+        "USE memory",
+        "PREPARE p AS SELECT 1",
+        "EXECUTE p",
+        "BEGIN",
+        "COMMIT",
+        "EXPLAIN SELECT 1",
+        "SELECT 1; SELECT 2",
+        "SELECT count(*) AS value FROM events; DELETE FROM events",
+        "WITH gone AS (SELECT 1) DELETE FROM events",
+    ];
+    for sql in statements {
+        let issue = refused(&test, &project, "stat", sql).await;
+        let text = format!("{issue}");
+        assert!(text.contains("single SELECT"), "{sql}: {issue}");
+    }
+    let issue = refused(&test, &project, "stat", "DELETE FROM events").await;
+    assert!(
+        issue["hint"].as_str().unwrap().contains("DELETE"),
+        "{issue}"
+    );
+    let issue = refused(&test, &project, "stat", "SELECT 1; SELECT 2").await;
+    assert!(
+        issue["message"].as_str().unwrap().contains("2 statements"),
+        "{issue}"
+    );
+    assert!(!std::path::Path::new("x.csv").exists());
+    assert!(!std::path::Path::new("dump").exists());
+    assert_eq!(event_count(&test, &project).await, 3);
+
+    // Syntax errors carry DuckDB's message and where it happened.
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        "SELECT count(*) AS value\nFROM events WHERE AND x",
+    )
+    .await;
+    let message = issue["message"].as_str().unwrap();
+    assert!(message.contains("syntax error"), "{issue}");
+    assert!(message.contains("line 2, column 19"), "{issue}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_refuses_escaping_functions_and_other_catalogs() {
+    let test = Test::new();
+    let project = test.project("Escape").await;
+    test.seed_events(&project, None, "checkout", 2).await;
+    let cases = [
+        (
+            "SELECT count(*) AS value FROM read_csv('/etc/passwd')",
+            "read_csv",
+        ),
+        ("SELECT count(*) AS value FROM glob('*')", "glob"),
+        (
+            "SELECT count(*) AS value FROM query('DROP TABLE events')",
+            "query",
+        ),
+        (
+            "SELECT count(*) AS value FROM query_table('events')",
+            "query_table",
+        ),
+        (
+            "SELECT count(*) AS value FROM duckdb_databases()",
+            "duckdb_databases",
+        ),
+        ("SELECT nextval('s') AS value", "nextval"),
+        ("SELECT setseed(0.5) AS value", "setseed"),
+        (
+            "SELECT count(*) AS value FROM system.main.something",
+            "system",
+        ),
+        ("SELECT count(*) AS value FROM memory.main.events", "memory"),
+        (
+            "SELECT count(*) AS value FROM information_schema.tables",
+            "information_schema",
+        ),
+        ("SELECT count(*) AS value FROM 'events.csv'", "events.csv"),
+        ("SELECT count(*) AS value FROM logs", "logs"),
+        (
+            "SELECT count(*) AS value FROM events WHERE name = $name",
+            "$name",
+        ),
+        (
+            "SELECT count(*) AS value FROM events WHERE name = ?",
+            "parameter",
+        ),
+        ("DESCRIBE events", "DESCRIBE"),
+    ];
+    for (sql, needle) in cases {
+        let issue = refused(&test, &project, "stat", sql).await;
+        assert!(format!("{issue}").contains(needle), "{sql}: {issue}");
+    }
+    // The table function refusal says what SQL may read instead.
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        "SELECT count(*) AS value FROM read_csv('x')",
+    )
+    .await;
+    let hint = issue["hint"].as_str().unwrap();
+    assert!(hint.contains("events table"), "{issue}");
+    assert!(
+        issue["message"]
+            .as_str()
+            .unwrap()
+            .contains("line 1, column 31"),
+        "{issue}"
+    );
+    assert_eq!(event_count(&test, &project).await, 2);
+
+    // Allowed table functions, CTEs and the events table itself all run.
+    let sql = "WITH named AS (SELECT name FROM main.events)
+        SELECT count(*) + (SELECT count(*) FROM range(3)) + (SELECT count(*) FROM generate_series(1, 2))
+            + (SELECT count(*) FROM unnest([1, 2, 3, 4])) + (SELECT count(*) FROM json_each('[1]')) AS value
+        FROM named";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", sql), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 2.0 + 3.0 + 2.0 + 4.0 + 1.0);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_shapes_are_checked_against_the_view() {
+    let test = Test::new();
+    let project = test.project("Shapes").await;
+    let series = "SELECT date_trunc($bucket, epoch_ms(event_time)) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1";
+    let issue = refused(&test, &project, "stat", series).await;
+    let message = issue["message"].as_str().unwrap();
+    assert!(
+        message.contains("value") && message.contains("time"),
+        "{issue}"
+    );
+
+    let issue = refused(
+        &test,
+        &project,
+        "ranking",
+        "SELECT name, count(*) AS value FROM events GROUP BY name",
+    )
+    .await;
+    assert!(
+        issue["message"].as_str().unwrap().contains("label"),
+        "{issue}"
+    );
+
+    let wide = (0..51)
+        .map(|i| format!("{i} AS c{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let issue = refused(&test, &project, "table", &format!("SELECT {wide}")).await;
+    assert!(issue["message"].as_str().unwrap().contains("50"), "{issue}");
+
+    // Binder errors keep DuckDB's message and point at the column.
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        "SELECT count(nosuch) AS value FROM events",
+    )
+    .await;
+    let message = issue["message"].as_str().unwrap();
+    assert!(message.contains("nosuch"), "{issue}");
+    assert!(message.contains("line 1, column 14"), "{issue}");
+
+    // The right shapes run; a series takes time and value, a ranking label and value.
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("line", series), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let ranking = "SELECT name AS label, count(*) AS value FROM events GROUP BY 1 ORDER BY 2 DESC";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("ranking", ranking), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["series"][0]["groups"], json!([]));
+
+    // A table widget has exactly one SQL query and no series.
+    let mut widget = sql_widget("table", "SELECT 1 AS one");
+    widget["queries"]["typed"] = json!({"signal": "events"});
+    let (status, body) = test.run(id(&project), run_body(widget, 7)).await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["errors"][0]["path"], "/queries");
+    let mut widget = sql_widget("table", "SELECT 1 AS one");
+    widget["series"] = json!([{"expr": "q"}]);
+    let (status, body) = test.run(id(&project), run_body(widget, 7)).await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["errors"][0]["path"], "/series");
+    // SQL is limited to 8,000 characters.
+    let long = format!("SELECT 1 AS value -- {}", "x".repeat(8_000));
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", &long), 7))
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["errors"][0]["path"], "/queries/q/sql");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_parameters_bind_by_name() {
+    let test = Test::new();
+    let project = test.project("Params").await;
+    let ios = test.source(&project, "iOS").await;
+    test.seed_events(&project, None, "visit", 3).await;
+    test.seed_events(&project, Some(&ios), "visit", 2).await;
+    let old = (Utc::now() - Duration::days(10)).to_rfc3339();
+    test.ingest_events(
+        &project,
+        None,
+        vec![json!({"name": "visit", "timestamp": old})],
+    )
+    .await;
+
+    let scoped = "SELECT count(*) AS value FROM events
+        WHERE event_time >= $from AND event_time < $to AND ($source IS NULL OR source_id = $source)";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", scoped), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 5.0);
+    assert_eq!(body["warnings"], json!([]));
+    let mut request = run_body(sql_widget("stat", scoped), 7);
+    request["source_id"] = json!(ios);
+    let (status, body) = test.run(id(&project), request).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 2.0);
+
+    // Every parameter is bound by name, in any order and any number of times.
+    let echo = "SELECT $bucket AS bucket, $to AS to_ms, $from AS from_ms, $source AS source, $from - $from AS zero";
+    let (from, to) = window(7);
+    let mut request =
+        json!({"widget": sql_widget("table", echo), "from": from, "to": to, "bucket": "week"});
+    let (status, body) = test.run(id(&project), request.clone()).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body["rows"],
+        json!([[
+            "week",
+            to.timestamp_millis(),
+            from.timestamp_millis(),
+            null,
+            0
+        ]])
+    );
+    request["source_id"] = json!(ios);
+    let (_, body) = test.run(id(&project), request).await;
+    assert_eq!(body["rows"][0][3], json!(ios));
+
+    // A query that uses no parameter also runs, over all time, with a warning that says so.
+    let all = "SELECT count(*) AS value FROM events";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("stat", all), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 6.0);
+    assert_eq!(body["warnings"][0]["path"], "/queries/q/sql", "{body}");
+    assert!(
+        body["warnings"][0]["hint"]
+            .as_str()
+            .unwrap()
+            .contains("$from")
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_series_align_and_combine_in_formulas() {
+    let test = Test::new();
+    let project = test.project("Align").await;
+    let at = |days: i64| (Utc::now() - Duration::days(days)).to_rfc3339();
+    let mut events = Vec::new();
+    for (name, days, n) in [("req", 3, 4), ("req", 1, 2), ("err", 3, 1), ("err", 1, 1)] {
+        events.extend((0..n).map(|_| json!({"name": name, "timestamp": at(days)})));
+    }
+    test.ingest_events(&project, None, events).await;
+    let errors = "SELECT date_trunc($bucket, epoch_ms(event_time)) AS time, count(*) AS value
+        FROM events WHERE name = 'err' AND event_time >= $from AND event_time < $to GROUP BY 1";
+    let widget = |missing: &str, series: Value| {
+        let mut sql = sql_query("events", errors);
+        sql["missing"] = json!(missing);
+        json!({
+            "id": "rate", "title": "Error rate", "view": {"type": "line", "bucket": "day"},
+            "queries": {"errs": sql, "reqs": {"signal": "events", "event": "req"}},
+            "series": series
+        })
+    };
+    // The day buckets of the run's window: eight, or nine when it crosses midnight.
+    let (from, to) = window(7);
+    let buckets =
+        ((to - Duration::milliseconds(1)).date_naive() - from.date_naive()).num_days() as usize + 1;
+    let request = |widget: Value| json!({"widget": widget, "from": from, "to": to});
+    let ratio = json!([{"expr": "errs / reqs * 100"}]);
+    let (status, body) = test.run(id(&project), request(widget("zero", ratio))).await;
+    assert_eq!(status, 200, "{body}");
+    let series = &body["series"][0];
+    // Totals come from totals: two errors over six requests.
+    assert_eq!(series["total"].as_f64().unwrap(), 2.0 / 6.0 * 100.0);
+    let points = series["points"].as_array().unwrap();
+    assert_eq!(points.len(), buckets, "{series}");
+    let values: Vec<Value> = points.iter().map(|p| p["value"].clone()).collect();
+    let day = |days: i64| {
+        let start = (Utc::now() - Duration::days(days)).date_naive();
+        start
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis()
+    };
+    let at_day = |days: i64| {
+        points
+            .iter()
+            .find(|p| p["time"] == day(days))
+            .map(|p| p["value"].clone())
+            .unwrap()
+    };
+    assert_eq!(at_day(3), 25.0);
+    assert_eq!(at_day(1), 50.0);
+    // Empty days are 0 / 0, so they have no value.
+    assert_eq!(
+        values.iter().filter(|v| v.is_null()).count(),
+        buckets - 2,
+        "{series}"
+    );
+
+    // `missing: zero` fills the absent buckets of the SQL series itself, and the total is the
+    // sum of its points; `null` leaves them as gaps.
+    let (_, body) = test
+        .run(
+            id(&project),
+            request(widget("zero", json!([{"expr": "errs"}, {"expr": "reqs"}]))),
+        )
+        .await;
+    let errs = &body["series"][0];
+    assert_eq!(errs["total"], 2.0);
+    let points = errs["points"].as_array().unwrap();
+    assert_eq!(points.len(), buckets);
+    assert_eq!(
+        points.iter().filter(|p| p["value"] == 0.0).count(),
+        buckets - 2,
+        "{errs}"
+    );
+    let sum: f64 = points.iter().filter_map(|p| p["value"].as_f64()).sum();
+    assert_eq!(sum, 2.0);
+    let (_, body) = test
+        .run(
+            id(&project),
+            request(widget("null", json!([{"expr": "errs"}, {"expr": "reqs"}]))),
+        )
+        .await;
+    let points = body["series"][0]["points"].as_array().unwrap();
+    assert_eq!(
+        points.iter().filter(|p| p["value"].is_null()).count(),
+        buckets - 2
+    );
+    assert_eq!(body["series"][0]["total"], 2.0);
+
+    // Grouped SQL series draw one series per group, and rankings align by JSON label.
+    let grouped = "SELECT date_trunc($bucket, epoch_ms(event_time)) AS time, name AS \"group\", count(*) AS value
+        FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1, 2";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("line", grouped), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let groups: Vec<Value> = body["series"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["group"].clone())
+        .collect();
+    assert_eq!(groups, [json!("req"), json!("err")]);
+    let ranking = json!({
+        "id": "names", "title": "Names", "view": {"type": "ranking"},
+        "queries": {
+            "sql": sql_query("events", "SELECT name AS label, count(*) AS value FROM events GROUP BY 1 ORDER BY 2 DESC"),
+            "typed": {"signal": "events", "group_by": "name"}
+        },
+        "series": [{"expr": "sql"}, {"expr": "typed - sql"}]
+    });
+    let (status, body) = test.run(id(&project), run_body(ranking, 7)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body["series"][0]["groups"],
+        json!([{"label": "req", "value": 6.0}, {"label": "err", "value": 2.0}])
+    );
+    assert_eq!(body["series"][0]["total"], 8.0);
+    assert_eq!(
+        body["series"][1]["groups"],
+        json!([{"label": "req", "value": 0.0}, {"label": "err", "value": 0.0}])
+    );
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_table_view_returns_rows_and_columns() {
+    let test = Test::new();
+    let project = test.project("Table").await;
+    test.ingest_events(
+        &project,
+        None,
+        vec![
+            json!({"name": "checkout", "properties": {"plan": "pro"}}),
+            json!({"name": "checkout", "properties": {"plan": "pro"}}),
+            json!({"name": "signup", "properties": {"plan": "free"}}),
+        ],
+    )
+    .await;
+    let sql = "SELECT name, count(*) AS n, epoch_ms(max(event_time)) AS last_seen,
+            any_value(properties) AS props, count(*) > 1 AS repeated, 1.5::DECIMAL(4,2) AS price, NULL AS nothing
+        FROM events WHERE event_time >= $from AND event_time < $to GROUP BY name ORDER BY n DESC";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("table", sql), 7))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["series"], json!([]));
+    assert_eq!(body["warnings"], json!([]));
+    assert_eq!(
+        body["columns"],
+        json!([
+            {"name": "name", "type": "VARCHAR"},
+            {"name": "n", "type": "BIGINT"},
+            {"name": "last_seen", "type": "TIMESTAMP"},
+            {"name": "props", "type": "JSON"},
+            {"name": "repeated", "type": "BOOLEAN"},
+            {"name": "price", "type": "DECIMAL(4,2)"},
+            {"name": "nothing", "type": "NULL"},
+        ])
+    );
+    let rows = body["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0][0], "checkout");
+    assert_eq!(rows[0][1], 2);
+    // Timestamps are epoch milliseconds, JSON is parsed, decimals are numbers.
+    let last = rows[0][2].as_i64().unwrap();
+    assert!(
+        (Utc::now().timestamp_millis() - last).abs() < 60_000,
+        "{body}"
+    );
+    assert_eq!(rows[0][3], json!({"plan": "pro"}));
+    assert_eq!(rows[0][4], true);
+    assert_eq!(rows[0][5], 1.5);
+    assert_eq!(rows[0][6], Value::Null);
+    assert_eq!(rows[1][0], "signup");
+    assert_eq!(rows[1][4], false);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_row_cap_truncates_with_a_warning() {
+    let test = Test::new();
+    let project = test.project("Many").await;
+    bulk_events(&test, &project, "bulk", 10_050);
+    let recent = "SELECT event_id FROM events WHERE event_time >= $from AND event_time < $to";
+    let (status, body) = test
+        .run(id(&project), run_body(sql_widget("table", recent), 7))
+        .await;
+    assert_eq!(status, 200, "{body:.200}");
+    assert_eq!(body["rows"].as_array().unwrap().len(), 10_000);
+    assert_eq!(
+        body["warnings"],
+        json!([{"path": "/queries/q/sql", "message": "Showing the first 10,000 rows", "hint": null}])
+    );
+    let (status, body) = test
+        .run(
+            id(&project),
+            run_body(sql_widget("table", &format!("{recent} LIMIT 10000")), 7),
+        )
+        .await;
+    assert_eq!(status, 200);
+    assert_eq!(body["rows"].as_array().unwrap().len(), 10_000);
+    assert_eq!(body["warnings"], json!([]));
+    test.close().await;
+}
+
+#[tokio::test]
+async fn heavy_sql_times_out_and_releases_slots() {
+    let test = Test::new();
+    let project = test.project("Heavy").await;
+    let mut widget = sql_widget(
+        "stat",
+        "SELECT count(*) AS value FROM range(10000000000) a, range(10) b",
+    );
+    widget["timeout_ms"] = json!(1000);
+    let started = std::time::Instant::now();
+    let (status, body) = test.run(id(&project), run_body(widget, 7)).await;
+    assert_eq!(status, 503, "{body}");
+    assert_eq!(body["code"], "query_timeout");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let store = &test.state.store;
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while store.query_slots.available_permits() != 4
+        || store.dashboard_event_gate.available_permits() != 3
+    {
+        assert!(std::time::Instant::now() < until, "slots return");
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    let (status, body) = test
+        .run(
+            id(&project),
+            run_body(sql_widget("stat", "SELECT 7 AS value"), 7),
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(total(&body), 7.0);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn logs_sql_reads_only_the_logs_database() {
+    let test = Test::new();
+    let project = test.project("Logs SQL").await;
+    test.seed_events(&project, None, "checkout", 5).await;
+    test.seed_logs(&project, "checkout", "error", 3).await;
+    test.seed_logs(&project, "search", "info", 1).await;
+    let logs = |sql: &str| {
+        json!({
+            "id": "logs", "title": "Logs", "view": {"type": "ranking"},
+            "queries": {"q": sql_query("logs", sql)}
+        })
+    };
+    let by_service = "SELECT service AS label, count(*) AS value FROM logs
+        WHERE timestamp >= $from AND timestamp < $to GROUP BY 1 ORDER BY 2 DESC";
+    let (status, body) = test.run(id(&project), run_body(logs(by_service), 90)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body["series"][0]["groups"],
+        json!([{"label": "checkout", "value": 3.0}, {"label": "search", "value": 1.0}])
+    );
+    // A logs query keeps the log range, like typed log queries.
+    assert_eq!(body["range"]["clamped"], true);
+
+    // Each query sees only the database it names.
+    for sql in [
+        "SELECT name AS label, count(*) AS value FROM events GROUP BY 1",
+        "SELECT name AS label, count(*) AS value FROM main.events GROUP BY 1",
+    ] {
+        let (status, body) = test.run(id(&project), run_body(logs(sql), 7)).await;
+        assert_eq!(status, 400, "{body}");
+        assert_eq!(body["errors"][0]["path"], "/queries/q/sql");
+        assert!(format!("{body}").contains("logs"), "{body}");
+    }
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        "SELECT count(*) AS value FROM logs",
+    )
+    .await;
+    assert!(format!("{issue}").contains("events"), "{issue}");
+    test.close().await;
+}
+
+#[tokio::test]
+async fn sql_is_verified_on_validate_and_on_writes() {
+    let test = Test::new();
+    let project = test.project("Writes").await;
+    let doc = |sql: &str| {
+        json!({
+            "version": 1,
+            "name": "Churn",
+            "widgets": [
+                {"id": "note", "title": "Note", "view": {"type": "text", "markdown": "Hi"}, "queries": {}},
+                {
+                    "id": "cohorts", "title": "Cohorts", "view": {"type": "table"},
+                    "queries": {"q": {"signal": "sql", "database": "events", "sql": sql, "missing": "null"}}
+                }
+            ]
+        })
+    };
+    let good = "SELECT name, count(*) AS n FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1";
+    let validate = format!("/api/read/products/{}/dashboards/validate", id(&project));
+    let (status, body) = test
+        .read("POST", &validate, json!({"document": doc(good)}))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["valid"], true, "{body}");
+    for bad in [
+        "DELETE FROM events",
+        "SELECT * FROM read_csv('x')",
+        "SELECT nosuch FROM events",
+    ] {
+        let (status, body) = test
+            .read("POST", &validate, json!({"document": doc(bad)}))
+            .await;
+        assert_eq!(status, 200, "{body}");
+        assert_eq!(body["valid"], false, "{bad}: {body}");
+        assert_eq!(
+            body["errors"][0]["path"], "/widgets/1/queries/q/sql",
+            "{bad}: {body}"
+        );
+        assert!(body["errors"][0]["hint"].is_string(), "{bad}: {body}");
+    }
+
+    let (status, created) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": doc(good)}),
+        )
+        .await;
+    assert_eq!(status, 200, "{created}");
+    assert_eq!(created["document"], doc(good));
+    let (status, body) = test
+        .manage(
+            "POST",
+            &dashboards_path(&project),
+            json!({"document": doc("DROP TABLE events")}),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["code"], "invalid_document");
+    assert_eq!(body["errors"][0]["path"], "/widgets/1/queries/q/sql");
+    let (status, body) = put(
+        &test,
+        &project,
+        "churn",
+        1,
+        doc("SELECT nosuch FROM events"),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["errors"][0]["path"], "/widgets/1/queries/q/sql");
+    let (status, body) = put(&test, &project, "churn", 1, document("Plain"), &[]).await;
+    assert_eq!(status, 200, "{body}");
+    // Restoring re-verifies the revision too, and a good one restores.
+    let (status, body) = test
+        .manage(
+            "POST",
+            &format!("{}/churn/revisions/1/restore", dashboards_path(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["revision"], 3);
+    // A missing project is a 404, before any SQL runs.
+    let (status, _) = test
+        .manage(
+            "POST",
+            &format!("/api/products/{}/dashboards", uuid::Uuid::now_v7()),
+            json!({"document": doc(good)}),
+        )
+        .await;
+    assert_eq!(status, 404);
+    test.close().await;
+}
+
+#[tokio::test]
+async fn catalog_describes_the_sql_schemas_and_parameters() {
+    let test = Test::new();
+    let project = test.project("Catalog SQL").await;
+    let (status, body) = test
+        .read(
+            "GET",
+            &format!("/api/read/products/{}/catalog", id(&project)),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let sql = &body["sql"];
+    assert_eq!(sql["parameters"], json!(["from", "to", "bucket", "source"]));
+    let has = |table: &str, name: &str, kind: &str| {
+        sql[table]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["name"] == name && c["type"] == kind)
+    };
+    assert!(has("events", "event_time", "BIGINT"), "{sql}");
+    assert!(has("events", "properties", "JSON"), "{sql}");
+    assert!(has("events", "source_id", "VARCHAR"), "{sql}");
+    assert!(has("logs", "timestamp", "BIGINT"), "{sql}");
+    assert!(has("logs", "attributes", "JSON"), "{sql}");
+    assert!(!has("logs", "event_time", "BIGINT"));
+    assert_eq!(body["limits"]["max_sql_chars"], 8_000);
+    assert_eq!(body["limits"]["max_sql_rows"], 10_000);
+    assert_eq!(body["limits"]["max_table_columns"], 50);
+    test.close().await;
+}

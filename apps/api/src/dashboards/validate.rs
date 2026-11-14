@@ -2,7 +2,11 @@
 //!
 //! `parse_*` reports shape errors (unknown fields, bad enum values) with JSON Pointer paths;
 //! `check_*` reports every rule violation it finds instead of stopping at the first.
-use super::{formula, spec::*};
+use super::{
+    formula,
+    spec::*,
+    sql::{MAX_SQL_CHARS, MAX_SQL_ROWS, MAX_TABLE_COLUMNS},
+};
 use crate::{logs::model::LEVELS, model::valid_key};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -76,6 +80,9 @@ pub fn limits_json() -> Value {
         "range_pattern": "^\\d{1,3}(h|d)$",
         "size_widths": Limits::SIZE_WIDTHS,
         "size_heights": Limits::SIZE_HEIGHTS,
+        "max_sql_chars": MAX_SQL_CHARS,
+        "max_sql_rows": MAX_SQL_ROWS,
+        "max_table_columns": MAX_TABLE_COLUMNS,
     })
 }
 
@@ -144,6 +151,7 @@ fn refine_query_error(value: &Value, segments: &[String]) -> Option<(Vec<String>
     let result = match signal.as_str()? {
         "events" => serde_path_to_error::deserialize::<_, EventsQuery>(spec).err(),
         "logs" => serde_path_to_error::deserialize::<_, LogsQuery>(spec).err(),
+        "sql" => serde_path_to_error::deserialize::<_, SqlQuery>(spec).err(),
         _ => None,
     }?;
     let mut full = segments.to_vec();
@@ -334,7 +342,7 @@ pub fn check_widget(w: &Widget, base: &str, r: &mut Report) {
             "timeout_ms must be 1000–10000",
         );
     }
-    let has_logs = w.queries.values().any(|q| matches!(q, QuerySpec::Logs(_)));
+    let has_logs = w.queries.values().any(QuerySpec::reads_logs);
     let range = w.range.as_deref().map(|s| (s, range_hours(s)));
     if let Some((s, hours)) = range {
         match hours {
@@ -425,10 +433,12 @@ fn check_view(w: &Widget, base: &str, range: Option<u64>, r: &mut Report) {
     }
 }
 
+/// A typed query's `group_by`. SQL queries group by their result columns instead.
 fn group_by(q: &QuerySpec) -> Option<&str> {
     match q {
         QuerySpec::Events(q) => q.group_by.as_deref(),
         QuerySpec::Logs(q) => q.group_by.as_deref(),
+        QuerySpec::Sql(_) => None,
     }
 }
 
@@ -447,11 +457,33 @@ fn check_shape(w: &Widget, base: &str, r: &mut Report) {
             }
             return;
         }
+        ViewKind::Table => {
+            let sql = w
+                .queries
+                .values()
+                .filter(|q| matches!(q, QuerySpec::Sql(_)))
+                .count();
+            if n != 1 || sql != 1 {
+                r.error_hint(
+                    &qpath,
+                    "A table widget needs exactly one SQL query",
+                    "Give the widget one query with \"signal\": \"sql\"",
+                );
+            }
+            if w.series.is_some() {
+                r.error_hint(
+                    format!("{base}/series"),
+                    "A table widget takes no series",
+                    "Remove series; the table shows the query's columns",
+                );
+            }
+            return;
+        }
         ViewKind::Events | ViewKind::Logs => {
-            let (wanted, name) = if kind == ViewKind::Events {
-                (true, "events")
+            let name = if kind == ViewKind::Events {
+                "events"
             } else {
-                (false, "logs")
+                "logs"
             };
             if n != 1 {
                 r.error(
@@ -460,15 +492,20 @@ fn check_shape(w: &Widget, base: &str, r: &mut Report) {
                 );
             }
             for (id, q) in &w.queries {
-                if matches!(q, QuerySpec::Events(_)) != wanted {
-                    r.error(
-                        format!("{qpath}/{id}"),
-                        format!("A {name} widget needs a {name} query"),
-                    );
-                }
-                let (measure_is_count, group) = match q {
-                    QuerySpec::Events(q) => (q.measure == EventMeasure::Count, &q.group_by),
-                    QuerySpec::Logs(q) => (q.measure == LogMeasure::Count, &q.group_by),
+                let (measure_is_count, group) = match (kind, q) {
+                    (ViewKind::Events, QuerySpec::Events(q)) => {
+                        (q.measure == EventMeasure::Count, &q.group_by)
+                    }
+                    (ViewKind::Logs, QuerySpec::Logs(q)) => {
+                        (q.measure == LogMeasure::Count, &q.group_by)
+                    }
+                    _ => {
+                        r.error(
+                            format!("{qpath}/{id}"),
+                            format!("A {name} widget needs a {name} query"),
+                        );
+                        continue;
+                    }
                 };
                 if !measure_is_count {
                     r.error(
@@ -506,11 +543,15 @@ fn check_shape(w: &Widget, base: &str, r: &mut Report) {
         r.warn(&qpath, format!("{runs} query runs per refresh including the previous period; this widget may load slowly"));
     }
 
-    // All queries share one group_by, or none has one.
-    let mut queries = w.queries.iter();
-    let first = queries.next().map(|(_, q)| group_by(q));
-    if let Some(first) = first {
-        for (id, q) in queries {
+    // All typed queries share one group_by, or none has one. SQL queries group by their result
+    // columns, which are checked against the others when they are described.
+    let mut typed = w
+        .queries
+        .iter()
+        .filter(|(_, q)| !matches!(q, QuerySpec::Sql(_)));
+    if let Some((_, first)) = typed.next() {
+        let first = group_by(first);
+        for (id, q) in typed {
             if group_by(q) != first {
                 r.error_hint(
                     format!("{qpath}/{id}/group_by"),
@@ -520,10 +561,10 @@ fn check_shape(w: &Widget, base: &str, r: &mut Report) {
             }
         }
     }
-    let grouped = first.flatten().is_some();
+    let grouped = w.queries.values().next().and_then(group_by).is_some();
     if kind == ViewKind::Ranking {
         for (id, q) in &w.queries {
-            if group_by(q).is_none() {
+            if !matches!(q, QuerySpec::Sql(_)) && group_by(q).is_none() {
                 r.error(
                     format!("{qpath}/{id}/group_by"),
                     "Ranking widgets need a group_by",
@@ -604,6 +645,25 @@ fn check_query(q: &QuerySpec, p: &str, r: &mut Report) {
     match q {
         QuerySpec::Events(q) => check_events(q, p, r),
         QuerySpec::Logs(q) => check_logs(q, p, r),
+        QuerySpec::Sql(q) => check_sql(q, p, r),
+    }
+}
+
+/// The size of the text. What the SQL does is verified by DuckDB (see `sql`).
+fn check_sql(q: &SqlQuery, p: &str, r: &mut Report) {
+    let n = chars(&q.sql);
+    if q.sql.trim().is_empty() {
+        r.error_hint(
+            format!("{p}/sql"),
+            "sql is empty",
+            "Write one SELECT, such as SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to",
+        );
+    } else if n > MAX_SQL_CHARS {
+        r.error_hint(
+            format!("{p}/sql"),
+            format!("sql is {n} characters; the limit is {MAX_SQL_CHARS}"),
+            "Shorten the query, for example by naming repeated parts in a WITH clause",
+        );
     }
 }
 
@@ -955,6 +1015,73 @@ mod tests {
             assert!(paths.iter().any(|p| p == path), "{path}: {paths:?}");
         }
     }
+    #[test]
+    fn sql_static_rules() {
+        let sql = |database: &str, text: &str| json!({"signal": "sql", "database": database, "sql": text});
+        let one = || sql("events", "SELECT 1 AS value");
+        let cases: Vec<(Value, &str)> = vec![
+            (
+                json!({"id":"a","title":"t","view":{"type":"table"},"queries":{"a":{"signal":"events"}}}),
+                "/widgets/0/queries",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"table"},"queries":{"a":one(),"b":one()}}),
+                "/widgets/0/queries",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"table"},"queries":{"a":one()},"series":[{"expr":"a"}]}),
+                "/widgets/0/series",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"logs"},"queries":{"a":sql("logs", "SELECT 1")}}),
+                "/widgets/0/queries/a",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"events"},"queries":{"a":one()}}),
+                "/widgets/0/queries/a",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"stat"},"queries":{"a":sql("events", "  ")}}),
+                "/widgets/0/queries/a/sql",
+            ),
+            (
+                json!({"id":"a","title":"t","view":{"type":"stat"},"queries":{"a":sql("events", &"x".repeat(8_001))}}),
+                "/widgets/0/queries/a/sql",
+            ),
+        ];
+        for (w, path) in cases {
+            let paths = errors(json!([w]));
+            assert!(paths.iter().any(|p| p == path), "{path}: {paths:?}");
+        }
+        // SQL needs no group_by in a ranking, and typed queries agree on group_by among
+        // themselves only.
+        let w = json!({"id":"a","title":"t","view":{"type":"ranking"},"queries":{
+            "a": sql("events", "SELECT name AS label, count(*) AS value FROM events GROUP BY 1"),
+            "b": {"signal":"events","group_by":"name"}
+        },"series":[{"expr":"a"},{"expr":"b"}]});
+        assert_eq!(errors(json!([w])), Vec::<String>::new());
+        let w = json!({"id":"a","title":"t","view":{"type":"table"},"queries":{"a":one()}});
+        assert_eq!(errors(json!([w])), Vec::<String>::new());
+        // A logs SQL query keeps the log range.
+        let w = json!({"id":"a","title":"t","view":{"type":"stat"},"range":"90d","queries":{"a":sql("logs", "SELECT 1 AS value")}});
+        let report = check_document(&parse_document(doc(json!([w]))).unwrap());
+        assert!(report.warnings.iter().any(|i| i.path == "/widgets/0/range"));
+        // Unknown fields inside an SQL query have their full path.
+        let mut w = json!({"id":"a","title":"t","view":{"type":"stat"},"queries":{"a":one()}});
+        w["queries"]["a"]["databse"] = json!("events");
+        assert_eq!(
+            parse_document(doc(json!([w]))).unwrap_err().errors[0].path,
+            "/widgets/0/queries/a/databse"
+        );
+        let mut w = json!({"id":"a","title":"t","view":{"type":"stat"},"queries":{"a":one()}});
+        w["queries"]["a"]["missing"] = json!("skip");
+        assert_eq!(
+            parse_document(doc(json!([w]))).unwrap_err().errors[0].path,
+            "/widgets/0/queries/a/missing"
+        );
+        assert_eq!(limits_json()["max_sql_chars"], 8_000);
+    }
+
     #[test]
     fn long_ranges_warn_and_malformed_ranges_never_panic() {
         let w = |range: &str, signal: Value, view: Value| json!({"id":"a","title":"t","view":view,"range":range,"queries":{"a":signal}});

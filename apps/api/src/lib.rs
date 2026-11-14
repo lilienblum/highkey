@@ -40,6 +40,8 @@ pub struct AppState {
     log_ingest_slots: Arc<tokio::sync::Semaphore>,
     ingest_slots: Arc<tokio::sync::Semaphore>,
     favicon_slots: Arc<tokio::sync::Semaphore>,
+    /// DuckDB's parser for verifying dashboard SQL, shared by every request.
+    pub sql_parser: Arc<dashboards::sql::Parser>,
     /// Extra origins allowed to call `/api/read` cross-origin (`*` allows all).
     pub cors_origins: Arc<Vec<String>>,
 }
@@ -66,6 +68,7 @@ impl AppState {
             log_ingest_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             ingest_slots: Arc::new(tokio::sync::Semaphore::new(config.queue_capacity)),
             favicon_slots: Arc::new(tokio::sync::Semaphore::new(2)),
+            sql_parser: Arc::new(dashboards::sql::Parser::open()?),
             cors_origins: Arc::default(),
         })
     }

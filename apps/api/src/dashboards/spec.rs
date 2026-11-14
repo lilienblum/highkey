@@ -75,6 +75,8 @@ pub enum ViewKind {
     Events,
     Logs,
     Text,
+    /// Arbitrary columns from one SQL query.
+    Table,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -138,6 +140,59 @@ pub struct Series {
 pub enum QuerySpec {
     Events(EventsQuery),
     Logs(LogsQuery),
+    Sql(SqlQuery),
+}
+
+impl QuerySpec {
+    /// Whether the query reads the logs database, which keeps the shorter log range.
+    pub fn reads_logs(&self) -> bool {
+        match self {
+            Self::Logs(_) => true,
+            Self::Sql(q) => q.database == SqlDatabase::Logs,
+            Self::Events(_) => false,
+        }
+    }
+    /// Whether the query reads the events database.
+    pub fn reads_events(&self) -> bool {
+        !self.reads_logs()
+    }
+}
+
+/// A read-only DuckDB SELECT over one of the project's databases. Its result columns decide its
+/// shape: `value`; `time` and `value` (plus an optional `group`); `label` and `value`; or any
+/// columns for a table. `$from`, `$to`, `$bucket` and `$source` are bound by name.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SqlQuery {
+    pub database: SqlDatabase,
+    pub sql: String,
+    /// What an absent bucket or group counts as.
+    #[serde(default)]
+    pub missing: Missing,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SqlDatabase {
+    Events,
+    Logs,
+}
+impl SqlDatabase {
+    /// The one table each database holds.
+    pub fn table(self) -> &'static str {
+        match self {
+            Self::Events => "events",
+            Self::Logs => "logs",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Missing {
+    #[default]
+    Null,
+    Zero,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -228,11 +283,11 @@ pub fn schema() -> serde_json::Value {
 
 impl Widget {
     /// Explicit series, or one series per query (in declaration order) when none are written.
-    /// Events, logs and text views have no series.
+    /// Events, logs, text and table views have no series.
     pub fn series_or_default(&self) -> Vec<Series> {
         if matches!(
             self.view.kind,
-            ViewKind::Events | ViewKind::Logs | ViewKind::Text
+            ViewKind::Events | ViewKind::Logs | ViewKind::Text | ViewKind::Table
         ) {
             return Vec::new();
         }
@@ -256,7 +311,7 @@ impl Widget {
         let (w, h) = match self.view.kind {
             ViewKind::Stat => (3, 1),
             ViewKind::Line | ViewKind::Area | ViewKind::Bar | ViewKind::Ranking => (6, 2),
-            ViewKind::Events | ViewKind::Logs => (12, 3),
+            ViewKind::Events | ViewKind::Logs | ViewKind::Table => (12, 3),
             ViewKind::Text => (4, 1),
         };
         Size { w, h }

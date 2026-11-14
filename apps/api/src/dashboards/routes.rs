@@ -3,7 +3,7 @@
 use super::{
     error::DashboardError,
     run::{RunRequest, run_widget},
-    spec,
+    spec, sql,
     storage::{self, Origin, origin_from},
     validate::{Report, check_document, parse_document},
 };
@@ -158,6 +158,32 @@ fn body<T>(body: Body<T>) -> Result<T, DashboardError> {
 fn document(value: Value) -> Result<spec::Document, DashboardError> {
     parse_document(value).map_err(DashboardError::Invalid)
 }
+/// Refuses a document whose SQL fails verification, before anything is written. SQL is
+/// described on the project's databases, so the project must exist first (`product` is its id).
+async fn verify_sql(
+    state: &AppState,
+    product: &str,
+    doc: &spec::Document,
+) -> Result<(), DashboardError> {
+    if !doc.widgets.iter().any(sql::has_sql) {
+        return Ok(());
+    }
+    let mut report = check_document(doc);
+    if !report.is_ok() {
+        return Err(DashboardError::Invalid(report));
+    }
+    let id = product.to_string();
+    state
+        .store
+        .state(move |db| crate::store::product(db, &id).map(|_| ()))
+        .await?;
+    sql::verify_document(state, product, doc, &mut report).await?;
+    if report.is_ok() {
+        Ok(())
+    } else {
+        Err(DashboardError::Invalid(report))
+    }
+}
 
 async fn list(
     State(state): State<AppState>,
@@ -211,6 +237,8 @@ async fn validate(
         Ok(doc) => {
             let mut report = check_document(&doc);
             super::catalog::warn_unknown_document(&doc, &catalog, &mut report);
+            let product = catalog["project"]["id"].as_str().unwrap_or_default();
+            sql::verify_document(&state, product, &doc, &mut report).await?;
             report
         }
         Err(report) => report,
@@ -240,6 +268,7 @@ async fn create(
     request: Body<Create>,
 ) -> Result<Json<Value>, DashboardError> {
     let doc = document(body(request)?.document)?;
+    verify_sql(&state, &product, &doc).await?;
     let origin = origin_from(&headers);
     let id = product.clone();
     let stored = state
@@ -260,6 +289,7 @@ async fn update(
         document: value,
     } = body(request)?;
     let doc = document(value)?;
+    verify_sql(&state, &product, &doc).await?;
     let origin = origin_from(&headers);
     let id = product.clone();
     let stored = state
@@ -275,6 +305,12 @@ async fn restore(
     headers: HeaderMap,
 ) -> Result<Json<Value>, DashboardError> {
     let origin: Origin = origin_from(&headers);
+    let (id, revision_key) = (product.clone(), key.clone());
+    let doc = state
+        .store
+        .state(move |db| Ok(storage::revision(db, &id, &revision_key, n)))
+        .await??;
+    verify_sql(&state, &product, &doc).await?;
     let id = product.clone();
     let stored = state
         .store
