@@ -13,9 +13,11 @@ const MAX_OPEN: usize = 8;
 /// SQL parser) after its own settings. `max_expression_depth` is a per-connection setting, so
 /// it is set GLOBAL to reach the cloned connections leases use; 250 bounds how deep DuckDB's
 /// recursive parser and binder go (see `dashboards::sql::SQL_STACK_BYTES` and `MAX_TREE_DEPTH`).
+/// `max_temp_directory_size` caps what one database spills to disk (an ORDER BY over a large
+/// range spilled 570 MB in 4 s; DuckDB's default is 90% of the free disk).
 /// `lock_configuration` comes last, so no query, dashboard SQL included, can change any setting
 /// afterwards; nothing in the API sets one later.
-pub const LOCKED_SETTINGS: &str = "SET GLOBAL max_expression_depth=250; SET enable_external_access=false; SET autoload_known_extensions=false; SET autoinstall_known_extensions=false; SET lock_configuration=true;";
+pub const LOCKED_SETTINGS: &str = "SET GLOBAL max_expression_depth=250; SET enable_external_access=false; SET autoload_known_extensions=false; SET autoinstall_known_extensions=false; SET max_temp_directory_size='1GiB'; SET lock_configuration=true;";
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS events(product_id VARCHAR NOT NULL, event_id VARCHAR NOT NULL, name VARCHAR NOT NULL, source VARCHAR NOT NULL, event_time BIGINT NOT NULL, received_at BIGINT NOT NULL, actor_id VARCHAR, identity_kind VARCHAR, session_id VARCHAR, properties JSON NOT NULL, PRIMARY KEY(product_id,event_id));";
 const LOG_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS logs(log_id VARCHAR PRIMARY KEY, source_id VARCHAR NOT NULL, timestamp BIGINT NOT NULL, received_at BIGINT NOT NULL, level VARCHAR NOT NULL, message VARCHAR NOT NULL, service VARCHAR NOT NULL, environment VARCHAR, trace_id VARCHAR, span_id VARCHAR, request_id VARCHAR, attributes JSON NOT NULL);";
 enum DatabaseKind {

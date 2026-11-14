@@ -2437,6 +2437,7 @@ mod tests {
                 "SET threads=8",
                 "SET memory_limit='4GB'",
                 "RESET memory_limit",
+                "SET max_temp_directory_size='100GB'",
             ] {
                 let error = db.execute_batch(statement).unwrap_err().to_string();
                 assert!(error.contains("locked"), "{statement}: {error}");
@@ -2453,6 +2454,8 @@ mod tests {
             assert_eq!(setting("enable_external_access"), "false");
             assert_eq!(setting("autoload_known_extensions"), "false");
             assert_eq!(setting("autoinstall_known_extensions"), "false");
+            // Spills to disk stop at 1 GB per database instead of 90% of the free disk.
+            assert_eq!(setting("max_temp_directory_size"), "1.0 GiB");
             // Writers still write, and checkpoints still run.
             db.execute_batch("CREATE TEMP TABLE scratch AS SELECT 1; CHECKPOINT;")
                 .unwrap();
