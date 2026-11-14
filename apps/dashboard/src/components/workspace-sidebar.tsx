@@ -87,6 +87,9 @@ export function WorkspaceSidebar({
         query: undefined,
         page: undefined,
         drilldown: undefined,
+        // A view replaces whatever made the current link invalid.
+        invalidQuery: undefined,
+        invalidDrilldown: undefined,
       })}
       {...(props as object)}
     />

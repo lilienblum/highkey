@@ -584,3 +584,13 @@ test("New view from the collapsed rail returns focus to the rail", async ({ page
   await expect(guide).toBeHidden();
   await expect(events).toBeFocused();
 });
+
+test("a saved view opens from an Events link that was invalid", async ({ page }) => {
+  await page.goto(`${eventsUrl()}?page=0`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "This selection is unavailable" }),
+  ).toBeVisible();
+  await sidebar(page).getByRole("link", { name: planName, exact: true }).click();
+  await expect.poll(() => viewParam(page)).toBe(planView.slug);
+  await expect(page.getByText("across 2 matching events")).toBeVisible();
+});
