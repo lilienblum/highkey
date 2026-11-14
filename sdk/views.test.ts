@@ -1,12 +1,24 @@
 import { expect, test } from "bun:test";
-import { defaultSpec, type ExploreSpec } from "../apps/dashboard/src/lib/explore-search";
-import { queryToSpec, specToQuery, validViewSlug } from "../apps/dashboard/src/lib/views";
+import {
+  defaultSpec,
+  validateExploreSearch,
+  type ExploreSpec,
+} from "../apps/dashboard/src/lib/explore-search";
+import {
+  explorable,
+  queryToSpec,
+  specToQuery,
+  validViewSlug,
+  viewErrorMessage,
+  type EventViewQuery,
+} from "../apps/dashboard/src/lib/views";
 
 const spec = (patch: Partial<ExploreSpec>): ExploreSpec => ({ ...defaultSpec, ...patch });
+const makeSpec = spec;
 
 test("the default Explore spec saves as a plain grouped count and reads back unchanged", () => {
   const query = specToQuery(defaultSpec);
-  expect(query).toEqual({ measure: "count", group_by: "name" });
+  expect(query).toEqual({ measure: "count" });
   expect(queryToSpec(query)).toEqual(defaultSpec);
 });
 
@@ -47,16 +59,48 @@ test("the client name is not part of a saved view", () => {
   expect(queryToSpec(query).source).toBe("");
 });
 
-test("a query written by an agent opens with the Events page's defaults filled in", () => {
-  expect(queryToSpec({ event: "signup", measure: "count" })).toEqual(
-    spec({ event: "signup", group: "name" }),
-  );
-  const opened = queryToSpec({
+test("every events query field survives a round trip through the Events page", () => {
+  const queries: EventViewQuery[] = [
+    { measure: "count" },
+    { event: "signup", measure: "count", group_by: "property:plan" },
+    { measure: "min", property: "seconds", group_by: "source_id" },
+    { measure: "max", property: "seconds", group_by: "identity_kind" },
+    {
+      event: "signup",
+      source_id: "0197f0f2-0000-7000-8000-000000000000",
+      identity_kind: "anonymous",
+      measure: "p95",
+      property: "duration_ms",
+      group_by: "property:plan",
+      filters: [
+        { property: "plan", op: "eq", value: "pro" },
+        { property: "region", op: "ne", value: "eu" },
+        { property: "seats", op: "gte", value: 10 },
+        { property: "beta", op: "eq", value: true },
+        { property: "code", op: "eq", value: "42" },
+        { property: "a", op: "eq", value: "x" },
+        { property: "b", op: "lt", value: 1.5 },
+        { property: "c", op: "gt", value: -2 },
+      ],
+    },
+  ];
+  for (const query of queries) {
+    const spec = queryToSpec(query);
+    expect(explorable(spec)).toBe(true);
+    expect(specToQuery(spec)).toEqual(query);
+    // And through the URL the page keeps it in.
+    const parsed = validateExploreSearch(JSON.parse(JSON.stringify({ query: spec })));
+    expect(parsed.invalidQuery).toBeUndefined();
+    expect(parsed.query).toEqual(spec);
+  }
+});
+
+test("extra filters, a pinned source and identity kind become page state", () => {
+  const spec = queryToSpec({
     event: "signup",
     measure: "avg",
     property: "seconds",
     group_by: "property:plan",
-    // Fields the Events page cannot show are left out rather than guessed at.
     source_id: "0197f0f2-0000-7000-8000-000000000000",
     identity_kind: "anonymous",
     filters: [
@@ -64,8 +108,8 @@ test("a query written by an agent opens with the Events page's defaults filled i
       { property: "region", op: "eq", value: "eu" },
     ],
   });
-  expect(opened).toEqual(
-    spec({
+  expect(spec).toEqual(
+    makeSpec({
       event: "signup",
       measure: "avg",
       property: "seconds",
@@ -73,8 +117,50 @@ test("a query written by an agent opens with the Events page's defaults filled i
       filterProperty: "plan",
       filterOp: "eq",
       filterValue: "pro",
+      moreFilters: [{ property: "region", op: "eq", value: "eu" }],
+      identityKind: "anonymous",
+      sourceId: "0197f0f2-0000-7000-8000-000000000000",
     }),
   );
+});
+
+test("a query the page cannot run is reported, not applied", () => {
+  expect(explorable(queryToSpec({ measure: "count", group_by: "bogus" }))).toBe(false);
+  expect(explorable(queryToSpec({ measure: "count", group_by: "property:bad key" }))).toBe(false);
+  expect(explorable(queryToSpec({ measure: "count", source_id: "nope" }))).toBe(false);
+  expect(
+    explorable(
+      queryToSpec({
+        measure: "count",
+        filters: [
+          { property: "a", op: "eq", value: 1 },
+          { property: "b", op: "gt", value: "text" },
+        ],
+      }),
+    ),
+  ).toBe(false);
+  expect(explorable(queryToSpec({ measure: "max", property: "seconds" }))).toBe(true);
+});
+
+test("a rejected write reads as the API's message and hint", () => {
+  const limited = Object.assign(new Error("Too many dashboard writes; slow down"), {
+    status: 429,
+    payload: {
+      code: "rate_limited",
+      errors: [
+        {
+          path: "",
+          message: "Too many dashboard writes for this project",
+          hint: "Retry after 12 s",
+        },
+      ],
+    },
+  });
+  expect(viewErrorMessage(limited, "x")).toBe(
+    "Too many dashboard writes for this project. Retry after 12 s",
+  );
+  expect(viewErrorMessage(new Error("Offline"), "x")).toBe("Offline");
+  expect(viewErrorMessage("nope", "Could not save")).toBe("Could not save");
 });
 
 test("a view slug in the URL is bounded to what the API generates", () => {

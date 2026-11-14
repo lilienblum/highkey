@@ -185,8 +185,9 @@ test("Save view stores the current query and opens it", async ({ page }) => {
   );
   expect(stored.document).toMatchObject({
     kind: "events",
-    query: { event: "page_view", measure: "count", group_by: "name" },
+    query: { event: "page_view", measure: "count" },
   });
+  expect(stored.document.query).not.toHaveProperty("group_by");
   await expect.poll(() => viewParam(page)).toBe(saved?.slug);
   await expect(sidebar(page).getByRole("link", { name, exact: true })).toHaveAttribute(
     "data-active",
@@ -302,4 +303,124 @@ test("the collapsed rail reaches views from Events by keyboard", async ({ page }
   await page.keyboard.press("Enter");
   await expect.poll(() => viewParam(page)).toBe(planView.slug);
   await expect(menu).toBeHidden();
+});
+
+const agentQuery = (sourceId: string) => ({
+  event: "signup",
+  source_id: sourceId,
+  identity_kind: "anonymous",
+  measure: "max",
+  property: "seats",
+  group_by: "property:plan",
+  filters: [
+    { property: "plan", op: "eq", value: "pro" },
+    { property: "region", op: "ne", value: "eu" },
+    { property: "seats", op: "gte", value: 2 },
+  ],
+});
+async function sourceId() {
+  const projects = await admin<(Project & { sources: { id: string }[] })[]>("/products");
+  const found = projects.find((candidate) => candidate.id === project.id);
+  return found?.sources[0]?.id ?? "";
+}
+const stored = (slug: string) =>
+  admin<View>(`/read/products/${project.slug}/views/${slug}?kind=events`);
+
+test("an agent-written view opens with every field shown and Update keeps them", async ({
+  page,
+}) => {
+  const source = await sourceId();
+  expect(source).not.toBe("");
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name: `Agent view ${run}`, query: agentQuery(source) },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(page.getByRole("combobox", { name: "Measure", exact: true })).toContainText(
+    "Numeric maximum",
+  );
+  await expect(page.getByRole("button", { name: "Filter · 3" })).toBeVisible();
+  const pins = page.getByRole("region", { name: "Also applied" });
+  await expect(pins).toContainText("Identity kind · anonymous");
+  await expect(pins).toContainText('region ≠ "eu"');
+  await expect(pins).toContainText("seats ≥ 2");
+  await expect(pins).toContainText("Source ·");
+  await expect(page.getByRole("heading", { name: /can’t show/ })).toHaveCount(0);
+
+  // Updating without edits keeps every field.
+  await page.getByRole("button", { name: "View actions" }).click();
+  await page.getByRole("menuitem", { name: "Update view with current query" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Updated" })).toBeVisible();
+  expect((await stored(created.slug)).document.query).toEqual(agentQuery(source));
+
+  // Removing a chip and updating drops only that field.
+  await pins.getByRole("button", { name: 'Remove filter region ≠ "eu"' }).click();
+  await pins.getByRole("button", { name: "Remove identity kind" }).click();
+  await page.getByRole("button", { name: "View actions" }).click();
+  await page.getByRole("menuitem", { name: "Update view with current query" }).click();
+  const expected = agentQuery(source);
+  expected.filters.splice(1, 1);
+  const { identity_kind: _dropped, ...withoutIdentity } = expected;
+  await expect
+    .poll(async () => (await stored(created.slug)).document.query)
+    .toEqual(withoutIdentity);
+});
+
+test("a view the page cannot show says so and offers the agent guide", async ({ page }) => {
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: {
+      version: 1,
+      kind: "events",
+      name: `Odd view ${run}`,
+      query: { measure: "count" },
+    },
+  });
+  await page.route(`**/api/read/products/*/views/${created.slug}?kind=events`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.document.query.group_by = "bogus";
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "This view uses settings Events can’t show" }),
+  ).toBeVisible();
+  await expect(page.getByText("invalid project, date range, or filter")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit with your agent" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit view" })).toContainText(created.slug);
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Clear view" }).click();
+  await expect.poll(() => viewParam(page)).toBeNull();
+  await expect(page.getByRole("heading", { level: 1, name: "Events", exact: true })).toBeVisible();
+});
+
+test("a rejected save shows the API's message and hint and creates nothing", async ({ page }) => {
+  const name = `Limited ${run}`;
+  await page.route("**/api/products/*/views", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await route.fulfill({
+      status: 429,
+      headers: { "retry-after": "12" },
+      json: {
+        error: "Too many dashboard writes; slow down",
+        code: "rate_limited",
+        errors: [
+          {
+            path: "",
+            message: "Too many dashboard writes for this project",
+            hint: "Retry after 12 s",
+          },
+        ],
+      },
+    });
+  });
+  await page.goto(eventsUrl());
+  await sidebar(page).getByRole("button", { name: "Save view", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Save view" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(dialog).toContainText(
+    "Too many dashboard writes for this project. Retry after 12 s",
+  );
+  await expect(dialog).toBeVisible();
+  expect((await views()).some((view) => view.name === name)).toBe(false);
 });

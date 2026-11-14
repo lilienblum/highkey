@@ -294,9 +294,9 @@ test("sidebar collapses, persists and keeps navigation keyboard accessible", asy
   await expect(page.getByRole("listbox")).toBeVisible();
   await expect(page.getByRole("option", { name: "Event count", exact: true })).toBeFocused();
   await page.keyboard.press("End");
-  await expect(page.getByRole("option", { name: "Duration p95", exact: true })).toBeFocused();
+  await expect(page.getByRole("option", { name: "Numeric maximum", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(measure).toContainText("Duration p95");
+  await expect(measure).toContainText("Numeric maximum");
 });
 
 test("one theme ignores legacy preferences and operating-system changes", async ({ page }) => {

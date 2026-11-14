@@ -8,6 +8,7 @@ export type ExploreDrilldown = {
   sourceId?: string;
   filter?: { property: string; value: string | number | boolean };
 };
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type ExploreSearch = {
   drilldown?: ExploreDrilldown;
   invalidDrilldown?: true;
@@ -76,6 +77,8 @@ function validateDrilldown(search: Record<string, unknown>): ExploreSearch {
   };
 }
 
+/** A filter beyond the one the query builder edits; the page shows it as a removable chip. */
+export type ExploreFilter = { property: string; op: string; value: string | number | boolean };
 export type ExploreSpec = {
   event: string;
   source: string;
@@ -85,7 +88,13 @@ export type ExploreSpec = {
   filterProperty: string;
   filterOp: string;
   filterValue: string;
+  /** Narrowing a saved view carries beyond the builder's controls; absent for ad-hoc queries. */
+  identityKind?: string;
+  sourceId?: string;
+  moreFilters?: ExploreFilter[];
 };
+/** The spec fields the query builder edits as text. */
+export type SpecTextKey = Exclude<keyof ExploreSpec, "identityKind" | "sourceId" | "moreFilters">;
 export const defaultSpec: ExploreSpec = {
   event: "",
   source: "",
@@ -115,7 +124,7 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     return { ...result, invalidQuery: true };
   const raw = search.query as Record<string, unknown>;
   const spec = { ...defaultSpec };
-  for (const key of Object.keys(defaultSpec) as (keyof ExploreSpec)[]) {
+  for (const key of Object.keys(defaultSpec) as SpecTextKey[]) {
     if (raw[key] !== undefined) {
       if (typeof raw[key] !== "string") return { ...result, invalidQuery: true };
       spec[key] = raw[key] as string;
@@ -124,7 +133,7 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
   if (
     (spec.event && !validKey(spec.event)) ||
     (spec.source && !validKey(spec.source)) ||
-    !["count", "actors", "sum", "avg", "p50", "p95"].includes(spec.measure) ||
+    !["count", "actors", "sum", "avg", "p50", "p95", "min", "max"].includes(spec.measure) ||
     !validKey(spec.property) ||
     !(
       ["name", "source", "source_id", "identity_kind"].includes(spec.group) ||
@@ -135,6 +144,41 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     new TextEncoder().encode(spec.filterValue).length > 2048
   )
     return { ...result, invalidQuery: true };
+  if (raw.identityKind !== undefined) {
+    if (typeof raw.identityKind !== "string" || !raw.identityKind || raw.identityKind.length > 256)
+      return { ...result, invalidQuery: true };
+    spec.identityKind = raw.identityKind;
+  }
+  if (raw.sourceId !== undefined) {
+    if (typeof raw.sourceId !== "string" || !uuid.test(raw.sourceId))
+      return { ...result, invalidQuery: true };
+    spec.sourceId = raw.sourceId;
+  }
+  if (raw.moreFilters !== undefined) {
+    if (!Array.isArray(raw.moreFilters) || raw.moreFilters.length > 7)
+      return { ...result, invalidQuery: true };
+    const more: ExploreFilter[] = [];
+    for (const item of raw.moreFilters) {
+      const f = item as Record<string, unknown> | null;
+      if (
+        !f ||
+        typeof f !== "object" ||
+        !validKey(f.property) ||
+        typeof f.op !== "string" ||
+        !["eq", "ne", "gt", "gte", "lt", "lte"].includes(f.op) ||
+        !(
+          typeof f.value === "boolean" ||
+          (typeof f.value === "number" && Number.isFinite(f.value)) ||
+          (typeof f.value === "string" && new TextEncoder().encode(f.value).length <= 2048)
+        ) ||
+        // The API orders only numbers.
+        (typeof f.value !== "number" && !["eq", "ne"].includes(f.op))
+      )
+        return { ...result, invalidQuery: true };
+      more.push({ property: f.property, op: f.op, value: f.value });
+    }
+    if (more.length) spec.moreFilters = more;
+  }
   result.query = spec;
   return result;
 }

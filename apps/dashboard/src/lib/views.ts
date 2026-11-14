@@ -1,6 +1,6 @@
-import { api, ApiError, type ViewLink } from "./api";
-import { defaultSpec, type ExploreSpec } from "./explore-search";
-import { asDocumentError, type EventMeasure, type Issue } from "./dashboards";
+import { api, type ViewLink } from "./api";
+import { defaultSpec, validateExploreSearch, type ExploreSpec } from "./explore-search";
+import { asDocumentError, DocumentError, type EventMeasure, type Issue } from "./dashboards";
 
 export type { ViewLink };
 export { validViewSlug } from "./workspace-search";
@@ -64,15 +64,22 @@ async function asRejected<T>(request: Promise<T>): Promise<T> {
   }
 }
 
-/** The API's first complaint about a view document, else the error itself. */
+/**
+ * The API's first complaint about a view write: its message and, when it has one, its hint
+ * ("Retry after 12 s" on a rate limit), else the error itself.
+ */
 export function viewErrorMessage(error: unknown, fallback: string): string {
-  const issues = (error as { issues?: Issue[] }).issues;
-  if (Array.isArray(issues) && issues[0]) return issues[0].message;
-  return error instanceof ApiError || error instanceof Error ? error.message : fallback;
+  const issues =
+    error instanceof DocumentError
+      ? error.issues
+      : (error as { payload?: { errors?: unknown } } | null)?.payload?.errors;
+  const first = Array.isArray(issues) ? (issues[0] as Issue | undefined) : undefined;
+  if (first?.message)
+    return first.hint ? `${first.message.replace(/\.$/, "")}. ${first.hint}` : first.message;
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
-const numericMeasures = ["sum", "avg", "p50", "p95"];
-const comparisons = ["eq", "ne", "gt", "gte", "lt", "lte"];
+const numericMeasures = ["sum", "avg", "p50", "p95", "min", "max"];
 
 /** A filter value as the query builder reads it: JSON when it parses as a scalar, else text. */
 function typedValue(text: string): Scalar {
@@ -89,43 +96,52 @@ function valueText(value: Scalar): string {
 }
 
 /**
- * The events query a view stores for what the Events page runs. The date range and workspace
- * source come from the toolbar, and the client name has no place in the query, so neither is saved.
+ * The events query a view stores for what the Events page runs. The date range and the workspace
+ * source come from the toolbar, so neither is saved; a source the view pins is its own. The
+ * client name has no place in the query and is not saved. Grouping by event name is the API's
+ * default, so it is left out.
  */
 export function specToQuery(spec: ExploreSpec): EventViewQuery {
   const query: EventViewQuery = { measure: spec.measure as EventMeasure };
   if (spec.event) query.event = spec.event;
+  if (spec.sourceId) query.source_id = spec.sourceId;
+  if (spec.identityKind) query.identity_kind = spec.identityKind;
   if (numericMeasures.includes(spec.measure)) query.property = spec.property;
+  const filters: NonNullable<EventViewQuery["filters"]> = [];
   if (spec.filterProperty && spec.filterValue)
-    query.filters = [
-      {
-        property: spec.filterProperty,
-        op: spec.filterOp,
-        value: typedValue(spec.filterValue),
-      },
-    ];
-  query.group_by = spec.group;
+    filters.push({
+      property: spec.filterProperty,
+      op: spec.filterOp,
+      value: typedValue(spec.filterValue),
+    });
+  filters.push(...(spec.moreFilters ?? []));
+  if (filters.length) query.filters = filters;
+  if (spec.group !== defaultSpec.group) query.group_by = spec.group;
   return query;
 }
 
 /**
- * What the Events page runs for a stored view. It shows one filter, no identity kind and the
- * workspace's source, so a query that uses more is opened with what the page can show.
+ * What the Events page runs for a stored view: the first filter fills the builder's filter row, the
+ * rest become chips, and a pinned identity kind or source becomes a chip. Nothing is dropped.
  */
 export function queryToSpec(query: EventViewQuery): ExploreSpec {
-  const filter = query.filters?.find((candidate) => comparisons.includes(candidate.op));
+  const [first, ...rest] = query.filters ?? [];
   return {
     ...defaultSpec,
     event: query.event ?? "",
     measure: query.measure ?? "count",
     property: query.property ?? defaultSpec.property,
     group: query.group_by ?? defaultSpec.group,
-    ...(filter
-      ? {
-          filterProperty: filter.property,
-          filterOp: filter.op,
-          filterValue: valueText(filter.value),
-        }
+    ...(first
+      ? { filterProperty: first.property, filterOp: first.op, filterValue: valueText(first.value) }
       : {}),
+    ...(query.identity_kind ? { identityKind: query.identity_kind } : {}),
+    ...(query.source_id ? { sourceId: query.source_id } : {}),
+    ...(rest.length ? { moreFilters: rest } : {}),
   };
+}
+
+/** Whether the Events page can run a spec, by the same rules as its URL. */
+export function explorable(spec: ExploreSpec): boolean {
+  return !validateExploreSearch({ query: spec }).invalidQuery;
 }

@@ -5,9 +5,16 @@ import { automaticBucket } from "@/lib/time-buckets";
 import { workspaceTarget } from "@/lib/workspace-route";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
-import { appliedSpec, type ExploreSpec as Spec, type ExploreDrilldown } from "@/lib/explore-search";
-import { getView, queryToSpec, specToQuery, type EventViewDocument } from "@/lib/views";
+import {
+  appliedSpec,
+  type ExploreFilter,
+  type ExploreSpec as Spec,
+  type ExploreDrilldown,
+  type SpecTextKey,
+} from "@/lib/explore-search";
+import { explorable, getView, queryToSpec, specToQuery, type EventViewDocument } from "@/lib/views";
 import { ViewActions } from "./saved-views";
+import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, FilterHorizontalIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
@@ -64,11 +71,44 @@ export function Explore() {
     <NoProduct />
   );
 }
+const opSymbols: Record<string, string> = {
+  eq: "=",
+  ne: "≠",
+  gt: ">",
+  gte: "≥",
+  lt: "<",
+  lte: "≤",
+};
+function filterText(filter: ExploreFilter) {
+  return `${filter.property} ${opSymbols[filter.op] ?? filter.op} ${JSON.stringify(filter.value)}`;
+}
+/** A narrowing the builder has no row for, with a button that removes it. */
+function PinChip({
+  label,
+  remove,
+  onRemove,
+}: {
+  label: string;
+  remove: string;
+  onRemove: () => void;
+}) {
+  return (
+    <Badge variant="outline" className="drilldown-property">
+      {label}
+      <button type="button" aria-label={remove} onClick={onRemove}>
+        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" className="size-3" />
+      </button>
+    </Badge>
+  );
+}
+
 /** Loads the saved view named in the URL and applies its query to the page. */
 function OpenView({ slug }: { slug: string }) {
   const { product } = useWorkspace();
   const navigate = useNavigate({ from: "/projects/$projectSlug/events" });
-  const [state, setState] = useState<"loading" | "missing" | "failed">("loading");
+  const [state, setState] = useState<"loading" | "missing" | "failed" | "unsupported">("loading");
+  const [name, setName] = useState("");
+  const [guiding, setGuiding] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const productSlug = product?.slug;
   // biome-ignore lint/correctness/useExhaustiveDependencies: a retry reloads the same view
@@ -77,12 +117,19 @@ function OpenView({ slug }: { slug: string }) {
     const controller = new AbortController();
     setState("loading");
     getView<EventViewDocument>(productSlug, slug, "events", controller.signal).then(
-      (stored) =>
+      (stored) => {
+        const spec = queryToSpec(stored.document.query);
+        if (!explorable(spec)) {
+          setName(stored.document.name);
+          setState("unsupported");
+          return;
+        }
         void navigate({
-          search: (previous) => ({ ...previous, query: queryToSpec(stored.document.query) }),
+          search: (previous) => ({ ...previous, query: spec }),
           replace: true,
           resetScroll: false,
-        }),
+        });
+      },
       (error) => {
         if (!controller.signal.aborted) setState(error?.status === 404 ? "missing" : "failed");
       },
@@ -104,6 +151,37 @@ function OpenView({ slug }: { slug: string }) {
         >
           Clear selection
         </Button>
+      </>
+    );
+  if (state === "unsupported")
+    return (
+      <>
+        <PageHeader
+          title="This view uses settings Events can’t show"
+          description={`${name} was saved with a query this page cannot run. Ask your agent to change it, or clear the view.`}
+        />
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => setGuiding(true)}>
+            Edit with your agent
+          </Button>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            role="link"
+            render={<Link {...workspaceTarget("/events", productSlug)} search={{}} />}
+          >
+            Clear view
+          </Button>
+        </div>
+        {product && (
+          <AgentGuideDialog
+            open={guiding}
+            onOpenChange={setGuiding}
+            mode="view"
+            project={product}
+            view={{ slug, name, kind: "events" }}
+          />
+        )}
       </>
     );
   return (
@@ -148,6 +226,10 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const openView = product?.views?.find(
     (candidate) => candidate.kind === "events" && candidate.slug === search.view,
   );
+  const dropPin = (patch: Partial<Spec>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    setApplied((d) => ({ ...d, ...patch }));
+  };
   const [validation, setValidation] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   const retry = () => setRetryKey((key) => key + 1);
@@ -159,19 +241,22 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
     } catch {}
     return [{ property: applied.filterProperty, op: applied.filterOp, value }];
   }, [applied]);
+  const moreFilters = applied.moreFilters ?? [];
+  const allFilters = useMemo(() => [...filters, ...moreFilters], [filters, moreFilters]);
   const scopeKey = JSON.stringify([product?.id, sourceId, rangeKey, applied]);
   const query = useQuery(
     product?.id,
     {
       ...range,
       bucket,
-      source_id: sourceId,
+      source_id: applied.sourceId ?? sourceId,
+      identity_kind: applied.identityKind,
       event: applied.event || undefined,
       source: applied.source || undefined,
       measure: applied.measure,
       property: applied.property,
       group_by: applied.group,
-      filters,
+      filters: allFilters,
       page,
       page_size: pageSize,
     },
@@ -184,7 +269,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
     if (query.data) setLastResult({ scope: scopeKey, data: query.data });
   }, [query.data, scopeKey]);
   const data = query.data ?? (lastResult?.scope === scopeKey ? lastResult.data : undefined);
-  const update = (key: keyof Spec, value: string) => setDraft((d) => ({ ...d, [key]: value }));
+  const update = (key: SpecTextKey, value: string) => setDraft((d) => ({ ...d, [key]: value }));
   const measureLabels: Record<string, string> = {
     count: "Event count",
     actors: "Distinct actors",
@@ -192,6 +277,8 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
     avg: "Numeric average",
     p50: "Duration p50",
     p95: "Duration p95",
+    min: "Numeric minimum",
+    max: "Numeric maximum",
   };
   return (
     <>
@@ -367,7 +454,10 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                       aria-hidden="true"
                       data-icon="inline-start"
                     />
-                    Filter{applied.filterProperty ? " · 1" : ""}
+                    Filter
+                    {applied.filterProperty || moreFilters.length
+                      ? ` · ${(applied.filterProperty ? 1 : 0) + moreFilters.length}`
+                      : ""}
                   </CollapsibleTrigger>
                   <Button
                     type="submit"
@@ -441,6 +531,35 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                 </FieldGroup>
               </CollapsibleContent>
             </Collapsible>
+            {(applied.identityKind || applied.sourceId || moreFilters.length > 0) && (
+              <section className="drilldown-filters query-pins" aria-label="Also applied">
+                {applied.sourceId && (
+                  <PinChip
+                    label={`Source · ${product?.sources.find((s) => s.id === applied.sourceId)?.name ?? "unavailable"}`}
+                    remove="Remove source"
+                    onRemove={() => dropPin({ sourceId: undefined })}
+                  />
+                )}
+                {applied.identityKind && (
+                  <PinChip
+                    label={`Identity kind · ${applied.identityKind}`}
+                    remove="Remove identity kind"
+                    onRemove={() => dropPin({ identityKind: undefined })}
+                  />
+                )}
+                {moreFilters.map((filter, index) => (
+                  <PinChip
+                    key={`${filter.property}:${filter.op}:${JSON.stringify(filter.value)}`}
+                    label={filterText(filter)}
+                    remove={`Remove filter ${filterText(filter)}`}
+                    onRemove={() => {
+                      const next = moreFilters.filter((_, i) => i !== index);
+                      dropPin({ moreFilters: next.length ? next : undefined });
+                    }}
+                  />
+                ))}
+              </section>
+            )}
             {validation && (
               <p role="alert" className="form-error">
                 {validation}
