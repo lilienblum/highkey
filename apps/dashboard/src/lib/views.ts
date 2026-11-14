@@ -274,6 +274,17 @@ export function logViewState(search: LogsSearch): string {
 }
 
 /**
+ * What the Logs page shows now, for comparing with a view: its filters and window, plus a mark
+ * when a trace ID or a selected range narrows the page, since a view cannot hold those and
+ * applying one in place would clear them.
+ */
+export function logPageState(search: LogsSearch): string {
+  const state = logViewState(search);
+  const narrowed = search.trace || search.logFrom || search.logTo;
+  return narrowed ? `${state}+narrowed` : state;
+}
+
+/**
  * How an open view stands against the stored one. `current`: the page applied this version.
  * `bump`: a newer version whose query the page already shows or started from (a rename, say), so
  * only the applied marker moves. `apply`: a newer query and nothing changed on the page, so it

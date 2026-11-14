@@ -511,6 +511,34 @@ test("an agent's change waits while you have your own, and Update refuses to rev
   expect((await stored(created.slug)).document.query).toEqual(agents);
 });
 
+test("an agent's change waits while an unsent query draft is on the page", async ({ page }) => {
+  const name = `Drafted ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "signup", measure: "count" } },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  // Chosen, but Run query is not pressed.
+  await page.getByRole("combobox", { name: "Event", exact: true }).click();
+  await page.getByRole("option", { name: "page_view", exact: true }).click();
+  await replaceView(created.slug, {
+    version: 1,
+    kind: "events",
+    name,
+    query: {
+      event: "signup",
+      measure: "count",
+      filters: [{ property: "plan", op: "eq", value: "pro" }],
+    },
+  });
+  await expect(page.getByText("Changed by your agent")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Event", exact: true })).toContainText(
+    "page_view",
+  );
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+});
+
 test("Load latest hands focus on to the view's menu when its notice goes", async ({ page }) => {
   const name = `Focus latest ${run}`;
   const created = await admin<View>(`/products/${project.id}/views`, {

@@ -24,6 +24,7 @@ import {
 import {
   currentLogView,
   logsRunnable,
+  logPageState,
   logViewState,
   queryToLogs,
   type LogViewDocument,
@@ -219,7 +220,7 @@ function LogExplorer() {
             view={openView}
             page={logViews}
             appliedAt={search.viewAt}
-            state={logViewState(search)}
+            state={logPageState(search)}
             withCurrent={(stored) => currentLogView(stored, search)}
             onDeleted={() => apply({ view: undefined, viewAt: undefined })}
           />

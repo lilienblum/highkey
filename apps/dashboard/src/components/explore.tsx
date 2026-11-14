@@ -117,6 +117,8 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const applied: Spec = appliedSpec({ query: search.query, drilldown });
   const appliedKey = JSON.stringify(applied);
   const [draft, setDraft] = useState<Spec>(applied);
+  // Choices made in the builder and not run yet are the reader's own, as much as a run query.
+  const draftPending = JSON.stringify(draft) !== appliedKey;
   const [showFilter, setShowFilter] = useState(!!applied.filterProperty);
   useEffect(() => {
     const applied: Spec = JSON.parse(appliedKey);
@@ -208,7 +210,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             view={openView}
             page={eventViews}
             appliedAt={search.viewAt}
-            state={eventViewState(applied)}
+            state={draftPending ? `${eventViewState(applied)}+draft` : eventViewState(applied)}
             withCurrent={(stored) => ({ ...stored, query: specToQuery(applied) })}
             onDeleted={() =>
               navigate({

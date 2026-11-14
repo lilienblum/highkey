@@ -374,6 +374,65 @@ test("without channels, an agent's change to the open log view applies by pollin
   await expect(page.getByText("Changed by your agent")).toHaveCount(0);
 });
 
+const replaceView = (slug: string, document: unknown) =>
+  admin<View>(`/products/${project.id}/views/${slug}`, { document }, "PUT");
+
+test("an agent's change waits while a trace ID narrows the page", async ({ page }) => {
+  const name = `Trace narrowed ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "logs", name, query: { level: "error" }, window: "6h" },
+  });
+  await page.goto(`${logsUrl()}?view=${created.slug}`);
+  await expect(severity(page)).toContainText("Error");
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByLabel("Trace ID", { exact: true }).fill("a".repeat(32));
+  await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("trace")).toBe("a".repeat(32));
+  await replaceView(created.slug, {
+    version: 1,
+    kind: "logs",
+    name,
+    query: { level: "error", service: "checkout" },
+    window: "6h",
+  });
+  await expect(page.getByText("Changed by your agent")).toBeVisible();
+  // The page keeps the narrowing until the reader loads the latest version.
+  expect(new URL(page.url()).searchParams.get("trace")).toBe("a".repeat(32));
+  await expect(service(page)).not.toContainText("checkout");
+});
+
+test("an agent's change waits while a range selected on the histogram narrows the page", async ({
+  page,
+}) => {
+  const name = `Range narrowed ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "logs", name, query: { level: "error" }, window: "6h" },
+  });
+  await page.goto(`${logsUrl()}?view=${created.slug}`);
+  await expect(severity(page)).toContainText("Error");
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  const bars = await page.locator(".logs-volume-bars").boundingBox();
+  if (!bars) throw new Error("Expected the volume histogram");
+  const y = bars.y + bars.height / 2;
+  await page.mouse.move(bars.x + bars.width * 0.5, y);
+  await page.mouse.down();
+  await page.mouse.move(bars.x + bars.width * 0.75, y, { steps: 4 });
+  await page.mouse.move(bars.x + bars.width * 0.99, y, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Clear selected range" })).toBeVisible();
+  await replaceView(created.slug, {
+    version: 1,
+    kind: "logs",
+    name,
+    query: { level: "error", service: "checkout" },
+    window: "6h",
+  });
+  await expect(page.getByText("Changed by your agent")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear selected range" })).toBeVisible();
+  await expect(service(page)).not.toContainText("checkout");
+});
+
 test("Save view says a trace ID filter is not part of a view", async ({ page }) => {
   await page.goto(`${logsUrl()}?trace=${"a".repeat(32)}`);
   await page.getByRole("button", { name: "Save view", exact: true }).click();

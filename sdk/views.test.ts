@@ -10,6 +10,7 @@ import {
   currentLogView,
   eventViewState,
   explorable,
+  logPageState,
   logViewState,
   rememberApplied,
   viewSync,
@@ -302,6 +303,28 @@ test("a view's state compares equal after a URL round trip, whatever the key ord
   // A view that names no window opens on the default one.
   expect(logViewState({ ...logs, logWindow: undefined })).toBe(logViewState(logs));
   expect(logViewState({ ...logs, logWindow: "6h" })).not.toBe(logViewState(logs));
+});
+
+test("a trace ID or a selected range makes the Logs page differ from its view", () => {
+  const logs = queryToLogs({ level: "error" });
+  expect(logPageState(logs)).toBe(logViewState(logs));
+  const narrowed = [
+    { ...logs, trace: "a".repeat(32) },
+    { ...logs, logFrom: "2026-11-14T10:00:00.000Z", logTo: "2026-11-14T10:05:00.000Z" },
+  ];
+  for (const search of narrowed) {
+    expect(logViewState(search)).toBe(logViewState(logs));
+    expect(logPageState(search)).not.toBe(logViewState(logs));
+    // So a stored version that changed is held back, not applied over the narrowing.
+    expect(
+      viewSync({
+        appliedAt: "a",
+        applied: logViewState(logs),
+        page: logPageState(search),
+        stored: { at: "b", state: logViewState(queryToLogs({ level: "warn" })) },
+      }),
+    ).toBe("changed");
+  }
 });
 
 test("a newer view version applies in place only when the page shows what it applied", () => {
