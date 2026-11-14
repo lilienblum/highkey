@@ -102,7 +102,7 @@ pub async fn run(store: Arc<Store>, project: String, query: Query) -> ApiResult<
         .state(move |db| {
             crate::store::require_product(db, &id)?;
             if let Some(source) = source {
-                crate::sources::get(db, &id, &source)?;
+                crate::sources::require(db, &id, &source)?;
             }
             Ok(())
         })

@@ -738,6 +738,23 @@ async fn multiple_sources_share_a_project_but_keys_and_filters_are_scoped() {
     .await;
     assert_eq!(filtered["summary"]["total"], 1);
     assert_eq!(filtered["summary"]["value"], 20.0);
+    // An unknown source on a read query says so, rather than blaming the project or key.
+    let mut unknown = range();
+    unknown["source_id"] = json!("00000000-0000-0000-0000-000000000000");
+    let mut unknown_logs = unknown.clone();
+    unknown_logs.as_object_mut().unwrap().remove("measure");
+    for (path, request) in [("query", unknown), ("logs/query", unknown_logs)] {
+        let (status, body) = call(
+            &f.app,
+            "POST",
+            &format!("/api/products/{id}/{path}"),
+            MANAGEMENT,
+            request,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+        assert_eq!(body["error"], "Source not found", "{path}");
+    }
     assert_eq!(filtered["events"][0]["source_id"], source_id);
     assert_eq!(filtered["events"][0]["source"], "cli"); // Client hint cannot change the key's source.
     let mut spoofed = event("spoofed", json!(1));

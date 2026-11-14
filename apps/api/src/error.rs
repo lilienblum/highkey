@@ -28,6 +28,10 @@ impl ApiError {
     pub fn missing() -> Self {
         Self(StatusCode::NOT_FOUND, "Product or key not found".into())
     }
+    /// A query filtered by a source the project does not have.
+    pub fn source_missing() -> Self {
+        Self(StatusCode::NOT_FOUND, "Source not found".into())
+    }
     /// No project has that id (or slug).
     pub fn project_missing() -> Self {
         Self(StatusCode::NOT_FOUND, PROJECT_MISSING.into())

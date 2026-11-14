@@ -2,6 +2,7 @@ use crate::{
     error::{ApiError, ApiResult},
     model::{Product, Source, SourceInput},
 };
+use axum::http::StatusCode;
 use rusqlite::{OptionalExtension, params};
 
 pub fn migrate(db: &mut rusqlite::Connection) -> anyhow::Result<()> {
@@ -146,6 +147,14 @@ pub fn get(db: &rusqlite::Connection, product_id: &str, id: &str) -> ApiResult<S
     .optional()
     .map_err(anyhow::Error::from)?
     .ok_or_else(ApiError::missing)
+}
+/// Checks that the project has a source with this id, for a read query that filters by one; a
+/// missing source is said to be missing (ingestion keeps `get`'s older wording).
+pub fn require(db: &rusqlite::Connection, product_id: &str, id: &str) -> ApiResult<()> {
+    match get(db, product_id, id) {
+        Err(ApiError(StatusCode::NOT_FOUND, _)) => Err(ApiError::source_missing()),
+        other => other.map(|_| ()),
+    }
 }
 /// A source of the project by id, or else by slug.
 pub fn resolve(db: &rusqlite::Connection, product_id: &str, key: &str) -> ApiResult<Source> {

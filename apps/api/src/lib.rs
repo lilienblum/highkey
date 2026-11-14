@@ -326,7 +326,7 @@ pub(crate) async fn query_product(
         .state(move |db| {
             store::require_product(db, &lookup)?;
             if let Some(source_id) = source_id {
-                sources::get(db, &lookup, &source_id)?;
+                sources::require(db, &lookup, &source_id)?;
             }
             Ok(())
         })
