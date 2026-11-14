@@ -149,17 +149,18 @@ impl Store {
             after_ms: started.elapsed().as_millis() as u64,
             queued,
         };
-        // Acquire in one fixed order (event gate, event slot, log gate, log slot) so runs that
-        // need both signals cannot deadlock each other.
+        // Acquire in one fixed order (log gate, log slot, event gate, event slot) so runs that
+        // need both signals cannot deadlock each other. The scarcer log stages come first, so
+        // a run waiting for them holds no event permit that events-only runs need.
         let mut permits = Vec::with_capacity(4);
         let mut stages = Vec::new();
-        if events {
-            stages.push(&self.dashboard_event_gate);
-            stages.push(&self.query_slots);
-        }
         if logs {
             stages.push(&self.dashboard_log_gate);
             stages.push(&self.log_query_slots);
+        }
+        if events {
+            stages.push(&self.dashboard_event_gate);
+            stages.push(&self.query_slots);
         }
         for semaphore in stages {
             let permit = tokio::time::timeout_at(deadline, semaphore.clone().acquire_owned())
@@ -780,6 +781,58 @@ mod widget_tests {
         }
         assert_eq!(store.query_slots.available_permits(), 4);
         assert_eq!(store.log_query_slots.available_permits(), 2);
+        assert_eq!(store.dashboard_event_gate.available_permits(), 3);
+        assert_eq!(store.dashboard_log_gate.available_permits(), 1);
+    }
+
+    #[tokio::test]
+    async fn runs_waiting_for_the_log_gate_hold_no_event_permits() {
+        let (_dir, store, product) = open(4);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        // A log-only run holds the one log gate permit.
+        let (release, wait) = mpsc::channel::<()>();
+        let (started_tx, started) = tokio::sync::oneshot::channel();
+        let held = {
+            let (store, product) = (store.clone(), product.clone());
+            tokio::spawn(async move {
+                store
+                    .widget_query(product, false, true, deadline, move |_, _| {
+                        started_tx.send(()).unwrap();
+                        let _ = wait.recv_timeout(Duration::from_secs(10));
+                        Ok(())
+                    })
+                    .await
+            })
+        };
+        started.await.unwrap();
+        // As many widgets that read both signals as the event gate admits queue behind it.
+        let mixed: Vec<_> = (0..3)
+            .map(|_| {
+                let (store, product) = (store.clone(), product.clone());
+                tokio::spawn(async move {
+                    store
+                        .widget_query(product, true, true, deadline, |_, _| Ok(()))
+                        .await
+                })
+            })
+            .collect();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        // While they wait for logs, an events-only widget still runs.
+        let events = store
+            .widget_query(
+                product.clone(),
+                true,
+                false,
+                Instant::now() + Duration::from_millis(500),
+                |_, _| Ok(()),
+            )
+            .await;
+        assert!(events.is_ok(), "{events:?}");
+        drop(release);
+        held.await.unwrap().unwrap();
+        for run in mixed {
+            run.await.unwrap().unwrap();
+        }
         assert_eq!(store.dashboard_event_gate.available_permits(), 3);
         assert_eq!(store.dashboard_log_gate.available_permits(), 1);
     }
