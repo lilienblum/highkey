@@ -4,7 +4,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use piko::{AppState, Config, router};
+use piko::{AppState, Config, changes::Signal, router};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 const MANAGEMENT: &str = "";
@@ -292,7 +292,7 @@ async fn retention_is_product_specific_and_uses_event_time() {
     let mut changes = f.state.changes.subscribe();
     let (_, r) = call(&f.app, "POST", "/api/cleanup", MANAGEMENT, Value::Null).await;
     assert_eq!(r["removed"], 1);
-    assert_eq!(changes.recv().await.unwrap(), a);
+    assert_eq!(changes.recv().await.unwrap(), (a.clone(), Signal::Events));
     assert!(changes.try_recv().is_err());
     let (_, r) = call(&f.app, "POST", "/api/cleanup", MANAGEMENT, Value::Null).await;
     assert_eq!(r["removed"], 0);
@@ -527,7 +527,7 @@ async fn committed_changes_are_visible_scoped_and_skip_duplicate_retries() {
     let request = tokio::spawn(async move {
         call(&app, "POST", "/api/ingest", &ka, event("one", json!(12))).await
     });
-    assert_eq!(changes.recv().await.unwrap(), a);
+    assert_eq!(changes.recv().await.unwrap(), (a.clone(), Signal::Events));
     // Read as soon as the signal arrives, independently of the HTTP acknowledgment.
     let (_, result) = call(
         &f.app,
@@ -556,7 +556,7 @@ async fn committed_changes_are_visible_scoped_and_skip_duplicate_retries() {
     ));
     let (_, ack) = call(&f.app, "POST", "/api/ingest", &kb, event("one", json!(24))).await;
     assert_eq!(ack["accepted"], 1);
-    assert_eq!(changes.recv().await.unwrap(), b);
+    assert_eq!(changes.recv().await.unwrap(), (b.clone(), Signal::Events));
     let mut invalid = event("invalid", json!(12));
     invalid["properties"]["nested"] = json!({"invalid": true});
     assert_eq!(

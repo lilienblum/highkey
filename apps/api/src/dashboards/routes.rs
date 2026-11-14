@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     AppState,
+    changes::Signal,
     error::{ApiError, ApiResult},
 };
 use axum::{
@@ -295,5 +296,7 @@ async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Called after every successful dashboard write. A later task turns it into a live hint.
-pub fn changed(_state: &AppState, _product: &str) {}
+/// Called after every successful dashboard write. Clients refetch to learn the new revision.
+pub fn changed(state: &AppState, product: &str) {
+    state.store.changes.changed(product, Signal::Dashboards);
+}

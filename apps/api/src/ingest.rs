@@ -1,4 +1,5 @@
 use crate::{
+    changes::Signal,
     error::{ApiError, ApiResult},
     model::{Ack, Event},
     store::Store,
@@ -207,7 +208,7 @@ fn persist(db: &mut Connection, batch: Vec<Write>, changes: &crate::changes::Cha
             if acks.iter().any(|ack| ack.accepted > 0)
                 && let Some(Write::Events { product_id, .. }) = batch.first()
             {
-                changes.product_changed(product_id);
+                changes.changed(product_id, Signal::Events);
             }
             for (item, result) in batch.into_iter().zip(acks) {
                 if let Write::Events { ack, .. } = item {
@@ -250,7 +251,7 @@ pub fn cleanup(store: &Store, now: i64) -> ApiResult<usize> {
         tx.commit().map_err(anyhow::Error::from)?;
         removed += count;
         if count > 0 {
-            store.changes.product_changed(&p.id);
+            store.changes.changed(&p.id, Signal::Events);
         }
     }
     Ok(removed)

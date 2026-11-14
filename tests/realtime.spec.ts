@@ -166,13 +166,17 @@ test("public ingestion keys cannot publish channel refresh notifications", async
   for (const authorization of [undefined, `Bearer ${web.key}`]) {
     const response = await request.post("/_piko/changes", {
       headers: authorization ? { authorization } : {},
-      data: { version: 1, products: [web.id] },
+      data: { version: 2, changes: [{ product: web.id, signals: ["events"] }] },
     });
     expect(response.status()).toBe(401);
   }
   const response = await request.get("/_piko/runtime");
   expect(await response.json()).toEqual({ live: true });
 });
+
+function hinted(envelope: ChangeEnvelope, product: string) {
+  return envelope.changes?.some((change) => change.product === product) ?? false;
+}
 
 function listen(baseUrl?: string, lastEventId?: string) {
   const subscription = new Channel("analytics-changes").subscribe({
@@ -202,13 +206,13 @@ test("ephemeral hints reach connected subscribers without replaying disconnected
     const live = await fixture("website", 1);
     for (const stream of subscriptions)
       await expect
-        .poll(() => stream.messages.some((message) => message.data.products?.includes(live.id)))
+        .poll(() => stream.messages.some((message) => hinted(message.data, live.id)))
         .toBe(true);
     first.close();
     const missed = await fixture("tool", 1);
     // The observer proves publication finished while the other subscriber was absent.
     await expect
-      .poll(() => observer.messages.some((message) => message.data.products?.includes(missed.id)))
+      .poll(() => observer.messages.some((message) => hinted(message.data, missed.id)))
       .toBe(true);
     // Existing clients may reconnect with a cursor from the previous durable channel.
     const reconnected = listen(baseURL, "1");
@@ -216,16 +220,14 @@ test("ephemeral hints reach connected subscribers without replaying disconnected
     await expect.poll(reconnected.isOpen).toBe(true);
     const fresh = await fixture("website", 1);
     await expect
-      .poll(() => reconnected.messages.some((message) => message.data.products?.includes(fresh.id)))
+      .poll(() => reconnected.messages.some((message) => hinted(message.data, fresh.id)))
       .toBe(true);
-    expect(reconnected.messages.some((message) => message.data.products?.includes(missed.id))).toBe(
-      false,
-    );
+    expect(reconnected.messages.some((message) => hinted(message.data, missed.id))).toBe(false);
     for (const message of subscriptions.flatMap((stream) => stream.messages)) {
       expect(message.id).toBe("");
       expect(message.channel).toBe("analytics-changes");
       expect(message.type).toBe("changed");
-      expect(Object.keys(message.data).sort()).toEqual(["products", "version"]);
+      expect(Object.keys(message.data).sort()).toEqual(["changes", "version"]);
     }
   } finally {
     for (const stream of subscriptions) stream.close();
@@ -249,7 +251,7 @@ test("Explore catches up changes between its initial query and first live connec
     await expect.poll(observer.isOpen).toBe(true);
     const tool = await fixture("tool", 1);
     await expect
-      .poll(() => observer.messages.some((message) => message.data.products?.includes(tool.id)))
+      .poll(() => observer.messages.some((message) => hinted(message.data, tool.id)))
       .toBe(true);
     await page.addInitScript((id) => localStorage.setItem("piko:product", id), tool.id);
     await page.goto("/explore");
@@ -257,9 +259,7 @@ test("Explore catches up changes between its initial query and first live connec
     const before = observer.messages.length;
     await ingest(tool, "tool", 2);
     await expect
-      .poll(() =>
-        observer.messages.slice(before).some((message) => message.data.products?.includes(tool.id)),
-      )
+      .poll(() => observer.messages.slice(before).some((message) => hinted(message.data, tool.id)))
       .toBe(true);
     release();
     await expect(page.getByText("across 3 matching events")).toBeVisible();

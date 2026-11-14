@@ -1,7 +1,10 @@
 use anyhow::{Context, Result, ensure};
 use reqwest::{Client, Url, redirect::Policy};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::Duration,
+};
 use tokio::{sync::broadcast, task::JoinHandle};
 
 const CAPACITY: usize = 128;
@@ -9,9 +12,18 @@ const MAX_PRODUCTS: usize = 64;
 const COALESCE: Duration = Duration::from_millis(250);
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(800);
 
+/// The kind of data a live hint refers to. Hints never carry the data itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Signal {
+    Events,
+    Logs,
+    Dashboards,
+}
+
 #[derive(Clone)]
 pub struct Changes {
-    tx: broadcast::Sender<String>,
+    tx: broadcast::Sender<(String, Signal)>,
 }
 impl Default for Changes {
     fn default() -> Self {
@@ -23,8 +35,16 @@ impl Default for Changes {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangeEnvelope {
     pub version: u8,
-    pub products: Option<Vec<String>>,
+    pub changes: Option<Vec<Change>>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Change {
+    pub product: String,
+    pub signals: Vec<Signal>,
+}
+
+type Pending = Option<BTreeMap<String, BTreeSet<Signal>>>;
 
 pub struct ChangeDelivery {
     endpoint: Url,
@@ -51,12 +71,12 @@ impl ChangeDelivery {
 }
 
 impl Changes {
-    pub fn subscribe(&self) -> broadcast::Receiver<String> {
+    pub fn subscribe(&self) -> broadcast::Receiver<(String, Signal)> {
         self.tx.subscribe()
     }
 
-    pub(crate) fn product_changed(&self, product: &str) {
-        let _ = self.tx.send(product.to_owned());
+    pub(crate) fn changed(&self, product: &str, signal: Signal) {
+        let _ = self.tx.send((product.to_owned(), signal));
     }
 
     pub fn start_delivery(&self, config: ChangeDelivery) -> Result<JoinHandle<()>> {
@@ -70,26 +90,41 @@ impl Changes {
 }
 
 // None means a full resync, including changes lost to queue lag or a failed delivery.
-fn add_product(pending: &mut Option<BTreeSet<String>>, product: String) {
-    if let Some(products) = pending {
-        products.insert(product);
-        if products.len() > MAX_PRODUCTS {
+fn add_change(pending: &mut Pending, product: String, signal: Signal) {
+    if let Some(changes) = pending {
+        changes.entry(product).or_default().insert(signal);
+        if changes.len() > MAX_PRODUCTS {
             *pending = None;
         }
     }
 }
 
+fn envelope(pending: &Pending) -> ChangeEnvelope {
+    ChangeEnvelope {
+        version: 2,
+        changes: pending.as_ref().map(|changes| {
+            changes
+                .iter()
+                .map(|(product, signals)| Change {
+                    product: product.clone(),
+                    signals: signals.iter().copied().collect(),
+                })
+                .collect()
+        }),
+    }
+}
+
 async fn deliver(
-    mut receiver: broadcast::Receiver<String>,
+    mut receiver: broadcast::Receiver<(String, Signal)>,
     client: Client,
     config: ChangeDelivery,
 ) {
-    let mut pending: Option<BTreeSet<String>> = None;
+    let mut pending: Pending = None;
     let mut backoff = Duration::from_secs(1);
     loop {
-        if pending.as_ref().is_some_and(BTreeSet::is_empty) {
+        if pending.as_ref().is_some_and(BTreeMap::is_empty) {
             match receiver.recv().await {
-                Ok(product) => add_product(&mut pending, product),
+                Ok((product, signal)) => add_change(&mut pending, product, signal),
                 Err(broadcast::error::RecvError::Lagged(_)) => pending = None,
                 Err(broadcast::error::RecvError::Closed) => return,
             }
@@ -97,18 +132,13 @@ async fn deliver(
         }
         loop {
             match receiver.try_recv() {
-                Ok(product) => add_product(&mut pending, product),
+                Ok((product, signal)) => add_change(&mut pending, product, signal),
                 Err(broadcast::error::TryRecvError::Lagged(_)) => pending = None,
                 Err(broadcast::error::TryRecvError::Empty) => break,
                 Err(broadcast::error::TryRecvError::Closed) => return,
             }
         }
-        let envelope = ChangeEnvelope {
-            version: 1,
-            products: pending
-                .as_ref()
-                .map(|products| products.iter().cloned().collect()),
-        };
+        let envelope = envelope(&pending);
         let sent = client
             .post(config.endpoint.clone())
             .bearer_auth(&config.token)
@@ -117,7 +147,7 @@ async fn deliver(
             .await
             .is_ok_and(|response| response.status().is_success());
         if sent {
-            pending = Some(BTreeSet::new());
+            pending = Some(BTreeMap::new());
             backoff = Duration::from_secs(1);
         } else {
             tracing::warn!(
@@ -145,16 +175,54 @@ mod tests {
     };
 
     #[test]
-    fn product_sets_and_queue_overflow_are_bounded() {
-        let mut pending = Some(BTreeSet::new());
+    fn envelope_coalesces_signals_per_product() {
+        let (a, b) = ("a-product".to_string(), "b-product".to_string());
+        let mut pending = Some(BTreeMap::new());
+        add_change(&mut pending, b.clone(), Signal::Dashboards);
+        add_change(&mut pending, a.clone(), Signal::Logs);
+        add_change(&mut pending, a.clone(), Signal::Events);
+        add_change(&mut pending, a.clone(), Signal::Logs);
+        assert_eq!(
+            envelope(&pending),
+            ChangeEnvelope {
+                version: 2,
+                changes: Some(vec![
+                    Change {
+                        product: a,
+                        signals: vec![Signal::Events, Signal::Logs]
+                    },
+                    Change {
+                        product: b,
+                        signals: vec![Signal::Dashboards]
+                    },
+                ])
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(envelope(&pending)).unwrap()["changes"][0]["signals"],
+            serde_json::json!(["events", "logs"])
+        );
+    }
+
+    #[test]
+    fn lag_or_overflow_sends_null() {
+        let mut pending = Some(BTreeMap::new());
         for _ in 0..1000 {
-            add_product(&mut pending, uuid::Uuid::new_v4().to_string());
+            add_change(
+                &mut pending,
+                uuid::Uuid::new_v4().to_string(),
+                Signal::Events,
+            );
         }
         assert!(pending.is_none());
+        assert_eq!(
+            serde_json::to_value(envelope(&pending)).unwrap(),
+            serde_json::json!({"version": 2, "changes": null})
+        );
         let changes = Changes::default();
         let mut receiver = changes.subscribe();
         for _ in 0..1000 {
-            changes.product_changed(&uuid::Uuid::new_v4().to_string());
+            changes.changed(&uuid::Uuid::new_v4().to_string(), Signal::Events);
         }
         assert!(matches!(
             receiver.try_recv(),
@@ -205,34 +273,43 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        assert_eq!(rx.recv().await.unwrap().products, None);
+        assert_eq!(rx.recv().await.unwrap().changes, None);
         let a = uuid::Uuid::new_v4().to_string();
-        changes.product_changed(&a);
+        changes.changed(&a, Signal::Events);
         assert_eq!(
             tokio::time::timeout(Duration::from_secs(3), rx.recv())
                 .await
                 .unwrap()
                 .unwrap()
-                .products,
+                .changes,
             None
         );
         // Let the successful response settle before checking the next coalesced batch.
         tokio::time::sleep(Duration::from_millis(30)).await;
         let b = uuid::Uuid::new_v4().to_string();
-        changes.product_changed(&a);
-        changes.product_changed(&a);
-        changes.product_changed(&b);
+        changes.changed(&a, Signal::Events);
+        changes.changed(&a, Signal::Logs);
+        changes.changed(&b, Signal::Events);
         let result = tokio::time::timeout(Duration::from_secs(2), rx.recv())
             .await
             .unwrap()
             .unwrap();
-        let mut expected = vec![a, b];
-        expected.sort();
+        let mut expected = vec![
+            Change {
+                product: a,
+                signals: vec![Signal::Events, Signal::Logs],
+            },
+            Change {
+                product: b,
+                signals: vec![Signal::Events],
+            },
+        ];
+        expected.sort_by(|x, y| x.product.cmp(&y.product));
         assert_eq!(
             result,
             ChangeEnvelope {
-                version: 1,
-                products: Some(expected)
+                version: 2,
+                changes: Some(expected)
             }
         );
         delivery.abort();

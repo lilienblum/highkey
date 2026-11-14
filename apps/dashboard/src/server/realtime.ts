@@ -28,7 +28,7 @@ export async function receiveChanges(request: Request): Promise<Response> {
   const envelope = parseChangeEnvelope(value);
   if (!envelope)
     return Response.json(
-      { error: "Expected version 1 and products: null or 1–64 UUIDs" },
+      { error: "Expected a version 1 or 2 change notification for null or 1–64 product UUIDs" },
       { status: 400 },
     );
   try {

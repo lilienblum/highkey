@@ -1,5 +1,6 @@
 use super::model::Log;
 use crate::{
+    changes::Signal,
     error::{ApiError, ApiResult},
     model::Ack,
     store::Store,
@@ -103,6 +104,10 @@ fn run(store: &Store, rx: Receiver<Write>) {
                     });
                     match result {
                         Ok(acks) => {
+                            // Hint after the commit, and only when something new was stored.
+                            if acks.iter().any(|ack| ack.accepted > 0) {
+                                store.changes.changed(&project, Signal::Logs);
+                            }
                             for (batch, ack) in batches.into_iter().zip(acks) {
                                 let _ = batch.ack.send(Ok(ack));
                             }
@@ -285,6 +290,29 @@ mod tests {
                 ("shared".into(), "source-a".into())
             ]
         );
+    }
+
+    #[test]
+    fn committed_log_batches_emit_logs_hints() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Store::open(directory.path(), 2).unwrap();
+        let project = uuid::Uuid::new_v4().to_string();
+        let mut hints = store.changes.subscribe();
+        let (tx, rx) = mpsc::sync_channel(16);
+        let (first, _first_ack) = batch(&project, "api", &["one"]);
+        let (duplicate, _duplicate_ack) = batch(&project, "api", &["one"]);
+        tx.send(first).unwrap();
+        let (stop, _stopped) = oneshot::channel();
+        tx.send(Write::Stop(stop)).unwrap();
+        run(&store, rx);
+        assert_eq!(hints.try_recv().unwrap(), (project.clone(), Signal::Logs));
+        assert!(hints.try_recv().is_err());
+        // A retry that stores nothing new has nothing to announce.
+        let (tx, rx) = mpsc::sync_channel(16);
+        tx.send(duplicate).unwrap();
+        drop(tx);
+        run(&store, rx);
+        assert!(hints.try_recv().is_err());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChangeChannel } from "@/lib/use-change-channel";
-import { parseChangeEnvelope } from "@/lib/change-envelope";
+import { matches, parseChangeEnvelope, type Signal } from "@/lib/change-envelope";
 
 interface Props {
   productId?: string;
@@ -8,7 +8,16 @@ interface Props {
   scopeKey: string;
   busy: boolean;
   onRefresh: () => void;
+  /** Signals that make the current view refresh. Defaults to events. */
+  signals?: Signal[];
+  /** Minimum spacing between refreshes. Defaults to 1,500 ms. */
+  minIntervalMs?: number;
+  /** Called for a dashboards signal on the current product, with no cadence limit. */
+  onDashboardsChanged?: () => void;
 }
+
+const EVENTS: Signal[] = ["events"];
+const REFRESH_VIEWS = ["/", "/explore", "/dashboards"];
 
 export function LiveUpdates(props: Props) {
   const [enabled, setEnabled] = useState(false);
@@ -45,6 +54,9 @@ function AutomaticUpdates({
   scopeKey,
   busy,
   onRefresh,
+  signals = EVENTS,
+  minIntervalMs = 1_500,
+  onDashboardsChanged,
   live,
 }: Props & { live: boolean }) {
   const [dirty, setDirty] = useState(false);
@@ -84,26 +96,44 @@ function AutomaticUpdates({
     };
   }, [markDirty]);
   useEffect(() => {
-    if (!dirty || !available || busy || !productId || !["/", "/explore"].includes(view)) return;
+    if (!dirty || !available || busy || !productId || !REFRESH_VIEWS.includes(view)) return;
     // At most one refresh in flight and one queued. Bursts share a short timer.
-    const delay = Math.max(750, 1_500 - (Date.now() - lastRefresh.current));
+    const delay = Math.max(750, minIntervalMs - (Date.now() - lastRefresh.current));
     const timer = setTimeout(() => {
       lastRefresh.current = Date.now();
       setDirty(false);
       onRefresh();
     }, delay);
     return () => clearTimeout(timer);
-  }, [dirty, available, busy, productId, view, onRefresh]);
-  return live ? <ChangeSubscription productId={productId} onChange={markDirty} /> : null;
+  }, [dirty, available, busy, productId, view, onRefresh, minIntervalMs]);
+  return live ? (
+    <ChangeSubscription
+      productId={productId}
+      signals={signals}
+      onChange={markDirty}
+      onDashboardsChanged={onDashboardsChanged}
+    />
+  ) : null;
 }
 
-function ChangeSubscription({ productId, onChange }: { productId?: string; onChange: () => void }) {
+function ChangeSubscription({
+  productId,
+  signals,
+  onChange,
+  onDashboardsChanged,
+}: {
+  productId?: string;
+  signals: Signal[];
+  onChange: () => void;
+  onDashboardsChanged?: () => void;
+}) {
   const previousStatus = useRef("connecting");
   const { status } = useChangeChannel((message) => {
-    if (message.type !== "changed") return;
+    if (message.type !== "changed" || !productId) return;
     const change = parseChangeEnvelope(message.data);
-    if (change && productId && (change.products === null || change.products.includes(productId)))
-      onChange();
+    if (!change) return;
+    if (matches(change, productId, signals)) onChange();
+    if (onDashboardsChanged && matches(change, productId, ["dashboards"])) onDashboardsChanged();
   });
   useEffect(() => {
     // No replay: reconcile every connection, including the initial subscription.
