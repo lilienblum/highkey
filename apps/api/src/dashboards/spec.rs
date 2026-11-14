@@ -171,9 +171,11 @@ impl QuerySpec {
     }
 }
 
-/// A read-only DuckDB SELECT over one of the project's databases. Its result columns decide its
-/// shape: `value`; `time` and `value` (plus an optional `group`); `label` and `value`; or any
-/// columns for a table. `$from`, `$to`, `$bucket` and `$source` are bound by name.
+/// A read-only DuckDB SELECT over one of the project's databases. `events` (or `logs`) holds only
+/// the dashboard's range and source, `all_events` (or `all_logs`) all history, and
+/// `bucket(event_time)` gives a row's bucket. Its result columns decide its shape: `value`;
+/// `time` and `value` (plus an optional `group`); `label` and `value`; or any columns for a
+/// table. `$from`, `$to`, `$bucket` and `$source` are bound by name.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SqlQuery {

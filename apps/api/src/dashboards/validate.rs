@@ -661,7 +661,7 @@ fn check_sql(q: &SqlQuery, p: &str, r: &mut Report) {
         r.error_hint(
             format!("{p}/sql"),
             "sql is empty",
-            "Write one SELECT, such as SELECT count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to",
+            "Write one SELECT, such as SELECT count(*) AS value FROM events",
         );
     } else if n > MAX_SQL_CHARS {
         r.error_hint(
