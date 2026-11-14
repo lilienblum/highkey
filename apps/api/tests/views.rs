@@ -606,6 +606,12 @@ async fn a_slug_shared_by_both_kinds_needs_a_kind() {
         .await;
     assert_eq!(status, 409, "{body}");
     assert_eq!(body["code"], "ambiguous_view");
+    // A replace takes its kind from the document, so the hint says to write it there.
+    let hint = body["errors"][0]["hint"].as_str().unwrap();
+    assert!(
+        hint.contains("\"kind\"") && !hint.contains("?kind="),
+        "{hint}"
+    );
     let (status, body) = test.manage("DELETE", &write, Value::Null).await;
     assert_eq!(status, 409, "{body}");
     assert_eq!(body["code"], "ambiguous_view");

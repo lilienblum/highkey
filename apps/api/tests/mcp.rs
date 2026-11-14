@@ -760,6 +760,11 @@ async fn views_round_trip_over_mcp() {
     ] {
         let body = test.fails(tool, args).await;
         assert_eq!(body["code"], "ambiguous_view", "{tool}: {body}");
+        if tool == "save_view" {
+            // `save_view` has no `kind` argument; the document names it.
+            assert!(hint(&body).contains("in the document"), "{body}");
+            continue;
+        }
         assert!(
             hint(&body).contains("events") && hint(&body).contains("logs"),
             "{body}"
@@ -1122,4 +1127,32 @@ impl Test {
     async fn read_post(&self, path: &str, body: Value) -> (StatusCode, Value) {
         self.send("POST", path, body, &[]).await
     }
+}
+
+#[tokio::test]
+async fn updating_a_dashboard_requires_base_revision() {
+    let test = Test::new();
+    test.project("Orbit").await;
+    test.ok(
+        "save_dashboard",
+        json!({"project": "orbit", "document": document("Board")}),
+    )
+    .await;
+    let body = test
+        .fails(
+            "save_dashboard",
+            json!({"project": "orbit", "dashboard": "board", "document": document("Board")}),
+        )
+        .await;
+    assert_eq!(body["code"], "invalid_argument", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/base_revision");
+    assert!(hint(&body).contains("get_dashboard"), "{body}");
+    let got = test
+        .ok(
+            "get_dashboard",
+            json!({"project": "orbit", "dashboard": "board"}),
+        )
+        .await;
+    assert_eq!(got["revision"], 1);
+    test.close().await;
 }

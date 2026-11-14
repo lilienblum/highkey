@@ -498,7 +498,30 @@ pub fn replace(
     let json = validated(doc)?;
     store::product(db, product)?;
     let tx = begin(db)?;
-    let (id, kind) = resolve(&tx, product, key, kind_written.then(|| doc.kind()))?;
+    let (id, kind) = resolve(&tx, product, key, kind_written.then(|| doc.kind())).map_err(|e| {
+        // A replace takes its kind from the document, not from `?kind=`.
+        match e {
+            DashboardError::Detailed {
+                status,
+                message,
+                code: "ambiguous_view",
+                mut errors,
+            } => {
+                for issue in &mut errors {
+                    issue.hint = Some(
+                        "Write \"kind\": \"events\" or \"kind\": \"logs\" in the document".into(),
+                    );
+                }
+                DashboardError::Detailed {
+                    status,
+                    message,
+                    code: "ambiguous_view",
+                    errors,
+                }
+            }
+            e => e,
+        }
+    })?;
     if kind != doc.kind() {
         return Err(if id == key {
             DashboardError::InvalidView(issue(

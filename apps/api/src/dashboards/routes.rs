@@ -342,12 +342,12 @@ pub(crate) async fn create_dashboard(
     Ok(saved(stored, bench))
 }
 /// Replaces a dashboard of project `product` (an id). A save based on an older revision is
-/// refused; `base_revision` of `None` means whatever is current.
+/// refused.
 pub(crate) async fn update_dashboard(
     state: &AppState,
     product: &str,
     key: &str,
-    base_revision: Option<i64>,
+    base_revision: i64,
     document: Value,
     origin: Origin,
 ) -> Result<Value, DashboardError> {
@@ -355,7 +355,6 @@ pub(crate) async fn update_dashboard(
     let doc = self::document(document)?;
     verify_sql(state, product, &doc).await?;
     let current = current(state, product, key).await?;
-    let base_revision = base_revision.unwrap_or(current.revision);
     if current.revision != base_revision {
         return Err(DashboardError::Conflict {
             revision: current.revision,
@@ -435,15 +434,7 @@ async fn update(
     } = body(request)?;
     let origin = origin_from(&headers);
     Ok(Json(
-        update_dashboard(
-            &state,
-            &product,
-            &key,
-            Some(base_revision),
-            document,
-            origin,
-        )
-        .await?,
+        update_dashboard(&state, &product, &key, base_revision, document, origin).await?,
     ))
 }
 async fn restore(

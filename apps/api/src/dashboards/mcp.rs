@@ -292,9 +292,8 @@ struct SaveDashboardParams {
     document: Value,
     /// The id or slug of the dashboard to replace. Omit it to create a new dashboard.
     dashboard: Option<String>,
-    /// The revision you read before changing the dashboard. The save is refused with
-    /// `revision_conflict` when the dashboard has moved on; omit it to replace whatever is
-    /// current.
+    /// Required with `dashboard`: the `revision` from get_dashboard. The save is refused with
+    /// `revision_conflict` when the dashboard has moved on.
     base_revision: Option<i64>,
 }
 #[derive(Deserialize, JsonSchema)]
@@ -575,7 +574,7 @@ impl PikoMcp {
 #[tool_router(router = write_tools)]
 impl PikoMcp {
     #[tool(
-        description = "Saves a dashboard document. Without `dashboard` it creates one; with it, it replaces that dashboard (pass base_revision from get_dashboard to avoid overwriting someone else's change). The document is validated and every widget is timed first; errors carry JSON paths and hints. Returns {id, slug, revision, warnings, bench}.",
+        description = "Saves a dashboard document. Without `dashboard` it creates one; with it, it replaces that dashboard (base_revision, the revision from get_dashboard, is required so you never overwrite someone else's change). The document is validated and every widget is timed first; errors carry JSON paths and hints. Returns {id, slug, revision, warnings, bench}.",
         annotations(read_only_hint = false, destructive_hint = false)
     )]
     async fn save_dashboard(
@@ -597,11 +596,18 @@ impl PikoMcp {
                         routes::create_dashboard(&self.state, &id, p.document, Origin::Mcp).await?
                     }
                     Some(key) => {
+                        let Some(base) = p.base_revision else {
+                            return Err(bad_argument(
+                                "/base_revision",
+                                "base_revision is required to update a dashboard".into(),
+                                "Call get_dashboard and pass its `revision` as base_revision".into(),
+                            ));
+                        };
                         routes::update_dashboard(
                             &self.state,
                             &id,
                             &key,
-                            p.base_revision,
+                            base,
                             p.document,
                             Origin::Mcp,
                         )
