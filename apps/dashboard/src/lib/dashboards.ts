@@ -279,6 +279,41 @@ export function thresholdColor(
   return color;
 }
 
+const measureNames = {
+  sum: "Sum",
+  avg: "Avg",
+  p50: "p50",
+  p95: "p95",
+  min: "Min",
+  max: "Max",
+} as const;
+/** What a query measures, in words: "Events", "Actors", "Avg duration_ms"; logs counts read "Logs". */
+export function queryLabel(query: QuerySpec): string {
+  const measure = query.measure ?? "count";
+  if (measure === "count") return query.signal === "logs" ? "Logs" : "Events";
+  if (measure === "actors") return "Actors";
+  const field = query.signal === "events" ? query.property : query.attribute;
+  return field ? `${measureNames[measure]} ${field}` : measureNames[measure];
+}
+
+/**
+ * The name the UI shows for a widget's series. An explicit label wins; otherwise a bare query id
+ * reads as what it measures and a formula reads as its expression. The API's own labels (the
+ * expression or query id) are left as they are; this is display only.
+ */
+export function seriesDisplayLabel(widget: Widget, index: number): string | undefined {
+  const series = widget.series?.[index];
+  if (series?.label) return series.label;
+  // Without `series`, each query is one series, in order.
+  const expr = widget.series ? series?.expr.trim() : Object.keys(widget.queries)[index];
+  if (expr === undefined) return undefined;
+  const query = Object.hasOwn(widget.queries, expr) ? widget.queries[expr] : undefined;
+  return query ? queryLabel(query) : expr;
+}
+
+/** Whether a series was given its own label; the title already names a lone unlabelled stat. */
+export const hasSeriesLabel = (widget: Widget, index: number) => !!widget.series?.[index]?.label;
+
 const binaryUnits = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 function fixed(value: number, decimals: number | undefined, fallback: number) {
   return decimals === undefined

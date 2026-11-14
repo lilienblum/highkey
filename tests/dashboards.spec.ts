@@ -203,6 +203,8 @@ test("dashboards appear under Overview in the server-rendered sidebar and render
     await expect(widget(page, "error-rate").locator(".analytics-plot")).toBeVisible();
     await expect(widget(page, "plans")).toContainText("pro");
     await expect(widget(page, "plans")).toContainText("free");
+    // An unlabelled series reads as what it measures, not as its query id.
+    await expect(widget(page, "plans").locator(".breakdown-head")).toHaveText("planEvents");
     await expect(widget(page, "recent-errors")).toContainText("Payment gateway timed out");
     await expect(widget(page, "recent-errors")).not.toContainText("Checkout 0 completed");
     await expect(
@@ -316,12 +318,15 @@ test("empty project renders dashes, not errors", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("a timed-out widget says so and retries only when asked", async ({ page }) => {
-  // Without live hints, the only further run could come from an automatic retry.
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+test("a timed-out widget waits for Retry while live refreshes re-run the others", async ({
+  page,
+}) => {
   let conversionRuns = 0;
+  let planRuns = 0;
   await page.route("**/api/read/products/*/widgets/run", async (route) => {
-    if (route.request().postDataJSON().widget.id === "conversion" && conversionRuns++ === 0) {
+    const id = route.request().postDataJSON().widget.id;
+    if (id === "plans") planRuns++;
+    if (id === "conversion" && conversionRuns++ === 0) {
       await route.fulfill({
         status: 503,
         json: { error: "Timed out after 5 s", code: "query_timeout" },
@@ -330,12 +335,25 @@ test("a timed-out widget says so and retries only when asked", async ({ page }) 
     }
     await route.fallback();
   });
+  await page.clock.install();
+  const connected = page.waitForResponse(
+    (response) => response.url().includes("/_tako/channels/") && response.ok(),
+  );
   await page.goto(dashboardUrl());
+  await connected;
   const footer = widget(page, "conversion").locator(".widget-footer");
   await expect(footer.getByRole("alert")).toContainText("Timed out after 5 s");
   await expect(widget(page, "plans")).toContainText("pro");
+  // The connection's reconcile waits for the dashboard's 30 s cadence instead of re-running at once.
   await page.waitForTimeout(2500);
+  expect(planRuns).toBe(1);
   expect(conversionRuns).toBe(1);
+  await page.clock.runFor(31_000);
+  await expect.poll(() => planRuns).toBe(2);
+  await expect(widget(page, "plans")).toContainText("pro");
+  await page.waitForTimeout(1000);
+  expect(conversionRuns).toBe(1);
+  await expect(footer.getByRole("alert")).toContainText("Timed out after 5 s");
   await footer.getByRole("button", { name: "Retry" }).click();
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
   await expect(footer.getByRole("alert")).toHaveCount(0);

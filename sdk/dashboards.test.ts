@@ -3,11 +3,14 @@ import {
   blankDocument,
   duplicateWidget,
   formatMeasure,
+  hasSeriesLabel,
   moveWidget,
   overviewTemplate,
+  queryLabel,
   removeWidget,
   resolvedSize,
   responsiveWidth,
+  seriesDisplayLabel,
   seriesStyle,
   SIZE_PRESETS,
   thresholdColor,
@@ -165,4 +168,57 @@ test("upsertWidget replaces by id or appends, removeWidget drops, and inputs are
     "duration",
   ]);
   expect(JSON.stringify(doc)).toBe(before);
+});
+
+test("queryLabel names what a query measures", () => {
+  expect(queryLabel({ signal: "events" })).toBe("Events");
+  expect(queryLabel({ signal: "events", measure: "count", event: "signup" })).toBe("Events");
+  expect(queryLabel({ signal: "events", measure: "actors" })).toBe("Actors");
+  expect(queryLabel({ signal: "events", measure: "avg", property: "duration_ms" })).toBe(
+    "Avg duration_ms",
+  );
+  expect(queryLabel({ signal: "events", measure: "p95", property: "duration_ms" })).toBe(
+    "p95 duration_ms",
+  );
+  expect(queryLabel({ signal: "events", measure: "sum", property: "amount" })).toBe("Sum amount");
+  expect(queryLabel({ signal: "logs", min_level: "error" })).toBe("Logs");
+  expect(queryLabel({ signal: "logs", measure: "max", attribute: "latency" })).toBe("Max latency");
+  expect(queryLabel({ signal: "logs", measure: "min", attribute: "latency" })).toBe("Min latency");
+  expect(queryLabel({ signal: "logs", measure: "p50", attribute: "latency" })).toBe("p50 latency");
+});
+
+test("seriesDisplayLabel prefers explicit labels, then measures, then the expression", () => {
+  const base = {
+    id: "w",
+    title: "W",
+    view: { type: "line" as const },
+    queries: {
+      a: { signal: "events" as const },
+      errors: { signal: "logs" as const, min_level: "error" },
+      requests: { signal: "events" as const, event: "checkout_request" },
+      latency: { signal: "events" as const, measure: "avg" as const, property: "duration_ms" },
+    },
+  };
+  // Without series, each query is one series in order.
+  expect(seriesDisplayLabel(base, 0)).toBe("Events");
+  expect(seriesDisplayLabel(base, 1)).toBe("Logs");
+  expect(seriesDisplayLabel(base, 3)).toBe("Avg duration_ms");
+  expect(seriesDisplayLabel(base, 9)).toBeUndefined();
+  const named: Widget = {
+    ...base,
+    series: [
+      { expr: "errors / requests * 100" },
+      { expr: "a", label: "Signups" },
+      { expr: " latency " },
+      { expr: "constructor" },
+    ],
+  };
+  expect(seriesDisplayLabel(named, 0)).toBe("errors / requests * 100");
+  expect(seriesDisplayLabel(named, 1)).toBe("Signups");
+  expect(seriesDisplayLabel(named, 2)).toBe("Avg duration_ms");
+  // Object prototype keys are not queries.
+  expect(seriesDisplayLabel(named, 3)).toBe("constructor");
+  expect(hasSeriesLabel(named, 0)).toBe(false);
+  expect(hasSeriesLabel(named, 1)).toBe(true);
+  expect(hasSeriesLabel(base, 0)).toBe(false);
 });

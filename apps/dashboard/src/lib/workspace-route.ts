@@ -18,10 +18,14 @@ export function workspaceTarget(view: WorkspaceView, projectSlug?: string, dashb
   }
   return projectSlug ? { to: routes[view], params: { projectSlug } } : { to: view };
 }
+/**
+ * The view a path shows, matched by whole segments so a project slugged `dashboards`, `explore`,
+ * `logs` or `settings` still reads as its own Overview. Bare `/explore`, `/logs` and `/settings`
+ * are the browser-saved project's views; dashboards exist only under a project.
+ */
 export function workspaceView(path: string): WorkspaceView {
-  if (path.includes("/dashboards/")) return "/dashboards";
-  if (path.endsWith("/explore")) return "/explore";
-  if (path.endsWith("/logs")) return "/logs";
-  if (path.endsWith("/settings")) return "/settings";
+  const view = /^(?:\/projects\/[^/]+)?\/(explore|logs|settings)\/?$/.exec(path)?.[1];
+  if (view) return `/${view}` as WorkspaceView;
+  if (/^\/projects\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";
   return "/";
 }

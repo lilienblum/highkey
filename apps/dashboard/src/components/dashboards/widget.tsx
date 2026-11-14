@@ -6,8 +6,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { groupLabel, number, type EventRow, type Group, type Product } from "@/lib/api";
 import {
   formatMeasure,
+  hasSeriesLabel,
   resolvedSize,
   responsiveWidth,
+  seriesDisplayLabel,
   thresholdColor,
   type EventsQuery,
   type LogsQuery,
@@ -203,6 +205,9 @@ function StatBody({ widget, result, loading }: BodyProps) {
   const fallback = first?.color ?? definition?.color ?? "yellow";
   const color = thresholds.length ? thresholdColor(value, thresholds, fallback) : undefined;
   const compare = widget.view.compare === "previous_period";
+  // A lone unlabelled series needs no sub-label: the widget title already names it.
+  const count = widget.series?.length ?? Object.keys(widget.queries).length;
+  const name = hasSeriesLabel(widget, 0) || count > 1 ? (seriesDisplayLabel(widget, 0) ?? "") : "";
   return (
     <div className="dashboard-stat" data-color={color}>
       <WidgetValue
@@ -212,7 +217,7 @@ function StatBody({ widget, result, loading }: BodyProps) {
             ? result
               ? delta(value, first?.previous_total ?? null, view.unit)
               : "vs previous period"
-            : (first?.label ?? definition?.label ?? "")
+            : name
         }
         loading={loading}
       />
@@ -287,8 +292,12 @@ function ChartBody({
   // Stable inputs keep the chart definition (and its focus and tooltip) across parent renders.
   const series = useMemo(
     () =>
-      result ? chartSeries(result, widget.series, (s) => seriesLabel(s, groupBy, product)) : [],
-    [result, widget.series, groupBy, product],
+      result
+        ? chartSeries(result, widget.series, (s, index) =>
+            seriesLabel(widget, s, index, groupBy, product),
+          )
+        : [],
+    [result, widget, groupBy, product],
   );
   const view = useMemo(() => measureView(widget, 0), [widget]);
   const hasValues = series.some((s) => [...s.points.values()].some((value) => value !== null));
@@ -337,7 +346,7 @@ function RankingBody({ widget, product, result, loading }: BodyProps) {
   // The first series draws the bar; every series is a value column, aligned by group label.
   const columns = (result?.series ?? []).map((series, index) => ({
     key: `series:${index}`,
-    label: series.label,
+    label: seriesDisplayLabel(widget, index) ?? series.label,
     view: measureView(widget, index),
     values: new Map(
       (series.groups ?? []).map((group) => [JSON.stringify(group.label), group.value]),
@@ -575,8 +584,16 @@ function groupText(groupBy: string | undefined, label: unknown, product: Product
   return groupLabel(label as Group["label"]);
 }
 
-function seriesLabel(series: SeriesResult, groupBy: string | undefined, product: Product) {
-  return series.group !== undefined ? groupText(groupBy, series.group, product) : series.label;
+/** Grouped series are named by their group; the rest by their display label. */
+function seriesLabel(
+  widget: Widget,
+  series: SeriesResult,
+  index: number,
+  groupBy: string | undefined,
+  product: Product,
+) {
+  if (series.group !== undefined) return groupText(groupBy, series.group, product);
+  return seriesDisplayLabel(widget, index) ?? series.label;
 }
 
 const exploreOps = ["eq", "ne", "gt", "gte", "lt", "lte"];

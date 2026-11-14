@@ -63,12 +63,12 @@ type Row = { time: number; value: number | null; lower: number; upper: number; s
 export function chartSeries(
   result: RunResult,
   definitions: Series[] | undefined,
-  label: (series: RunResult["series"][number]) => string,
+  label: (series: RunResult["series"][number], index: number) => string,
 ): ChartSeries[] {
   const grouped = result.series.some((series) => series.group !== undefined);
   return result.series.map((series, index) => ({
     key: series.group !== undefined ? `group:${JSON.stringify(series.group)}` : `series:${index}`,
-    label: label(series),
+    label: label(series, index),
     color: series.color,
     dither: result.series.slice(0, index).some((earlier) => earlier.color === series.color),
     thresholds: (grouped ? definitions?.[0] : definitions?.[index])?.thresholds ?? [],

@@ -65,6 +65,9 @@ function AutomaticUpdates({
   const previousScope = useRef(scopeKey);
   const markDirty = useCallback(() => setDirty(true), []);
   useEffect(() => {
+    // The cadence starts with the page (or its new scope), which has just loaded fresh results,
+    // so the first catch-up (a connection reconcile, say) also waits minIntervalMs.
+    lastRefresh.current = Date.now();
     if (previousScope.current !== scopeKey) {
       previousScope.current = scopeKey;
       setDirty(false);

@@ -89,9 +89,14 @@ export function useWidgetRun(
     sourceId ?? "",
     refreshKey,
   ];
+  const keyText = JSON.stringify(queryKey);
+  // A timeout would only repeat, so it holds across refreshes of the same scope (live hints,
+  // polling) until the reader presses Retry; a new scope runs normally.
+  const [held, setHeld] = useState<{ key: QueryKey; failure: RunFailure }>();
+  const holding = !!held && JSON.stringify(held.key) !== keyText && sameScope(queryKey, held.key);
   const query = useQuery<RunResult, RunFailure>({
     queryKey,
-    enabled: near && !!project,
+    enabled: near && !!project && !holding,
     queryFn: async ({ signal }) => {
       const release = await acquire(signal);
       try {
@@ -126,7 +131,15 @@ export function useWidgetRun(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
-  const failure = query.error ?? undefined;
+  const failure = query.error ?? (holding ? held?.failure : undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
+  useEffect(() => {
+    if (query.error?.timedOut) setHeld({ key: queryKey, failure: query.error });
+  }, [query.error, keyText]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
+  useEffect(() => {
+    setHeld((current) => (current && sameScope(queryKey, current.key) ? current : undefined));
+  }, [keyText]);
 
   // A failed refresh keeps the last result of the same scope next to its error.
   const known = useRef<{ key: QueryKey; data: RunResult }>(undefined);
@@ -137,7 +150,6 @@ export function useWidgetRun(
       ? known.current.data
       : undefined);
 
-  const keyText = JSON.stringify(queryKey);
   const attempts = useRef({ key: keyText, count: 0 });
   if (attempts.current.key !== keyText) attempts.current = { key: keyText, count: 0 };
   // Each failed attempt schedules at most one retry; the key text identifies the attempt series.
@@ -160,7 +172,12 @@ export function useWidgetRun(
     timedOut: !!failure?.timedOut,
     loading: !data && !failure,
     refreshing: !!data && !failure && (query.isPlaceholderData || query.isFetching),
-    retry: () => void query.refetch(),
+    retry: () => {
+      // A held timeout runs again once released (the key has no result yet); the failed key
+      // itself refetches.
+      setHeld(undefined);
+      if (query.error) void query.refetch();
+    },
   };
 }
 
