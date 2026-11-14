@@ -1,11 +1,20 @@
 import { displayGroups, displayValue } from "@/lib/display-values";
 import { reportLink } from "@/lib/report-link";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
 import { useQuery } from "@/lib/use-query";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { NewDashboardDialog } from "./dashboards/new-dashboard-dialog";
 import { number, sourceGroups, type Group } from "@/lib/api";
 import { sourceDistribution } from "@/lib/overview-widgets";
 import type { OverviewSearch } from "@/lib/workspace-search";
@@ -27,15 +36,32 @@ type ChartChoice = {
 const chartChoices: ChartChoice[] = [
   { id: "count", label: "Events", measure: "count" },
   { id: "actors", label: "Identified actors", measure: "actors" },
-  { id: "visitors", label: "Unique visitors", measure: "actors", identity_kind: "visitor" },
+  {
+    id: "visitors",
+    label: "Unique visitors",
+    measure: "actors",
+    identity_kind: "visitor",
+  },
   {
     id: "installations",
     label: "Active installations",
     measure: "actors",
     identity_kind: "installation",
   },
-  { id: "average", label: "Average duration", measure: "avg", property: "duration_ms", unit: "ms" },
-  { id: "p95", label: "p95 duration", measure: "p95", property: "duration_ms", unit: "ms" },
+  {
+    id: "average",
+    label: "Average duration",
+    measure: "avg",
+    property: "duration_ms",
+    unit: "ms",
+  },
+  {
+    id: "p95",
+    label: "p95 duration",
+    measure: "p95",
+    property: "duration_ms",
+    unit: "ms",
+  },
 ];
 const dimensions = [
   ["name", "Top events"],
@@ -73,6 +99,33 @@ export function Overview() {
     );
   return product ? <ProductOverview key={`${product.id}:${sourceId ?? "all"}`} /> : <NoProduct />;
 }
+/** Overview's heading menu: its widgets, kept as an editable dashboard. */
+function OverviewActions() {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button ref={trigger} variant="outline" size="icon" aria-label="Overview actions" />
+          }
+        >
+          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-52">
+          <DropdownMenuItem onClick={() => setOpen(true)}>Duplicate as dashboard</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <NewDashboardDialog
+        open={open}
+        onOpenChange={setOpen}
+        initialTemplate="overview"
+        finalFocus={trigger}
+      />
+    </>
+  );
+}
 function ProductOverview() {
   const { product, source, sourceId, range, refresh, refreshKey, now } = useWorkspace();
   const search = useSearch({ strict: false });
@@ -81,7 +134,10 @@ function ProductOverview() {
   const chartMetric = search.metric ?? "count";
   const durationMetric = search.duration ?? "avg";
   const update = (patch: OverviewSearch) =>
-    void navigate({ search: (previous) => ({ ...previous, ...patch }), resetScroll: false });
+    void navigate({
+      search: (previous) => ({ ...previous, ...patch }),
+      resetScroll: false,
+    });
   const setDimension = (breakdown: string) => update({ breakdown });
   const setChartMetric = (metric: string) => update({ metric: metric as OverviewSearch["metric"] });
   const setDurationMetric = (duration: string) =>
@@ -91,7 +147,13 @@ function ProductOverview() {
     event: selectedFilter?.field === "name" ? selectedFilter.value : undefined,
     source: selectedFilter?.field === "source" ? selectedFilter.value : undefined,
     filters: selectedFilter?.field.startsWith("property:")
-      ? [{ property: selectedFilter.field.slice(9), op: "eq", value: selectedFilter.value }]
+      ? [
+          {
+            property: selectedFilter.field.slice(9),
+            op: "eq",
+            value: selectedFilter.value,
+          },
+        ]
       : [],
   };
   const body = {
@@ -150,7 +212,13 @@ function ProductOverview() {
   };
   const active = useQuery(
     product?.id,
-    { ...activeRange, ...eventFilters, source_id: sourceId, measure: "actors", page_size: 1 },
+    {
+      ...activeRange,
+      ...eventFilters,
+      source_id: sourceId,
+      measure: "actors",
+      page_size: 1,
+    },
     refreshKey,
     `active:${sourceId ?? "all"}:${JSON.stringify(selectedFilter)}`,
   );
@@ -181,7 +249,10 @@ function ProductOverview() {
     if (groupBy === "source" && typeof group.label === "string")
       return { ...context, source: group.label };
     if (groupBy.startsWith("property:"))
-      return { ...context, filter: { property: groupBy.slice(9), value: group.label } };
+      return {
+        ...context,
+        filter: { property: groupBy.slice(9), value: group.label },
+      };
   };
   const noEvents =
     s?.total === 0
@@ -198,7 +269,11 @@ function ProductOverview() {
           : undefined);
   const actorGroups: Group[] = [
     { label: "Visitors", value: s?.visitors ?? 0, count: s?.visitors ?? 0 },
-    { label: "Installations", value: s?.installations ?? 0, count: s?.installations ?? 0 },
+    {
+      label: "Installations",
+      value: s?.installations ?? 0,
+      count: s?.installations ?? 0,
+    },
     {
       label: "Other actors",
       value: Math.max(0, (s?.actors ?? 0) - (s?.visitors ?? 0) - (s?.installations ?? 0)),
@@ -212,7 +287,9 @@ function ProductOverview() {
       <PageHeader
         title={source ? `${product.name} / ${source.name}` : product.name}
         description="Usage, reach, and performance at a glance."
-      />
+      >
+        <OverviewActions />
+      </PageHeader>
       {selectedFilter && (
         <section className="overview-filter-bar" aria-label="Applied filter">
           <Button
@@ -234,7 +311,10 @@ function ProductOverview() {
                 source:
                   selectedFilter.field === "source" ? String(selectedFilter.value) : undefined,
                 filter: selectedFilter.field.startsWith("property:")
-                  ? { property: selectedFilter.field.slice(9), value: selectedFilter.value }
+                  ? {
+                      property: selectedFilter.field.slice(9),
+                      value: selectedFilter.value,
+                    }
                   : undefined,
               },
             }}
@@ -265,8 +345,16 @@ function ProductOverview() {
             />
           </article>
           {[
-            { label: "Events", value: number(s?.total), detail: "In selected period" },
-            { label: "Visitors", value: number(s?.visitors), detail: "Unique visitor IDs" },
+            {
+              label: "Events",
+              value: number(s?.total),
+              detail: "In selected period",
+            },
+            {
+              label: "Visitors",
+              value: number(s?.visitors),
+              detail: "Unique visitor IDs",
+            },
             {
               label: "Installations",
               value: number(s?.installations),
@@ -467,7 +555,11 @@ function ProductOverview() {
                 unit="Percent"
                 groups={[
                   { label: "Succeeded", value: s?.success_rate ?? 0, count: 0 },
-                  { label: "Failed", value: 100 - (s?.success_rate ?? 0), count: 0 },
+                  {
+                    label: "Failed",
+                    value: 100 - (s?.success_rate ?? 0),
+                    count: 0,
+                  },
                 ]}
               />
             </WidgetContent>
@@ -521,7 +613,11 @@ function ProductOverview() {
                 unit="Milliseconds"
                 groups={[
                   { label: "Average", value: s?.avg_duration ?? 0, count: 0 },
-                  { label: "95th percentile", value: s?.p95_duration ?? 0, count: 0 },
+                  {
+                    label: "95th percentile",
+                    value: s?.p95_duration ?? 0,
+                    count: 0,
+                  },
                 ]}
               />
             </WidgetContent>

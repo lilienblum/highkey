@@ -402,3 +402,108 @@ test("widget runs wait for the viewport and run at most three at a time", async 
   await expect(widget(page, "far").locator(".widget-value")).toHaveText("15.0%");
   expect(requested).toContain("far");
 });
+
+const sidebar = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
+
+test("new dashboard from Overview creates an editable copy and opens it", async ({ page }) => {
+  await page.goto(`/projects/${project.slug}`);
+  const trigger = sidebar(page).getByRole("button", { name: "New dashboard" });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "New dashboard" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Name").fill("Ops");
+  await dialog.getByRole("button", { name: "Start from Overview" }).click();
+  await dialog.getByRole("button", { name: "Create dashboard" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/dashboards/ops(\\?|$)`));
+  await expect(page.getByRole("heading", { level: 1, name: "Ops" })).toBeVisible();
+  await expect(page.locator(".dashboard-widget")).toHaveCount(7);
+  for (const heading of await page.locator(".dashboard-widget h2").all())
+    await expect(heading).toBeVisible();
+  await expect(sidebar(page).getByRole("link", { name: "Ops", exact: true })).toHaveAttribute(
+    "data-active",
+    "",
+  );
+});
+
+test("a blank dashboard is created empty and a rejected name shows inline", async ({ page }) => {
+  await page.goto(`/projects/${project.slug}`);
+  await sidebar(page).getByRole("button", { name: "New dashboard" }).click();
+  const dialog = page.getByRole("dialog", { name: "New dashboard" });
+  await dialog.getByLabel("Name").fill("x".repeat(81));
+  await dialog.getByRole("button", { name: "Create dashboard" }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Name").fill("Scratch");
+  await dialog.getByRole("button", { name: "Create dashboard" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Scratch" })).toBeVisible();
+  await expect(page.getByText("No widgets yet")).toBeVisible();
+});
+
+test("duplicate as dashboard from Overview", async ({ page }) => {
+  await page.goto(`/projects/${project.slug}`);
+  await page.getByRole("button", { name: "Overview actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate as dashboard" }).click();
+  const dialog = page.getByRole("dialog", { name: "New dashboard" });
+  await expect(dialog.getByRole("button", { name: "Start from Overview" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await dialog.getByLabel("Name").fill("Overview copy");
+  await dialog.getByRole("button", { name: "Create dashboard" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Overview copy" })).toBeVisible();
+  await expect(page.locator(".dashboard-widget")).toHaveCount(7);
+});
+
+test("duplicating a dashboard opens its copy", async ({ page }) => {
+  await page.goto(dashboardUrl());
+  await page.getByRole("button", { name: "Dashboard actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Checkout health copy" })).toBeVisible();
+  await expect(page.locator(".dashboard-widget")).toHaveCount(checkoutDashboard.widgets.length);
+  await expect(
+    sidebar(page).getByRole("link", { name: "Checkout health copy", exact: true }),
+  ).toBeVisible();
+});
+
+test("copy JSON puts a valid document on the clipboard", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(dashboardUrl());
+  await page.getByRole("button", { name: "Dashboard actions" }).click();
+  await page.getByRole("menuitem", { name: "Copy JSON" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Copied" })).toBeVisible();
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  const parsed = JSON.parse(text);
+  expect(parsed.version).toBe(1);
+  expect(parsed.name).toBe("Checkout health");
+  expect(parsed.widgets).toHaveLength(checkoutDashboard.widgets.length);
+  expect(text).toContain('\n  "version": 1');
+});
+
+test("delete asks first and returns to Overview", async ({ page }) => {
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: checkoutDashboard,
+  });
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  const menu = page.getByRole("button", { name: "Dashboard actions" });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  const alert = page.getByRole("alertdialog");
+  await expect(alert).toContainText("Delete Checkout health? Its revisions are deleted too.");
+  await alert.getByRole("button", { name: "Cancel" }).click();
+  await expect(alert).toBeHidden();
+  await expect(menu).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1, name: "Checkout health" })).toBeVisible();
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete dashboard" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
+  await expect(page.locator(".overview-dashboard")).toBeVisible();
+  await expect(
+    sidebar(page).getByRole("link", { name: "Checkout health", exact: true }),
+  ).toHaveCount(1);
+  expect(
+    (await admin<{ slug: string }[]>(`/read/products/${project.slug}/dashboards`)).map(
+      (d) => d.slug,
+    ),
+  ).not.toContain(created.slug);
+});

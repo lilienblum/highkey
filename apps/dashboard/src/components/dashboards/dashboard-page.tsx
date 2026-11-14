@@ -1,10 +1,30 @@
 import "./dashboards.css";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Link, useLoaderData, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { DashboardSquare01Icon } from "@hugeicons/core-free-icons";
+import { DashboardSquare01Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Empty,
   EmptyDescription,
@@ -14,7 +34,13 @@ import {
 } from "@/components/ui/empty";
 import { api, type Product } from "@/lib/api";
 import type { Signal } from "@/lib/change-envelope";
-import type { DashboardDocument, StoredDashboard } from "@/lib/dashboards";
+import {
+  createDashboard,
+  deleteDashboard,
+  type DashboardDocument,
+  type StoredDashboard,
+} from "@/lib/dashboards";
+import { createErrorMessage, useOpenDashboard } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
@@ -76,7 +102,9 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
 
   return (
     <>
-      <PageHeader title={dashboard.name} description={dashboard.description ?? ""} />
+      <PageHeader title={dashboard.name} description={dashboard.description ?? ""}>
+        <DashboardActions stored={stored} product={product} />
+      </PageHeader>
       {dashboard.widgets.length ? (
         <div className="dashboard-grid">
           {dashboard.widgets.map((widget) => (
@@ -106,6 +134,110 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
   );
 }
 
+/**
+ * The dashboard's overflow menu. Copy JSON hands the stored document to the clipboard; Duplicate
+ * saves a copy and opens it; Delete asks first. Failures show under the heading.
+ */
+function DashboardActions({ stored, product }: { stored: StoredDashboard; product: Product }) {
+  const { reload } = useWorkspace();
+  const navigate = useNavigate();
+  const open = useOpenDashboard();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  async function copyJson() {
+    setError("");
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(stored.document, null, 2));
+      setCopied(true);
+    } catch {
+      setError("Could not copy to the clipboard. Allow clipboard access and try again.");
+    }
+  }
+  async function duplicate() {
+    setError("");
+    try {
+      const name = `${stored.document.name} copy`.slice(0, 80);
+      await open(await createDashboard(product.id, { ...stored.document, name }));
+    } catch (e) {
+      setError(createErrorMessage(e));
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteDashboard(product.id, stored.slug);
+      setConfirming(false);
+      await reload();
+      await navigate(workspaceTarget("/", product.slug));
+    } catch (e) {
+      setConfirming(false);
+      setError(e instanceof Error ? e.message : "Could not delete the dashboard.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="dashboard-actions">
+      {copied && (
+        <span role="status" className="dashboard-actions-status">
+          Copied
+        </span>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button ref={trigger} variant="outline" size="icon" aria-label="Dashboard actions" />
+          }
+        >
+          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          <DropdownMenuItem onClick={() => void duplicate()}>Duplicate</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void copyJson()}>Copy JSON</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error && (
+        <Alert variant="destructive" role="alert" className="dashboard-actions-error">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <AlertDialog open={confirming} onOpenChange={(next) => !busy && setConfirming(next)}>
+        <AlertDialogContent finalFocus={trigger}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {stored.document.name}? Its revisions are deleted too.
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Your events, logs and other dashboards are not affected. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy} onClick={() => void remove()}>
+              {busy && <Spinner data-icon="inline-start" aria-hidden="true" />}
+              Delete dashboard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 function MissingDashboard({ product }: { product: Product }) {
   return (
     <>
@@ -131,7 +263,11 @@ export function DashboardError({ error }: ErrorComponentProps) {
   return (
     <ErrorState
       message={error instanceof Error ? error.message : "Could not load this dashboard."}
-      retry={() => void router.invalidate({ filter: (match) => match.routeId === dashboardRoute })}
+      retry={() =>
+        void router.invalidate({
+          filter: (match) => match.routeId === dashboardRoute,
+        })
+      }
     />
   );
 }

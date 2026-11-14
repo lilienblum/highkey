@@ -54,7 +54,13 @@ type Bucket = {
   upper: number[];
   previous: number | null;
 };
-type Row = { time: number; value: number | null; lower: number; upper: number; series: number };
+type Row = {
+  time: number;
+  value: number | null;
+  lower: number;
+  upper: number;
+  series: number;
+};
 
 /**
  * Each result series becomes one legend entry. A hue that an earlier series already uses is
@@ -132,7 +138,11 @@ export function WidgetChart({
   const definition = useMemo(() => {
     const format = (value: number | null) => formatMeasure(value, view);
     const tick = (value: number) =>
-      formatMeasure(value, { unit: view.unit, prefix: view.prefix, suffix: view.suffix });
+      formatMeasure(value, {
+        unit: view.unit,
+        prefix: view.prefix,
+        suffix: view.suffix,
+      });
     const rows = (index: number): Row[] =>
       buckets.map((b) => ({
         time: b.time,
@@ -285,7 +295,10 @@ export function WidgetChart({
           return {
             title: `${bucket === "week" ? "Week of " : ""}${formatDate(time, bucket, true)} UTC${partial ? ` · partial ${bucket}` : ""}`,
             rows: [
-              ...series.map((s, index) => ({ label: s.label, value: format(values[index]) })),
+              ...series.map((s, index) => ({
+                label: s.label,
+                value: format(values[index]),
+              })),
               ...(compare ? [{ label: previousLabel(series), value: format(before) }] : []),
             ],
           };
@@ -317,7 +330,10 @@ export function WidgetChart({
               y: (b) => Math.max(0, ...b.upper),
               r: 0,
             }),
-            crosshair({ x: { stroke: "var(--muted-foreground)", strokeWidth: 1 }, y: false }),
+            crosshair({
+              x: { stroke: "var(--muted-foreground)", strokeWidth: 1 },
+              y: false,
+            }),
           ],
           scales: {
             x: {
@@ -336,7 +352,11 @@ export function WidgetChart({
             y: {
               scale: scaleLinear().domain([floor, peak > floor ? peak : floor + 1]),
               nice: true,
-              grid: { stroke: "var(--border)", strokeOpacity: 1, strokeDasharray: "2 5" },
+              grid: {
+                stroke: "var(--border)",
+                strokeOpacity: 1,
+                strokeDasharray: "2 5",
+              },
               axis: {
                 line: false,
                 tickLabels: { fontSize: 11, opacity: 1 },

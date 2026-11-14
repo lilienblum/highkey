@@ -3270,3 +3270,32 @@ html {
     color: HighlightText;
   }
 }
+button.workspace-dashboards-menu-link {
+  width: 100%;
+  color: var(--muted-foreground);
+  text-align: left;
+}
+.workspace-sidebar button[data-slot="sidebar-menu-sub-button"] {
+  width: 100%;
+}
+.dashboard-actions {
+  position: relative;
+  flex: none;
+}
+.dashboard-actions-status {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  transform: translateY(-50%);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dashboard-actions-error {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+}
