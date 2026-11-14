@@ -698,7 +698,7 @@ async fn delete_dashboard_requires_matching_confirm() {
                 json!({"project": "orbit", "dashboard": "old-board", "confirm": confirm}),
             )
             .await;
-        assert_eq!(body["errors"][0]["path"], "confirm", "{body}");
+        assert_eq!(body["errors"][0]["path"], "/confirm", "{body}");
         assert!(hint(&body).contains("old-board"), "{body}");
     }
     let (_, list) = test.read("/api/read/products/orbit/dashboards").await;
@@ -736,7 +736,7 @@ async fn delete_view_requires_matching_confirm() {
             json!({"project": "orbit", "view": "signups", "confirm": "nope"}),
         )
         .await;
-    assert_eq!(body["errors"][0]["path"], "confirm", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/confirm", "{body}");
     assert!(hint(&body).contains("signups"), "{body}");
     assert_eq!(
         test.ok("list_views", json!({"project": "orbit"}))
@@ -816,6 +816,7 @@ async fn views_round_trip_over_mcp() {
     ] {
         let body = test.fails(tool, args).await;
         assert_eq!(body["code"], "ambiguous_view", "{tool}: {body}");
+        assert_eq!(body["errors"][0]["path"], "/view", "{tool}: {body}");
         if tool == "save_view" {
             // `save_view` has no `kind` argument; the document names it.
             assert!(hint(&body).contains("in the document"), "{body}");
@@ -881,7 +882,7 @@ async fn unknown_project_gets_a_nearest_match_hint() {
         .fails("describe_project", json!({"project": "orbt"}))
         .await;
     assert_eq!(body["code"], "not_found", "{body}");
-    assert_eq!(body["errors"][0]["path"], "project");
+    assert_eq!(body["errors"][0]["path"], "/project");
     assert_eq!(hint(&body), "did you mean `orbit`?");
 
     // Nothing close lists what exists.
@@ -908,11 +909,13 @@ async fn unknown_project_gets_a_nearest_match_hint() {
         )
         .await;
     assert_eq!(body["code"], "not_found");
+    assert_eq!(body["errors"][0]["path"], "/dashboard");
     assert_eq!(hint(&body), "did you mean `checkout`?");
     let body = test
         .fails("get_view", json!({"project": "orbit", "view": "signop"}))
         .await;
     assert_eq!(body["code"], "not_found");
+    assert_eq!(body["errors"][0]["path"], "/view");
     assert_eq!(hint(&body), "did you mean `signups`?");
     let body = test
         .fails(
@@ -1104,7 +1107,7 @@ async fn run_widget_takes_a_range_and_trims_long_series() {
             json!({"project": "orbit", "widget": document("x")["widgets"][0], "from": "yesterday"}),
         )
         .await;
-    assert_eq!(body["errors"][0]["path"], "from", "{body}");
+    assert_eq!(body["errors"][0]["path"], "/from", "{body}");
     test.close().await;
 }
 
@@ -1245,6 +1248,14 @@ async fn updating_a_dashboard_requires_base_revision() {
     assert_eq!(body["code"], "invalid_argument", "{body}");
     assert_eq!(body["errors"][0]["path"], "/base_revision");
     assert!(hint(&body).contains("get_dashboard"), "{body}");
+    // base_revision without dashboard points at the same argument.
+    let body = test
+        .fails(
+            "save_dashboard",
+            json!({"project": "orbit", "document": document("Other"), "base_revision": 1}),
+        )
+        .await;
+    assert_eq!(body["errors"][0]["path"], "/base_revision", "{body}");
     let got = test
         .ok(
             "get_dashboard",

@@ -131,7 +131,8 @@ fn reply(result: Result<Value, DashboardError>) -> Result<CallToolResult, ErrorD
     })
 }
 
-/// A 400 about one argument, with a hint on how to fix it.
+/// A 400 about one argument, at its JSON Pointer (`/base_revision`), with a hint on how to fix
+/// it.
 fn bad_argument(path: &str, message: String, hint: String) -> DashboardError {
     DashboardError::Detailed {
         status: StatusCode::BAD_REQUEST,
@@ -145,7 +146,7 @@ fn bad_argument(path: &str, message: String, hint: String) -> DashboardError {
     }
 }
 
-/// An RFC 3339 time, or a date meaning midnight UTC.
+/// An RFC 3339 time, or a date meaning midnight UTC. `field` is the argument's JSON Pointer.
 fn time(field: &str, text: &str) -> Result<DateTime<Utc>, DashboardError> {
     text.parse::<DateTime<Utc>>()
         .ok()
@@ -171,11 +172,11 @@ fn range(
     to: Option<&str>,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), DashboardError> {
     let to = match to {
-        Some(text) => time("to", text)?,
+        Some(text) => time("/to", text)?,
         None => Utc::now(),
     };
     let from = match from {
-        Some(text) => time("from", text)?,
+        Some(text) => time("/from", text)?,
         None => to - Duration::days(DEFAULT_DAYS),
     };
     Ok((from, to))
@@ -239,7 +240,7 @@ fn confirm_mismatch(action: &str, what: &str, field: &str, slug: &str) -> Dashbo
         message: "Confirmation does not match".into(),
         code: "confirm_mismatch",
         errors: vec![Issue {
-            path: "confirm".into(),
+            path: "/confirm".into(),
             message: format!("`confirm` must equal the {what}'s {field}, `{slug}`"),
             hint: Some(format!(
                 "Pass confirm: \"{slug}\" to {action} this {what}; it cannot be undone"
@@ -606,7 +607,7 @@ impl PikoMcp {
                     None => {
                         if p.base_revision.is_some() {
                             return Err(bad_argument(
-                                "base_revision",
+                                "/base_revision",
                                 "base_revision applies to updates".into(),
                                 "Pass `dashboard` as well to update one, or drop base_revision to create".into(),
                             ));

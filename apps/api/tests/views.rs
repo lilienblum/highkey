@@ -525,7 +525,7 @@ async fn a_bad_kind_is_a_structured_error_that_lists_the_kinds() {
         let (status, body) = test.read(&path).await;
         assert_eq!(status, 400, "{body}");
         assert_eq!(body["code"], "invalid_kind");
-        assert_eq!(body["errors"][0]["path"], "kind");
+        assert_eq!(body["errors"][0]["path"], "/kind");
         let hint = body["errors"][0]["hint"].as_str().unwrap();
         assert!(hint.contains("events") && hint.contains("logs"), "{hint}");
     }
@@ -537,7 +537,7 @@ async fn a_bad_kind_is_a_structured_error_that_lists_the_kinds() {
         )
         .await;
     assert_eq!(status, 400, "{body}");
-    assert_eq!(body["errors"][0]["path"], "kind");
+    assert_eq!(body["errors"][0]["path"], "/kind");
 }
 
 #[tokio::test]

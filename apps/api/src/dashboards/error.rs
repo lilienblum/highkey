@@ -46,16 +46,17 @@ impl From<ApiError> for DashboardError {
 }
 impl DashboardError {
     /// A 404 that names what was not found and what exists instead, so a caller can correct a
-    /// misspelt slug. `what` is `Dashboard`, `View`, `Project` or `Revision`.
+    /// misspelt slug. `what` is `Dashboard`, `View`, `Project`, `Revision`, `Source` or `Key`;
+    /// the issue's path is the JSON Pointer of the argument that names it (`/dashboard`).
     pub fn not_found(what: &str, hint: Option<String>) -> Self {
-        let path = what.to_lowercase();
+        let name = what.to_lowercase();
         Self::Detailed {
             status: StatusCode::NOT_FOUND,
             message: format!("{what} not found"),
             code: "not_found",
             errors: vec![Issue {
-                message: format!("No {path} matches that id or slug"),
-                path,
+                message: format!("No {name} matches that id or slug"),
+                path: format!("/{name}"),
                 hint,
             }],
         }

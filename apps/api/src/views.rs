@@ -325,7 +325,7 @@ fn resolve(
             message: "More than one view has that slug".into(),
             code: "ambiguous_view",
             errors: vec![Issue {
-                path: "view".into(),
+                path: "/view".into(),
                 message: format!("`{key}` is both an events view and a logs view"),
                 hint: Some("Pass ?kind=events or ?kind=logs (the `kind` argument over MCP)".into()),
             }],
@@ -608,7 +608,7 @@ fn kind_param(
             message: "kind must be events or logs".into(),
             code: "invalid_kind",
             errors: vec![Issue {
-                path: "kind".into(),
+                path: "/kind".into(),
                 message: format!("`{k}` is not a view kind"),
                 hint: Some("Use `events` or `logs`".into()),
             }],
