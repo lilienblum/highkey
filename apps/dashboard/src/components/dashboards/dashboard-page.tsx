@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Link, useLoaderData, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { DashboardSquare01Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -25,22 +25,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { api, type Product } from "@/lib/api";
 import type { Signal } from "@/lib/change-envelope";
-import {
-  createDashboard,
-  deleteDashboard,
-  type DashboardDocument,
-  type StoredDashboard,
-} from "@/lib/dashboards";
-import { createErrorMessage, useOpenDashboard } from "./new-dashboard-dialog";
+import { deleteDashboard, type DashboardDocument, type StoredDashboard } from "@/lib/dashboards";
+import { AgentGuide, AgentGuideDialog } from "./agent-guide";
+import { NameDialog } from "./new-dashboard-dialog";
 import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
@@ -56,7 +45,7 @@ export function signalsOf(dashboard: DashboardDocument): Signal[] {
 
 /**
  * A named dashboard: its server-rendered document under the shared toolbar, with each widget
- * loading its own data. Edit mode builds on this page.
+ * loading its own data.
  */
 export function DashboardPage() {
   const stored = useLoaderData({ from: dashboardRoute });
@@ -118,17 +107,19 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
           ))}
         </div>
       ) : (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>No widgets yet</EmptyTitle>
-            <EmptyDescription>
-              Widgets added to this dashboard, in Piko or by your AI through MCP, appear here.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <section className="dashboard-empty" aria-labelledby="dashboard-empty-title">
+          <h2 id="dashboard-empty-title" className="dashboard-empty-title">
+            No widgets yet
+          </h2>
+          <p className="dashboard-empty-description">
+            Your agent adds widgets over MCP. Connect it, then ask for what you want to see.
+          </p>
+          <AgentGuide
+            mode="edit"
+            project={product}
+            dashboard={{ slug: stored.slug, name: dashboard.name, revision: stored.revision }}
+          />
+        </section>
       )}
     </>
   );
@@ -136,14 +127,15 @@ function DashboardView({ stored, product }: { stored: StoredDashboard; product: 
 
 /**
  * The dashboard's overflow menu. Copy JSON hands the stored document to the clipboard; Duplicate
- * saves a copy and opens it; Delete asks first. Failures show under the heading.
+ * asks for the copy's name and opens it; Edit shows how to change the dashboard through an agent; Delete asks first. Failures show under the heading.
  */
 function DashboardActions({ stored, product }: { stored: StoredDashboard; product: Product }) {
   const { reload } = useWorkspace();
   const navigate = useNavigate();
-  const open = useOpenDashboard();
   const trigger = useRef<HTMLButtonElement>(null);
   const [confirming, setConfirming] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [guiding, setGuiding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -160,15 +152,6 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
       setCopied(true);
     } catch {
       setError("Could not copy to the clipboard. Allow clipboard access and try again.");
-    }
-  }
-  async function duplicate() {
-    setError("");
-    try {
-      const name = `${stored.document.name} copy`.slice(0, 80);
-      await open(await createDashboard(product.id, { ...stored.document, name }));
-    } catch (e) {
-      setError(createErrorMessage(e));
     }
   }
   async function remove() {
@@ -193,6 +176,9 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
           Copied
         </span>
       )}
+      <Button type="button" variant="outline" onClick={() => setGuiding(true)}>
+        Edit
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -202,7 +188,7 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
           <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-44">
-          <DropdownMenuItem onClick={() => void duplicate()}>Duplicate</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setDuplicating(true)}>Duplicate</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void copyJson()}>Copy JSON</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
@@ -210,6 +196,23 @@ function DashboardActions({ stored, product }: { stored: StoredDashboard; produc
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <AgentGuideDialog
+        open={guiding}
+        onOpenChange={setGuiding}
+        mode="edit"
+        project={product}
+        dashboard={{ slug: stored.slug, name: stored.document.name, revision: stored.revision }}
+      />
+      <NameDialog
+        open={duplicating}
+        onOpenChange={setDuplicating}
+        title="Duplicate dashboard"
+        description="The copy keeps every widget and opens when it is saved."
+        initialName={`${stored.document.name} copy`.slice(0, 80)}
+        submitLabel="Duplicate"
+        build={(name) => ({ ...stored.document, name })}
+        finalFocus={trigger}
+      />
       {error && (
         <Alert variant="destructive" role="alert" className="dashboard-actions-error">
           <AlertDescription>{error}</AlertDescription>

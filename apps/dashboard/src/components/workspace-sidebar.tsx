@@ -32,7 +32,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { DashboardLink, Product } from "@/lib/api";
-import { NewDashboardDialog } from "./dashboards/new-dashboard-dialog";
+import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
 import { SourceIcon } from "./source-icon";
 
@@ -238,7 +238,14 @@ export function WorkspaceSidebar({
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      {product && <NewDashboardDialog open={creating} onOpenChange={setCreating} />}
+      {product && (
+        <AgentGuideDialog
+          open={creating}
+          onOpenChange={setCreating}
+          mode="create"
+          project={product}
+        />
+      )}
     </>
   );
 }

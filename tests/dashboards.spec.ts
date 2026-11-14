@@ -405,65 +405,120 @@ test("widget runs wait for the viewport and run at most three at a time", async 
 
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 
-test("new dashboard from Overview creates an editable copy and opens it", async ({ page }) => {
+test("New dashboard opens the agent guide with copyable commands and prompts", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`/projects/${project.slug}`);
   const trigger = sidebar(page).getByRole("button", { name: "New dashboard" });
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "New dashboard" });
   await expect(dialog).toBeVisible();
-  const name = `Ops ${Date.now()}`;
-  await dialog.getByLabel("Name").fill(name);
-  await dialog.getByRole("button", { name: "Start from Overview" }).click();
-  await dialog.getByRole("button", { name: "Create dashboard" }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/dashboards/ops-\\d+(\\?|$)`));
+  for (const heading of ["Connect your agent", "Ask it", "Examples"])
+    await expect(dialog.getByRole("heading", { name: heading })).toBeVisible();
+  const status = dialog.getByRole("status");
+  await dialog.getByRole("button", { name: "Copy Claude Code command" }).click();
+  await expect(status).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    `claude mcp add --transport http piko ${new URL(page.url()).origin}/api/mcp`,
+  );
+  await dialog.getByRole("button", { name: "Copy Codex config" }).click();
+  const codex = await page.evaluate(() => navigator.clipboard.readText());
+  expect(codex).toContain("[mcp_servers.piko]");
+  expect(codex).toContain("/api/mcp");
+  await expect(dialog.getByRole("link", { name: "See the docs" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Copy prompt" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    `In Piko project "${project.slug}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`,
+  );
+  for (const example of ["Checkout error rate", "Weekly churn by cohort", "Slowest routes"])
+    await expect(dialog.getByRole("button", { name: `Copy example: ${example}` })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("Edit opens the agent guide with the dashboard slug and revision", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(dashboardUrl());
+  const edit = page.getByRole("button", { name: "Edit", exact: true });
+  await edit.click();
+  const dialog = page.getByRole("dialog", { name: "Edit dashboard" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Copy prompt" }).click();
+  const prompt = await page.evaluate(() => navigator.clipboard.readText());
+  expect(prompt).toMatch(
+    new RegExp(
+      `^In Piko project "${project.slug}", update dashboard "${slug}" \\(revision (\\d+)\\): … \\. Read it with get_dashboard, preview changes with run_widget, and save with base_revision \\1\\.$`,
+    ),
+  );
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeFocused();
+});
+
+test("Duplicate asks for the copy's name", async ({ page }) => {
+  await page.goto(dashboardUrl());
+  const menu = page.getByRole("button", { name: "Dashboard actions" });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  const dialog = page.getByRole("dialog", { name: "Duplicate dashboard" });
+  const field = dialog.getByLabel("Name");
+  await expect(field).toHaveValue("Checkout health copy");
+  await expect(field).toBeFocused();
+  expect(
+    await field.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd]),
+  ).toEqual([0, "Checkout health copy".length]);
+  await field.fill("x".repeat(81));
+  await dialog.getByRole("button", { name: "Duplicate" }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(field).toBeFocused();
+  const name = `Checkout ops ${Date.now()}`;
+  await field.fill(name);
+  await dialog.getByRole("button", { name: "Duplicate" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${project.slug}/dashboards/checkout-ops-\\d+(\\?|$)`),
+  );
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-  await expect(page.locator(".dashboard-widget")).toHaveCount(7);
-  for (const heading of await page.locator(".dashboard-widget h2").all())
-    await expect(heading).toBeVisible();
+  for (const title of titles)
+    await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible();
   await expect(sidebar(page).getByRole("link", { name, exact: true })).toHaveAttribute(
     "data-active",
     "",
   );
+  await page.getByRole("button", { name: "Dashboard actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  await expect(page.getByRole("dialog", { name: "Duplicate dashboard" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Dashboard actions" })).toBeFocused();
 });
 
-test("a blank dashboard is created empty and a rejected name shows inline", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}`);
-  await sidebar(page).getByRole("button", { name: "New dashboard" }).click();
-  const dialog = page.getByRole("dialog", { name: "New dashboard" });
-  await dialog.getByLabel("Name").fill("x".repeat(81));
-  await dialog.getByRole("button", { name: "Create dashboard" }).click();
-  await expect(dialog.getByRole("alert")).toBeVisible();
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Name").fill("Scratch");
-  await dialog.getByRole("button", { name: "Create dashboard" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Scratch" })).toBeVisible();
-  await expect(page.getByText("No widgets yet")).toBeVisible();
+test("an empty dashboard shows the guide inline", async ({ page }) => {
+  const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
+    document: { version: 1, name: "Scratch", widgets: [] },
+  });
+  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  const main = page.locator("#main-content");
+  await expect(main.getByRole("heading", { name: "No widgets yet" })).toBeVisible();
+  for (const heading of ["Connect your agent", "Ask it", "Examples"])
+    await expect(main.getByRole("heading", { name: heading })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "Copy prompt" })).toBeVisible();
 });
 
 test("duplicate as dashboard from Overview", async ({ page }) => {
   await page.goto(`/projects/${project.slug}`);
   await page.getByRole("button", { name: "Overview actions" }).click();
   await page.getByRole("menuitem", { name: "Duplicate as dashboard" }).click();
-  const dialog = page.getByRole("dialog", { name: "New dashboard" });
-  await expect(dialog.getByRole("button", { name: "Start from Overview" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await dialog.getByLabel("Name").fill("Overview copy");
-  await dialog.getByRole("button", { name: "Create dashboard" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Overview copy" })).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "Duplicate Overview" });
+  await expect(dialog.getByLabel("Name")).toHaveValue("Overview copy");
+  await dialog.getByLabel("Name").fill(`Overview copy ${Date.now()}`);
+  await dialog.getByRole("button", { name: "Duplicate" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: /^Overview copy \d+$/ })).toBeVisible();
   await expect(page.locator(".dashboard-widget")).toHaveCount(7);
-});
-
-test("duplicating a dashboard opens its copy", async ({ page }) => {
-  await page.goto(dashboardUrl());
-  await page.getByRole("button", { name: "Dashboard actions" }).click();
-  await page.getByRole("menuitem", { name: "Duplicate" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Checkout health copy" })).toBeVisible();
-  await expect(page.locator(".dashboard-widget")).toHaveCount(checkoutDashboard.widgets.length);
-  await expect(
-    sidebar(page).getByRole("link", { name: "Checkout health copy", exact: true }),
-  ).toBeVisible();
 });
 
 test("copy JSON puts a valid document on the clipboard", async ({ page, context }) => {

@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NewDashboardDialog } from "./dashboards/new-dashboard-dialog";
+import { NameDialog } from "./dashboards/new-dashboard-dialog";
 import { number, sourceGroups, type Group } from "@/lib/api";
 import { sourceDistribution } from "@/lib/overview-widgets";
 import type { OverviewSearch } from "@/lib/workspace-search";
@@ -23,6 +23,7 @@ import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-
 import { BreakdownRows } from "./shared";
 import { AnalyticsChart } from "./analytics-chart";
 import { ValueSelect } from "./value-select";
+import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 
 type ChartChoice = {
@@ -100,10 +101,14 @@ function OverviewActions() {
           <DropdownMenuItem onClick={() => setOpen(true)}>Duplicate as dashboard</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <NewDashboardDialog
+      <NameDialog
         open={open}
         onOpenChange={setOpen}
-        initialTemplate="overview"
+        title="Duplicate Overview"
+        description="The copy keeps Overview's widgets as a dashboard your agent can change."
+        initialName="Overview copy"
+        submitLabel="Duplicate"
+        build={overviewTemplate}
         finalFocus={trigger}
       />
     </>
