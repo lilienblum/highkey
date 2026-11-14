@@ -97,4 +97,6 @@ test("project icons load only from Piko and failed images fall back without shif
     path: test.info().outputPath("website-settings-mobile.png"),
     fullPage: true,
   });
+  // A background catalog refresh can still be inside route.fetch when the test ends.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
