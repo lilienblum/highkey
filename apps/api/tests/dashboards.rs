@@ -1836,6 +1836,23 @@ async fn sql_shapes_are_checked_against_the_view() {
     let message = issue["message"].as_str().unwrap();
     assert!(message.contains("nosuch"), "{issue}");
     assert!(message.contains("line 1, column 14"), "{issue}");
+    // bucket takes a time, and says what kinds.
+    let issue = refused(
+        &test,
+        &project,
+        "stat",
+        "SELECT max(bucket(name)) AS value FROM events",
+    )
+    .await;
+    assert!(
+        issue["message"].as_str().unwrap().contains("bucket"),
+        "{issue}"
+    );
+    let hint = issue["hint"].as_str().unwrap();
+    assert!(
+        hint.starts_with("bucket takes one time") && hint.contains("TIMESTAMP"),
+        "{issue}"
+    );
 
     // The right shapes run; a series takes time and value, a ranking label and value.
     let (status, body) = test

@@ -1622,7 +1622,11 @@ mod tests {
             .map(|t| format!("({t}::BIGINT)"))
             .collect::<Vec<_>>()
             .join(", ");
-        let sql = format!("SELECT t, bucket(t) AS b FROM (VALUES {values}) v(t) ORDER BY t");
+        // An epoch-ms time, a TIMESTAMP and a DATE all give the epoch-ms start.
+        let sql = format!(
+            "SELECT t, bucket(t) AS b, bucket(epoch_ms(t)) AS stamp, bucket(epoch_ms(t)::DATE) AS day
+             FROM (VALUES {values}) v(t) ORDER BY t"
+        );
         for bucket in [Bucket::Hour, Bucket::Day, Bucket::Week, Bucket::Month] {
             let params = SqlParams {
                 from: 0,
@@ -1638,7 +1642,9 @@ mod tests {
                 MAX_SQL_ROWS,
             )
             .unwrap();
-            assert_eq!(result.columns[1], ("b".into(), "BIGINT".into()));
+            for column in &result.columns[1..] {
+                assert_eq!(column.1, "BIGINT", "{column:?}");
+            }
             assert_eq!(result.rows.len(), times.len());
             for row in result.rows {
                 let t = row[0].as_i64().unwrap();
@@ -1648,12 +1654,13 @@ mod tests {
                     bucket,
                 };
                 // The grid's first bucket is the one holding `from`.
-                assert_eq!(
-                    row[1].as_i64(),
-                    bucket_starts(&w).first().copied(),
-                    "{} {t}",
-                    bucket.as_str()
-                );
+                let start = bucket_starts(&w).first().copied();
+                assert_eq!(row[1].as_i64(), start, "{} {t}", bucket.as_str());
+                assert_eq!(row[2].as_i64(), start, "{} {t}", bucket.as_str());
+                // A date is its midnight, so it shares the bucket of every day or longer.
+                if bucket != Bucket::Hour {
+                    assert_eq!(row[3].as_i64(), start, "{} {t}", bucket.as_str());
+                }
             }
         }
     }

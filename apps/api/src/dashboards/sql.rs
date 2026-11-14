@@ -78,7 +78,7 @@ pub const TABLES: [(&str, SqlDatabase, bool, &str); 4] = [
 pub const FUNCTIONS: [(&str, &str, &str); 1] = [(
     "bucket",
     "bucket(event_time)",
-    "The start (epoch milliseconds) of the dashboard's $bucket that holds an epoch-millisecond time, in UTC with weeks starting on Monday: the same buckets the chart draws, so SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1 lands on them. Use bucket(timestamp) over logs",
+    "The start (epoch milliseconds) of the dashboard's $bucket that holds a time, in UTC with weeks starting on Monday: the same buckets the chart draws, so SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1 lands on them. It takes epoch milliseconds (event_time, or timestamp over logs), a TIMESTAMP or a DATE",
 )];
 /// The table functions a query may call. They generate rows from values; none reads files,
 /// the network or SQL text (as `query` and `query_table` do).
@@ -1277,8 +1277,9 @@ fn quoted(name: &str) -> String {
 /// - `events` (or `logs`): the database's table, holding only the rows of the run's window
 ///   (`[from, to)` on its time column) and, when one is chosen, of its source;
 /// - `all_events` (or `all_logs`): the whole table, for history such as cohorts;
-/// - `bucket(t)`: the epoch-ms start of the run's `$bucket` holding the epoch-ms time `t`, in
-///   UTC with weeks starting on Monday, as DuckDB's `date_trunc` and Piko's bucket grid have it.
+/// - `bucket(t)`: the epoch-ms start of the run's `$bucket` holding `t`, an epoch-ms time (or a
+///   TIMESTAMP or DATE), in UTC with weeks starting on Monday, as DuckDB's `date_trunc` and
+///   Piko's bucket grid have it.
 ///
 /// They are temporary views and a temporary macro, so they belong to this connection alone and
 /// vanish when the transaction rolls back; the typed queries that share a widget's connection
@@ -1316,8 +1317,9 @@ fn scope(tx: &Transaction<'_>, database: SqlDatabase, params: &SqlParams) -> Api
             WHERE {time} >= getvariable('piko_run').from AND {time} < getvariable('piko_run').to
               AND (getvariable('piko_run').source IS NULL OR source_id = getvariable('piko_run').source);
          CREATE OR REPLACE TEMP VIEW {history} AS SELECT * FROM {own};
-         CREATE OR REPLACE TEMP MACRO bucket(t) AS
-            epoch_ms(date_trunc(getvariable('piko_run').bucket, epoch_ms(t)));",
+         CREATE OR REPLACE TEMP MACRO bucket
+            (t BIGINT) AS epoch_ms(date_trunc(getvariable('piko_run').bucket, epoch_ms(t))),
+            (t TIMESTAMP) AS epoch_ms(date_trunc(getvariable('piko_run').bucket, t));",
         history = database.history(),
     ))
     .map_err(internal)?;
@@ -2009,6 +2011,11 @@ pub fn verify_widget(
             Err(ApiError(StatusCode::BAD_REQUEST, message)) => {
                 let hint = if deep(&message) {
                     too_deep().hint.unwrap_or_default()
+                } else if message.contains("Macro bucket()") {
+                    format!(
+                        "bucket takes one time: epoch milliseconds, such as bucket({}), or a TIMESTAMP or DATE",
+                        time_column(q.database)
+                    )
                 } else {
                     format!(
                         "Names must match the {} table's columns, listed in the catalog's sql.{}",
