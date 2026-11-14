@@ -45,12 +45,12 @@ fn count() -> String {
 fn page_size() -> usize {
     25
 }
-pub fn numeric(key: &str) -> String {
+pub(crate) fn numeric(key: &str) -> String {
     format!(
         "CASE WHEN json_type(properties, '$.\"{key}\"') IN ('BIGINT','UBIGINT','DOUBLE') THEN try_cast(json_extract(properties, '$.\"{key}\"') AS DOUBLE) END"
     )
 }
-fn property(key: &str) -> ApiResult<String> {
+pub(crate) fn property(key: &str) -> ApiResult<String> {
     if !valid_key(key) {
         return Err(ApiError::bad("Invalid property key"));
     }
@@ -86,7 +86,7 @@ impl Query {
         }
         Ok(())
     }
-    fn predicate(&self, id: &str) -> ApiResult<(String, Vec<DbValue>)> {
+    pub(crate) fn predicate(&self, id: &str) -> ApiResult<(String, Vec<DbValue>)> {
         let mut sql = "product_id=? AND event_time>=? AND event_time<?".to_string();
         let mut values = vec![
             DbValue::Text(id.into()),
@@ -136,7 +136,7 @@ impl Query {
         Ok((sql, values))
     }
 }
-fn agg(q: &Query) -> String {
+pub(crate) fn agg(q: &Query) -> String {
     match q.measure.as_str() {
         "actors" => {
             "count(DISTINCT (identity_kind, actor_id)) FILTER (WHERE actor_id IS NOT NULL)".into()
