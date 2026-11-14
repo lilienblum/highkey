@@ -1674,8 +1674,10 @@ mod tests {
         };
         let m = sql_measured(&result, Missing::Null, &w, &ranking).unwrap();
         assert_eq!(m.total, Some(n as f64));
+        // Well under a second alone in a debug build, against about 40 s when quadratic; the
+        // margin absorbs a loaded machine.
         assert!(
-            started.elapsed() < std::time::Duration::from_secs(1),
+            started.elapsed() < std::time::Duration::from_secs(10),
             "{:?}",
             started.elapsed()
         );
