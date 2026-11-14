@@ -3,7 +3,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{HeaderMap, Request, StatusCode},
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, DurationRound, Utc};
 use piko::{AppState, Config, router};
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -116,6 +116,13 @@ impl Test {
         let events = (0..n).map(|_| json!({"name": name})).collect();
         self.ingest_events(project, source, events).await;
     }
+    /// Ingests `n` events stamped `at`, so a test never straddles a bucket boundary.
+    async fn seed_events_at(&self, project: &Value, name: &str, n: usize, at: DateTime<Utc>) {
+        let events = (0..n)
+            .map(|_| json!({"name": name, "timestamp": at.to_rfc3339()}))
+            .collect();
+        self.ingest_events(project, None, events).await;
+    }
     /// Ingests events, each given an id and a source, through the public endpoint.
     async fn ingest_events(&self, project: &Value, source: Option<&str>, mut events: Vec<Value>) {
         let n = events.len();
@@ -145,6 +152,29 @@ impl Test {
     }
     /// Ingests `n` logs from `service` at `level` through the public endpoint.
     async fn seed_logs(&self, project: &Value, service: &str, level: &str, n: usize) {
+        self.seed_logs_stamped(project, service, level, n, None)
+            .await;
+    }
+    /// Ingests `n` logs stamped `at`, so a test never straddles a bucket boundary.
+    async fn seed_logs_at(
+        &self,
+        project: &Value,
+        service: &str,
+        level: &str,
+        n: usize,
+        at: DateTime<Utc>,
+    ) {
+        self.seed_logs_stamped(project, service, level, n, Some(at))
+            .await;
+    }
+    async fn seed_logs_stamped(
+        &self,
+        project: &Value,
+        service: &str,
+        level: &str,
+        n: usize,
+        at: Option<DateTime<Utc>>,
+    ) {
         let (status, key) = self
             .manage(
                 "POST",
@@ -154,7 +184,13 @@ impl Test {
             .await;
         assert_eq!(status, 200, "{key}");
         let logs: Vec<Value> = (0..n)
-            .map(|_| json!({"service":service,"level":level,"message":"Request finished"}))
+            .map(|_| {
+                let mut log = json!({"service":service,"level":level,"message":"Request finished"});
+                if let Some(at) = at {
+                    log["timestamp"] = json!(at.to_rfc3339());
+                }
+                log
+            })
             .collect();
         let bearer = format!("Bearer {}", key["key"].as_str().unwrap());
         let (status, ack) = self
@@ -223,13 +259,20 @@ async fn widgets_run_over_events_and_logs_by_slug() {
     let test = Test::new();
     let project = test.project("Checkout Shop").await;
     assert_eq!(project["slug"], "checkout-shop");
-    test.seed_events(&project, None, "checkout_request", 8)
+    // Mid-hour two hours back: every row lands in one hourly bucket whatever the clock says.
+    let at = (Utc::now() - Duration::hours(2))
+        .duration_trunc(Duration::hours(1))
+        .unwrap()
+        + Duration::minutes(30);
+    test.seed_events_at(&project, "checkout_request", 8, at)
         .await;
-    test.seed_events(&project, None, "page_view", 3).await;
-    test.seed_logs(&project, "checkout", "error", 1).await;
-    test.seed_logs(&project, "checkout", "fatal", 1).await;
-    test.seed_logs(&project, "checkout", "info", 5).await;
-    test.seed_logs(&project, "search", "error", 4).await;
+    test.seed_events_at(&project, "page_view", 3, at).await;
+    test.seed_logs_at(&project, "checkout", "error", 1, at)
+        .await;
+    test.seed_logs_at(&project, "checkout", "fatal", 1, at)
+        .await;
+    test.seed_logs_at(&project, "checkout", "info", 5, at).await;
+    test.seed_logs_at(&project, "search", "error", 4, at).await;
 
     // `read` sends no X-Piko-Admin header.
     let (status, body) = test.run("checkout-shop", run_body(error_rate(), 7)).await;
