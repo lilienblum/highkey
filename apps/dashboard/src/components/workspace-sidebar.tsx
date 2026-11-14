@@ -43,14 +43,10 @@ export function WorkspaceSidebar({
   sourceId?: string;
   picker: ReactNode;
   navigationReady: boolean;
-  /** Receives the chosen source's slug, or an empty string for All sources. */
-  onSourceChange: (slug: string) => void;
+  onSourceChange: (id: string) => void;
 }) {
   const { isMobile, setOpenMobile, open } = useSidebar();
-  const sources = [
-    { id: "", slug: "", name: "All sources", icon: null },
-    ...(product?.sources ?? []),
-  ];
+  const sources = [{ id: "", name: "All sources", icon: null }, ...(product?.sources ?? [])];
   return (
     <Sidebar collapsible="icon" className="workspace-sidebar">
       <SidebarHeader className="workspace-identity">
@@ -139,7 +135,7 @@ export function WorkspaceSidebar({
                       tooltip={source.name}
                       title={source.name}
                       onClick={() => {
-                        onSourceChange(source.slug);
+                        onSourceChange(source.id);
                         setOpenMobile(false);
                       }}
                     >

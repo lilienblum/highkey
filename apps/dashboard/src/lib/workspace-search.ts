@@ -23,13 +23,29 @@ export const validKey = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9_./-]{1,64}$/.test(value);
 export const validSlug = (value: unknown): value is string =>
   typeof value === "string" && value.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-/** The workspace `source` URL value for a source ID: its slug, or "all" without a source. */
+/** The source a workspace `source` URL value names: by slug, then by ID from older links. */
+export function findSource<T extends { id: string; slug: string }>(
+  sources: readonly T[] | undefined,
+  value: string | undefined,
+) {
+  // "all" is the combined view, even if old data gave a source that slug.
+  if (!value || value === "all") return;
+  return (
+    sources?.find((source) => source.slug === value) ??
+    sources?.find((source) => source.id === value)
+  );
+}
+/**
+ * The workspace `source` URL value for a source ID: its slug, or "all" without a source. A source
+ * still holding the reserved `all` slug keeps its ID, so the link cannot mean All sources.
+ */
 export function sourceParam(
   sources: readonly { id: string; slug: string }[] | undefined,
   id: string | undefined,
 ) {
   if (!id) return "all";
-  return sources?.find((source) => source.id === id)?.slug ?? id;
+  const slug = sources?.find((source) => source.id === id)?.slug;
+  return slug && slug !== "all" ? slug : id;
 }
 
 export function validateWorkspaceSearch(search: Record<string, unknown>): WorkspaceSearch {

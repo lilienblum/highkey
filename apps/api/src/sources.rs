@@ -88,11 +88,13 @@ pub fn migrate(db: &mut rusqlite::Connection) -> anyhow::Result<()> {
         let base = source_slug(&name);
         let mut slug = base.clone();
         let mut suffix = 2;
-        while tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM sources WHERE product_id=? AND slug=?)",
-            [&product_id, &slug],
-            |r| r.get::<_, bool>(0),
-        )? {
+        while slug == ALL_SOURCES
+            || tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sources WHERE product_id=? AND slug=?)",
+                [&product_id, &slug],
+                |r| r.get::<_, bool>(0),
+            )?
+        {
             slug = suffixed(&base, suffix);
             suffix += 1;
         }
@@ -104,6 +106,8 @@ pub fn migrate(db: &mut rusqlite::Connection) -> anyhow::Result<()> {
     tx.commit()?;
     Ok(())
 }
+/// Workspace URLs use `?source=all` for the combined view, so no source may take this slug.
+const ALL_SOURCES: &str = "all";
 /// Source slugs follow project slug rules with their own fallback.
 fn source_slug(name: &str) -> String {
     if name.chars().any(|c| c.is_ascii_alphanumeric()) {
@@ -183,10 +187,12 @@ pub fn save(
     let mut slug = base.clone();
     let mut suffix = 2;
     loop {
-        // The unique index arbitrates concurrent creators, as for project slugs.
-        let inserted = db.execute("INSERT INTO sources(id,product_id,name,icon,created_at,slug) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(product_id,slug) DO NOTHING", params![id,product_id,name,input.icon,chrono::Utc::now().to_rfc3339(),slug]).map_err(duplicate_name)?;
-        if inserted == 1 {
-            break;
+        if slug != ALL_SOURCES {
+            // The unique index arbitrates concurrent creators, as for project slugs.
+            let inserted = db.execute("INSERT INTO sources(id,product_id,name,icon,created_at,slug) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(product_id,slug) DO NOTHING", params![id,product_id,name,input.icon,chrono::Utc::now().to_rfc3339(),slug]).map_err(duplicate_name)?;
+            if inserted == 1 {
+                break;
+            }
         }
         slug = suffixed(&base, suffix);
         suffix += 1;
@@ -306,7 +312,7 @@ mod tests {
           CREATE UNIQUE INDEX products_slug ON products(slug);
           CREATE TABLE sources(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),name TEXT NOT NULL COLLATE NOCASE,created_at TEXT NOT NULL,icon TEXT,UNIQUE(product_id,name));
           INSERT INTO products(id,name,retention_days,created_at,slug) VALUES ('orbit','Orbit',90,'2026-01-01','orbit'),('atlas','Atlas',90,'2026-01-02','atlas');
-          INSERT INTO sources(id,product_id,name,created_at) VALUES ('b','orbit','web-app','2026-01-02'),('a','orbit','Web App','2026-01-01'),('c','orbit','東京','2026-01-03'),('d','atlas','Web App','2026-01-01');
+          INSERT INTO sources(id,product_id,name,created_at) VALUES ('b','orbit','web-app','2026-01-02'),('a','orbit','Web App','2026-01-01'),('c','orbit','東京','2026-01-03'),('d','atlas','Web App','2026-01-01'),('e','atlas','All','2026-01-02');
           PRAGMA user_version=6;").unwrap();
         migrate(&mut db).unwrap();
         migrate(&mut db).unwrap();
@@ -320,7 +326,11 @@ mod tests {
                 ("c".into(), "source".into())
             ]
         );
-        assert_eq!(slugs(&db, "atlas"), [("d".into(), "web-app".into())]);
+        // `all` names the combined view in workspace URLs, so a source never takes it.
+        assert_eq!(
+            slugs(&db, "atlas"),
+            [("d".into(), "web-app".into()), ("e".into(), "all-2".into())]
+        );
         assert!(
             db.execute("UPDATE sources SET slug='web-app' WHERE id='b'", [])
                 .is_err()
@@ -385,6 +395,8 @@ mod tests {
                 .slug,
             format!("{}-2", "a".repeat(62))
         );
+        assert_eq!(source(&orbit.id, None, "All").unwrap().slug, "all-2");
+        assert_eq!(source(&orbit.id, None, "all!").unwrap().slug, "all-3");
         let atlas = product("Atlas");
         assert_eq!(source(&atlas.id, None, "Web App").unwrap().slug, "web-app");
         drop(db);

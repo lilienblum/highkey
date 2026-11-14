@@ -30,6 +30,7 @@ import { WorkspaceSidebar } from "./workspace-sidebar";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { api, type Product, type Source } from "@/lib/api";
 import { readPreference, savePreference } from "@/lib/preferences";
+import { findSource, sourceParam } from "@/lib/workspace-search";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { LiveUpdates } from "./live-updates";
@@ -152,10 +153,9 @@ export function AppShell({
     ? (drilldown.sourceId ?? "all")
     : (search.source ?? (requestedProject ? "all" : (sourceSelection[product?.id ?? ""] ?? "all")));
   // URLs name sources by slug; IDs come from older links, drilldowns and saved choices.
-  const source =
-    product?.sources?.find((source) => source.slug === requestedSource) ??
-    product?.sources?.find((source) => source.id === requestedSource);
+  const source = findSource(product?.sources, requestedSource);
   const sourceId = source?.id;
+  const sourceValue = sourceParam(product?.sources, sourceId);
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
     search.invalidWorkspace ||
@@ -172,7 +172,7 @@ export function AppShell({
     if (
       projectSlug !== product.slug ||
       search.project !== undefined ||
-      search.source !== (source?.slug ?? "all") ||
+      search.source !== sourceValue ||
       search.days !== days
     )
       void navigate({
@@ -180,7 +180,7 @@ export function AppShell({
         search: (previous) => ({
           ...previous,
           project: undefined,
-          source: source?.slug ?? "all",
+          source: sourceValue,
           days,
         }),
         replace: true,
@@ -194,7 +194,7 @@ export function AppShell({
     missingSource,
     days,
     sourceId,
-    source?.slug,
+    sourceValue,
     projectSlug,
     view,
     search.project,
@@ -306,13 +306,13 @@ export function AppShell({
           sourceId={sourceId}
           picker={projectPicker}
           navigationReady={preferencesReady}
-          onSourceChange={(slug) => {
+          onSourceChange={(id) => {
             if (!product) return;
             void navigate({
               ...workspaceTarget(view === "/settings" ? "/" : view, product.slug),
               search: {
                 project: undefined,
-                source: slug || "all",
+                source: sourceParam(product.sources, id),
                 days,
                 period: search.period,
                 snapshot: search.snapshot,

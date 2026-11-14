@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  findSource,
   sourceParam,
   validateWorkspaceSearch,
   validateOverviewSearch,
@@ -73,6 +74,21 @@ test("workspace source links name a catalog source by its slug", () => {
   expect(sourceParam(sources, "f7ec76d3-4b2a-4c1d-8e9f-0a1b2c3d4e5f")).toBe(
     "f7ec76d3-4b2a-4c1d-8e9f-0a1b2c3d4e5f",
   );
+});
+test("workspace source links resolve slugs, then legacy IDs, and never treat all as a source", () => {
+  const sources = [
+    { id: "0195f1c2-7b3a-7c4d-9e5f-6a7b8c9d0e1f", slug: "web-app" },
+    // Only data from before the slug was reserved can hold `all`.
+    { id: "0195f1c2-7b3a-7c4d-9e5f-6a7b8c9d0e20", slug: "all" },
+  ];
+  expect(findSource(sources, "web-app")).toBe(sources[0]);
+  expect(findSource(sources, sources[0].id)).toBe(sources[0]);
+  expect(findSource(sources, "all")).toBeUndefined();
+  expect(findSource(sources, undefined)).toBeUndefined();
+  expect(findSource(sources, "missing")).toBeUndefined();
+  // Such a source keeps an ID link, which still selects it.
+  expect(sourceParam(sources, sources[1].id)).toBe(sources[1].id);
+  expect(findSource(sources, sourceParam(sources, sources[1].id))).toBe(sources[1]);
 });
 test("Explore URL validation preserves typed filter text and bounded pagination", () => {
   for (const value of ["true", "42", '"42"', '"build"']) {
