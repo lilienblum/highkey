@@ -89,7 +89,11 @@ function AutomaticUpdates({
     // Reconcile even without channels: ephemeral hints may be lost, or collection
     // may be running in standalone mode. Hidden/offline tabs do no polling work.
     const timer = setInterval(() => {
-      if (available()) markDirty();
+      if (!available()) return;
+      markDirty();
+      // Without channels nothing signals a dashboard, view or source an agent saved, so every
+      // page (Logs and Settings too) polls for them. With channels, those signals arrive on their own.
+      if (pollOnly.current) dashboardsChanged.current?.();
     }, 30_000);
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("focus", resume);
@@ -111,9 +115,6 @@ function AutomaticUpdates({
       lastRefresh.current = Date.now();
       setDirty(false);
       onRefresh();
-      // Without channels nothing signals a dashboard, view or source an agent saved, so the poll
-      // does what a dashboards signal does. With channels, those signals arrive on their own.
-      if (pollOnly.current) dashboardsChanged.current?.();
     }, delay);
     return () => clearTimeout(timer);
   }, [dirty, available, busy, productId, view, onRefresh, minIntervalMs]);
