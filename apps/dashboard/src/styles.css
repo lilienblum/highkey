@@ -3346,9 +3346,13 @@ button.workspace-dashboards-menu-link {
 .workspace-sidebar button[data-slot="sidebar-menu-sub-button"] {
   width: 100%;
 }
+/* A page's actions sit on one centred row; an icon-only button has no baseline to ride. */
 .dashboard-actions {
   position: relative;
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .dashboard-actions-status {
   position: absolute;
