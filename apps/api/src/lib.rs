@@ -1,4 +1,5 @@
 pub mod changes;
+pub mod dashboards;
 pub mod error;
 pub mod ingest;
 pub mod logs;
