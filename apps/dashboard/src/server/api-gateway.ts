@@ -34,6 +34,7 @@ export async function proxyApi(request: Request): Promise<Response> {
     "content-type",
     "content-encoding",
     "x-piko-admin",
+    "x-piko-origin",
     "origin",
     "access-control-request-method",
     "access-control-request-headers",

@@ -9,6 +9,7 @@ export type Source = {
   icon: SourceIconId | null;
   created_at: string;
 };
+export type DashboardLink = { id: string; slug: string; name: string };
 export type Product = {
   slug: string;
   website_url: string | null;
@@ -16,6 +17,8 @@ export type Product = {
   id: string;
   name: string;
   sources: Source[];
+  /** Named dashboards, ordered by name; absent when an older API or a mock omits them. */
+  dashboards?: DashboardLink[];
   retention_days: number;
   created_at: string;
 };
@@ -63,6 +66,8 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public retryAfterMs?: number,
+    /** The parsed JSON error body, when the response had one. */
+    public payload?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -77,7 +82,11 @@ export async function api<T>(
     method,
     credentials: "same-origin",
     signal,
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: {
+      "content-type": "application/json",
+      "x-piko-admin": "1",
+      "x-piko-origin": "dashboard",
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
@@ -87,6 +96,7 @@ export async function api<T>(
       payload.error ?? `Request failed (${response.status})`,
       response.status,
       Number.isFinite(seconds) && seconds >= 0 && seconds <= 5 ? seconds * 1000 : undefined,
+      payload && typeof payload === "object" ? payload : undefined,
     );
   }
   return response.status === 204 ? (undefined as T) : response.json();
