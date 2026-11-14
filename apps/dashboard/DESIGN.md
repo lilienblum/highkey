@@ -224,7 +224,7 @@ Analytical regions use flat surfaces, fine seams, aligned labels, and tabular va
 **Key Characteristics:**
 
 - Sumi-ink surfaces, warm text, orange actions, and yellow/violet/aqua data accents.
-- Geist typography: Geist for interface text, Geist Mono for literal code and identifiers, and Geist Pixel for page titles and measurements.
+- Geist typography: Geist for interface text, Geist Mono for literal code, identifiers, and card headings, and Geist Pixel for page titles and measurements.
 - Ordered-dither (Bayer 4×4, 2px pixel) screen tones wherever the interface would otherwise use a translucent tint.
 - Flat analytical fields, small square metrics, and rectangular reports; contained forms and inspection.
 - Glossy pill actions and segmented choices, inset fields, one focus outline, and stable geometry.
@@ -269,9 +269,9 @@ Code snippets, raw JSON, and inspected values use Kanagawa Wave syntax roles: st
 
 **Display Font:** Geist Pixel Variable (single 400 weight, OFL-1.1, self-hosted) for page titles and measurement values, falling back to Geist.
 **Body Font:** Geist Variable, with sans-serif fallback.
-**Code Font:** Geist Mono Variable (self-hosted, OFL-1.1) through the `--font-mono` token, with the platform monospace stack as fallback, for identifiers, keys, properties, snippets, and raw values.
+**Code Font:** Geist Mono Variable (self-hosted, OFL-1.1) through the `--font-mono` token, with the platform monospace stack as fallback, for identifiers, keys, properties, snippets, raw values, and card headings.
 
-**Character:** one type family in three cuts. Geist carries labels, controls, and prose; Geist Mono sets literal code and identifiers; Geist Pixel sets the numbers people come to read, matching the dithered marks around them. Size and alignment carry hierarchy because the pixel cut has a single weight; oversized display typography does not compete with the data.
+**Character:** one type family in three cuts. Geist carries labels, controls, and prose; Geist Mono sets literal code, identifiers, and the card headings that read as instrument labels; Geist Pixel sets the numbers people come to read, matching the dithered marks around them. Size and alignment carry hierarchy because the pixel cut has a single weight; oversized display typography does not compete with the data.
 
 ### Hierarchy
 
@@ -282,7 +282,7 @@ Code snippets, raw JSON, and inspected values use Kanagawa Wave syntax roles: st
 - **Supporting:** page explanations, with a measured line length of up to (65ch).
 - **Label:** field labels, metadata, legends, and table headers. Labels use sentence case; chart ticks and secondary table annotations can use the observed smaller (11px) treatment.
 
-The logo is a distinct wordmark treatment, not an additional heading scale. Use Geist Mono only where a literal identifier or code structure benefits from it; keycaps and labels stay in Geist.
+The logo is a distinct wordmark treatment, not an additional heading scale. Use Geist Mono only where a literal identifier or code structure benefits from it, plus card headings (metric labels and widget titles), which are set as instrument labels at 13px and a level 500 weight without tracking; keycaps and all other labels stay in Geist. The base interface font stays proportional: mono glyphs are wider, so labels, selects, and source names would truncate sooner, and prose would read slower.
 
 **The Value Alignment Rule.** Use tabular numerals for measurements, percentages, durations, and times that readers compare across rows. Geist Pixel has proportional digits only, so it is reserved for single headline values; anything compared down a column stays in Geist with tabular numerals.
 
@@ -308,9 +308,9 @@ Ordered dither uses the 4×4 Bayer matrix with 2px pixels on a 4px (CSS) or 8px 
 - **25%:** a regular dot grid; active destination navigation (brighter ink on hover), the last 4px of a breakdown bar, the middle chart band, a pressed filled action, hovered and focused log rows (darker ink over a lifted face), and the backdrop screen.
 - **50%:** a checkerboard; quiet-action hover and open states, the highlighted menu or select row, the 4px before a bar's last step, the chart band under the line, and log volume columns (aqua ink under a solid 2px cap, with error volume solid red from the base).
 - **75%:** an inverse dot grid; quiet actions while pressed.
-- **Leaders:** a row of 2px dots every 4px runs from metric labels, sidebar section labels, and widget headings to the edge of their region.
+- **Leaders:** a row of 2px dots every 4px runs from sidebar section labels and date-period labels to the edge of their region. Card headings (metric labels and widget titles) lead instead into a braille strip: even six-dot cells (⠿) drawn in the same 2px dots on the 4px pitch with 4px between cells (10px tall), in the quiet rule ink. It is decorative and hidden from assistive technology.
 - **Seams:** structural rules are dotted in the same unit: 2px pixels on a 4px pitch in `--rule-ink` (border 70%, supporting text 30%). That covers the sidebar edge and nested sidebar rails, open analytical regions and their dividers, column headers, line tabs, and popover and sheet section rules. They are drawn with `border-image`, so layout and backgrounds hold. Field and card frames stay solid, and fine row hairlines stay continuous for scanning. Under forced colors seams fall back to plain system borders.
-- **Horizon:** the main area's top edge carries a 14px falloff: a dotted rule, then rows at half, quarter, and eighth density. It is tinted from the sidebar field's orange at the left, through neutral, to violet at the right. It is decorative, ignores the pointer, and is hidden under forced colors.
+- **Horizon:** the main area's top edge carries a 10px falloff: a dotted rule, then rows at half and quarter density, in the neutral rule ink. It fades in and out symmetrically over the first and last 240px (at most 30% of the width each), so the sidebar's dither field keeps the corner. It is decorative, ignores the pointer, and is hidden under forced colors.
 
 ### Shadow Vocabulary
 
