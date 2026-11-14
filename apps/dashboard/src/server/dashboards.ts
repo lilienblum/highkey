@@ -1,6 +1,7 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { StoredDashboard } from "../lib/dashboards";
+import { browserGcTime } from "../lib/cache-time";
 
 /** Project and dashboard keys are slugs or UUIDs; anything else cannot name one. */
 const key = /^[A-Za-z0-9-]{1,128}$/;
@@ -52,7 +53,7 @@ export const dashboardQuery = (project: string, dashboard: string) =>
     queryKey: [...dashboardQueries, project, dashboard] as const,
     queryFn: () => getDashboard({ data: { project, dashboard } }),
     staleTime: Number.POSITIVE_INFINITY,
-    gcTime: 30 * 60_000,
+    gcTime: browserGcTime(30 * 60_000),
     retry: 2,
     refetchOnMount: false,
     refetchOnWindowFocus: false,

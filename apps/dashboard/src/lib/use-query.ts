@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery as useCachedQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, queryProduct, type QueryResult } from "./api";
+import { browserGcTime } from "./cache-time";
 
 /** A cached result remembers the exact request that produced it. */
 type Cached = { request: string; data: QueryResult };
@@ -50,7 +51,7 @@ export function useQuery(
     },
     // Freshness is driven by the request identity below and the workspace's live updates.
     staleTime: Number.POSITIVE_INFINITY,
-    gcTime: 10 * 60_000,
+    gcTime: browserGcTime(10 * 60_000),
     retry: false,
     refetchOnMount: false,
     refetchOnWindowFocus: false,

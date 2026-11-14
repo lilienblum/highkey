@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "./api";
 import { runWidget, type RunResult, type Widget } from "./dashboards";
+import { browserGcTime } from "./cache-time";
 
 /** At most this many widget runs per page, so one dashboard never floods the API's query gate. */
 const CONCURRENT_RUNS = 3;
@@ -111,7 +112,7 @@ export function useWidgetRun(
     },
     // Freshness is driven by the request identity below and the workspace's live updates.
     staleTime: Number.POSITIVE_INFINITY,
-    gcTime: 10 * 60_000,
+    gcTime: browserGcTime(10 * 60_000),
     retry: false,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
