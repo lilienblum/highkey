@@ -125,7 +125,7 @@ pub fn save(
     if let Some(id) = &id {
         get(db, product_id, id)?;
     }
-    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     db.execute("INSERT INTO sources(id,product_id,name,icon,created_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET name=?3,icon=?4", params![id,product_id,input.name.trim(),input.icon,chrono::Utc::now().to_rfc3339()])
         .map_err(|error| match &error {
             rusqlite::Error::SqliteFailure(code, _) if code.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE => ApiError::bad("A source with that name already exists in this project"),

@@ -46,7 +46,7 @@ pub fn create(db: &rusqlite::Connection, id: &str, input: KeyInput) -> ApiResult
         return Err(ApiError::bad("Key label must be 1–80 bytes"));
     }
     let key = store::secret("pl_");
-    let key_id = uuid::Uuid::new_v4().to_string();
+    let key_id = uuid::Uuid::now_v7().to_string();
     db.execute("INSERT INTO log_keys(id,product_id,source_id,label,prefix,hash,created_at) VALUES (?,?,?,?,?,?,?)", params![key_id,id,source,input.label.trim(),&key[..11],store::hash(&key),chrono::Utc::now().to_rfc3339()]).map_err(anyhow::Error::from)?;
     Ok(json!({"id":key_id,"key":key,"source_id":source}))
 }

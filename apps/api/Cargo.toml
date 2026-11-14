@@ -15,7 +15,7 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 duckdb = { version = "=1.20000.1", features = ["bundled", "json"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

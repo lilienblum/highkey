@@ -290,7 +290,7 @@ pub fn decode(headers: &HeaderMap, body: &[u8]) -> ApiResult<Vec<Log>> {
                 };
                 logs.push(Log {
                     log_id: text("log.record.uid")
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                        .unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
                     timestamp,
                     level: level.into(),
                     message: message

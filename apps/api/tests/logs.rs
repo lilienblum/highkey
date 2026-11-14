@@ -645,6 +645,27 @@ async fn otlp_json_protobuf_gzip_and_limits_follow_the_same_storage_contract() {
     assert_eq!(response.status(), 413);
     test.close().await;
 }
+#[test]
+fn otlp_records_without_uid_get_time_ordered_ids() {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert("content-type", "application/json".parse().unwrap());
+    let record =
+        json!({"timeUnixNano":"1767225600000000000","body":{"stringValue":"Same instant"}});
+    let payload = json!({"resourceLogs":[{"scopeLogs":[{"logRecords":[record, record]}]}]});
+    let logs = piko::logs::otlp::decode(&headers, payload.to_string().as_bytes()).unwrap();
+    assert_eq!(logs.len(), 2);
+    assert_eq!(logs[0].timestamp, logs[1].timestamp);
+    for log in &logs {
+        assert_eq!(
+            uuid::Uuid::parse_str(&log.log_id)
+                .unwrap()
+                .get_version_num(),
+            7
+        );
+    }
+    // UUIDv7 ids sort by creation, so the batch order survives an id sort.
+    assert!(logs[0].log_id < logs[1].log_id);
+}
 
 #[tokio::test]
 async fn facets_list_every_known_service_environment_and_typed_attribute() {

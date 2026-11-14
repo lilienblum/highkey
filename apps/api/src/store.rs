@@ -183,7 +183,7 @@ pub fn save_product(
         Some(value) => crate::website::normalize(value)?,
         None => previous.as_ref().and_then(|p| p.website_url.clone()),
     };
-    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     let tx = db.unchecked_transaction().map_err(anyhow::Error::from)?;
     if previous.is_some() {
         tx.execute("UPDATE products SET name=?2,retention_days=?3,website_url=?4,favicon=CASE WHEN website_url IS ?4 THEN favicon ELSE NULL END,favicon_version=CASE WHEN website_url IS ?4 THEN favicon_version ELSE NULL END WHERE id=?1", params![id,input.name.trim(),input.retention_days,website]).map_err(anyhow::Error::from)?;
@@ -225,7 +225,7 @@ pub fn create_key(
     }
     let allowed_origins = crate::origins::normalize(allowed_origins)?;
     let key = secret("pk_");
-    let key_id = uuid::Uuid::new_v4().to_string();
+    let key_id = uuid::Uuid::now_v7().to_string();
     db.execute("INSERT INTO ingestion_keys(id,product_id,label,prefix,hash,created_at,source_id,allowed_origins) VALUES (?,?,?,?,?,?,?,?)",params![key_id,id,label.trim(),&key[..11],hash(&key),chrono::Utc::now().to_rfc3339(),source_id,serde_json::to_string(&allowed_origins).map_err(anyhow::Error::from)?]).map_err(anyhow::Error::from)?;
     Ok(
         serde_json::json!({"id":key_id,"key":key,"source_id":source_id,"allowed_origins":allowed_origins}),
