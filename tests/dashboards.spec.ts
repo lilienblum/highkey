@@ -926,6 +926,58 @@ test("a failed document refresh keeps the dashboard and says so quietly", async 
   expect(await card?.evaluate((element) => element.isConnected)).toBe(true);
 });
 
+/** Opens the dashboard in poll mode and fails the next poll's document read, so the note shows. */
+async function openStale(page: Page) {
+  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.clock.install();
+  const hydrated = page.waitForResponse("**/_piko/runtime");
+  await page.goto(dashboardUrl());
+  await hydrated;
+  await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
+  const outage = { failing: true, reads: 0, hold: Promise.resolve() };
+  await page.route("**/_serverFn/**", async (route) => {
+    outage.reads++;
+    await outage.hold;
+    if (outage.failing) await route.fulfill({ status: 503, body: "Service Unavailable" });
+    else await route.fallback();
+  });
+  await page.clock.runFor(31_000);
+  const note = page.getByText("Couldn’t refresh this dashboard");
+  await expect(note).toBeVisible();
+  return { note, outage };
+}
+const focusIsOnBody = (page: Page) =>
+  page.evaluate(() => document.activeElement === document.body || !document.activeElement);
+
+test("the stale note and Try again stay put while a retry is under way", async ({ page }) => {
+  const { note, outage } = await openStale(page);
+  const tryAgain = page.getByRole("button", { name: "Try again" });
+  // Hold the retry's read, so the refetch is certainly in flight while the outage lasts.
+  let release = () => {};
+  outage.hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const before = outage.reads;
+  await tryAgain.click();
+  await expect.poll(() => outage.reads).toBeGreaterThan(before);
+  await expect(note).toBeVisible();
+  await expect(tryAgain).toBeVisible();
+  release();
+  // The failed read backs off on the fake clock; the note stays through every retry.
+  await page.clock.runFor(10_000);
+  await expect(note).toBeVisible();
+  await expect(tryAgain).toBeVisible();
+});
+
+test("Try again hands focus on when the dashboard refreshes", async ({ page }) => {
+  const { note, outage } = await openStale(page);
+  outage.failing = false;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(note).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  expect(await focusIsOnBody(page)).toBe(false);
+});
+
 test("returning to a dashboard shows its last results while they refresh", async ({ page }) => {
   const name = `Return ${Date.now()}`;
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {

@@ -70,7 +70,8 @@ export function DashboardPage() {
       key={`${product.id}:${stored.id}`}
       stored={stored}
       product={product}
-      stale={document.isError && !document.isFetching}
+      stale={document.isError}
+      refreshing={document.isFetching}
       retry={() => void document.refetch()}
     />
   );
@@ -80,12 +81,15 @@ function DashboardView({
   stored,
   product,
   stale,
+  refreshing,
   retry,
 }: {
   stored: StoredDashboard;
   product: Product;
-  /** The last refresh failed, so this is the last document that loaded. */
+  /** The last refresh failed, so this is the last document that loaded. It holds while retrying. */
   stale: boolean;
+  /** A read is under way, a retry of the failed one included. */
+  refreshing: boolean;
   retry: () => void;
 }) {
   const { setLiveSignals } = useWorkspace();
@@ -124,7 +128,13 @@ function DashboardView({
   return (
     <>
       <PageHeader title={dashboard.name} description={dashboard.description ?? ""}>
-        <DashboardActions stored={stored} product={product} stale={stale} retry={retry} />
+        <DashboardActions
+          stored={stored}
+          product={product}
+          stale={stale}
+          refreshing={refreshing}
+          retry={retry}
+        />
       </PageHeader>
       {dashboard.widgets.length ? (
         <div className="dashboard-grid">
@@ -169,11 +179,13 @@ function DashboardActions({
   stored,
   product,
   stale,
+  refreshing,
   retry,
 }: {
   stored: StoredDashboard;
   product: Product;
   stale: boolean;
+  refreshing: boolean;
   retry: () => void;
 }) {
   const { reload } = useWorkspace();
@@ -187,6 +199,14 @@ function DashboardActions({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  // Try again leaves with the note once a read works; focus goes to the menu, not to the page.
+  const retried = useRef(false);
+  useEffect(() => {
+    if (stale || !retried.current) return;
+    retried.current = false;
+    const active = globalThis.document.activeElement;
+    if (!active || active === globalThis.document.body) trigger.current?.focus();
+  }, [stale]);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
@@ -236,7 +256,19 @@ function DashboardActions({
         {stale ? "Couldn’t refresh this dashboard" : ""}
       </span>
       {stale && (
-        <Button type="button" variant="ghost" size="sm" onClick={retry}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          // Not disabled: it keeps focus while the retry runs.
+          aria-disabled={refreshing || undefined}
+          onClick={() => {
+            if (refreshing) return;
+            retried.current = true;
+            retry();
+          }}
+        >
+          {refreshing && <Spinner data-icon="inline-start" aria-hidden="true" />}
           Try again
         </Button>
       )}
