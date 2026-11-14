@@ -864,9 +864,22 @@ async fn concurrent_saves_with_the_same_base_have_one_winner() {
 async fn slugs_are_unique_stable_and_never_empty() {
     let test = Test::new();
     let project = test.project("Shop").await;
+    // The project slug rule, so non-ASCII letters are dropped, not transliterated.
     assert_eq!(
         create_dashboard(&test, &project, "Ünïcode ✨").await["slug"],
+        "n-code"
+    );
+    assert_eq!(
+        create_dashboard(&test, &project, "Café sales").await["slug"],
+        "caf-sales"
+    );
+    assert_eq!(
+        create_dashboard(&test, &project, "✨").await["slug"],
         "dashboard"
+    );
+    assert_eq!(
+        create_dashboard(&test, &project, "!!!").await["slug"],
+        "dashboard-2"
     );
     assert_eq!(
         create_dashboard(&test, &project, "Checkout").await["slug"],

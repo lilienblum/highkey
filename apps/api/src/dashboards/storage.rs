@@ -174,12 +174,10 @@ pub fn get(db: &rusqlite::Connection, product: &str, key: &str) -> Result<Stored
     load(db, &id)
 }
 
-/// A slug for a dashboard name. A name with no letter or digit, or with letters outside ASCII
-/// (which slugifying would mangle, as in `n-code` for `Ünïcode`), becomes `dashboard`.
+/// A slug for a dashboard name, by the project rule. Only a name that rule empties (no ASCII
+/// letter or digit) becomes `dashboard`.
 fn dashboard_slug(name: &str) -> String {
-    let ascii = name.chars().any(|c| c.is_ascii_alphanumeric());
-    let foreign = name.chars().any(|c| c.is_alphanumeric() && !c.is_ascii());
-    if ascii && !foreign {
+    if name.chars().any(|c| c.is_ascii_alphanumeric()) {
         store::project_slug(name)
     } else {
         "dashboard".into()
