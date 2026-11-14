@@ -123,11 +123,16 @@ fn log_ceiling(ceiling: &Ceiling) {
         Ceiling::Derived { bytes, of } => tracing::info!(
             limit_mib = bytes >> 20,
             of_mib = of >> 20,
-            "Memory ceiling (RLIMIT_DATA) set to 80% of the smaller of the cgroup limit and the host's memory"
+            "Memory ceiling (RLIMIT_DATA) set by {}=auto to 80% of the smaller of the cgroup limit and the host's memory",
+            memory::SETTING
         ),
         Ceiling::Off => tracing::info!("No memory ceiling: {} is off", memory::SETTING),
+        Ceiling::Unset => tracing::info!(
+            "No memory ceiling: set {}=auto, or a size such as 2G, to cap the API's memory",
+            memory::SETTING
+        ),
         Ceiling::Unknown => tracing::warn!(
-            "No memory ceiling: neither a cgroup limit nor /proc/meminfo could be read; set {}",
+            "No memory ceiling: neither a cgroup limit nor /proc/meminfo could be read; set {} to a size such as 2G",
             memory::SETTING
         ),
         Ceiling::Unsupported => {

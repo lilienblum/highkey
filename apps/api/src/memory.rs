@@ -1,22 +1,25 @@
-//! A ceiling on the API's own memory.
+//! An opt-in ceiling on the API's own memory.
 //!
 //! DuckDB's `memory_limit` covers its buffers and aggregate states, not every allocation: a
 //! single string or list value, among others, is untracked. Without a ceiling, one runaway
 //! query grows until the kernel's OOM killer takes the API down (ingestion included), or
-//! starves the rest of the host. So on Linux the API sets `RLIMIT_DATA` at startup: an
+//! starves the rest of the host. So on Linux the API can set `RLIMIT_DATA` at startup: an
 //! allocation past it fails instead, which DuckDB reports as an Out of Memory error for that
 //! one query. An allocation of the API's own that fails still ends the process, as the OOM
 //! killer would, but the host keeps its memory.
 //!
-//! `RLIMIT_DATA` counts the process's private writable mappings (heap, `mmap`ed allocations
-//! and thread stacks) whether or not they are resident, so the default leaves a fifth of the
-//! host's memory for everything else.
+//! The ceiling is off unless `PIKO_MEMORY_LIMIT` asks for it. `RLIMIT_DATA` counts the
+//! process's private writable mappings (heap, `mmap`ed allocations and thread stacks)
+//! whether or not they are resident, and every open project database reserves thread stacks,
+//! so a ceiling sized to the container's memory can refuse ordinary work once a few projects
+//! are open. `auto` leaves a fifth of the smaller of the cgroup limit and the host's memory
+//! for everything else; a size sets it directly.
 use std::path::{Path, PathBuf};
 
 /// The setting that overrides the default ceiling.
 pub const SETTING: &str = "PIKO_MEMORY_LIMIT";
-/// The default ceiling is this share (in percent) of the smaller of the cgroup memory limit and
-/// the host's memory.
+/// `auto` sets the ceiling to this share (in percent) of the smaller of the cgroup memory limit
+/// and the host's memory.
 const SHARE_PERCENT: u64 = 80;
 
 /// The ceiling to set, and why.
@@ -24,10 +27,13 @@ const SHARE_PERCENT: u64 = 80;
 pub enum Ceiling {
     /// From `PIKO_MEMORY_LIMIT`.
     Configured(u64),
-    /// `SHARE_PERCENT` of `of`, the smaller of the cgroup limit and the host's memory.
+    /// `PIKO_MEMORY_LIMIT=auto`: `SHARE_PERCENT` of `of`, the smaller of the cgroup limit and the
+    /// host's memory.
     Derived { bytes: u64, of: u64 },
     /// `PIKO_MEMORY_LIMIT` is `0` or `off`.
     Off,
+    /// `PIKO_MEMORY_LIMIT` is unset or empty.
+    Unset,
     /// Neither a cgroup limit nor the host's memory could be read.
     Unknown,
     /// Not Linux, where `RLIMIT_DATA` would not count every allocation the same way.
@@ -37,13 +43,14 @@ impl Ceiling {
     pub fn bytes(&self) -> Option<u64> {
         match self {
             Self::Configured(bytes) | Self::Derived { bytes, .. } => Some(*bytes),
-            Self::Off | Self::Unknown | Self::Unsupported => None,
+            Self::Off | Self::Unset | Self::Unknown | Self::Unsupported => None,
         }
     }
 }
 
-/// `PIKO_MEMORY_LIMIT`: bytes with an optional `K`, `M` or `G` suffix (powers of 1,024), or
-/// `0` or `off` for no ceiling, which is `None`.
+/// A size for `PIKO_MEMORY_LIMIT`: bytes with an optional `K`, `M` or `G` suffix (powers of
+/// 1,024), or `0` or `off` for no ceiling, which is `None`. `auto` and empty are handled by
+/// `ceiling`.
 pub fn parse_setting(text: &str) -> Result<Option<u64>, String> {
     let text = text.trim();
     if text.eq_ignore_ascii_case("off") {
@@ -74,7 +81,7 @@ pub fn parse_setting(text: &str) -> Result<Option<u64>, String> {
 
 fn invalid(text: &str) -> String {
     format!(
-        "{SETTING} must be bytes with an optional K, M or G suffix (such as 2G), or 0 or off for no limit; got `{text}`"
+        "{SETTING} must be bytes with an optional K, M or G suffix (such as 2G), auto, or 0 or off for no limit; got `{text}`"
     )
 }
 
@@ -95,14 +102,19 @@ fn mem_total(meminfo: &str) -> Option<u64> {
     }
 }
 
-/// The ceiling for a `setting` (the value of `PIKO_MEMORY_LIMIT`, if set), the contents of the
-/// cgroup limit files that apply to the process, and `/proc/meminfo`.
+/// The ceiling for a `setting` (the value of `PIKO_MEMORY_LIMIT`, if set; unset and empty both
+/// mean no ceiling, as Compose's `${PIKO_MEMORY_LIMIT:-}` passes an empty one), the contents of
+/// the cgroup limit files that apply to the process, and `/proc/meminfo`.
 pub fn ceiling(
     setting: Option<&str>,
     cgroup_limits: &[String],
     meminfo: Option<&str>,
 ) -> Result<Ceiling, String> {
-    if let Some(text) = setting {
+    let text = match setting.map(str::trim) {
+        None | Some("") => return Ok(Ceiling::Unset),
+        Some(text) => text,
+    };
+    if !text.eq_ignore_ascii_case("auto") {
         return Ok(match parse_setting(text)? {
             Some(bytes) => Ceiling::Configured(bytes),
             None => Ceiling::Off,
@@ -175,7 +187,8 @@ pub fn apply() -> anyhow::Result<Ceiling> {
     #[cfg(not(target_os = "linux"))]
     {
         // Check the setting anyway, so a mistake shows up before it reaches a server.
-        if let Some(text) = setting.as_deref() {
+        let text = setting.as_deref().map(str::trim).unwrap_or_default();
+        if !text.is_empty() && !text.eq_ignore_ascii_case("auto") {
             parse_setting(text).map_err(anyhow::Error::msg)?;
         }
         Ok(Ceiling::Unsupported)
@@ -243,11 +256,11 @@ mod tests {
     }
 
     #[test]
-    fn the_default_is_most_of_the_smaller_of_the_cgroup_and_the_host() {
+    fn auto_is_most_of_the_smaller_of_the_cgroup_and_the_host() {
         let meminfo = "MemTotal:        8388608 kB\nMemFree:         1024 kB\n";
         // The host alone: 80% of 8 GiB.
         assert_eq!(
-            ceiling(None, &[], Some(meminfo)),
+            ceiling(Some("auto"), &[], Some(meminfo)),
             Ok(Ceiling::Derived {
                 bytes: 8 * GIB * 4 / 5,
                 of: 8 * GIB
@@ -256,7 +269,7 @@ mod tests {
         // A cgroup v2 limit below the host's memory wins; `max` means no limit.
         let limits = vec!["max\n".to_string(), format!("{}\n", 2 * GIB)];
         assert_eq!(
-            ceiling(None, &limits, Some(meminfo)),
+            ceiling(Some("auto"), &limits, Some(meminfo)),
             Ok(Ceiling::Derived {
                 bytes: 2 * GIB * 4 / 5,
                 of: 2 * GIB
@@ -265,19 +278,49 @@ mod tests {
         // An unlimited cgroup v1 value is larger than the host, so the host wins.
         let unlimited = vec!["9223372036854771712\n".to_string()];
         assert_eq!(
-            ceiling(None, &unlimited, Some(meminfo)).unwrap().bytes(),
+            ceiling(Some("auto"), &unlimited, Some(meminfo))
+                .unwrap()
+                .bytes(),
             Some(8 * GIB * 4 / 5)
         );
         // Only `max`, and no meminfo: nothing to go by.
         assert_eq!(
-            ceiling(None, &["max".to_string()], None),
+            ceiling(Some("auto"), &["max".to_string()], None),
             Ok(Ceiling::Unknown)
         );
-        assert_eq!(ceiling(None, &[], Some("garbage")), Ok(Ceiling::Unknown));
+        assert_eq!(
+            ceiling(Some("auto"), &[], Some("garbage")),
+            Ok(Ceiling::Unknown)
+        );
     }
 
     #[test]
-    fn the_setting_overrides_or_disables_the_default() {
+    fn unset_or_empty_means_no_ceiling() {
+        let meminfo = Some("MemTotal: 8388608 kB\n");
+        let limits = vec![format!("{GIB}")];
+        assert_eq!(ceiling(None, &limits, meminfo), Ok(Ceiling::Unset));
+        assert_eq!(ceiling(Some(""), &limits, meminfo), Ok(Ceiling::Unset));
+        assert_eq!(ceiling(Some("  "), &limits, meminfo), Ok(Ceiling::Unset));
+        assert_eq!(Ceiling::Unset.bytes(), None);
+        // Nothing to read is no problem when nothing is asked for.
+        assert_eq!(ceiling(None, &[], None), Ok(Ceiling::Unset));
+    }
+
+    #[test]
+    fn auto_is_case_insensitive_and_needs_something_to_go_by() {
+        let meminfo = Some("MemTotal: 4194304 kB\n");
+        assert_eq!(
+            ceiling(Some(" AUTO "), &[], meminfo),
+            Ok(Ceiling::Derived {
+                bytes: 4 * GIB * 4 / 5,
+                of: 4 * GIB
+            })
+        );
+        assert_eq!(ceiling(Some("auto"), &[], None), Ok(Ceiling::Unknown));
+    }
+
+    #[test]
+    fn a_size_sets_the_ceiling_and_off_disables_it() {
         let meminfo = Some("MemTotal: 8388608 kB\n");
         let limits = vec![format!("{GIB}")];
         assert_eq!(
