@@ -1,5 +1,10 @@
 import { useMemo } from "react";
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { queryReadOnly } from "./api";
 import type { LogResult } from "./logs";
 import { appendLogPage, MAX_BUFFERED_LOGS } from "./log-buffer";
@@ -28,6 +33,8 @@ export function useLogFeed(
   const live = follow && windowMs !== undefined;
   const query = useInfiniteQuery({
     queryKey,
+    // A source or filter change keeps the previous rows on screen until the new page arrives.
+    placeholderData: keepPreviousData,
     enabled: !!product && enabled,
     initialPageParam: undefined as LogBody | undefined,
     queryFn: async ({ pageParam, signal }): Promise<LogPage> => {

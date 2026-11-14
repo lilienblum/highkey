@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Search01Icon,
@@ -41,8 +41,10 @@ import { MAX_BUFFERED_LOGS } from "@/lib/log-buffer";
 const direction =
   "THESIS: A compact log workspace that keeps investigation beside the stream. OWN-WORLD: Kanagawa Wave, Geist, fine seams, Base UI controls and restrained severity colors. STORY: Search a project, locate a request, inspect its structured context. FIRST VIEWPORT: Query bar, time and follow controls, shallow volume histogram, aligned timestamp/severity/service/message rows. FORM: Extend the existing shell with the requested dense stream and a right-hand inspector.";
 export function Logs() {
-  const { product, sourceId } = useWorkspace();
-  return <LogExplorer key={`${product?.id}:${sourceId}`} />;
+  const { product } = useWorkspace();
+  // Only the project remounts the explorer: a source switch keeps the stream, histogram and
+  // filters in place and refreshes them.
+  return <LogExplorer key={product?.id} />;
 }
 function LogExplorer() {
   const { product, sourceId, now: workspaceNow } = useWorkspace();
@@ -59,6 +61,8 @@ function LogExplorer() {
   const opener = useRef<HTMLElement | null>(null);
   const window = search.logWindow ?? "1h";
   const scope = JSON.stringify([product?.id, sourceId, search]);
+  // The stream and filters stay mounted across a source switch; other query changes reset them.
+  const viewKey = JSON.stringify([product?.id, search]);
   const selected = selection?.scope === scope ? selection.log : undefined;
   function setSelected(log: LogRow | undefined) {
     setSelection(log ? { log, scope } : undefined);
@@ -148,17 +152,7 @@ function LogExplorer() {
   );
   return (
     <>
-      <PageHeader title="Logs" description="Investigate what happened across your services.">
-        <Button
-          variant="outline"
-          size="sm"
-          nativeButton={false}
-          role="link"
-          render={<Link {...workspaceTarget("/settings", product.slug)} hash="logs" />}
-        >
-          Connect a source
-        </Button>
-      </PageHeader>
+      <PageHeader title="Logs" description="Investigate what happened across your services." />
       <section className="logs-workspace" aria-label="Project logs">
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static design provenance, with no dynamic or user content. */}
         <span hidden dangerouslySetInnerHTML={{ __html: `<!-- ${direction} -->` }} />
@@ -285,7 +279,7 @@ function LogExplorer() {
           </span>
         </div>
         {advanced && (
-          <LogFilters key={scope} search={search} facets={data?.facets} onApply={apply} />
+          <LogFilters key={viewKey} search={search} facets={data?.facets} onApply={apply} />
         )}
         {search.invalidLogs ? (
           <ErrorState
@@ -402,7 +396,7 @@ function LogExplorer() {
             </div>
           ) : data?.logs.length ? (
             <LogStream
-              key={scope}
+              key={viewKey}
               logs={data.logs}
               timeZone={timeZone}
               viewportRef={viewportRef}

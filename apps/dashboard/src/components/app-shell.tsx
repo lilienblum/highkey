@@ -1,3 +1,4 @@
+import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
 import { dashboardRoute, workspaceTarget, workspaceView } from "@/lib/workspace-route";
@@ -333,6 +334,8 @@ export function AppShell({
             void navigate({
               ...workspaceTarget(view === "/settings" ? "/" : view, product.slug, dashboardSlug),
               search: {
+                // The log query and filters carry over to the new source; its cursor does not.
+                ...(view === "/logs" ? logFilters(currentSearch) : {}),
                 project: undefined,
                 source: sourceParam(product.sources, id),
                 days,
@@ -448,6 +451,10 @@ export function AppShell({
       </SidebarProvider>
     </Workspace.Provider>
   );
+}
+function logFilters(current: Record<string, unknown>) {
+  const { logBefore: _cursor, invalidLogs: _invalid, ...filters } = validateLogsSearch(current);
+  return filters;
 }
 export function PageHeader({
   title,

@@ -22,6 +22,7 @@ import {
   SidebarTrigger,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
@@ -181,6 +182,21 @@ export function WorkspaceSidebar({
           </SidebarGroup>
           <SidebarGroup className="workspace-sources">
             <SidebarGroupLabel>Sources</SidebarGroupLabel>
+            {product && (
+              <SidebarGroupAction
+                aria-label="Connect a source"
+                title="Connect a source"
+                render={
+                  <Link
+                    {...workspaceTarget("/settings", product.slug)}
+                    hash="logs"
+                    onClick={() => setOpenMobile(false)}
+                  />
+                }
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+              </SidebarGroupAction>
+            )}
             <SidebarGroupContent>
               <nav aria-label="Project sources">
                 <SidebarMenu>
@@ -210,6 +226,19 @@ export function WorkspaceSidebar({
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+                  {product && state === "collapsed" && !isMobile && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        tooltip="Connect a source"
+                        render={
+                          <Link {...workspaceTarget("/settings", product.slug)} hash="logs" />
+                        }
+                      >
+                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+                        <span className="sr-only">Connect a source</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </nav>
               {product && !product.sources.length && (

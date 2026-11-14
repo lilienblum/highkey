@@ -183,3 +183,30 @@ for (const collapsed of [false, true]) {
     });
   });
 }
+
+test("connect a source lives in the sidebar, not in page headers", async ({ page }) => {
+  for (const route of ["/", "/explore", "/logs"]) {
+    await page.goto(`/projects/${project.slug}${route === "/" ? "" : route}`);
+    const sources = page.locator(".workspace-sources");
+    await expect(
+      sources.getByRole("link", { name: "Connect a source", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("main").getByRole("link", { name: "Connect a source", exact: true }),
+    ).toHaveCount(0);
+  }
+  await page.getByRole("link", { name: "Connect a source", exact: true }).click();
+  await expect(page).toHaveURL(/settings.*#logs$/);
+});
+test("connect a source stays reachable from the collapsed rail", async ({ page }) => {
+  await page.addInitScript((id) => {
+    localStorage.setItem("piko:product", id);
+    localStorage.setItem("piko:sidebar", "collapsed");
+  }, project.id);
+  await page.goto(`/projects/${project.slug}/explore`);
+  const link = page.getByRole("link", { name: "Connect a source", exact: true });
+  // The rail is inert until preferences load, then the link is enabled.
+  await expect(link).toBeEnabled();
+  await link.click();
+  await expect(page).toHaveURL(/settings.*#logs$/);
+});

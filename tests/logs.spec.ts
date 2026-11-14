@@ -334,6 +334,7 @@ test("older-page failures retain rows and stale requests cannot replace a new qu
 });
 test("log settings create scoped keys and store independent retention", async ({ page }) => {
   await page.goto(`/projects/${project.slug}/logs`);
+  await expect(page.locator(".page-header").getByText("Connect a source")).toHaveCount(0);
   await page.getByRole("link", { name: "Connect a source", exact: true }).click();
   await expect(page).toHaveURL(/settings.*#logs$/);
   const settings = page.locator(".log-settings");
@@ -442,4 +443,85 @@ test("dragging across the log volume histogram narrows the query to those bucket
     "aria-pressed",
     "true",
   );
+});
+
+test("switching sources keeps the logs stream mounted and never flashes a skeleton", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const steady = await admin("/products", { name: `Steady logs ${stamp}`, retention_days: 30 });
+  const names = [`Alpha ${stamp}`, `Beta ${stamp}`];
+  for (const name of names) {
+    const source = await admin(`/products/${steady.id}/sources`, { name });
+    const sourceKey = (
+      await admin(`/products/${steady.id}/logs/keys`, { label: name, source_id: source.id })
+    ).key;
+    const word = name.split(" ")[0].toLowerCase();
+    const response = await fetch(`${endpoint}/api/logs/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${sourceKey}` },
+      body: JSON.stringify({
+        logs: Array.from({ length: 20 }, (_, i) => ({
+          log_id: `${word}-${stamp}-${i}`,
+          timestamp: new Date(Date.now() - i * 1000 - 10000).toISOString(),
+          level: "info",
+          service: "api",
+          message: `${word} message ${i}`,
+        })),
+      }),
+    });
+    expect(response.ok).toBe(true);
+  }
+  // Hold source-scoped log queries so the transition is observable.
+  let release = () => {};
+  let hold = false;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/logs/query", async (route) => {
+    if (hold && route.request().postDataJSON().source_id) await gate;
+    await route.continue().catch(() => {});
+  });
+  await page.goto(`/projects/${steady.slug}/logs`);
+  await expect(page.locator(".log-row").first()).toBeVisible();
+  const sources = page.getByRole("navigation", { name: "Project sources" });
+  await sources.getByRole("button", { name: names[0], exact: true }).click();
+  await expect(page.locator(".log-row").first()).toContainText("alpha");
+  await page.getByRole("button", { name: "Following", exact: true }).click();
+  await page.getByLabel("Search log messages").fill("message");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.locator(".log-row")).toHaveCount(20);
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__stream = document.querySelector(".logs-stream");
+    w.__volume = document.querySelector(".logs-volume");
+    w.__input = document.getElementById("log-message-search");
+    w.__flashes = 0;
+    new MutationObserver(() => {
+      if (
+        document.querySelector(
+          ".logs-placeholder, .logs-empty, .logs-volume .skeleton, .logs-volume [data-slot=skeleton]",
+        )
+      )
+        w.__flashes = (w.__flashes as number) + 1;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  hold = true;
+  await sources.getByRole("button", { name: names[1], exact: true }).click();
+  await expect(page.locator(".logs-stream")).toHaveAttribute("aria-busy", "true");
+  // The previous rows stay in place while the new source loads.
+  await expect(page.locator(".log-row").first()).toContainText("alpha");
+  await expect(page.getByLabel("Search log messages")).toHaveValue("message");
+  release();
+  await expect(page.locator(".log-row").first()).toContainText("beta");
+  const state = await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    return {
+      stream: w.__stream === document.querySelector(".logs-stream"),
+      volume: w.__volume === document.querySelector(".logs-volume"),
+      input: w.__input === document.getElementById("log-message-search"),
+      flashes: w.__flashes,
+    };
+  });
+  expect(state).toEqual({ stream: true, volume: true, input: true, flashes: 0 });
 });
