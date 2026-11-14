@@ -511,6 +511,34 @@ test("an agent's change waits while you have your own, and Update refuses to rev
   expect((await stored(created.slug)).document.query).toEqual(agents);
 });
 
+test("Load latest hands focus on to the view's menu when its notice goes", async ({ page }) => {
+  const name = `Focus latest ${run}`;
+  const created = await admin<View>(`/products/${project.id}/views`, {
+    document: { version: 1, kind: "events", name, query: { event: "signup", measure: "count" } },
+  });
+  await page.goto(`${eventsUrl()}?view=${created.slug}`);
+  await expect(page.getByText("across 3 matching events")).toBeVisible();
+  await page.getByRole("combobox", { name: "Event", exact: true }).click();
+  await page.getByRole("option", { name: "page_view", exact: true }).click();
+  await page.getByRole("button", { name: "Run query", exact: true }).click();
+  await expect(page.getByText("across 4 matching events")).toBeVisible();
+  await replaceView(created.slug, {
+    version: 1,
+    kind: "events",
+    name,
+    query: {
+      event: "signup",
+      measure: "count",
+      filters: [{ property: "plan", op: "eq", value: "pro" }],
+    },
+  });
+  await page.getByRole("button", { name: "Load latest" }).click();
+  await expect(page.getByText("across 2 matching events")).toBeVisible();
+  await expect(page.getByText("Changed by your agent")).toHaveCount(0);
+  // The button left with the notice; focus must not fall to the page.
+  await expect(page.getByRole("button", { name: "View actions" })).toBeFocused();
+});
+
 test("switching source keeps the open view and its query", async ({ page }) => {
   await page.goto(`${eventsUrl()}?view=${planView.slug}`);
   await expect(page.getByText("across 2 matching events")).toBeVisible();

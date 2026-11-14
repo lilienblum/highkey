@@ -647,7 +647,11 @@ export function ViewActions<D extends ViewDocument>({
           size="sm"
           onClick={() => {
             setError("");
-            void show(view.slug, latest);
+            // The button leaves with the notice once the version applies; focus moves to the menu.
+            void show(view.slug, latest).then(() => {
+              const active = globalThis.document.activeElement;
+              if (!active || active === globalThis.document.body) trigger.current?.focus();
+            });
           }}
         >
           Load latest
