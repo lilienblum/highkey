@@ -128,8 +128,9 @@ impl Store {
     ///
     /// The deadline covers waiting at the dashboard gates and for query slots as well as the
     /// work itself. Gates keep the last event slot and one log slot for interactive queries,
-    /// which keep `try_acquire`. At the deadline the run returns `Timeout` and its statements
-    /// are interrupted; the permits stay with the blocking work until it really ends.
+    /// which keep `try_acquire`. At the deadline, or as soon as the caller's future is dropped,
+    /// the work's statements are interrupted (and the caller gets `Timeout`); the permits stay
+    /// with the blocking work until it really ends.
     pub async fn widget_query<T: Send + 'static>(
         self: &Arc<Self>,
         product: String,
@@ -200,32 +201,46 @@ impl Store {
                 log_lease.as_mut().map(|lease| &mut lease.connection),
             )
         });
-        match tokio::time::timeout_at(deadline, &mut work).await {
-            Ok(joined) => joined
+        // The watchdog owns the work, so the deadline holds even when the caller's future is
+        // dropped (an aborted request). A dropped caller stops the work at once.
+        let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let mut result_tx = result_tx;
+            let finished = tokio::select! {
+                biased;
+                joined = &mut work => Some(joined),
+                _ = tokio::time::sleep_until(deadline) => None,
+                _ = result_tx.closed() => None,
+            };
+            if let Some(joined) = finished {
+                let _ = result_tx.send(joined);
+                return;
+            }
+            cancelled.store(true, Ordering::SeqCst);
+            drop(result_tx);
+            let Ok(handles) = handles_rx.await else {
+                return;
+            };
+            // DuckDB clears an interrupt when a statement starts, so one interrupt can land
+            // between statements and be lost. Keep signalling until the work ends.
+            loop {
+                for handle in &handles {
+                    handle.interrupt();
+                }
+                if tokio::time::timeout(Duration::from_millis(50), &mut work)
+                    .await
+                    .is_ok()
+                {
+                    break;
+                }
+            }
+        });
+        match tokio::time::timeout_at(deadline, &mut result_rx).await {
+            Ok(Ok(joined)) => joined
                 .map_err(|e| ApiError::from(anyhow::anyhow!(e)))?
                 .map_err(DashboardError::Api),
-            Err(_) => {
-                cancelled.store(true, Ordering::SeqCst);
-                tokio::spawn(async move {
-                    let Ok(handles) = handles_rx.await else {
-                        return;
-                    };
-                    // DuckDB clears an interrupt when a statement starts, so one interrupt can
-                    // land between statements and be lost. Keep signalling until the work ends.
-                    loop {
-                        for handle in &handles {
-                            handle.interrupt();
-                        }
-                        if tokio::time::timeout(Duration::from_millis(50), &mut work)
-                            .await
-                            .is_ok()
-                        {
-                            break;
-                        }
-                    }
-                });
-                Err(timeout())
-            }
+            // The watchdog stopped the work at the deadline.
+            Ok(Err(_)) | Err(_) => Err(timeout()),
         }
     }
 }
@@ -591,6 +606,44 @@ mod widget_tests {
         })
         .await;
         eventually("the gate reopens", || {
+            store.dashboard_event_gate.available_permits() == 3
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_dropped_widget_query_still_interrupts_and_releases_slots() {
+        let (_dir, store, product) = open(4);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        // A long deadline, so only the dropped caller can explain a prompt release.
+        let run = store.widget_query(
+            product,
+            true,
+            false,
+            Instant::now() + Duration::from_secs(10),
+            move |events, _| {
+                let _ = started_tx.send(());
+                events
+                    .expect("an events connection")
+                    .query_row(
+                        "SELECT count(*) FROM range(10000000000) a, range(10) b",
+                        [],
+                        |r| r.get::<_, i64>(0),
+                    )
+                    .map_err(|e| anyhow::Error::from(e).into())
+            },
+        );
+        // Drive the run until its statement starts, then drop it, as an aborted request does.
+        tokio::select! {
+            _ = run => panic!("the cross join finished"),
+            _ = started_rx => {}
+        }
+        assert_eq!(store.query_slots.available_permits(), 3);
+        eventually("query slots return after the caller is dropped", || {
+            store.query_slots.available_permits() == 4
+        })
+        .await;
+        eventually("the gate reopens after the caller is dropped", || {
             store.dashboard_event_gate.available_permits() == 3
         })
         .await;
