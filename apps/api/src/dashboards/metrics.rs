@@ -83,7 +83,7 @@ pub fn missing_is_zero(measure: &str) -> bool {
     ["count", "actors", "sum"].contains(&measure)
 }
 
-fn measure_name(m: &EventMeasure) -> &'static str {
+pub(super) fn measure_name(m: &EventMeasure) -> &'static str {
     match m {
         EventMeasure::Count => "count",
         EventMeasure::Actors => "actors",
@@ -306,7 +306,7 @@ pub fn event_rows(
     Ok(rows)
 }
 
-fn log_measure_name(m: &LogMeasure) -> &'static str {
+pub(super) fn log_measure_name(m: &LogMeasure) -> &'static str {
     match m {
         LogMeasure::Count => "count",
         LogMeasure::Sum => "sum",

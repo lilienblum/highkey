@@ -277,7 +277,7 @@ fn valid_query_id(id: &str) -> bool {
 }
 
 /// Range override in hours: `^\d{1,3}(h|d)$`, non-zero.
-fn range_hours(s: &str) -> Option<u64> {
+pub(super) fn range_hours(s: &str) -> Option<u64> {
     let (digits, unit) = if let Some(d) = s.strip_suffix('h') {
         (d, "h")
     } else {
