@@ -155,6 +155,17 @@
   min-height: 0;
 }
 .dashboard-legend {
+  flex: 1;
+  min-width: 0;
+}
+.dashboard-chart-head .widget-growth {
+  flex: none;
+  min-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
@@ -182,7 +193,14 @@
   height: 2px;
   background: linear-gradient(90deg, var(--widget-color) 2px, transparent 0) 0 0 / 4px 2px repeat-x;
 }
-.dashboard-legend-label {
+.dashboard-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.dashboard-chart-head .dashboard-legend-label {
   max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;

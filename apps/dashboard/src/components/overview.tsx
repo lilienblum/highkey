@@ -386,6 +386,7 @@ function ProductOverview() {
                 value={query.error && !s ? "—" : item.value}
                 label={item.detail}
                 growth={item.change}
+                compactGrowth
                 loading={query.loading}
                 growthLoading={query.loading || previous.loading}
               />

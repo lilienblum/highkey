@@ -941,6 +941,7 @@ pub async fn run_widget(
 
 #[cfg(test)]
 mod tests {
+    use super::super::spec::{Better, Unit};
     use super::*;
     use serde_json::json;
 
@@ -1283,14 +1284,62 @@ mod tests {
     }
 
     #[test]
-    fn compare_none_is_in_the_schema_and_validates() {
+    fn compare_none_and_better_are_in_the_schema_and_validate() {
         let schema = super::super::spec::schema().to_string();
         assert!(schema.contains("\"none\""), "{schema}");
-        let w = widget(json!({
-            "id": "w", "title": "W", "view": {"type": "stat", "compare": "none"},
-            "queries": {"a": {"signal": "events", "event": "e"}}
-        }));
-        assert_eq!(w.view.compare, Some(Compare::None));
+        assert!(schema.contains("\"better\""), "{schema}");
+        let document = super::super::validate::parse_document(json!({
+            "version": 1, "name": "N",
+            "widgets": [{
+                "id": "w", "title": "W",
+                "view": {"type": "stat", "compare": "none", "better": "down"},
+                "queries": {"a": {"signal": "events", "event": "e"}}
+            }]
+        }))
+        .unwrap_or_else(|r| panic!("{:?}", r.errors));
+        let report = super::super::validate::check_document(&document);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let view = &document.widgets[0].view;
+        assert_eq!(view.compare, Some(Compare::None));
+        assert_eq!(view.better, Some(Better::Down));
+        assert!(
+            super::super::validate::parse_widget(json!({
+                "id": "w", "title": "W", "view": {"type": "stat", "better": "sideways"},
+                "queries": {"a": {"signal": "events", "event": "e"}}
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn better_defaults_to_down_for_durations_and_up_otherwise() {
+        let view = |v: Value| {
+            widget(json!({
+                "id": "w", "title": "W", "view": v,
+                "queries": {"a": {"signal": "events", "event": "e"}}
+            }))
+            .view
+        };
+        assert_eq!(
+            view(json!({"type": "stat"})).effective_better(None),
+            Better::Up
+        );
+        assert_eq!(
+            view(json!({"type": "stat", "unit": "ms"})).effective_better(None),
+            Better::Down
+        );
+        assert_eq!(
+            view(json!({"type": "stat"})).effective_better(Some(Unit::Seconds)),
+            Better::Down
+        );
+        assert_eq!(
+            view(json!({"type": "stat", "unit": "ms", "better": "up"})).effective_better(None),
+            Better::Up
+        );
+        assert_eq!(
+            view(json!({"type": "stat", "better": "down"})).effective_better(Some(Unit::Percent)),
+            Better::Down
+        );
     }
 
     #[test]

@@ -310,7 +310,7 @@ test("empty project renders dashes, not errors", async ({ page }) => {
   });
   await page.goto(`/projects/${empty.slug}/dashboards/${created.slug}`);
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("—");
-  await expect(widget(page, "conversion").locator(".widget-growth")).toHaveText("—");
+  await expect(widget(page, "conversion").locator(".widget-growth")).toContainText("—");
   await expect(widget(page, "error-rate")).toContainText("No values in this range");
   await expect(widget(page, "plans")).toContainText("No values in this range");
   await expect(widget(page, "recent-errors")).toContainText("No matching logs in this range");
@@ -687,18 +687,39 @@ test("a stat shows growth against the previous period without asking for it", as
       widgets: [
         { id: "signups", title: "Signups", view: view(), queries },
         { id: "quiet", title: "Signups, no comparison", view: view("none"), queries },
+        { id: "trend", title: "Signup trend", view: { type: "line" }, queries },
+        {
+          id: "flat-trend",
+          title: "Signup trend, quiet",
+          view: { type: "line", compare: "none" },
+          queries,
+        },
+        {
+          id: "failures",
+          title: "Failed signups",
+          view: { type: "stat", better: "down" },
+          queries,
+        },
       ],
     },
   });
   await page.goto(`/projects/${grown.slug}/dashboards/${created.slug}?days=7`);
   await expect(widget(page, "signups").locator(".widget-value")).toHaveText("3");
-  await expect(widget(page, "signups").locator(".widget-growth")).toHaveText(
+  const signups = widget(page, "signups").locator(".widget-growth");
+  await expect(signups).toContainText("+50% vs prior 7d");
+  await expect(signups).toHaveAttribute("title", "+50% vs previous 7 days");
+  await expect(signups).toHaveAttribute("data-outcome", "good");
+  // The headline of a chart reads as the full sentence, and compare: none hides it.
+  await expect(widget(page, "trend").locator(".widget-growth")).toHaveText(
     "+50% vs previous 7 days",
   );
-  await expect(widget(page, "signups").locator(".widget-growth")).toHaveAttribute(
-    "data-outcome",
-    "good",
-  );
+  await expect(widget(page, "flat-trend").locator(".widget-growth")).toHaveCount(0);
+  // A count where fewer is better is coloured as an outcome, not by its sign.
+  const failures = widget(page, "failures").locator(".widget-growth");
+  await expect(failures).toContainText("+50% vs prior 7d");
+  await expect(failures).toHaveAttribute("data-outcome", "bad");
+  await expect(failures).toHaveCSS("color", "rgb(255, 93, 98)");
+  await expect(signups).toHaveCSS("color", "rgb(152, 187, 108)");
   await expect(widget(page, "quiet").locator(".widget-value")).toHaveText("3");
   await expect(widget(page, "quiet").locator(".widget-growth")).toHaveCount(0);
 });

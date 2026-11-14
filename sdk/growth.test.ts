@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import { growth, previousPeriodLabel, previousRange } from "../apps/dashboard/src/lib/growth";
 
 const DAY = 86_400_000;
+const hours = (n: number) => ({
+  from: "2026-11-01T00:00:00.000Z",
+  to: new Date(Date.UTC(2026, 10, 1) + n * 3_600_000).toISOString(),
+});
 const range = (days: number) => ({
   from: new Date(Date.UTC(2026, 10, 1)).toISOString(),
   to: new Date(Date.UTC(2026, 10, 1) + days * DAY).toISOString(),
@@ -11,10 +15,19 @@ test("growth is signed, rounded and worded against the previous period", () => {
   const week = { range: range(7) };
   expect(growth(130, 100, week)).toEqual({
     text: "+30% vs previous 7 days",
+    short: "+30% vs prior 7d",
     outcome: "good",
   });
-  expect(growth(70, 100, week)).toEqual({ text: "−30% vs previous 7 days", outcome: "bad" });
-  expect(growth(100, 100, week)).toEqual({ text: "0% vs previous 7 days", outcome: "neutral" });
+  expect(growth(70, 100, week)).toEqual({
+    text: "−30% vs previous 7 days",
+    short: "−30% vs prior 7d",
+    outcome: "bad",
+  });
+  expect(growth(100, 100, week)).toEqual({
+    text: "0% vs previous 7 days",
+    short: "0% vs prior 7d",
+    outcome: "neutral",
+  });
 });
 
 test("small changes keep one decimal and large ones are whole numbers", () => {
@@ -28,13 +41,17 @@ test("small changes keep one decimal and large ones are whole numbers", () => {
 
 test("lower-is-better measures invert the outcome, not the sign", () => {
   const faster = growth(80, 100, { lowerIsBetter: true, range: range(7) });
-  expect(faster).toEqual({ text: "−20% vs previous 7 days", outcome: "good" });
+  expect(faster).toEqual({
+    text: "−20% vs previous 7 days",
+    short: "−20% vs prior 7d",
+    outcome: "good",
+  });
   expect(growth(120, 100, { lowerIsBetter: true }).outcome).toBe("bad");
   expect(growth(100, 100, { lowerIsBetter: true }).outcome).toBe("neutral");
 });
 
 test("a zero or missing baseline shows a dash with no outcome", () => {
-  const dash = { text: "—", outcome: "none" as const };
+  const dash = { text: "—", short: "—", outcome: "none" as const };
   expect(growth(5, 0)).toEqual(dash);
   expect(growth(0, 0)).toEqual(dash);
   expect(growth(5, null)).toEqual(dash);
@@ -46,6 +63,7 @@ test("a zero or missing baseline shows a dash with no outcome", () => {
 test("rates change in percentage points", () => {
   expect(growth(52.1, 50, { points: 1, range: range(30) })).toEqual({
     text: "+2.1 pts vs previous 30 days",
+    short: "+2.1 pts vs prior 30d",
     outcome: "good",
   });
   expect(growth(0.4, 0.5, { points: 100 }).text).toStartWith("−10 pts");
@@ -58,10 +76,6 @@ test("the label names the length of the range", () => {
   expect(previousPeriodLabel(range(2))).toBe("previous 48 hours");
   expect(previousPeriodLabel(range(30))).toBe("previous 30 days");
   expect(previousPeriodLabel(range(366))).toBe("previous 366 days");
-  const hours = (n: number) => ({
-    from: "2026-11-01T00:00:00.000Z",
-    to: new Date(Date.UTC(2026, 10, 1) + n * 3_600_000).toISOString(),
-  });
   expect(previousPeriodLabel(hours(1))).toBe("previous 1 hour");
   expect(previousPeriodLabel(hours(5.4))).toBe("previous 6 hours");
   // A partial period such as month to date or the last 7 calendar days counts its last day whole.
@@ -69,6 +83,10 @@ test("the label names the length of the range", () => {
     previousPeriodLabel({ ...range(0), to: new Date(Date.UTC(2026, 10, 15, 8)).toISOString() }),
   ).toBe("previous 15 days");
   expect(growth(2, 1).text).toBe("+100% vs previous period");
+  expect(growth(2, 1).short).toBe("+100% vs prior period");
+  expect(growth(2, 1, { range: range(1) }).short).toBe("+100% vs prior 24h");
+  expect(growth(2, 1, { range: range(30) }).short).toBe("+100% vs prior 30d");
+  expect(growth(2, 1, { range: hours(5.4) }).short).toBe("+100% vs prior 6h");
 });
 
 test("the previous window is the equal span just before the range", () => {

@@ -4,6 +4,7 @@ import {
   duplicateWidget,
   formatMeasure,
   hasSeriesLabel,
+  lowerIsBetter,
   moveWidget,
   overviewTemplate,
   queryLabel,
@@ -332,4 +333,13 @@ test("JSON columns parse their text", () => {
   expect(parseJsonCell('{"a":1}')).toEqual({ a: 1 });
   expect(parseJsonCell("not json")).toBe("not json");
   expect(parseJsonCell({ a: 1 })).toEqual({ a: 1 });
+});
+
+test("a duration is better when it falls unless the view says otherwise", () => {
+  expect(lowerIsBetter({})).toBe(false);
+  expect(lowerIsBetter({ unit: "ms" })).toBe(true);
+  expect(lowerIsBetter({ unit: "seconds" })).toBe(true);
+  expect(lowerIsBetter({ unit: "percent" })).toBe(false);
+  expect(lowerIsBetter({ unit: "ms", better: "up" })).toBe(false);
+  expect(lowerIsBetter({ unit: "number", better: "down" })).toBe(true);
 });

@@ -126,11 +126,26 @@ test("Overview tiles and the activity headline show growth against the previous 
   await page.goto(`/projects/${project.slug}?source=all&days=7`);
   const tile = (label: string) => page.locator(".metric-widget", { hasText: label });
   await expect(tile("Events").locator(".widget-value")).toHaveText("4");
-  await expect(tile("Events").locator(".widget-growth")).toHaveText("+100% vs previous 7 days");
+  await expect(tile("Events").locator(".widget-growth")).toContainText("+100% vs prior 7d");
+  await expect(tile("Events").locator(".widget-growth")).toHaveAttribute(
+    "title",
+    "+100% vs previous 7 days",
+  );
   await expect(tile("Events").locator(".widget-growth")).toHaveAttribute("data-outcome", "good");
-  await expect(tile("Avg. duration").locator(".widget-growth")).toHaveText("—");
+  await expect(tile("Avg. duration").locator(".widget-growth")).toContainText("—");
   await expect(page.locator(".live-metric .widget-growth")).toHaveCount(0);
   await expect(page.locator(".activity-widget .widget-growth")).toHaveText(
     "+100% vs previous 7 days",
   );
+  // One line that fits its tile on wide and narrow screens.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const label of ["Events", "Visitors", "Installations", "Success rate", "Avg. duration"]) {
+      const growth = tile(label).locator(".widget-growth");
+      const box = await growth.boundingBox();
+      expect(box?.height, `${label} at ${width}px`).toBeLessThan(20);
+      const fits = await tile(label).evaluate((el) => el.scrollHeight <= el.clientHeight + 1);
+      expect(fits, `${label} fits its tile at ${width}px`).toBe(true);
+    }
+  }
 });

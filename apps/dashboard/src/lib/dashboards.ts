@@ -33,6 +33,8 @@ export type View = {
   sparkline?: boolean;
   /** Absent means the previous period for stat, line, area and bar views. */
   compare?: "previous_period" | "none";
+  /** Which direction of change is good. Absent means down for ms and seconds, otherwise up. */
+  better?: "up" | "down";
   bucket?: string;
   stacked?: boolean;
   limit?: number;
@@ -44,6 +46,10 @@ export function comparesPreviousPeriod(view: Pick<View, "type" | "compare">) {
   return (
     view.type === "stat" || view.type === "line" || view.type === "area" || view.type === "bar"
   );
+}
+/** Whether a fall is the good outcome; `unit` is the series' own unit when it has one. */
+export function lowerIsBetter(view: Pick<View, "unit" | "better">) {
+  return view.better ? view.better === "down" : view.unit === "ms" || view.unit === "seconds";
 }
 export type EventMeasure = "count" | "actors" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
 export type LogMeasure = "count" | "sum" | "avg" | "p50" | "p95" | "min" | "max";

@@ -18,6 +18,7 @@ import {
   parseJsonCell,
   comparesPreviousPeriod,
   formatMeasure,
+  lowerIsBetter,
   hasSeriesLabel,
   resolvedSize,
   responsiveWidth,
@@ -50,7 +51,7 @@ import { useNearViewport, useWidgetRun } from "@/lib/use-widget";
 import { sourceParam, validKey } from "@/lib/workspace-search";
 import { useWorkspace } from "../app-shell";
 import { useDisplayPreferences } from "../display-preferences";
-import { OverviewWidget, WidgetContent, WidgetValue } from "../overview-widgets";
+import { GrowthLine, OverviewWidget, WidgetContent, WidgetValue } from "../overview-widgets";
 import { ChartLegend, chartSeries, colorVar, WidgetChart } from "./widget-chart";
 
 type Props = {
@@ -221,6 +222,17 @@ function measureView(widget: Widget, index: number): View {
   return { ...widget.view, unit };
 }
 
+/** Change of the first series against the previous period, coloured by which direction is good. */
+function seriesGrowth(widget: Widget, result?: RunResult) {
+  const first = result?.series[0];
+  const view = measureView(widget, 0);
+  return growth(first?.total, first?.previous_total, {
+    range: result?.range,
+    lowerIsBetter: lowerIsBetter(view),
+    points: view.unit === "percent" ? 1 : view.unit === "ratio" ? 100 : undefined,
+  });
+}
+
 function StatBody({ widget, result, loading }: BodyProps) {
   const first = result?.series[0];
   const definition = widget.series?.[0];
@@ -238,14 +250,8 @@ function StatBody({ widget, result, loading }: BodyProps) {
       <WidgetValue
         value={formatMeasure(value, view)}
         label={name}
-        growth={
-          compare
-            ? growth(value, first?.previous_total, {
-                range: result?.range,
-                points: view.unit === "percent" ? 1 : view.unit === "ratio" ? 100 : undefined,
-              })
-            : undefined
-        }
+        growth={compare ? seriesGrowth(widget, result) : undefined}
+        compactGrowth
         loading={loading}
       />
       {widget.view.sparkline && <Sparkline points={first?.points} color={fallback} />}
@@ -315,16 +321,20 @@ function ChartBody({
   const view = useMemo(() => measureView(widget, 0), [widget]);
   const hasValues = series.some((s) => [...s.points.values()].some((value) => value !== null));
   const compare = comparesPreviousPeriod(widget.view) && !!result?.series[0]?.previous_points;
+  const comparing = comparesPreviousPeriod(widget.view);
   const bucket = (result?.range.bucket ?? "day") as TimeBucket;
   return (
     <div className="dashboard-chart">
-      <ChartLegend
-        series={series}
-        view={view}
-        previous={
-          compare && series.length ? (result?.series[0]?.previous_total ?? null) : undefined
-        }
-      />
+      <div className="dashboard-chart-head">
+        <ChartLegend
+          series={series}
+          view={view}
+          previous={
+            compare && series.length ? (result?.series[0]?.previous_total ?? null) : undefined
+          }
+        />
+        {comparing && <GrowthLine growth={seriesGrowth(widget, result)} loading={loading} />}
+      </div>
       <div className="widget-plot chart-plot" aria-busy={loading}>
         <WidgetContent
           label="chart"

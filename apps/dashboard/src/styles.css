@@ -2840,11 +2840,18 @@ html {
 }
 .widget-growth {
   flex-basis: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 1.4em;
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
+}
+.widget-growth[data-compact] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .widget-growth[data-outcome="good"] {
   color: var(--success);

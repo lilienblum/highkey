@@ -1,7 +1,8 @@
 import { DAY_MS, type AnalyticsRange } from "./date-range";
 
 export type GrowthOutcome = "good" | "bad" | "neutral" | "none";
-export type Growth = { text: string; outcome: GrowthOutcome };
+/** `text` is the full sentence; `short` fits one line in a small tile ("+15% vs prior 7d"). */
+export type Growth = { text: string; short: string; outcome: GrowthOutcome };
 
 const HOUR_MS = 3_600_000;
 const EPSILON = 1e-6;
@@ -14,16 +15,28 @@ export function previousRange(range: AnalyticsRange): AnalyticsRange {
   return { from: new Date(from - span).toISOString(), to: range.from };
 }
 
+/** The previous period's length in whole hours (up to two days) or days, rounding a partial one up. */
+function periodLength(range?: AnalyticsRange) {
+  const span = range ? Date.parse(range.to) - Date.parse(range.from) : Number.NaN;
+  if (!(span > 0)) return;
+  if (span <= 2 * DAY_MS)
+    return { count: Math.max(1, Math.ceil(span / HOUR_MS - EPSILON)), unit: "hour" as const };
+  return { count: Math.ceil(span / DAY_MS - EPSILON), unit: "day" as const };
+}
+
 /**
  * "previous 24 hours" up to two days, otherwise whole days: "previous 7 days". A partial last
  * hour or day counts whole, so "Last 7 days" ending mid-day still reads as 7.
  */
 export function previousPeriodLabel(range?: AnalyticsRange) {
-  const span = range ? Date.parse(range.to) - Date.parse(range.from) : Number.NaN;
-  if (!(span > 0)) return "previous period";
-  if (span <= 2 * DAY_MS)
-    return `previous ${plural(Math.max(1, Math.ceil(span / HOUR_MS - EPSILON)), "hour")}`;
-  return `previous ${plural(Math.ceil(span / DAY_MS - EPSILON), "day")}`;
+  const length = periodLength(range);
+  return length ? `previous ${plural(length.count, length.unit)}` : "previous period";
+}
+
+/** The same label in a few characters: "prior 7d", "prior 24h". */
+export function priorPeriodLabel(range?: AnalyticsRange) {
+  const length = periodLength(range);
+  return length ? `prior ${length.count}${length.unit === "hour" ? "h" : "d"}` : "prior period";
 }
 
 const format = (value: number) =>
@@ -49,7 +62,7 @@ export function growth(
     !Number.isFinite(previous) ||
     previous === 0
   )
-    return { text: "—", outcome: "none" };
+    return { text: "—", short: "—", outcome: "none" };
   const change =
     options.points === undefined
       ? ((current - previous) / Math.abs(previous)) * 100
@@ -63,5 +76,10 @@ export function growth(
     : change > 0 !== !!options.lowerIsBetter
       ? "good"
       : "bad";
-  return { text: `${sign}${shown}${unit} vs ${previousPeriodLabel(options.range)}`, outcome };
+  const amount = `${sign}${shown}${unit}`;
+  return {
+    text: `${amount} vs ${previousPeriodLabel(options.range)}`,
+    short: `${amount} vs ${priorPeriodLabel(options.range)}`,
+    outcome,
+  };
 }

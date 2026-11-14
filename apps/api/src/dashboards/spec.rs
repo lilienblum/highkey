@@ -54,6 +54,10 @@ pub struct View {
     pub sparkline: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compare: Option<Compare>,
+    /// Which direction of change is good, so growth is coloured as an outcome. Absent means
+    /// `down` for `ms` and `seconds` values and `up` otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub better: Option<Better>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bucket: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,6 +89,13 @@ pub enum Compare {
     PreviousPeriod,
     /// Opts out of the previous-period default.
     None,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Better {
+    Up,
+    Down,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -284,6 +295,15 @@ pub fn schema() -> serde_json::Value {
 }
 
 impl View {
+    /// The good direction of change: written `better`, else down for durations, else up.
+    /// `series_unit` is the first series' own unit, which wins over the view's.
+    pub fn effective_better(&self, series_unit: Option<Unit>) -> Better {
+        self.better.unwrap_or(match series_unit.or(self.unit) {
+            Some(Unit::Ms | Unit::Seconds) => Better::Down,
+            _ => Better::Up,
+        })
+    }
+
     /// The comparison this view runs. Stat views and the headline of line, area and bar views
     /// compare with the previous period unless they say `none`; other views only when asked.
     pub fn effective_compare(&self) -> Option<Compare> {
