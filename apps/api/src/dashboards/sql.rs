@@ -24,12 +24,12 @@ use duckdb::{
     Connection, Statement, Transaction,
     core::{LogicalTypeHandle, LogicalTypeId},
     params_from_iter,
-    types::Value as DbValue,
+    types::{Value as DbValue, ValueRef},
 };
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
 };
 
@@ -48,18 +48,90 @@ pub const TABLE_FUNCTIONS: [&str; 5] = [
     "json_each",
     "json_tree",
 ];
-/// Scalar functions refused by name: they change state, hold a query slot doing nothing, or
-/// read the server's settings and variables (such as its temp and home paths). File and
-/// network scalars already fail with external access off.
-pub const BLOCKED_FUNCTIONS: [&str; 7] = [
-    "nextval",
-    "currval",
-    "setseed",
-    "write_log",
-    "sleep_ms",
-    "current_setting",
-    "getvariable",
+/// Scalar functions refused by name, each with what to do instead. They change state, hold a
+/// query slot doing nothing, or read the server's settings and variables (such as its temp
+/// and home paths). File and network scalars already fail with external access off.
+pub const BLOCKED_FUNCTIONS: [(&str, &str); 7] = [
+    (
+        "nextval",
+        "Sequences change the database; number rows with row_number() OVER (ORDER BY ...) instead",
+    ),
+    (
+        "currval",
+        "Sequences change the database; number rows with row_number() OVER (ORDER BY ...) instead",
+    ),
+    (
+        "setseed",
+        "setseed changes the session; call random() without it instead",
+    ),
+    (
+        "write_log",
+        "write_log writes to the server's log; return the value as a column instead",
+    ),
+    (
+        "sleep_ms",
+        "Sleeping only holds a query slot; remove it, since widgets refresh on their own instead",
+    ),
+    (
+        "current_setting",
+        "Server settings are not readable; use the parameters $from, $to, $bucket and $source instead",
+    ),
+    (
+        "getvariable",
+        "Variables are not readable; use the parameters $from, $to, $bucket and $source instead",
+    ),
 ];
+/// Scalar functions refused because one call can build a value far larger than the server's
+/// memory. DuckDB's `memory_limit` covers its buffers and aggregate states, not scalar string
+/// and list results, and it checks for interrupts only between chunks of 2,048 rows: one row
+/// of `repeat('x', 100000000)` took the process past 1 GB with the limit at 64 MB. `range` and
+/// `generate_series` are refused only as scalars (which build lists); as table functions they
+/// stream rows. This list does not catch every way to build a big value (a chain of `x || x`
+/// WITH tables still doubles a string per step), so the API also caps the process's memory at
+/// startup (see `memory`), where a runaway allocation fails inside DuckDB.
+pub const AMPLIFYING_FUNCTIONS: [(&str, &str); 10] = [
+    (
+        "repeat",
+        "repeat can build values larger than the server's memory; write the text out, or join short literals with || instead",
+    ),
+    (
+        "lpad",
+        "Padding can build values larger than the server's memory; pad with a literal and cut, as in right('00' || n::VARCHAR, 2), or format dates with strftime instead",
+    ),
+    (
+        "rpad",
+        "Padding can build values larger than the server's memory; pad with a literal and cut, as in left(name || '          ', 10), instead",
+    ),
+    (
+        "printf",
+        "printf can build values larger than the server's memory; build text with || and casts, as in name || ': ' || count(*)::VARCHAR, and format dates with strftime instead",
+    ),
+    (
+        "format",
+        "format can build values larger than the server's memory; build text with || and casts, as in name || ': ' || count(*)::VARCHAR, and format dates with strftime instead",
+    ),
+    (
+        "bar",
+        "bar draws text bars of any width; use a bar or ranking view to draw bars instead",
+    ),
+    (
+        "list_resize",
+        "Resizing can build lists larger than the server's memory; cut lists with list_slice or [a:b] instead",
+    ),
+    (
+        "array_resize",
+        "Resizing can build lists larger than the server's memory; cut lists with list_slice or [a:b] instead",
+    ),
+    (
+        "range",
+        "The list form of range can be larger than the server's memory; use the table form instead, as in SELECT i FROM range(10) t(i), with list(i) for a list",
+    ),
+    (
+        "generate_series",
+        "The list form of generate_series can be larger than the server's memory; use the table form instead, as in SELECT i FROM generate_series(1, 10) t(i), with list(i) for a list",
+    ),
+];
+const RECURSIVE_HINT: &str = "A recursive WITH can grow without bound; generate rows with a table function instead, as in SELECT i FROM range(10) t(i), and use window functions such as sum(...) OVER (ORDER BY ...) for running totals";
 /// The most cell data one result returns; a larger one stops there with a warning.
 pub const MAX_RESULT_BYTES: usize = 4 * 1024 * 1024;
 /// The warning on a result cut at `MAX_SQL_ROWS`.
@@ -74,6 +146,9 @@ const READS: [&str; 7] = [
 /// The DuckDB parser, on a private in-memory database whose settings are locked.
 pub struct Parser {
     connection: Mutex<Connection>,
+    /// Every scalar function refused by name, lowercase, with its hint: `BLOCKED_FUNCTIONS`
+    /// and `AMPLIFYING_FUNCTIONS`.
+    refused: BTreeMap<String, String>,
 }
 
 /// What verification learned about a query.
@@ -112,8 +187,14 @@ impl Parser {
             "SET threads=1; SET memory_limit='32MB'; {}",
             crate::product_db::LOCKED_SETTINGS
         ))?;
+        let refused = BLOCKED_FUNCTIONS
+            .iter()
+            .chain(&AMPLIFYING_FUNCTIONS)
+            .map(|(name, hint)| (name.to_string(), hint.to_string()))
+            .collect();
         Ok(Self {
             connection: Mutex::new(db),
+            refused,
         })
     }
 
@@ -142,7 +223,7 @@ impl Parser {
             }
         };
         check_statement(sql, &nodes)?;
-        check_tree(sql, &nodes, database)
+        check_tree(sql, &nodes, database, &self.refused)
     }
 
     fn serialize(&self, sql: &str) -> Result<String, Issue> {
@@ -296,6 +377,13 @@ fn article(word: &str) -> &'static str {
 }
 
 /// Exactly one statement, and it is a SELECT.
+///
+/// This check is load-bearing beyond wording: duckdb-rs `prepare` executes every statement of
+/// its text but the last (`inner_connection.rs`, `prepare`), so `describe`, `check_plan` and
+/// `execute` would run anything placed before the final statement, and `EXPLAIN` would cover
+/// only the first. What keeps them safe is this check on DuckDB's own parse (one statement,
+/// a SELECT) together with `CString::new` in that `prepare`, which refuses text with a NUL
+/// byte, so the text DuckDB prepares cannot differ from the text verified here.
 fn check_statement(sql: &str, nodes: &[Node]) -> Result<(), Issue> {
     let root = nodes
         .iter()
@@ -710,9 +798,27 @@ fn table_function(
     )
 }
 
-/// Refuses whatever reaches past the project's one database, changes state, or cannot be
-/// verified, and returns the parameters the query uses.
-fn check_tree(sql: &str, nodes: &[Node], database: Option<SqlDatabase>) -> Result<Verified, Issue> {
+/// Where a refusal of WITH RECURSIVE points: the keyword, which the tree does not locate.
+fn recursive_keyword(sql: &str) -> Option<usize> {
+    let lower = sql.to_ascii_lowercase();
+    lower
+        .match_indices("recursive")
+        .map(|(at, _)| at)
+        .find(|&at| {
+            let before = lower[..at].trim_end();
+            before.ends_with("with")
+        })
+}
+
+/// Refuses whatever reaches past the project's one database, changes state, can build values
+/// without bound, or cannot be verified, and returns the parameters the query uses. `refused`
+/// maps the scalar functions refused by name to their hints.
+fn check_tree(
+    sql: &str,
+    nodes: &[Node],
+    database: Option<SqlDatabase>,
+    refused: &BTreeMap<String, String>,
+) -> Result<Verified, Issue> {
     let mut verified = Verified::default();
     let mut names = Vec::new();
     let joins = nodes
@@ -771,6 +877,16 @@ fn check_tree(sql: &str, nodes: &[Node], database: Option<SqlDatabase>) -> Resul
         }
         let class = node.get("class");
         match node.get("type") {
+            // DuckDB parses a WITH RECURSIVE whose body is a UNION as a recursive node.
+            Some("RECURSIVE_CTE_NODE") => {
+                return Err(issue(
+                    format!(
+                        "WITH RECURSIVE is not allowed{}",
+                        position(sql, recursive_keyword(sql))
+                    ),
+                    RECURSIVE_HINT,
+                ));
+            }
             Some("TABLE_FUNCTION") if node.table_functions.is_empty() => {
                 return Err(table_function(sql, "", offset, database));
             }
@@ -813,13 +929,15 @@ fn check_tree(sql: &str, nodes: &[Node], database: Option<SqlDatabase>) -> Resul
             }
             verified.parameters.insert(name.to_string());
         }
+        // A table function's own call is checked against `TABLE_FUNCTIONS` above, so `range`
+        // and `generate_series` stay allowed there and are refused as scalars.
         let table_function = class == Some("FUNCTION") && node.member == "function";
         if let Some(name) = node.get("function_name").filter(|_| !table_function) {
             let lower = name.to_ascii_lowercase();
-            if BLOCKED_FUNCTIONS.contains(&lower.as_str()) {
+            if let Some(hint) = refused.get(&lower) {
                 return Err(issue(
                     format!("{lower} is not allowed{}", position(sql, offset)),
-                    format!("Dashboard SQL must not change anything: remove {lower}"),
+                    hint.clone(),
                 ));
             }
         }
@@ -1521,21 +1639,39 @@ fn json(value: DbValue) -> Value {
     }
 }
 
-/// One value of a row as JSON, or `None` when DuckDB's value cannot be read. NULL-typed columns
-/// are always null; reading them (and a few rare nested types) panics in the driver, which is
-/// caught here rather than taking down the request.
-fn cell(row: &duckdb::Row<'_>, i: usize, kind: &str) -> Option<Value> {
+/// What reading one value of a row gave.
+enum Cell {
+    Value(Value),
+    /// A string or blob longer than the bytes left in the result's budget.
+    TooBig,
+    /// DuckDB's value cannot be read.
+    Unreadable,
+}
+
+/// One value of a row as JSON. A string or blob longer than `budget` bytes is measured before
+/// it is copied, so it is never copied at all. NULL-typed columns are always null; reading
+/// them (and a few rare nested types) panics in the driver, which is caught here rather than
+/// taking down the request.
+fn cell(row: &duckdb::Row<'_>, i: usize, kind: &str, budget: usize) -> Cell {
     if kind == "NULL" {
-        return Some(Value::Null);
+        return Cell::Value(Value::Null);
     }
-    let read = std::panic::AssertUnwindSafe(|| row.get_ref(i).map(|v| json(v.to_owned())));
-    let value = std::panic::catch_unwind(read).ok()?.ok()?;
-    Some(match value {
-        Value::String(text) if kind == "JSON" => {
-            serde_json::from_str(&text).unwrap_or(Value::String(text))
+    let read = std::panic::AssertUnwindSafe(|| {
+        row.get_ref(i).map(|v| match v {
+            ValueRef::Text(b) | ValueRef::Blob(b) | ValueRef::Geometry(b) if b.len() > budget => {
+                None
+            }
+            v => Some(json(v.to_owned())),
+        })
+    });
+    match std::panic::catch_unwind(read) {
+        Ok(Ok(Some(Value::String(text)))) if kind == "JSON" => {
+            Cell::Value(serde_json::from_str(&text).unwrap_or(Value::String(text)))
         }
-        value => value,
-    })
+        Ok(Ok(Some(value))) => Cell::Value(value),
+        Ok(Ok(None)) => Cell::TooBig,
+        Ok(Err(_)) | Err(_) => Cell::Unreadable,
+    }
 }
 
 /// Runs a verified query and fetches at most `max_rows` rows and `MAX_RESULT_BYTES` of cell
@@ -1553,20 +1689,31 @@ pub fn execute(
             let mut rows = Vec::new();
             let (mut truncated, mut byte_limited, mut bytes) = (false, false, 0);
             let mut cursor = statement.raw_query();
-            while let Some(row) = cursor.next().map_err(|e| refused(sql, e))? {
+            'rows: while let Some(row) = cursor.next().map_err(|e| refused(sql, e))? {
                 if rows.len() == max_rows {
                     truncated = true;
                     break;
                 }
                 let mut values = Vec::with_capacity(columns.len());
+                let mut size = 0;
                 for (i, (name, kind)) in columns.iter().enumerate() {
-                    values.push(cell(row, i, kind).ok_or_else(|| {
-                        ApiError::bad(format!(
-                            "Column {name} has type {kind}, which cannot be read; cast it, for example to VARCHAR"
-                        ))
-                    })?);
+                    let budget = MAX_RESULT_BYTES.saturating_sub(bytes + size);
+                    let value = match cell(row, i, kind, budget) {
+                        Cell::Value(value) => value,
+                        Cell::TooBig => {
+                            (truncated, byte_limited) = (true, true);
+                            break 'rows;
+                        }
+                        Cell::Unreadable => {
+                            return Err(ApiError::bad(format!(
+                                "Column {name} has type {kind}, which cannot be read; cast it, for example to VARCHAR"
+                            )));
+                        }
+                    };
+                    size += json_size(&value);
+                    values.push(value);
                 }
-                bytes += values.iter().map(json_size).sum::<usize>();
+                bytes += size;
                 if bytes > MAX_RESULT_BYTES {
                     (truncated, byte_limited) = (true, true);
                     break;
@@ -2043,8 +2190,8 @@ mod tests {
                 "WITH a AS (SELECT * FROM b), b AS (SELECT 1) SELECT * FROM a",
                 "b",
             ),
-            // A WITH naming itself reads the catalog object of that name, recursive or not,
-            // unless it is the recursive branch of a WITH RECURSIVE … UNION.
+            // A WITH naming itself reads the catalog object of that name, recursive keyword or
+            // not; a WITH RECURSIVE … UNION is refused outright.
             (
                 "WITH duckdb_databases AS (SELECT * FROM duckdb_databases) SELECT database_name, path FROM duckdb_databases",
                 "duckdb_databases",
@@ -2067,11 +2214,11 @@ mod tests {
             ),
             (
                 "WITH RECURSIVE sqlite_master AS (SELECT * FROM sqlite_master UNION ALL SELECT * FROM sqlite_master) SELECT 1",
-                "sqlite_master",
+                "WITH RECURSIVE",
             ),
             (
                 "WITH RECURSIVE r AS (SELECT * FROM sqlite_master UNION ALL SELECT * FROM r) SELECT * FROM r",
-                "sqlite_master",
+                "WITH RECURSIVE",
             ),
             // Only unqualified names bind to WITH tables; `main.x` is the catalog object x.
             (
@@ -2080,7 +2227,7 @@ mod tests {
             ),
             (
                 "WITH RECURSIVE sqlite_master AS (SELECT 1 AS n UNION ALL SELECT n FROM main.sqlite_master) SELECT * FROM sqlite_master",
-                "sqlite_master",
+                "WITH RECURSIVE",
             ),
             (
                 "WITH t AS (SELECT 1 AS x) SELECT * FROM main.t",
@@ -2113,6 +2260,80 @@ mod tests {
     }
 
     #[test]
+    fn refuses_functions_that_build_unbounded_values() {
+        // DuckDB's memory_limit does not cover scalar string and list results: one row of
+        // repeat('x', 100000000) took the process past 1 GB with the limit at 64 MB.
+        for (sql, name) in [
+            ("SELECT repeat('x', 100000000) AS v", "repeat"),
+            (
+                "SELECT max(length(repeat('x', 100000000) || i::VARCHAR)) AS value FROM range(8) t(i)",
+                "repeat",
+            ),
+            ("SELECT REPEAT([1], 100000000) AS v", "repeat"),
+            ("SELECT main.repeat('x', 3) AS v", "repeat"),
+            ("SELECT lpad('x', 100000000, 'y') AS v", "lpad"),
+            ("SELECT rpad('x', 100000000, 'y') AS v", "rpad"),
+            ("SELECT printf('%0100000000d', 1) AS v", "printf"),
+            ("SELECT format('{:>100000000}', 1) AS v", "format"),
+            ("SELECT bar(1, 0, 2, 100000000) AS v", "bar"),
+            ("SELECT list_resize([1], 100000000) AS v", "list_resize"),
+            ("SELECT array_resize([1], 100000000) AS v", "array_resize"),
+            ("SELECT range(100000000) AS v", "range"),
+            (
+                "SELECT generate_series(1, 100000000) AS v",
+                "generate_series",
+            ),
+            ("SELECT * FROM unnest(range(100000000))", "range"),
+            (
+                "SELECT count(*) AS value FROM range(3) t(i) WHERE i IN (SELECT unnest(generate_series(1, 2)))",
+                "generate_series",
+            ),
+        ] {
+            let issue = refusal(sql);
+            assert!(
+                issue.message.starts_with(&format!("{name} is not allowed")),
+                "{sql}: {issue:?}"
+            );
+            let hint = issue.hint.unwrap_or_default();
+            assert!(hint.contains("instead"), "{sql}: {hint}");
+        }
+        // The table forms of range and generate_series still generate rows.
+        for sql in [
+            "SELECT i FROM range(3) t(i)",
+            "SELECT i FROM generate_series(1, 3) t(i)",
+            "SELECT list(i) AS v FROM range(3) t(i)",
+        ] {
+            if let Err(issue) = parser().verify_static(sql) {
+                panic!("{sql}: {issue:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn refuses_recursive_with() {
+        // A recursive WITH can double a string on every step.
+        for sql in [
+            "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) SELECT * FROM r",
+            "WITH RECURSIVE s(x) AS (SELECT 'x' UNION ALL SELECT x || x FROM s) SELECT max(length(x)) AS value FROM s",
+            "SELECT * FROM (WITH RECURSIVE r(n) AS (SELECT 1 UNION SELECT n + 1 FROM r) SELECT n FROM r) t",
+            "with recursive r(n) as (select 1 union all select n + 1 from r) select n from r",
+        ] {
+            let issue = refusal(sql);
+            assert!(
+                issue.message.starts_with("WITH RECURSIVE is not allowed"),
+                "{sql}: {issue:?}"
+            );
+            assert!(issue.hint.unwrap_or_default().contains("range"), "{sql}");
+        }
+        // Without a UNION that refers back to itself, WITH RECURSIVE is an ordinary WITH.
+        assert!(
+            parser()
+                .verify_static("WITH RECURSIVE t AS (SELECT 1 AS n) SELECT n FROM t")
+                .is_ok()
+        );
+    }
+
+    #[test]
     fn accepts_read_only_selects() {
         // Deeper than serde_json's 128 levels, within `MAX_TREE_DEPTH`.
         let deep = format!("SELECT {} AS value", vec!["1"; 120].join(" + "));
@@ -2120,8 +2341,6 @@ mod tests {
             "SELECT epoch_ms(date_trunc($bucket, epoch_ms(event_time))) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1",
             "SELECT count(*) AS value FROM main.events WHERE ($source IS NULL OR source_id = $source)",
             "FROM events SELECT name",
-            "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) SELECT * FROM r",
-            "WITH RECURSIVE duckdb_databases AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM (SELECT * FROM duckdb_databases) d WHERE n < 3) SELECT * FROM duckdb_databases",
             "WITH a AS (SELECT name FROM events), b AS (SELECT * FROM a) SELECT * FROM b",
             "SELECT * FROM range(3) r(x), generate_series(1, 2), unnest([1, 2]), json_each('[1]'), json_tree('{}')",
             "SELECT name, sum(1) OVER (PARTITION BY source ORDER BY event_time) FROM events QUALIFY row_number() OVER () = 1",

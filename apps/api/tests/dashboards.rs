@@ -2146,14 +2146,17 @@ async fn sql_cannot_reach_system_catalogs_or_settings() {
             .starts_with("This query reads duckdb_views"),
         "{issue}"
     );
-    // A real recursive WITH may reuse such a name for itself.
+    // A real recursive WITH is refused whatever it is called, since it can grow without bound.
     let sql = "WITH RECURSIVE duckdb_databases(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM duckdb_databases WHERE n < 4)
         SELECT count(*) AS value FROM duckdb_databases";
-    let (status, body) = test
-        .run(id(&project), run_body(sql_widget("stat", sql), 7))
-        .await;
-    assert_eq!(status, 200, "{body}");
-    assert_eq!(total(&body), 4.0);
+    let issue = refused(&test, &project, "stat", sql).await;
+    assert!(
+        issue["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("WITH RECURSIVE is not allowed (line 1, column 6)"),
+        "{issue}"
+    );
     test.close().await;
 }
 
@@ -2231,7 +2234,8 @@ async fn deeply_nested_or_costly_sql_is_refused_not_fatal() {
 async fn sql_results_stop_at_four_megabytes() {
     let test = Test::new();
     let project = test.project("Wide").await;
-    let sql = "SELECT repeat('x', 100000) AS big FROM range(100) WHERE $from > 0";
+    // repeat is refused, so the 100,000-character value is aggregated once.
+    let sql = "SELECT big FROM (SELECT string_agg('x', '') AS big FROM range(100000)) t, range(100) WHERE $from > 0";
     let (status, body) = test
         .run(id(&project), run_body(sql_widget("table", sql), 7))
         .await;
