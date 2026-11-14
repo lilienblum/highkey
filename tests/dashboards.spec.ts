@@ -668,6 +668,21 @@ test("revisions list origins and restore an earlier version", async ({ page }) =
   await rows.nth(1).getByRole("button", { name: "Restore" }).click();
   const alert = page.getByRole("alertdialog");
   await expect(alert).toContainText("Restore revision 1?");
+  // Cancelling keeps the title whole while the dialog animates out.
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { titles: string[] }).titles = seen;
+    new MutationObserver(() => {
+      for (const title of document.querySelectorAll('[role="alertdialog"] h2'))
+        seen.push(title.textContent ?? "");
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  await alert.getByRole("button", { name: "Cancel" }).click();
+  await expect(alert).toBeHidden();
+  const titles = await page.evaluate(() => (window as unknown as { titles: string[] }).titles);
+  expect(titles.filter((title) => !title.includes("revision 1"))).toEqual([]);
+  await rows.nth(1).getByRole("button", { name: "Restore" }).click();
+  await expect(alert).toContainText("Restore revision 1?");
   await alert.getByRole("button", { name: "Restore revision" }).click();
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("Revision 3");

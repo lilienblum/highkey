@@ -71,6 +71,9 @@ export function RevisionsSheet({
 }) {
   const { timeZone } = useDisplayPreferences();
   const [target, setTarget] = useState<number | null>(null);
+  // The confirmation keeps naming its revision while it animates closed.
+  const [shown, setShown] = useState<number | null>(null);
+  if (target !== null && target !== shown) setShown(target);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const revisions = useQuery({
@@ -174,7 +177,7 @@ export function RevisionsSheet({
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Restore revision {target}?</AlertDialogTitle>
+              <AlertDialogTitle>Restore revision {target ?? shown}?</AlertDialogTitle>
               <AlertDialogDescription>
                 The dashboard returns to that version and is saved as a new revision. The current
                 version stays in the list.
