@@ -141,9 +141,9 @@ A query names its database with `"database": "events"` or `"database": "logs"`, 
 | `logs`       | Only the logs in the dashboard's range (`timestamp` from `$from` up to `$to`) and selected source    |
 | `all_logs`   | Every log the project keeps, of every source                                                         |
 
-So `SELECT count(*) AS value FROM events` already follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Read `all_events` or `all_logs` only when a query needs rows outside the range, and filter them yourself with the parameters below where the range or source should apply. A WITH table of your own named `events` replaces the scoped one inside that query, as any WITH does.
+So `SELECT count(*) AS value FROM events` already follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Read `all_events` or `all_logs` only when a query needs rows outside the range, and filter them yourself with the parameters below where the range or source should apply. A WITH table of your own named `events` replaces the scoped one inside that query, as any WITH does. These names are views, so they have no `rowid`; use `event_id` or `log_id` to tell rows apart.
 
-`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. It also takes a `TIMESTAMP` or a `DATE`. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
+`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. It also takes a `TIMESTAMP` or a `DATE`; cast a `TIMESTAMP WITH TIME ZONE`, such as `now()`, with `::TIMESTAMP`. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
 
 In earlier versions `events` and `logs` held all history in SQL: a query that relied on that should read `all_events` or `all_logs` instead, and one that already filters on `$from` and `$to` works unchanged.
 
@@ -446,7 +446,7 @@ A table is just as direct; this one lists the busiest events in the range:
 
 ### New and returning actors in SQL
 
-`events` and `all_events` work together when a cohort began before the range. The stat counts the people active in the range who were also active before it. The chart counts new people per bucket: each person's first event ever is found in `all_events`, and `bucket` puts it on the chart's buckets. Both filter `all_events` by the source themselves, since only `events` follows the source picker.
+`events` and `all_events` work together when a cohort began before the range. The stat counts the people active in the range who were also active before it. The chart counts new people per bucket: `all_events` gives each person's first event, in the selected source when one is picked, and `bucket` puts it on the chart's buckets. Both filter `all_events` by the source themselves, since only `events` follows the source picker.
 
 ```json piko-dashboard
 {
