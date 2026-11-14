@@ -1,5 +1,5 @@
 use piko::{AppState, Config, changes::ChangeDelivery, router, runtime::lock_data_directory};
-use std::{env, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -46,7 +46,10 @@ async fn run(managed: bool) -> anyhow::Result<()> {
             .parse()?,
     };
     let _data_lock = lock_data_directory(&config.data_dir)?;
-    let state = AppState::open(&config)?;
+    let mut state = AppState::open(&config)?;
+    state.cors_origins = Arc::new(parse_origins(
+        &env::var("PIKO_CORS_ORIGINS").unwrap_or_default(),
+    ));
     let notifications = delivery_config
         .map(|config| state.changes.start_delivery(config))
         .transpose()?;
@@ -100,4 +103,13 @@ async fn shutdown() {
     {
         let _ = tokio::signal::ctrl_c().await;
     }
+}
+
+fn parse_origins(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|origin| !origin.is_empty())
+        .map(String::from)
+        .collect()
 }

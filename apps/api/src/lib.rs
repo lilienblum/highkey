@@ -40,6 +40,8 @@ pub struct AppState {
     log_ingest_slots: Arc<tokio::sync::Semaphore>,
     ingest_slots: Arc<tokio::sync::Semaphore>,
     favicon_slots: Arc<tokio::sync::Semaphore>,
+    /// Extra origins allowed to call `/api/read` cross-origin (`*` allows all).
+    pub cors_origins: Arc<Vec<String>>,
 }
 pub struct Config {
     pub data_dir: PathBuf,
@@ -64,6 +66,7 @@ impl AppState {
             log_ingest_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             ingest_slots: Arc::new(tokio::sync::Semaphore::new(config.queue_capacity)),
             favicon_slots: Arc::new(tokio::sync::Semaphore::new(2)),
+            cors_origins: Arc::default(),
         })
     }
 }
@@ -119,7 +122,11 @@ pub fn router(state: AppState) -> Router {
         .merge(admin)
         .merge(ingest)
         // Outside `admin`, so read routes need no X-Piko-Admin marker.
-        .nest("/api/read", dashboards::routes::read_router())
+        .nest(
+            "/api/read",
+            dashboards::routes::read_router()
+                .layer(dashboards::routes::read_cors(state.cors_origins.clone())),
+        )
         .route("/api/{*path}", get(|| async { ApiError::missing() }))
         .route("/health", get(|| async { Json(json!({"status":"ok"})) }))
         .layer(DefaultBodyLimit::max(256 * 1024))

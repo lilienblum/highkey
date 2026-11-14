@@ -14,11 +14,13 @@ use crate::{
 use axum::{
     Json, Router,
     extract::{Path, State, rejection::JsonRejection},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderName, Method, StatusCode, header},
     routing::{get, post},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::sync::Arc;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub fn read_router() -> Router<AppState> {
     Router::new()
@@ -35,6 +37,53 @@ pub fn read_router() -> Router<AppState> {
             get(revisions),
         )
         .route("/schemas/dashboard.v1.json", get(schema))
+}
+
+/// CORS for `/api/read`: loopback origins, exact `extra` entries, or any origin when `extra`
+/// holds `*`. The `null` origin is never allowed and credentials are never enabled.
+pub fn read_cors(extra: Arc<Vec<String>>) -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(move |origin, _| {
+            let Ok(origin) = origin.to_str() else {
+                return false;
+            };
+            origin != "null"
+                && (is_loopback(origin) || extra.iter().any(|e| e == "*" || e == origin))
+        }))
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            HeaderName::from_static("cf-access-client-id"),
+            HeaderName::from_static("cf-access-client-secret"),
+        ])
+}
+
+/// `http(s)://localhost|127.0.0.1|[::1]` with an optional numeric port and nothing else.
+fn is_loopback(origin: &str) -> bool {
+    let Some(rest) = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))
+    else {
+        return false;
+    };
+    let (host, port) = match rest.strip_prefix('[') {
+        Some(inner) => match inner.split_once(']') {
+            Some((addr, tail)) => (&rest[..addr.len() + 2], tail),
+            None => return false,
+        },
+        None => match rest.find(':') {
+            Some(at) => rest.split_at(at),
+            None => (rest, ""),
+        },
+    };
+    if !port.is_empty()
+        && !port
+            .strip_prefix(':')
+            .is_some_and(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return false;
+    }
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
 /// The id of the project named by id or slug.

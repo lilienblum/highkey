@@ -1115,3 +1115,169 @@ async fn the_validate_slug_is_reserved_so_every_dashboard_is_readable_by_slug() 
     assert_eq!(body["id"], first["id"]);
     test.close().await;
 }
+
+async fn preflight(test: &Test, path: &str, origin: &str) -> (StatusCode, HeaderMap) {
+    let (status, headers, _) = test
+        .send_full(
+            "OPTIONS",
+            path,
+            Value::Null,
+            &[
+                ("origin", origin),
+                ("access-control-request-method", "POST"),
+                ("access-control-request-headers", "content-type"),
+            ],
+        )
+        .await;
+    (status, headers)
+}
+
+#[tokio::test]
+async fn read_cors_allows_loopback_and_configured_origins_only() {
+    let mut test = Test::new();
+    let path = "/api/read/products/anything/widgets/run";
+    for origin in [
+        "http://localhost:5173",
+        "https://localhost",
+        "http://127.0.0.1:3000",
+        "http://[::1]:8080",
+        "http://[::1]",
+    ] {
+        let (_, headers) = preflight(&test, path, origin).await;
+        assert_eq!(
+            headers.get("access-control-allow-origin").unwrap(),
+            origin,
+            "{origin}"
+        );
+        assert!(headers.get("access-control-allow-credentials").is_none());
+        let methods = headers["access-control-allow-methods"].to_str().unwrap();
+        assert!(methods.contains("GET") && methods.contains("POST"));
+        let allowed = headers["access-control-allow-headers"].to_str().unwrap();
+        assert!(allowed.contains("cf-access-client-secret"));
+    }
+    for origin in [
+        "https://evil.example",
+        "null",
+        "HTTP://LOCALHOST:5173",
+        "http://Localhost:5173",
+        "http://localhost.evil.com",
+        "http://127.0.0.1.nip.io",
+        "http://evil.com:5173",
+        "ftp://localhost",
+        "http://localhost:abc",
+        "http://localhost/path",
+        "http://user@localhost",
+        "https://dash.example",
+    ] {
+        let (_, headers) = preflight(&test, path, origin).await;
+        assert!(
+            headers.get("access-control-allow-origin").is_none(),
+            "{origin}"
+        );
+        assert!(headers.get("access-control-allow-credentials").is_none());
+    }
+    // A simple cross-origin response carries the header too, still without credentials.
+    let (_, headers, _) = test
+        .send_full(
+            "GET",
+            "/api/read/products",
+            Value::Null,
+            &[("origin", "http://localhost:5173")],
+        )
+        .await;
+    assert_eq!(
+        headers.get("access-control-allow-origin").unwrap(),
+        "http://localhost:5173"
+    );
+    assert!(headers.get("access-control-allow-credentials").is_none());
+
+    test.state.cors_origins = std::sync::Arc::new(vec!["https://dash.example".into()]);
+    let (_, headers) = preflight(&test, path, "https://dash.example").await;
+    assert_eq!(
+        headers.get("access-control-allow-origin").unwrap(),
+        "https://dash.example"
+    );
+    assert!(headers.get("access-control-allow-credentials").is_none());
+    let (_, headers) = preflight(&test, path, "https://other.example").await;
+    assert!(headers.get("access-control-allow-origin").is_none());
+    let (_, headers) = preflight(&test, path, "null").await;
+    assert!(headers.get("access-control-allow-origin").is_none());
+
+    test.state.cors_origins = std::sync::Arc::new(vec!["*".into()]);
+    let (_, headers) = preflight(&test, path, "https://anything.example").await;
+    assert_eq!(
+        headers.get("access-control-allow-origin").unwrap(),
+        "https://anything.example"
+    );
+    assert!(headers.get("access-control-allow-credentials").is_none());
+    let (_, headers) = preflight(&test, path, "null").await;
+    assert!(headers.get("access-control-allow-origin").is_none());
+    test.close().await;
+}
+
+#[tokio::test]
+async fn management_writes_never_send_cors() {
+    let mut test = Test::new();
+    test.state.cors_origins = std::sync::Arc::new(vec!["*".into()]);
+    for path in [
+        "/api/products/anything/dashboards",
+        "/api/products",
+        "/api/ingest-not-this",
+    ] {
+        let (_, headers) = preflight(&test, path, "http://localhost:5173").await;
+        assert!(
+            headers.get("access-control-allow-origin").is_none(),
+            "{path}"
+        );
+    }
+    let (_, headers, _) = test
+        .send_full(
+            "GET",
+            "/api/products",
+            Value::Null,
+            &[("origin", "http://localhost:5173")],
+        )
+        .await;
+    assert!(headers.get("access-control-allow-origin").is_none());
+    test.close().await;
+}
+
+#[tokio::test]
+async fn read_prefix_has_no_mutating_route() {
+    let test = Test::new();
+    let base = "/api/read/products/p";
+    let paths = [
+        "/api/read/products".to_string(),
+        format!("{base}/query"),
+        format!("{base}/logs/query"),
+        format!("{base}/widgets/run"),
+        format!("{base}/catalog"),
+        format!("{base}/dashboards"),
+        format!("{base}/dashboards/validate"),
+        format!("{base}/dashboards/d"),
+        format!("{base}/dashboards/d/revisions"),
+        "/api/read/schemas/dashboard.v1.json".to_string(),
+    ];
+    let posts = ["query", "logs/query", "widgets/run", "dashboards/validate"];
+    for path in &paths {
+        for method in ["PUT", "PATCH", "DELETE"] {
+            let (status, _) = test.send(method, path, json!({}), &[]).await;
+            assert!(
+                status == StatusCode::METHOD_NOT_ALLOWED || status == StatusCode::NOT_FOUND,
+                "{method} {path} -> {status}"
+            );
+        }
+        if !posts.iter().any(|post| path.ends_with(post)) {
+            let (status, _) = test.send("POST", path, json!({}), &[]).await;
+            assert!(
+                status == StatusCode::METHOD_NOT_ALLOWED || status == StatusCode::NOT_FOUND,
+                "POST {path} -> {status}"
+            );
+        }
+    }
+    let (status, _) = test
+        .send("POST", &format!("{base}/dashboards"), json!({}), &[])
+        .await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    test.close().await;
+}
