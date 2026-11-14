@@ -209,9 +209,14 @@ test("a log view can be updated, renamed, copied and deleted from its menu", asy
   await service(page).click();
   await page.getByRole("option", { name: "checkout", exact: true }).click();
   await windowButton(page, "Last 6 hours").click();
+  await expect(page.getByText("2 records", { exact: true })).toBeVisible();
+  const row = await page.locator(".log-row").first().elementHandle();
   await page.getByRole("button", { name: "View actions" }).click();
   await page.getByRole("menuitem", { name: "Update view with current filters" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Updated" })).toBeVisible();
+  // Updating moves only the applied version, so the stream stays as it is.
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).not.toBeNull();
+  expect(await row?.evaluate((element) => element.isConnected)).toBe(true);
   expect((await stored(created.slug)).document).toMatchObject({
     description: "kept across updates",
     query: { level: "error", service: "checkout" },

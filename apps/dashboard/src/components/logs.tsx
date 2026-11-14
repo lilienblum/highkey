@@ -99,9 +99,11 @@ function LogExplorer() {
   const viewportRef = useRef<HTMLElement | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const window = search.logWindow ?? "1h";
-  const scope = JSON.stringify([product?.id, sourceId, search]);
+  // Which view the filters came from (and its applied version) is not part of the query.
+  const { view: _view, viewAt: _viewAt, ...filtersOnly } = search;
+  const scope = JSON.stringify([product?.id, sourceId, filtersOnly]);
   // The stream and filters stay mounted across a source switch; other query changes reset them.
-  const viewKey = JSON.stringify([product?.id, search]);
+  const viewKey = JSON.stringify([product?.id, filtersOnly]);
   const selected = selection?.scope === scope ? selection.log : undefined;
   function setSelected(log: LogRow | undefined) {
     setSelection(log ? { log, scope } : undefined);
