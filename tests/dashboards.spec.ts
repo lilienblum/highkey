@@ -1042,3 +1042,28 @@ test("Open in Events and Open in Logs carry every filter the widget reads", asyn
     "Error and above",
   );
 });
+
+test("a dashboards signal keeps a chart's keyboard inspection in place", async ({ page }) => {
+  const connected = page.waitForResponse(
+    (response) => response.url().includes("/_tako/channels/") && response.ok(),
+  );
+  await page.goto(dashboardUrl());
+  await connected;
+  const chart = widget(page, "error-rate");
+  const surface = chart.locator("svg.ts-chart");
+  await expect(surface).toBeVisible();
+  await surface.press("End");
+  const tooltip = chart.locator(".ts-chart-tooltip");
+  await expect(tooltip).toBeVisible();
+  const before = await tooltip.textContent();
+  const marks = await chart.locator("svg.ts-chart path").elementHandles();
+  // Another dashboard saved elsewhere reloads the sidebar and this document.
+  const name = `Signal ${Date.now()}`;
+  await admin(`/products/${project.id}/dashboards`, { document: { ...checkoutDashboard, name } });
+  await expect(sidebar(page).getByRole("link", { name, exact: true })).toBeVisible();
+  await expect(surface).toBeFocused();
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText(before ?? "");
+  for (const mark of marks)
+    expect(await mark.evaluate((element) => element.isConnected)).toBe(true);
+});

@@ -124,8 +124,20 @@ function TextWidget({ widget }: { widget: Widget }) {
   );
 }
 
-function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Props) {
+/**
+ * The same object while its JSON is unchanged, so a reloaded document or project list (each live
+ * dashboards signal) keeps charts, their keyboard inspection and tooltips in place.
+ */
+function useStable<T>(value: T): T {
+  const key = JSON.stringify(value);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the JSON is the value's identity
+  return useMemo(() => value, [key]);
+}
+
+function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange }: Props) {
   const { range, rangeScope, sourceId, refreshKey } = useWorkspace();
+  const widget = useStable(given);
+  const sources = useStable(product.sources);
   const ref = useRef<HTMLElement>(null);
   const near = useNearViewport(ref);
   const run = useWidgetRun(product.id, widget, range, rangeScope, sourceId, refreshKey, near);
@@ -141,7 +153,7 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
     ? { from: iso(result.range.from), to: iso(result.range.to) }
     : widgetRange(widget, range);
   const body = (() => {
-    const shared = { widget, product, result, loading: run.loading };
+    const shared = { widget, sources, result, loading: run.loading };
     switch (kind) {
       case "stat":
         return <StatBody {...shared} />;
@@ -211,9 +223,11 @@ function QueryWidget({ widget, product, logRetentionDays, onPendingChange }: Pro
   );
 }
 
+type Sources = Product["sources"];
 type BodyProps = {
   widget: Widget;
-  product: Product;
+  /** For source names; stable while the project's sources are unchanged. */
+  sources: Sources;
   result?: RunResult;
   loading: boolean;
 };
@@ -307,21 +321,23 @@ function Sparkline({
 
 function ChartBody({
   widget,
-  product,
+  sources,
   result,
   loading,
   span,
 }: BodyProps & { span: { from: string; to: string } }) {
   const groupBy = groupByOf(Object.values(widget.queries)[0]);
-  // Stable inputs keep the chart definition (and its focus and tooltip) across parent renders.
+  // Stable inputs keep the chart definition (and its focus and tooltip) across parent renders:
+  // a refresh that returns the same series keeps them too.
+  const results = result?.series;
   const series = useMemo(
     () =>
-      result
-        ? chartSeries(result, widget.series, (s, index) =>
-            seriesLabel(widget, s, index, groupBy, product),
+      results
+        ? chartSeries(results, widget.series, (s, index) =>
+            seriesLabel(widget, s, index, groupBy, sources),
           )
         : [],
-    [result, widget, groupBy, product],
+    [results, widget, groupBy, sources],
   );
   const view = useMemo(() => measureView(widget, 0), [widget]);
   const hasValues = series.some((s) => [...s.points.values()].some((value) => value !== null));
@@ -365,7 +381,7 @@ function ChartBody({
   );
 }
 
-function RankingBody({ widget, product, result, loading }: BodyProps) {
+function RankingBody({ widget, sources, result, loading }: BodyProps) {
   const groupBy = groupByOf(Object.values(widget.queries)[0]);
   const first = result?.series[0];
   const rows = first?.groups ?? [];
@@ -399,7 +415,7 @@ function RankingBody({ widget, product, result, loading }: BodyProps) {
         </div>
         {rows.map((row) => {
           const key = JSON.stringify(row.label);
-          const label = groupText(groupBy, row.label, product);
+          const label = groupText(groupBy, row.label, sources);
           return (
             <div
               className="breakdown-row"
@@ -550,7 +566,7 @@ function CellValue({
   return <>{formatCell(value, kind, column)}</>;
 }
 
-function EventRowsBody({ widget, product, result, loading }: BodyProps) {
+function EventRowsBody({ widget, sources, result, loading }: BodyProps) {
   const rows = (result?.rows ?? []) as unknown as EventRow[];
   return (
     <WidgetContent
@@ -583,8 +599,7 @@ function EventRowsBody({ widget, product, result, loading }: BodyProps) {
                   {row.name}
                 </span>
                 <span className="dashboard-row-meta">
-                  {product.sources.find((source) => source.id === row.source_id)?.name ??
-                    row.source}
+                  {sources.find((source) => source.id === row.source_id)?.name ?? row.source}
                 </span>
               </li>
             );
@@ -706,9 +721,9 @@ function dimensionLabel(groupBy?: string) {
 }
 
 /** Group labels read like Overview's reports: source names, display names, "Not provided". */
-function groupText(groupBy: string | undefined, label: unknown, product: Product) {
+function groupText(groupBy: string | undefined, label: unknown, sources: Sources) {
   if (groupBy === "source_id" && typeof label === "string")
-    return product.sources.find((source) => source.id === label)?.name ?? "Unknown source";
+    return sources.find((source) => source.id === label)?.name ?? "Unknown source";
   if (label === null || label === undefined || label === "") return groupLabel(label as null);
   if (groupBy?.startsWith("property:") && typeof label !== "object")
     return displayValue(groupBy, label);
@@ -721,8 +736,8 @@ function seriesLabel(
   series: SeriesResult,
   index: number,
   groupBy: string | undefined,
-  product: Product,
+  sources: Sources,
 ) {
-  if (series.group !== undefined) return groupText(groupBy, series.group, product);
+  if (series.group !== undefined) return groupText(groupBy, series.group, sources);
   return seriesDisplayLabel(widget, index) ?? series.label;
 }

@@ -62,16 +62,16 @@ type Row = { time: number; value: number | null; lower: number; upper: number; s
  * drawn dithered, so grouped series 4–6 (and any repeated choice) stay distinguishable.
  */
 export function chartSeries(
-  result: RunResult,
+  results: RunResult["series"],
   definitions: Series[] | undefined,
   label: (series: RunResult["series"][number], index: number) => string,
 ): ChartSeries[] {
-  const grouped = result.series.some((series) => series.group !== undefined);
-  return result.series.map((series, index) => ({
+  const grouped = results.some((series) => series.group !== undefined);
+  return results.map((series, index) => ({
     key: series.group !== undefined ? `group:${JSON.stringify(series.group)}` : `series:${index}`,
     label: label(series, index),
     color: series.color,
-    dither: result.series.slice(0, index).some((earlier) => earlier.color === series.color),
+    dither: results.slice(0, index).some((earlier) => earlier.color === series.color),
     thresholds: (grouped ? definitions?.[0] : definitions?.[index])?.thresholds ?? [],
     total: series.total,
     points: new Map((series.points ?? []).map((point) => [point.time, point.value])),
