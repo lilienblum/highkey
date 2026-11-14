@@ -1,4 +1,10 @@
-use piko::{AppState, Config, changes::ChangeDelivery, router, runtime::lock_data_directory};
+use piko::{
+    AppState, Config,
+    changes::ChangeDelivery,
+    memory::{self, Ceiling},
+    router,
+    runtime::lock_data_directory,
+};
 use std::{env, sync::Arc, time::Duration};
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -7,6 +13,8 @@ fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "piko=info".into()),
         )
         .init();
+    // Before Tokio and DuckDB allocate anything, so every allocation counts against it.
+    log_ceiling(&memory::apply()?);
     let managed = ["TAKO_DATA_DIR", "TAKO_BUILD", "TAKO_BOOTSTRAP_DATA"]
         .iter()
         .any(|name| env::var_os(name).is_some());
@@ -102,6 +110,29 @@ async fn shutdown() {
     #[cfg(not(unix))]
     {
         let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+fn log_ceiling(ceiling: &Ceiling) {
+    match *ceiling {
+        Ceiling::Configured(bytes) => tracing::info!(
+            limit_mib = bytes >> 20,
+            "Memory ceiling (RLIMIT_DATA) set from {}",
+            memory::SETTING
+        ),
+        Ceiling::Derived { bytes, of } => tracing::info!(
+            limit_mib = bytes >> 20,
+            of_mib = of >> 20,
+            "Memory ceiling (RLIMIT_DATA) set to 80% of the smaller of the cgroup limit and the host's memory"
+        ),
+        Ceiling::Off => tracing::info!("No memory ceiling: {} is off", memory::SETTING),
+        Ceiling::Unknown => tracing::warn!(
+            "No memory ceiling: neither a cgroup limit nor /proc/meminfo could be read; set {}",
+            memory::SETTING
+        ),
+        Ceiling::Unsupported => {
+            tracing::debug!("No memory ceiling: RLIMIT_DATA is only set on Linux")
+        }
     }
 }
 

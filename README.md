@@ -64,6 +64,7 @@ Under native Tako, data lives in `$TAKO_DATA_DIR` (locally `.tako/data/app`); Co
 | `PIKO_BIND`              | `127.0.0.1:3001`           | Standalone API address; Tako owns its listener                                                 |
 | `PIKO_QUERY_CONCURRENCY` | `4` (1–16)                 | Independent DuckDB query connections                                                           |
 | `PIKO_QUEUE_CAPACITY`    | `64` (1–1024)              | Bounded ingestion request slots/queue                                                          |
+| `PIKO_MEMORY_LIMIT`      | 80% of cgroup or host RAM  | Linux memory ceiling; `0` or `off` for none ([resource model](docs/api.md#resource-model))     |
 | `PIKO_API_URL`           | `http://127.0.0.1:3001`    | Dashboard-to-API origin                                                                        |
 | `HOST`, `PORT`           | `127.0.0.1`, `3000`        | Standalone Bun dashboard listener                                                              |
 | `PIKO_CHANGE_URL`        | unset outside Tako configs | Optional post-commit notification endpoint                                                     |

@@ -3,6 +3,7 @@ pub mod dashboards;
 pub mod error;
 pub mod ingest;
 pub mod logs;
+pub mod memory;
 pub mod model;
 pub mod origins;
 pub mod product_db;

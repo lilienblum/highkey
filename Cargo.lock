@@ -1692,6 +1692,7 @@ dependencies = [
  "http-body-util",
  "indexmap",
  "jsonschema",
+ "libc",
  "piko-sdk",
  "prost",
  "reqwest",

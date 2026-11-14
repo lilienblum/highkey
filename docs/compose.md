@@ -32,6 +32,19 @@ services:
 
 Recreate the API with `docker compose up -d`. The API restart is brief but interrupts queries and ingestion; see [updates](#updates-and-recovery). See [local pages](dashboards.md#local-pages) and [access](access.md#local-pages-and-cors) for what the allowlist covers and the Access settings it needs. Native Tako sets it under `[vars.production]` in `tako.api.toml`.
 
+## Memory ceiling
+
+On Linux the API caps its own memory at startup, so a runaway query fails with an Out of Memory error instead of the kernel stopping the API (and ingestion with it) or starving the host. By default the ceiling is 80% of the smaller of the container's memory limit and the host's memory; `docker compose logs api` shows the value chosen. To choose it yourself, set `PIKO_MEMORY_LIMIT` on the API service, in bytes with an optional `K`, `M` or `G` suffix, or `0` or `off` for no ceiling:
+
+```yaml
+services:
+  api:
+    environment:
+      PIKO_MEMORY_LIMIT: "2G"
+```
+
+Recreate the API with `docker compose up -d`. The ceiling counts reserved as well as resident memory, so it reads higher than the container's RSS; see the [resource model](api.md#resource-model).
+
 ## Deploy with Tako
 
 Use a CLI/server release with [Tako Compose support](https://tako.sh/docs/docker-compose). The target server requires Docker Engine and Compose 2.24.4 or newer, with Docker socket access for the `tako-server` service account. Tako's Podman installation alone is insufficient. Verify `docker info` and `docker compose version` as that account.
