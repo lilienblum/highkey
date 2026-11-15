@@ -3,6 +3,7 @@
 import { tako } from "tako.sh";
 import { Readers } from "../clickhouse/access";
 import { ClickHouse } from "../clickhouse/client";
+import { type Gates, gatesFromEnv } from "../dashboards/gates";
 import { WriteLimit } from "../dashboards/limit";
 import { Store } from "../db/sqlite";
 
@@ -23,6 +24,8 @@ export interface ApiContext {
   changes: ChangeBus;
   /** Dashboard and view writes per project per minute. */
   writeLimit: WriteLimit;
+  /** Concurrency gates for dashboard widget runs. */
+  gates: Gates;
   now(): Date;
 }
 
@@ -59,6 +62,7 @@ export function apiContext(): ApiContext {
     corsOrigins: parseOrigins(process.env.PIKO_CORS_ORIGINS),
     changes: { notify: () => {} },
     writeLimit: new WriteLimit(),
+    gates: gatesFromEnv(),
     now: () => new Date(),
   };
   return singleton;

@@ -5,7 +5,9 @@ import type { ApiContext } from "../api/context";
 import { json, noContent } from "../api/errors";
 import { route } from "../api/router";
 import { resolveProduct } from "../db/products";
+import { catalog, warnUnknownDocument } from "./catalog";
 import schema from "./dashboard.v1.schema.json";
+import { parseRunRequest, runWidget } from "./run";
 import { conflict, invalid, rateLimited } from "./errors";
 import type { Document } from "./spec";
 import {
@@ -130,6 +132,15 @@ export async function validateFor(ctx: ApiContext, project: string, value: unkno
 }
 
 export function registerDashboards(): void {
+  setValidateExtras(async (ctx, product, doc, report) =>
+    warnUnknownDocument(doc, await catalog(ctx, product), report),
+  );
+  route("POST", "/api/read/products/:project/widgets/run", async (request, ctx, { project }) =>
+    json(await runWidget(ctx, project as string, parseRunRequest(await readJson(request)))),
+  );
+  route("GET", "/api/read/products/:project/catalog", async (_r, ctx, { project }) =>
+    json(await catalog(ctx, project as string)),
+  );
   const read = "/api/read/products/:project/dashboards";
   route("GET", "/api/read/schemas/dashboard.v1.json", async () => json(schema));
   route("GET", read, async (_r, ctx, { project }) =>

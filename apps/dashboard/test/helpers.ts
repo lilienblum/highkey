@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { ApiContext, Signal } from "../src/server/api/context";
 import { handleApi } from "../src/server/api/router";
 import { Readers } from "../src/server/clickhouse/access";
+import { gatesFromEnv } from "../src/server/dashboards/gates";
 import { WriteLimit } from "../src/server/dashboards/limit";
 import { ClickHouse } from "../src/server/clickhouse/client";
 import { migrate } from "../src/server/clickhouse/migrate";
@@ -43,6 +44,7 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
     changes: { notify: (product, signal) => void signals.push({ product, signal }) },
     // Tests write freely; the rate-limit test installs the real limit.
     writeLimit: new WriteLimit(1_000_000),
+    gates: gatesFromEnv({ PIKO_QUERY_CONCURRENCY: "4" }),
     now: () => new Date(),
     signals,
     cleanup() {

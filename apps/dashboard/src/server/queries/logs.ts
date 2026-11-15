@@ -154,7 +154,10 @@ const SCALARS: Record<string, string> = {
   Bool: "boolean",
 };
 
-async function facets(reader: ClickHouse, settings: Record<string, string>): Promise<Facets> {
+export async function facets(
+  reader: ClickHouse,
+  settings: Record<string, string>,
+): Promise<Facets> {
   const top = (column: string) =>
     reader.query<{ name: string; count: number }>(
       `SELECT ${column} AS name, count() AS count FROM logs WHERE ${column} IS NOT NULL GROUP BY name ORDER BY count DESC, name LIMIT 50`,

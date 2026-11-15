@@ -15,6 +15,8 @@ export async function readAs<T>(
   try {
     return await run(ctx.readers.reader(productId));
   } catch (error) {
+    // A query that ran out of time is the caller's to report (a widget's query_timeout).
+    if (error instanceof ClickHouseError && error.code === 159) throw error;
     if (error instanceof ClickHouseError && error.code === 202)
       throw new ApiError(503, "Too many queries for this project; retry shortly", {}, "busy");
     if (

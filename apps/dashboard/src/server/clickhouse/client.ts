@@ -84,10 +84,18 @@ export class ClickHouse {
         signal: options.signal,
       });
     } catch (error) {
+      // The caller's own deadline or cancellation, not ClickHouse failing.
+      if (options.signal?.aborted) throw options.signal.reason ?? error;
       const message = error instanceof Error ? error.message : String(error);
       throw new ClickHouseError(`ClickHouse is unreachable: ${message}`, null, 0, true);
     }
-    const text = await response.text();
+    let text: string;
+    try {
+      text = await response.text();
+    } catch (error) {
+      if (options.signal?.aborted) throw options.signal.reason ?? error;
+      throw error;
+    }
     if (!response.ok) {
       const header = response.headers.get("x-clickhouse-exception-code");
       const parsed = header ?? /^Code: (\d+)/.exec(text)?.[1] ?? null;
