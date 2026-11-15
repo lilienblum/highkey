@@ -571,13 +571,43 @@ export function ViewActions<D extends ViewDocument>({
   useEffect(() => {
     if (!latest) return;
     if (sync === "bump") mark(latest);
-    else if (sync === "apply") void show(view.slug, latest);
+    else if (sync === "apply")
+      show(view.slug, latest).catch((e: unknown) =>
+        setError(viewErrorMessage(e, "Could not apply the latest version of this view.")),
+      );
   }, [sync, latest?.updated_at]);
   useEffect(() => {
     if (!status) return;
     const timer = setTimeout(() => setStatus(""), 2500);
     return () => clearTimeout(timer);
   }, [status]);
+  // Load latest leaves with the notice once the version it loads applies. This runs after that
+  // render, when the button is gone, so focus that fell to the page moves to the menu instead.
+  // It holds that version's `updated_at` until then.
+  const loadingLatest = useRef<string | null>(null);
+  useEffect(() => {
+    const loading = loadingLatest.current;
+    if (!loading) return;
+    if (sync === "changed") {
+      // A newer version arrived first: the notice and its button stay for that one.
+      if (latest?.updated_at !== loading) loadingLatest.current = null;
+      return;
+    }
+    loadingLatest.current = null;
+    const active = globalThis.document.activeElement;
+    if (!active || active === globalThis.document.body) trigger.current?.focus();
+  }, [sync, latest?.updated_at]);
+  async function loadLatest(stored: StoredView<D>) {
+    setError("");
+    loadingLatest.current = stored.updated_at;
+    try {
+      await show(view.slug, stored);
+    } catch (e) {
+      // The notice and its button stay, and so does focus on it.
+      loadingLatest.current = null;
+      setError(viewErrorMessage(e, "Could not load the latest version. Try again."));
+    }
+  }
 
   async function run(message: string, work: () => Promise<void>) {
     setError("");
@@ -643,19 +673,7 @@ export function ViewActions<D extends ViewDocument>({
         {sync === "changed" ? "Changed by your agent" : ""}
       </span>
       {sync === "changed" && latest && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setError("");
-            // The button leaves with the notice once the version applies; focus moves to the menu.
-            void show(view.slug, latest).then(() => {
-              const active = globalThis.document.activeElement;
-              if (!active || active === globalThis.document.body) trigger.current?.focus();
-            });
-          }}
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={() => void loadLatest(latest)}>
           Load latest
         </Button>
       )}
@@ -697,9 +715,8 @@ export function ViewActions<D extends ViewDocument>({
           } catch (e) {
             throw new Error(viewErrorMessage(e, "Could not rename the view."));
           }
-          // A rename that moves the slug leaves the old one's copy for a later view to find.
-          if (saved.slug !== view.slug) client.removeQueries({ queryKey: key, exact: true });
-          client.setQueryData(viewQueryKey(product.id, kind, saved.slug), saved);
+          // The API keeps a view's slug when it is saved again, so its copy stays under this key.
+          client.setQueryData(key, saved);
           // A new name changes nothing the page shows, so the page stays on this version.
           if (inStep) mark(saved);
           await reload();

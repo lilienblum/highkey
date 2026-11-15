@@ -8,6 +8,7 @@ type View = {
   id: string;
   slug: string;
   kind: string;
+  updated_at: string;
   document: { name: string; kind: string; query: { event?: string } };
 };
 async function admin<T>(
@@ -265,6 +266,9 @@ test("a view can be updated, renamed, copied and deleted from its menu", async (
     query: { event: "signup" },
   });
   expect(viewParam(page)).toBe(created.slug);
+  // The rename is a new version; the page moves to it rather than offering to load it.
+  await expect.poll(() => new URL(page.url()).searchParams.get("viewAt")).toBe(renamed.updated_at);
+  await expect(page.getByText("Changed by your agent")).toHaveCount(0);
 
   // Copy JSON hands over the stored document.
   await page.getByRole("button", { name: "View actions" }).click();
