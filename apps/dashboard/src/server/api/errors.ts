@@ -7,6 +7,8 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly headers: Record<string, string> = {},
+    /** A stable code for programs, sent beside the message when set. */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -19,6 +21,15 @@ export const unprocessable = (message: string) => new ApiError(422, message);
 export const missing = () => new ApiError(404, "Product or key not found");
 export const projectMissing = () => new ApiError(404, "Project not found");
 export const sourceMissing = () => new ApiError(404, "Source not found");
+
+/** A project's analytics are not reachable yet: ClickHouse is down or still provisioning. */
+export const analyticsUnavailable = () =>
+  new ApiError(
+    503,
+    "Analytics storage is not ready for this project; retry shortly",
+    { "Retry-After": "5" },
+    "analytics_unavailable",
+  );
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return Response.json(body, { status, headers });
@@ -35,7 +46,8 @@ export function errorResponse(error: unknown): Response {
     const headers = { ...error.headers };
     if ((error.status === 503 || error.status === 429) && !headers["Retry-After"])
       headers["Retry-After"] = "1";
-    return json({ error: error.message }, error.status, headers);
+    const body = error.code ? { error: error.message, code: error.code } : { error: error.message };
+    return json(body, error.status, headers);
   }
   console.error("Database operation failed", error);
   return json({ error: "Database operation failed" }, 500);
