@@ -5,7 +5,10 @@
 //   bun scripts/clickhouse.ts dev-up     persistent server for `bun dev`
 //   bun scripts/clickhouse.ts dev-down
 //
-// `*-up` is idempotent: a running server is reused. It prints the server's URL.
+// `*-up` is idempotent: a running server is reused and migrated. It prints the server's URL.
+
+import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
+import { migrate } from "../apps/dashboard/src/server/clickhouse/migrate";
 
 /** Pinned image. compose.yaml must name the same tag. */
 export const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:26.8.37.168";
@@ -22,6 +25,8 @@ export interface ServerOptions {
   tmpfs: boolean;
   volume?: string;
   password: string;
+  /** The password `migrate` gives the `piko_ingest` user. */
+  ingestPassword: string;
   memory?: string;
 }
 
@@ -30,6 +35,7 @@ export const TEST_SERVER: ServerOptions = {
   port: 18123,
   tmpfs: true,
   password: "piko-test",
+  ingestPassword: "piko-ingest-test",
 };
 
 export const DEV_SERVER: ServerOptions = {
@@ -38,6 +44,7 @@ export const DEV_SERVER: ServerOptions = {
   tmpfs: false,
   volume: "piko-dev-clickhouse",
   password: process.env.PIKO_CLICKHOUSE_PASSWORD ?? "piko-dev",
+  ingestPassword: process.env.PIKO_INGEST_CLICKHOUSE_PASSWORD ?? "piko-ingest-dev",
 };
 
 async function docker(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -107,6 +114,8 @@ export async function startClickHouse(options: ServerOptions): Promise<{ url: st
     if (run.code !== 0) throw new Error(`docker run ${options.name}: ${run.stderr}`);
   }
   await waitForClickHouse(url, 120_000);
+  const admin = new ClickHouse({ url, user: ADMIN_USER, password: options.password });
+  await migrate(admin, { ingestPassword: options.ingestPassword });
   return { url };
 }
 

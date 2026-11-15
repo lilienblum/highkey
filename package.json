@@ -17,6 +17,7 @@
     "benchmark:logs": "bun scripts/benchmark-logs.ts",
     "benchmark": "bun scripts/benchmark.ts",
     "seed": "bun scripts/seed.ts",
+    "migrate": "bun apps/dashboard/src/server/clickhouse/migrate-cli.ts",
     "dev:dashboard": "bun run --cwd apps/dashboard dev",
     "dev:stop": "bun scripts/dev.ts --stop",
     "dev:standalone": "bun scripts/dev-standalone.ts"
