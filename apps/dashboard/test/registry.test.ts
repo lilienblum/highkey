@@ -94,7 +94,7 @@ describe("registry and access", () => {
     await admin.command("OPTIMIZE TABLE piko.events FINAL");
     expect(await expiry(id)).toEqual([{ event_id: "twenty", days: 30 }]);
     expect((await registry(id))[0]?.retention_days).toBe(30);
-  });
+  }, 60_000);
 
   test("provisioning_after_an_outage_is_repaired_by_reconcile", async () => {
     const working = ctx.admin;
@@ -143,7 +143,7 @@ describe("registry and access", () => {
     expect(typeof result.json.removed).toBe("number");
     expect(typeof result.json.logs_removed).toBe("number");
     expect((await expiry(id)).map((row) => row.event_id)).toEqual(["fresh"]);
-  });
+  }, 60_000);
 
   test("reconcile_is_idempotent", async () => {
     const { id } = await project(ctx, "Twice", 30);

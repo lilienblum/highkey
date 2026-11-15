@@ -17,7 +17,8 @@ export function path(column: "properties" | "attributes", key: string): string {
 
 /** A JSON value as Float64 when it is a number, else NULL. */
 export function numeric(expression: string): string {
-  return `multiIf(dynamicType(${expression}) = 'Int64', toFloat64(${expression}.:Int64), dynamicType(${expression}) = 'UInt64', toFloat64(${expression}.:UInt64), dynamicType(${expression}) = 'Float64', ${expression}.:Float64, NULL)`;
+  const as = (type: string) => `dynamicElement(${expression}, '${type}')`;
+  return `multiIf(dynamicType(${expression}) = 'Int64', toFloat64(${as("Int64")}), dynamicType(${expression}) = 'UInt64', toFloat64(${as("UInt64")}), dynamicType(${expression}) = 'Float64', ${as("Float64")}, NULL)`;
 }
 
 /** Bound parameters collected while building a query. */
@@ -35,9 +36,9 @@ export class Params {
 /** A JSON value equal to a scalar of the same JSON type. */
 export function scalarEquals(expression: string, value: unknown, params: Params): string {
   if (typeof value === "boolean")
-    return `(dynamicType(${expression}) = 'Bool' AND ${expression}.:Bool = ${params.add("Bool", value)})`;
+    return `(dynamicType(${expression}) = 'Bool' AND dynamicElement(${expression}, 'Bool') = ${params.add("Bool", value)})`;
   if (typeof value === "string")
-    return `(dynamicType(${expression}) = 'String' AND ${expression}.:String = ${params.add("String", value)})`;
+    return `(dynamicType(${expression}) = 'String' AND dynamicElement(${expression}, 'String') = ${params.add("String", value)})`;
   if (typeof value === "number")
     return `(${numeric(expression)} = ${params.add("Float64", value)})`;
   throw bad("Ordered comparisons require numbers; eq/ne require scalar values");

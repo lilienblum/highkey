@@ -206,7 +206,7 @@ export async function runEventsQuery(reader: ClickHouse, q: EventsQuery): Promis
   };
   // One at a time: each project's reader may run only a few queries at once.
   const summary = await reader.query<Record<string, number | null>>(
-    `SELECT count() AS total, uniqExactIf((identity_kind, actor_id), actor_id IS NOT NULL) AS actors, uniqExactIf(actor_id, identity_kind = 'visitor') AS visitors, uniqExactIf(actor_id, identity_kind = 'installation') AS installations, uniqExactIf((actor_id, session_id), session_id IS NOT NULL AND identity_kind = 'visitor') AS sessions, avgOrNullIf(if(${success}.:Bool, 100., 0.), dynamicType(${success}) = 'Bool') AS success_rate, avgOrNull(${duration}) AS avg_duration, quantileExactInclusiveOrNull(0.95)(${duration}) AS p95_duration, ${value} AS value, countIf(session_id IS NOT NULL AND identity_kind = 'visitor') AS session_views FROM events WHERE ${where}`,
+    `SELECT count() AS total, uniqExactIf((identity_kind, actor_id), actor_id IS NOT NULL) AS actors, uniqExactIf(actor_id, identity_kind = 'visitor') AS visitors, uniqExactIf(actor_id, identity_kind = 'installation') AS installations, uniqExactIf((actor_id, session_id), session_id IS NOT NULL AND identity_kind = 'visitor') AS sessions, avgOrNullIf(if(dynamicElement(${success}, 'Bool'), 100., 0.), dynamicType(${success}) = 'Bool') AS success_rate, avgOrNull(${duration}) AS avg_duration, quantileExactInclusiveOrNull(0.95)(${duration}) AS p95_duration, ${value} AS value, countIf(session_id IS NOT NULL AND identity_kind = 'visitor') AS session_views FROM events WHERE ${where}`,
     options,
   );
   const buckets = await reader.query<{ time: number; value: number | null }>(

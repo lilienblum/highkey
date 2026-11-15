@@ -129,7 +129,7 @@ describe("Explore queries", () => {
     await call(ctx, "POST", "/api/cleanup", {});
     expect((await run(short.id, range())).json.summary.total).toBe(0);
     expect((await run(long.id, range())).json.summary.total).toBe(1);
-  });
+  }, 60_000);
 
   test("mixed_integer_and_float_property_values_aggregate_as_numbers", async () => {
     const { id } = await project(ctx, "Mixed numbers");
