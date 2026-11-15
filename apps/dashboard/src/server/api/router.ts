@@ -24,7 +24,9 @@ async function ensureRoutes(): Promise<void> {
   if (registered) return;
   registered = true;
   const { registerManagement } = await import("./management");
+  const { registerQueries } = await import("../queries/routes");
   registerManagement();
+  registerQueries();
 }
 
 /** Registers a route; `:name` segments become params. Registration order breaks ties. */
