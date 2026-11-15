@@ -2,6 +2,7 @@
 // dashboard's /api/$ route calls `handleApi`.
 import type { ApiContext } from "./context";
 import { preflight, withReadCors } from "./cors";
+import { dashboardResponse } from "../dashboards/errors";
 import { ApiError, errorResponse, json } from "./errors";
 
 export type Handler = (
@@ -25,8 +26,10 @@ async function ensureRoutes(): Promise<void> {
   registered = true;
   const { registerManagement } = await import("./management");
   const { registerQueries } = await import("../queries/routes");
+  const { registerDashboards } = await import("../dashboards/routes");
   registerManagement();
   registerQueries();
+  registerDashboards();
 }
 
 /** Registers a route; `:name` segments become params. Registration order breaks ties. */
@@ -88,7 +91,9 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
         throw new ApiError(403, "Management requests require X-Piko-Admin: 1");
       response = await candidate.handler(request, ctx, params);
     } catch (error) {
-      response = errorResponse(error);
+      // Read and dashboard paths answer with typed bodies (code, errors[].path, hint).
+      const typed = read || /\/(dashboards|views)(\/|$)/.test(url.pathname);
+      response = (typed ? dashboardResponse(error) : null) ?? errorResponse(error);
     }
     response = secured(response);
     return read ? withReadCors(request, response, ctx.corsOrigins) : response;

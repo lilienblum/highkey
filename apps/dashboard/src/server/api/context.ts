@@ -3,6 +3,7 @@
 import { tako } from "tako.sh";
 import { Readers } from "../clickhouse/access";
 import { ClickHouse } from "../clickhouse/client";
+import { WriteLimit } from "../dashboards/limit";
 import { Store } from "../db/sqlite";
 
 export type Signal = "events" | "logs" | "dashboards";
@@ -20,6 +21,8 @@ export interface ApiContext {
   /** Extra origins allowed to call /api/read cross-origin (`*` allows any). */
   corsOrigins: string[];
   changes: ChangeBus;
+  /** Dashboard and view writes per project per minute. */
+  writeLimit: WriteLimit;
   now(): Date;
 }
 
@@ -55,6 +58,7 @@ export function apiContext(): ApiContext {
     secret: readerSecret,
     corsOrigins: parseOrigins(process.env.PIKO_CORS_ORIGINS),
     changes: { notify: () => {} },
+    writeLimit: new WriteLimit(),
     now: () => new Date(),
   };
   return singleton;
