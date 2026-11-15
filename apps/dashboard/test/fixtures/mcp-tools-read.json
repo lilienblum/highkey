@@ -1,0 +1,369 @@
+{
+  "initialize": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "piko",
+      "version": "0.1.0"
+    },
+    "instructions": "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own data: `events` and `logs` already hold only the dashboard's range and source, `all_events` and `all_logs` hold all history (for cohorts), `bucket(event_time)` gives a row's bucket, and the parameters are $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug."
+  },
+  "tools": [
+    {
+      "name": "describe_project",
+      "description": "Describes a project: event names and property keys, log services and levels, sources, retention, the SQL tables (and which follow the dashboard's range), their columns, parameters and functions, and the document limits. Call this first.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_dashboard",
+      "description": "Returns a dashboard with its document and current revision. Read it before changing it, and pass the revision as base_revision when saving.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "dashboard": {
+            "description": "The dashboard's id or slug.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project", "dashboard"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_log_settings",
+      "description": "Reads a project's log settings: {retention_days}. Logs are kept 7 days unless changed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_view",
+      "description": "Returns a saved view with its document. Pass kind when an events view and a logs view share the slug.",
+      "inputSchema": {
+        "$defs": {
+          "ViewKind": {
+            "enum": ["events", "logs"],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ViewKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`events` or `logs`; needed only when both kinds have a view with this slug."
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          },
+          "view": {
+            "description": "The view's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project", "view"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_dashboards",
+      "description": "Lists a project's dashboards: id, slug, name, revision and widget count.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_projects",
+      "description": "Lists the projects: id, slug, name and event retention in days. Every other tool takes a project's id or slug.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_revisions",
+      "description": "Lists the kept revisions of a dashboard, newest first, with who wrote each (dashboard, mcp or api).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "dashboard": {
+            "description": "The dashboard's id or slug.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project", "dashboard"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_sources",
+      "description": "Lists a project's sources: id, slug, name and icon.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_views",
+      "description": "Lists a project's saved views (named queries for the Events and Logs pages), optionally of one kind.",
+      "inputSchema": {
+        "$defs": {
+          "ViewKind": {
+            "enum": ["events", "logs"],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ViewKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only views of this kind."
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "run_widget",
+      "description": "Runs one widget definition and returns its series (or rows and columns for lists and tables), the range actually used, any warnings and elapsed_ms. Series are trimmed to their newest 200 points and tables to their first 50 rows, with a warning. Use it to preview every widget before saving.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "from": {
+            "description": "Start of the range, RFC 3339 or a date. Defaults to seven days before `to`.",
+            "type": ["string", "null"]
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "Limits every query of the widget to one source (a source id).",
+            "type": ["string", "null"]
+          },
+          "to": {
+            "description": "End of the range, RFC 3339 or a date. Defaults to now.",
+            "type": ["string", "null"]
+          },
+          "widget": {
+            "description": "One widget of the dashboard document, exactly as it would be saved."
+          }
+        },
+        "required": ["project", "widget"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "sample_events",
+      "description": "Shows up to 20 of the newest events of the last 7 days, to see real names and property shapes. These are raw events.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event": {
+            "description": "Only events with this name.",
+            "type": ["string", "null"]
+          },
+          "limit": {
+            "description": "How many rows, at most 20 (the default).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "sample_logs",
+      "description": "Shows up to 20 of the newest logs of the last 7 days, to see real services, levels and messages. These are raw logs.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "level": {
+            "description": "Only logs at exactly this level: trace, debug, info, warn, error or fatal.",
+            "type": ["string", "null"]
+          },
+          "limit": {
+            "description": "How many rows, at most 20 (the default).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          },
+          "search": {
+            "description": "Only logs whose message contains this text.",
+            "type": ["string", "null"]
+          },
+          "service": {
+            "description": "Only logs from this service.",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["project"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "validate_dashboard",
+      "description": "Checks a dashboard document without saving it. Returns {valid, errors, warnings}; each issue has a JSON path, a message and often a hint. Unknown event names and properties only warn.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "document": {
+            "description": "The `piko.dashboard/v1` document; see the piko://schema/dashboard.v1 resource."
+          },
+          "project": {
+            "description": "The project's id or slug.",
+            "type": "string"
+          }
+        },
+        "required": ["project", "document"],
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    }
+  ],
+  "resources": {
+    "resources": [
+      {
+        "uri": "piko://schema/dashboard.v1",
+        "name": "Dashboard JSON Schema",
+        "description": "The JSON Schema of a piko.dashboard/v1 document",
+        "mimeType": "application/json"
+      },
+      {
+        "uri": "piko://docs/dashboards",
+        "name": "Dashboards guide",
+        "description": "How to write dashboards: queries, series, formulas, views, limits and examples",
+        "mimeType": "text/markdown"
+      }
+    ]
+  },
+  "prompts": {
+    "prompts": [
+      {
+        "name": "build_dashboard",
+        "description": "Build and save a dashboard for a goal, checking each step",
+        "arguments": [
+          {
+            "name": "goal",
+            "description": "What the dashboard should show",
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}

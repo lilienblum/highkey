@@ -1,0 +1,412 @@
+{
+  "$defs": {
+    "Better": {
+      "enum": ["up", "down"],
+      "type": "string"
+    },
+    "Color": {
+      "enum": ["yellow", "violet", "aqua", "green", "red", "neutral"],
+      "type": "string"
+    },
+    "Compare": {
+      "oneOf": [
+        {
+          "enum": ["previous_period"],
+          "type": "string"
+        },
+        {
+          "const": "none",
+          "description": "Opts out of the previous-period default.",
+          "type": "string"
+        }
+      ]
+    },
+    "EventMeasure": {
+      "enum": ["count", "actors", "sum", "avg", "p50", "p95", "min", "max"],
+      "type": "string"
+    },
+    "Filter": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "type": "string"
+        },
+        "property": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": ["property", "op", "value"],
+      "type": "object"
+    },
+    "LogFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": ["attribute", "value"],
+      "type": "object"
+    },
+    "LogMeasure": {
+      "enum": ["count", "sum", "avg", "p50", "p95", "min", "max"],
+      "type": "string"
+    },
+    "Missing": {
+      "enum": ["null", "zero"],
+      "type": "string"
+    },
+    "QuerySpec": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "event": {
+              "type": ["string", "null"]
+            },
+            "filters": {
+              "items": {
+                "$ref": "#/$defs/Filter"
+              },
+              "type": "array"
+            },
+            "group_by": {
+              "type": ["string", "null"]
+            },
+            "identity_kind": {
+              "type": ["string", "null"]
+            },
+            "measure": {
+              "$ref": "#/$defs/EventMeasure",
+              "default": "count"
+            },
+            "property": {
+              "type": ["string", "null"]
+            },
+            "signal": {
+              "const": "events",
+              "type": "string"
+            },
+            "source_id": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["signal"],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "attribute": {
+              "type": ["string", "null"]
+            },
+            "environment": {
+              "type": ["string", "null"]
+            },
+            "filters": {
+              "items": {
+                "$ref": "#/$defs/LogFilter"
+              },
+              "type": "array"
+            },
+            "group_by": {
+              "type": ["string", "null"]
+            },
+            "level": {
+              "type": ["string", "null"]
+            },
+            "measure": {
+              "$ref": "#/$defs/LogMeasure",
+              "default": "count"
+            },
+            "min_level": {
+              "type": ["string", "null"]
+            },
+            "search": {
+              "type": ["string", "null"]
+            },
+            "service": {
+              "type": ["string", "null"]
+            },
+            "signal": {
+              "const": "logs",
+              "type": "string"
+            },
+            "source_id": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["signal"],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A read-only ClickHouse SELECT over the project's views. `events` (or `logs`) holds only\nthe dashboard's range and source, `all_events` (or `all_logs`) all history, and\n`bucket(event_time)` gives a row's bucket. Its result columns decide its shape: `value`;\n`time` and `value` (plus an optional `group`); `label` and `value`; or any columns for a\ntable. `{from:DateTime64(3)}`, `{to:DateTime64(3)}`, `{bucket:String}` and `{source:String}` are bound by name.",
+          "properties": {
+            "database": {
+              "$ref": "#/$defs/SqlDatabase"
+            },
+            "missing": {
+              "$ref": "#/$defs/Missing",
+              "default": "null",
+              "description": "What an absent bucket or group counts as."
+            },
+            "signal": {
+              "const": "sql",
+              "type": "string"
+            },
+            "sql": {
+              "type": "string"
+            }
+          },
+          "required": ["signal", "database", "sql"],
+          "type": "object"
+        }
+      ]
+    },
+    "Series": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expr": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/Threshold"
+          },
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Unit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["expr"],
+      "type": "object"
+    },
+    "Size": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "w": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["w", "h"],
+      "type": "object"
+    },
+    "SqlDatabase": {
+      "enum": ["events", "logs"],
+      "type": "string"
+    },
+    "Threshold": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "double",
+          "type": "number"
+        },
+        "color": {
+          "$ref": "#/$defs/Color"
+        }
+      },
+      "required": ["at", "color"],
+      "type": "object"
+    },
+    "Unit": {
+      "enum": ["number", "percent", "ratio", "ms", "seconds", "bytes"],
+      "type": "string"
+    },
+    "View": {
+      "additionalProperties": false,
+      "properties": {
+        "better": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Better"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which direction of change is good, so growth is coloured as an outcome. Absent means\n`down` for `ms` and `seconds` values and `up` otherwise."
+        },
+        "bucket": {
+          "type": ["string", "null"]
+        },
+        "compare": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Compare"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decimals": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": ["integer", "null"]
+        },
+        "limit": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": ["integer", "null"]
+        },
+        "markdown": {
+          "type": ["string", "null"]
+        },
+        "prefix": {
+          "type": ["string", "null"]
+        },
+        "sparkline": {
+          "type": ["boolean", "null"]
+        },
+        "stacked": {
+          "type": ["boolean", "null"]
+        },
+        "suffix": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "$ref": "#/$defs/ViewKind"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Unit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ViewKind": {
+      "oneOf": [
+        {
+          "enum": ["stat", "line", "area", "bar", "ranking", "events", "logs", "text"],
+          "type": "string"
+        },
+        {
+          "const": "table",
+          "description": "Arbitrary columns from one SQL query.",
+          "type": "string"
+        }
+      ]
+    },
+    "Widget": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": ["string", "null"]
+        },
+        "id": {
+          "type": "string"
+        },
+        "queries": {
+          "additionalProperties": {
+            "$ref": "#/$defs/QuerySpec"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "range": {
+          "type": ["string", "null"]
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/Series"
+          },
+          "type": ["array", "null"]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": ["integer", "null"]
+        },
+        "title": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/View"
+        }
+      },
+      "required": ["id", "title", "view"],
+      "type": "object"
+    }
+  },
+  "$id": "/api/read/schemas/dashboard.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": ["string", "null"]
+    },
+    "description": {
+      "type": ["string", "null"]
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "widgets": {
+      "items": {
+        "$ref": "#/$defs/Widget"
+      },
+      "type": "array"
+    }
+  },
+  "required": ["version", "name", "widgets"],
+  "title": "Document",
+  "type": "object"
+}
