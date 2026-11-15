@@ -1,0 +1,45 @@
+<!-- Piko's ClickHouse server settings: small-server memory use, quiet system logs, and no
+     system tables for users who were not granted them. Mounted read-only by Compose and by
+     scripts/clickhouse.ts. -->
+<clickhouse>
+    <access_control_improvements>
+        <select_from_system_db_requires_grant>true</select_from_system_db_requires_grant>
+        <select_from_information_schema_requires_grant>true</select_from_information_schema_requires_grant>
+        <enable_read_write_grants>true</enable_read_write_grants>
+        <table_engines_require_grant>true</table_engines_require_grant>
+    </access_control_improvements>
+
+    <!-- Leave room for the ingest app, the dashboard and the host inside the memory limit. -->
+    <max_server_memory_usage_to_ram_ratio>0.9</max_server_memory_usage_to_ram_ratio>
+    <mark_cache_size>268435456</mark_cache_size>
+    <index_mark_cache_size>67108864</index_mark_cache_size>
+    <uncompressed_cache_size>0</uncompressed_cache_size>
+    <background_pool_size>4</background_pool_size>
+    <background_schedule_pool_size>16</background_schedule_pool_size>
+    <!-- A small merge pool needs matching thresholds, or the server refuses to start. -->
+    <merge_tree>
+        <number_of_free_entries_in_pool_to_execute_mutation>4</number_of_free_entries_in_pool_to_execute_mutation>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>4</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+        <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>4</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
+    </merge_tree>
+
+    <!-- Keep query_log for diagnosing slow widgets; turn the rest off. -->
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+    <trace_log remove="1"/>
+    <text_log remove="1"/>
+    <metric_log remove="1"/>
+    <latency_log remove="1"/>
+    <error_log remove="1"/>
+    <query_metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <query_views_log remove="1"/>
+    <part_log remove="1"/>
+    <session_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <blob_storage_log remove="1"/>
+    <background_schedule_pool_log remove="1"/>
+</clickhouse>

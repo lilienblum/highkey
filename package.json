@@ -12,7 +12,7 @@
     "fmt:check": "bun node_modules/@biomejs/biome/bin/biome format . && cargo fmt --all --check",
     "lint": "bun node_modules/@biomejs/biome/bin/biome lint .",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
-    "test": "bun test sdk scripts",
+    "test": "bun test ./sdk ./scripts ./apps/dashboard/test",
     "test:e2e": "bun scripts/e2e.ts",
     "benchmark:logs": "bun scripts/benchmark-logs.ts",
     "benchmark": "bun scripts/benchmark.ts",
