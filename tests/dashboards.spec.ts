@@ -958,10 +958,15 @@ test("the stale note and Try again stay put while a retry is under way", async (
     release = resolve;
   });
   const before = outage.reads;
+  const idle = (await tryAgain.boundingBox())?.width;
+  expect(idle).toBeGreaterThan(0);
   await tryAgain.click();
   await expect.poll(() => outage.reads).toBeGreaterThan(before);
   await expect(note).toBeVisible();
   await expect(tryAgain).toBeVisible();
+  // The spinner takes the icon's place, so the button and the actions after it keep their place.
+  await expect(tryAgain.locator(".animate-spin")).toBeVisible();
+  expect((await tryAgain.boundingBox())?.width).toBeCloseTo(idle ?? 0, 1);
   release();
   // The failed read backs off on the fake clock; the note stays through every retry.
   await page.clock.runFor(10_000);

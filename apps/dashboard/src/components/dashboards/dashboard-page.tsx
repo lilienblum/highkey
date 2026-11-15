@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { MoreHorizontalIcon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -268,7 +268,17 @@ function DashboardActions({
             retry();
           }}
         >
-          {refreshing && <Spinner data-icon="inline-start" aria-hidden="true" />}
+          {/* The icon slot is always filled, so the button keeps its width while it retries. */}
+          {refreshing ? (
+            <Spinner data-icon="inline-start" aria-hidden="true" />
+          ) : (
+            <HugeiconsIcon
+              icon={RefreshIcon}
+              strokeWidth={2}
+              aria-hidden="true"
+              data-icon="inline-start"
+            />
+          )}
           Try again
         </Button>
       )}
