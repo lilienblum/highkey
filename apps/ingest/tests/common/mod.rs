@@ -206,3 +206,89 @@ pub async fn send(app: &Router, request: Request<Body>) -> Reply {
 pub async fn get(app: &Router, path: &str) -> Reply {
     send(app, Request::get(path).body(Body::empty()).unwrap()).await
 }
+
+/// Registry key kinds, as `piko.ingest_keys.kind` stores them.
+#[derive(Clone, Copy)]
+pub enum Kind {
+    Events,
+    Logs,
+}
+
+pub fn hash(secret: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(secret.as_bytes()))
+}
+
+/// Writes a registry row the way the dashboard does, and returns the key's secret.
+pub async fn seed_key(
+    kind: Kind,
+    product: &str,
+    source: &str,
+    origins: &[&str],
+    retention: u16,
+    revoked: bool,
+) -> String {
+    let prefix = match kind {
+        Kind::Events => "pk_",
+        Kind::Logs => "pl_",
+    };
+    let secret = format!(
+        "{prefix}{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    write_key(
+        kind,
+        &hash(&secret),
+        product,
+        source,
+        origins,
+        retention,
+        revoked,
+    )
+    .await;
+    secret
+}
+
+pub async fn write_key(
+    kind: Kind,
+    hash: &str,
+    product: &str,
+    source: &str,
+    origins: &[&str],
+    retention: u16,
+    revoked: bool,
+) {
+    let row = serde_json::json!({
+        "hash": hash,
+        "kind": match kind { Kind::Events => "events", Kind::Logs => "logs" },
+        "product_id": product,
+        "source_id": source,
+        "allowed_origins": origins,
+        "retention_days": retention,
+        "revoked": u8::from(revoked),
+        "updated_at": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+    });
+    admin_query(&format!(
+        "INSERT INTO piko.ingest_keys FORMAT JSONEachRow {row}"
+    ))
+    .await;
+}
+
+/// POSTs a JSON body with a bearer key and an optional Origin.
+pub async fn post(
+    app: &Router,
+    path: &str,
+    key: Option<&str>,
+    origin: Option<&str>,
+    body: &Value,
+) -> Reply {
+    let mut request = Request::post(path).header("content-type", "application/json");
+    if let Some(key) = key {
+        request = request.header("authorization", format!("Bearer {key}"));
+    }
+    if let Some(origin) = origin {
+        request = request.header("origin", origin);
+    }
+    send(app, request.body(Body::from(body.to_string())).unwrap()).await
+}
