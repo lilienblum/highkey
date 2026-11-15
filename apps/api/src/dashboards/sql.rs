@@ -236,15 +236,24 @@ fn unavailable() -> Issue {
 /// The catalog's scalar macros, lowercase, with their definitions. Built-in macros such as
 /// `pg_catalog.pg_sleep` keep their own name in the serialized tree, so a macro over a refused
 /// function would pass the name check. Table macros are left out, since a scalar call never
-/// reaches them, and so is any name that also has a non-macro overload: `histogram` is an
-/// aggregate as well as a table macro over `bar`, and refusing it would refuse the aggregate.
+/// reaches them: `histogram` is an aggregate as well as a table macro over `bar`, and refusing
+/// it would refuse the aggregate. So is a scalar macro whose name a non-macro function shares,
+/// such as `current_schema`, since refusing it would refuse the function; a test pins that list.
 fn catalog_macros(db: &Connection) -> duckdb::Result<Vec<(String, String)>> {
-    db.prepare(
+    scalar_macros(db, false)
+}
+
+/// The catalog's scalar macros as `catalog_macros` returns them, or, when `shared`, only the
+/// ones it skips because a non-macro function shares their name.
+fn scalar_macros(db: &Connection, shared: bool) -> duckdb::Result<Vec<(String, String)>> {
+    db.prepare(&format!(
         "SELECT DISTINCT lower(function_name), macro_definition FROM duckdb_functions()
          WHERE function_type = 'macro' AND macro_definition IS NOT NULL
-           AND lower(function_name) NOT IN (
-               SELECT lower(function_name) FROM duckdb_functions() WHERE function_type <> 'macro')",
-    )?
+           AND lower(function_name) {} IN (
+               SELECT lower(function_name) FROM duckdb_functions() WHERE function_type <> 'macro')
+         ORDER BY 1",
+        if shared { "" } else { "NOT" }
+    ))?
     .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
     .collect()
 }
@@ -2617,6 +2626,37 @@ mod tests {
             refused["doze"],
             "doze calls nap: nap calls sleep_ms: Remove it"
         );
+    }
+
+    #[test]
+    fn the_macros_skipped_for_a_shared_name_are_known() {
+        // catalog_macros skips a scalar macro whose name a non-macro function shares, so a
+        // refused function that such a macro calls would pass under its name. On this DuckDB
+        // each one forwards to the system function of the same name and calls nothing refused.
+        // A DuckDB upgrade that changes the list fails here: read what each new one calls, and
+        // refuse it by name in BLOCKED_FUNCTIONS if it reaches a refused function.
+        let skipped = scalar_macros(&Connection::open_in_memory().unwrap(), true).unwrap();
+        assert_eq!(
+            skipped
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "current_database",
+                "current_query",
+                "current_schema",
+                "current_schemas"
+            ],
+            "{skipped:?}"
+        );
+        let refused = parser().refused;
+        for (name, body) in &skipped {
+            assert_eq!(
+                calls(body, refused.keys()),
+                None,
+                "{name} calls a refused function: {body}"
+            );
+        }
     }
 
     #[test]
