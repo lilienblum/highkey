@@ -148,3 +148,22 @@ impl ClickHouse {
         self.send(url, body).await.map(|_| ())
     }
 }
+
+/// An `Array(String)` query parameter in ClickHouse's quoted text form.
+pub fn array_param(values: &[&str]) -> String {
+    let quoted: Vec<String> = values
+        .iter()
+        .map(|value| format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'")))
+        .collect();
+    format!("[{}]", quoted.join(","))
+}
+
+/// A UTC time as ClickHouse's `DateTime64(3)` text form.
+pub fn datetime64(time: chrono::DateTime<chrono::Utc>) -> String {
+    time.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+}
+
+/// A UTC time as ClickHouse's `DateTime` text form.
+pub fn datetime(time: chrono::DateTime<chrono::Utc>) -> String {
+    time.format("%Y-%m-%d %H:%M:%S").to_string()
+}

@@ -101,3 +101,47 @@ pub struct Ack {
     pub accepted: usize,
     pub duplicates: usize,
 }
+
+impl crate::writer::Row for Event {
+    const TABLE: &'static str = "piko.events";
+    const ID_COLUMN: &'static str = "event_id";
+    const COLUMNS: &'static [&'static str] = &[
+        "product_id",
+        "source_id",
+        "event_id",
+        "name",
+        "source",
+        "event_time",
+        "received_at",
+        "actor_id",
+        "identity_kind",
+        "session_id",
+        "properties",
+        "expires_at",
+    ];
+    const SIGNAL: crate::changes::Signal = crate::changes::Signal::Events;
+
+    fn id(&self) -> &str {
+        &self.event_id
+    }
+
+    /// Call only after `validate`, which fills in the timestamp.
+    fn json(&self, context: &crate::writer::RowContext) -> Value {
+        use crate::clickhouse::{datetime, datetime64};
+        let time = self.timestamp.unwrap_or(context.received_at);
+        serde_json::json!({
+            "product_id": context.product,
+            "source_id": context.source,
+            "event_id": self.event_id,
+            "name": self.name,
+            "source": self.source,
+            "event_time": datetime64(time),
+            "received_at": datetime64(context.received_at),
+            "actor_id": self.actor_id,
+            "identity_kind": self.identity_kind,
+            "session_id": self.session_id,
+            "properties": self.properties,
+            "expires_at": datetime(time + chrono::Duration::days(i64::from(context.retention_days))),
+        })
+    }
+}

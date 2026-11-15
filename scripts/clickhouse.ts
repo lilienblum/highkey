@@ -18,6 +18,7 @@ export const ADMIN_USER = "piko_admin";
 
 const root = new URL("..", import.meta.url).pathname;
 const config = `${root}deploy/clickhouse/config.d/piko.xml`;
+const users = `${root}deploy/clickhouse/users.d/piko.xml`;
 
 export interface ServerOptions {
   name: string;
@@ -102,6 +103,8 @@ export async function startClickHouse(options: ServerOptions): Promise<{ url: st
       // Mount the one file: the image's own config.d makes the server listen on all interfaces.
       "--volume",
       `${config}:/etc/clickhouse-server/config.d/piko.xml:ro`,
+      "--volume",
+      `${users}:/etc/clickhouse-server/users.d/piko.xml:ro`,
       "--ulimit",
       "nofile=262144:262144",
       ...(options.tmpfs

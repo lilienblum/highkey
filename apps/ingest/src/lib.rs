@@ -5,19 +5,21 @@ pub mod changes;
 pub mod clickhouse;
 pub mod config;
 pub mod contract;
+pub mod dedup;
 pub mod error;
 pub mod keys;
 pub mod logs;
 pub mod model;
 pub mod origins;
 pub mod tracker;
+pub mod writer;
 
 pub use config::{ClickHouseConfig, Config};
 
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, header},
     middleware::{self, Next},
     response::Response,
     routing::{get, post},
@@ -38,6 +40,8 @@ pub struct AppState {
     pub clickhouse: ClickHouse,
     pub keys: Keys,
     pub changes: changes::Changes,
+    pub events: writer::Writer<model::Event>,
+    ingest_slots: Arc<tokio::sync::Semaphore>,
     pub tracker_path: Option<Arc<PathBuf>>,
 }
 
@@ -60,10 +64,13 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
             Err(error) => return Err(error.into()),
         }
     }
+    let changes = changes::Changes::default();
     Ok(AppState {
         keys: Keys::new(clickhouse.clone()),
+        events: writer::Writer::spawn(clickhouse.clone(), config.queue_capacity, changes.clone()),
+        ingest_slots: Arc::new(tokio::sync::Semaphore::new(config.queue_capacity)),
         clickhouse,
-        changes: changes::Changes::default(),
+        changes,
         tracker_path: config.tracker_path.map(Arc::new),
     })
 }
@@ -114,15 +121,38 @@ async fn ingest_events(
             .validate(now, i64::from(record.retention_days))
             .map_err(|e| ApiError::bad(format!("events[{i}]: {}", e.1)))?;
     }
-    Err(ApiError(
-        StatusCode::NOT_IMPLEMENTED,
-        "Event writes arrive in the next change".into(),
+    Ok(Json(
+        state
+            .events
+            .submit(
+                record.product_id,
+                record.source_id,
+                record.retention_days,
+                events,
+            )
+            .await?,
     ))
+}
+
+/// Bounds concurrent event uploads and their total time, before any body is read.
+async fn ingest_limit(
+    State(state): State<AppState>,
+    req: Request,
+    next: Next,
+) -> ApiResult<Response> {
+    let _permit = state
+        .ingest_slots
+        .try_acquire()
+        .map_err(|_| ApiError::busy())?;
+    tokio::time::timeout(Duration::from_secs(12), next.run(req))
+        .await
+        .map_err(|_| ApiError::busy())
 }
 
 pub fn router(state: AppState) -> Router {
     let ingest = Router::new()
         .route("/api/ingest", post(ingest_events))
+        .layer(middleware::from_fn_with_state(state.clone(), ingest_limit))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
