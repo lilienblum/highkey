@@ -9,13 +9,39 @@ use crate::{
 use axum::{
     Json,
     body::Bytes,
-    extract::State,
-    http::{HeaderMap, StatusCode},
+    extract::{Request, State},
+    http::HeaderMap,
+    middleware::Next,
     response::Response,
 };
 
+/// Concurrent log uploads, as before the split.
+pub const LOG_SLOTS: usize = 16;
+/// Log requests that may wait for a write.
+pub const LOG_QUEUE: usize = 16;
+
+/// Bounds concurrent log uploads and their total time, answering OTLP clients in their format.
+pub async fn limit(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let otlp_request = request.uri().path().ends_with("/v1/logs");
+    let protobuf = request
+        .headers()
+        .get("content-type")
+        .is_some_and(|v| v.as_bytes().starts_with(b"application/x-protobuf"));
+    let result = match state.log_slots.try_acquire() {
+        Err(_) => Err(ApiError::busy()),
+        Ok(_permit) => tokio::time::timeout(std::time::Duration::from_secs(12), next.run(request))
+            .await
+            .map_err(|_| ApiError::busy()),
+    };
+    match result {
+        Ok(response) => response,
+        Err(error) if otlp_request => otlp::response(Err(error), protobuf),
+        Err(error) => axum::response::IntoResponse::into_response(error),
+    }
+}
+
 async fn commit(
-    _state: &AppState,
+    state: &AppState,
     record: KeyRecord,
     mut records: Vec<model::Log>,
 ) -> ApiResult<crate::model::Ack> {
@@ -27,10 +53,15 @@ async fn commit(
         log.validate(now, i64::from(record.retention_days))
             .map_err(|e| ApiError::bad(format!("logs[{index}]: {}", e.1)))?;
     }
-    Err(ApiError(
-        StatusCode::NOT_IMPLEMENTED,
-        "Log writes arrive in a later change".into(),
-    ))
+    state
+        .logs
+        .submit(
+            record.product_id,
+            record.source_id,
+            record.retention_days,
+            records,
+        )
+        .await
 }
 
 pub async fn ingest(

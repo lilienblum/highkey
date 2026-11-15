@@ -41,7 +41,9 @@ pub struct AppState {
     pub keys: Keys,
     pub changes: changes::Changes,
     pub events: writer::Writer<model::Event>,
+    pub logs: writer::Writer<logs::model::Log>,
     ingest_slots: Arc<tokio::sync::Semaphore>,
+    log_slots: Arc<tokio::sync::Semaphore>,
     pub tracker_path: Option<Arc<PathBuf>>,
 }
 
@@ -68,7 +70,9 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
     Ok(AppState {
         keys: Keys::new(clickhouse.clone()),
         events: writer::Writer::spawn(clickhouse.clone(), config.queue_capacity, changes.clone()),
+        logs: writer::Writer::spawn(clickhouse.clone(), logs::LOG_QUEUE, changes.clone()),
         ingest_slots: Arc::new(tokio::sync::Semaphore::new(config.queue_capacity)),
+        log_slots: Arc::new(tokio::sync::Semaphore::new(logs::LOG_SLOTS)),
         clickhouse,
         changes,
         tracker_path: config.tracker_path.map(Arc::new),
@@ -162,8 +166,12 @@ pub fn router(state: AppState) -> Router {
         );
     Router::new()
         .merge(ingest)
-        .route("/api/logs/ingest", post(logs::ingest))
-        .route("/api/logs/v1/logs", post(logs::ingest_otlp))
+        .merge(
+            Router::new()
+                .route("/api/logs/ingest", post(logs::ingest))
+                .route("/api/logs/v1/logs", post(logs::ingest_otlp))
+                .layer(middleware::from_fn_with_state(state.clone(), logs::limit)),
+        )
         .route("/tracker.js", get(tracker::tracker))
         .route("/health", get(|| async { Json(json!({"status":"ok"})) }))
         .layer(DefaultBodyLimit::max(256 * 1024))

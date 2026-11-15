@@ -144,3 +144,51 @@ fn attribute(value: &Value, depth: usize) -> bool {
         _ => true,
     }
 }
+
+impl crate::writer::Row for Log {
+    const TABLE: &'static str = "piko.logs";
+    const ID_COLUMN: &'static str = "log_id";
+    const COLUMNS: &'static [&'static str] = &[
+        "product_id",
+        "source_id",
+        "log_id",
+        "timestamp",
+        "received_at",
+        "level",
+        "message",
+        "service",
+        "environment",
+        "trace_id",
+        "span_id",
+        "request_id",
+        "attributes",
+        "expires_at",
+    ];
+    const SIGNAL: crate::changes::Signal = crate::changes::Signal::Logs;
+
+    fn id(&self) -> &str {
+        &self.log_id
+    }
+
+    /// Call only after `validate`, which fills in the timestamp.
+    fn json(&self, context: &crate::writer::RowContext) -> Value {
+        use crate::clickhouse::{datetime, datetime64};
+        let time = self.timestamp.unwrap_or(context.received_at);
+        serde_json::json!({
+            "product_id": context.product,
+            "source_id": context.source,
+            "log_id": self.log_id,
+            "timestamp": datetime64(time),
+            "received_at": datetime64(context.received_at),
+            "level": self.level,
+            "message": self.message,
+            "service": self.service,
+            "environment": self.environment,
+            "trace_id": self.trace_id,
+            "span_id": self.span_id,
+            "request_id": self.request_id,
+            "attributes": self.attributes,
+            "expires_at": datetime(time + chrono::Duration::days(i64::from(context.retention_days))),
+        })
+    }
+}
