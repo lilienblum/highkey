@@ -496,3 +496,32 @@ async fn date_like_string_properties_stay_strings() {
     assert_eq!(rows[0]["c"], "String");
     assert_eq!(rows[0]["published"], "2026-11-15T10:00:00.123+02:00");
 }
+
+#[tokio::test]
+async fn the_dedup_lookup_handles_a_full_batch_of_long_ids() {
+    use piko_ingest::{clickhouse::ClickHouse, dedup};
+    let (app, _) = app().await;
+    let (id, key) = project(30).await;
+    // A batch can hold 100 requests of 100 events, with ids of up to 64 characters; '/' is
+    // the character that grows most when encoded.
+    let long = |n: usize| format!("{n:06}/{}", "/".repeat(57));
+    let stored_id = long(1234);
+    assert_eq!(
+        ingest(&app, &key, event(&stored_id, json!(1))).await.status,
+        200
+    );
+    let ids: Vec<String> = (0..10_000).map(long).collect();
+    let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    let ch = ClickHouse::new(&config(&clickhouse().url).clickhouse).unwrap();
+    let found = dedup::existing(
+        &ch,
+        "piko.events",
+        "event_id",
+        id.parse().unwrap(),
+        &ids,
+        chrono::Utc::now() - chrono::Duration::hours(1),
+    )
+    .await
+    .expect("a full batch's lookup succeeds");
+    assert_eq!(found, std::collections::HashSet::from([stored_id]));
+}
