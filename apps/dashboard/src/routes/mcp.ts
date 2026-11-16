@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { proxyApi } from "../server/api-gateway";
+import { serveApi } from "../server/api/serve";
 
-// The short address agents connect to. It is the API's full MCP server at /api/mcp, which stays
-// the API's own path; the read-only server keeps /api/read/mcp so Access can scope its token.
-const forward = ({ request }: { request: Request }) => proxyApi(request, "/api/mcp");
+// The short address agents connect to: the full MCP server at /api/mcp. The read-only server
+// keeps /api/read/mcp so Access can scope its token.
+const forward = ({ request }: { request: Request }) => {
+  const url = new URL(request.url);
+  url.pathname = "/api/mcp";
+  return serveApi(new Request(url, request));
+};
 
 export const Route = createFileRoute("/mcp")({
   server: {

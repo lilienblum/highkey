@@ -4,32 +4,19 @@ import { tako } from "tako.sh/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
-function browserTracker(): Plugin {
-  const moduleId = "\0virtual:piko-tracker";
+/** Markdown imports are their text, as Bun's `[loader]` in bunfig.toml makes them. */
+function markdownText(): Plugin {
   return {
-    name: "piko-browser-tracker",
-    resolveId(id) {
-      if (id === "virtual:piko-tracker") return moduleId;
-    },
-    async load(id) {
-      if (id !== moduleId) return;
-      const entry = new URL("../../sdk/typescript/browser.ts", import.meta.url).pathname;
-      this.addWatchFile(entry);
-      this.addWatchFile(new URL("../../sdk/typescript/client.ts", import.meta.url).pathname);
-      const result = await Bun.build({
-        entrypoints: [entry],
-        target: "browser",
-        format: "esm",
-        minify: true,
-      });
-      if (!result.success) throw new AggregateError(result.logs, "Browser tracker build failed");
-      return `export default ${JSON.stringify(await result.outputs[0].text())};`;
+    name: "piko-markdown-text",
+    enforce: "pre",
+    transform(code, id) {
+      if (id.endsWith(".md")) return { code: `export default ${JSON.stringify(code)};`, map: null };
     },
   };
 }
 
 export default defineConfig({
-  plugins: [tailwindcss(), browserTracker(), tanstackStart(), react(), tako()],
+  plugins: [tailwindcss(), markdownText(), tanstackStart(), react(), tako()],
   resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
   // Tako reads channel metadata through this internal development hostname.
   server: { port: 3000, allowedHosts: ["piko.tako"] },

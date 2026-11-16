@@ -705,9 +705,9 @@ test("revisions list origins and restore an earlier version", async ({ page }) =
   await expect(page.getByRole("heading", { level: 1, name: original, exact: true })).toBeVisible();
 });
 
-const sqlDashboard = {
+const tablesDashboard = {
   version: 1,
-  name: "SQL views",
+  name: "Tables and funnels",
   widgets: [
     {
       id: "by-name",
@@ -715,83 +715,132 @@ const sqlDashboard = {
       view: { type: "table" },
       size: { w: 12, h: 2 },
       queries: {
-        q: {
-          signal: "sql",
-          database: "events",
-          sql: "SELECT name AS event, count(*) AS total, epoch_ms(max(event_time)) AS last_seen, count(*) > 5 AS busy, NULL::VARCHAR AS note, json_object('kind', name) AS meta FROM events GROUP BY 1 ORDER BY 2 DESC, 1",
-        },
+        events: { signal: "events", group_by: "name" },
+        actors: { signal: "events", measure: "actors", group_by: "name" },
       },
     },
     {
-      id: "many",
-      title: "Many rows",
+      id: "funnel",
+      title: "Visit to purchase",
       view: { type: "table" },
       size: { w: 6, h: 2 },
       queries: {
-        q: {
-          signal: "sql",
-          database: "events",
-          sql: "SELECT n AS number, 'row ' || n AS text FROM range(600) t(n)",
+        f: {
+          signal: "funnel",
+          steps: [{ event: "visit" }, { event: "signup" }, { event: "purchase" }],
         },
       },
     },
     {
-      id: "sql-line",
-      title: "SQL events per day",
-      view: { type: "line" },
+      id: "retention",
+      title: "Daily retention",
+      view: { type: "table" },
       size: { w: 6, h: 2 },
+      range: "7d",
       queries: {
-        q: {
-          signal: "sql",
-          database: "events",
-          sql: "SELECT epoch_ms(date_trunc($bucket, epoch_ms(event_time))) AS time, count(*) AS value FROM events WHERE event_time >= $from AND event_time < $to GROUP BY 1",
+        r: {
+          signal: "retention",
+          start: { event: "visit" },
+          return: { event: "visit" },
+          period: "day",
+          periods: 2,
         },
       },
-      series: [{ expr: "q", label: "SQL events" }],
+    },
+    {
+      id: "lines",
+      title: "Three lines",
+      view: { type: "line", compare: "none" },
+      size: { w: 6, h: 2 },
+      queries: {
+        visits: { signal: "events", event: "visit" },
+        signups: { signal: "events", event: "signup" },
+        purchases: { signal: "events", event: "purchase" },
+      },
+      series: [
+        { expr: "visits", label: "Visits" },
+        { expr: "signups", label: "Signups" },
+        { expr: "purchases", label: "Purchases" },
+      ],
     },
   ],
 };
 
-test("SQL table and line widgets render with a truncation note", async ({ page }) => {
+test("typed tables, a funnel and retention render, with shares as percentages", async ({
+  page,
+}) => {
   const errors = collectErrors(page);
-  const sqlSlug = (
-    await admin<{ slug: string }>(`/products/${project.id}/dashboards`, { document: sqlDashboard })
+  const shop = await admin<Project>("/products", {
+    name: `Tables ${Date.now()}`,
+    retention_days: 365,
+  });
+  const { key } = await admin<{ key: string }>(`/products/${shop.id}/keys`, { label: "Web" });
+  const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const event = (name: string, actor: string, minutes: number) => ({
+    event_id: crypto.randomUUID(),
+    name,
+    source: "browser",
+    timestamp: at(minutes),
+    actor_id: actor,
+    identity_kind: "visitor",
+    properties: {},
+  });
+  // Four visitors, two sign up and one buys: 100%, 50% and 25% of the first step.
+  await ingest("/ingest", key, {
+    events: [
+      ...["a", "b", "c", "d"].map((actor) => event("visit", actor, 30)),
+      event("signup", "a", 20),
+      event("signup", "b", 20),
+      event("purchase", "a", 10),
+    ],
+  });
+  const slug = (
+    await admin<{ slug: string }>(`/products/${shop.id}/dashboards`, { document: tablesDashboard })
   ).slug;
-  await page.goto(`/projects/${project.slug}/dashboards/${sqlSlug}`);
+  await page.goto(`/projects/${shop.slug}/dashboards/${slug}`);
 
-  const events = widget(page, "by-name");
-  const table = events.getByRole("region", { name: "Events by name" });
+  const table = widget(page, "by-name").getByRole("region", { name: "Events by name" });
   await expect(table).toBeVisible();
   await expect(table).toHaveAttribute("tabindex", "0");
-  await expect(table.getByRole("columnheader")).toHaveText([
-    "event",
-    "total",
-    "last_seen",
-    "busy",
-    "note",
-    "meta",
-  ]);
+  await expect(table.getByRole("columnheader")).toHaveText(["name", "events", "actors"]);
   const first = table.getByRole("row").nth(1);
-  await expect(first.getByRole("cell").nth(0)).toHaveText("checkout_request");
-  await expect(first.getByRole("cell").nth(1)).toHaveText("20");
+  await expect(first.getByRole("cell").nth(0)).toHaveText("visit");
+  await expect(first.getByRole("cell").nth(1)).toHaveText("4");
   await expect(first.getByRole("cell").nth(1)).toHaveCSS("font-variant-numeric", "tabular-nums");
-  await expect(first.getByRole("cell").nth(2)).toContainText(/\d{4}/);
-  await expect(first.getByRole("cell").nth(3)).toHaveText("true");
-  await expect(first.getByRole("cell").nth(4)).toHaveText("—");
-  const meta = first.getByRole("cell").nth(5);
-  await expect(meta.locator(".typed-value .tok-property")).toHaveText('"kind"');
-  await expect(meta.locator(".typed-value .tok-string")).toHaveText('"checkout_request"');
   await expect(table.getByRole("columnheader").first()).toHaveCSS("position", "sticky");
 
-  const many = widget(page, "many");
-  await expect(many.getByRole("region", { name: "Many rows" }).getByRole("row")).toHaveCount(501);
-  await expect(many.locator(".dashboard-footer-notes")).toContainText(
-    "Showing the first 500 of 600 rows",
-  );
+  const funnel = widget(page, "funnel").getByRole("region", { name: "Visit to purchase" });
+  await expect(funnel.getByRole("columnheader")).toHaveText([
+    "step",
+    "actors",
+    "conversion",
+    "from_previous",
+  ]);
+  await expect(funnel.getByRole("row").nth(3).getByRole("cell")).toHaveText([
+    "purchase",
+    "1",
+    "25%",
+    "50%",
+  ]);
 
-  const line = widget(page, "sql-line");
-  await expect(line.locator(".analytics-plot")).toBeVisible();
-  await expect(line.locator(".dashboard-legend")).toContainText("SQL events");
+  const retention = widget(page, "retention").getByRole("region", { name: "Daily retention" });
+  await expect(retention.getByRole("columnheader")).toHaveText([
+    "cohort",
+    "size",
+    "p0",
+    "p1",
+    "p2",
+  ]);
+  const cohort = retention.getByRole("row").nth(1).getByRole("cell");
+  await expect(cohort.nth(0)).toHaveText(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(cohort.nth(1)).toHaveText("4");
+  await expect(cohort.nth(2)).toHaveText("100%");
+  await expect(cohort.nth(4)).toHaveText("—");
+
+  const lines = widget(page, "lines");
+  await expect(lines.locator(".analytics-plot")).toBeVisible();
+  for (const label of ["Visits", "Signups", "Purchases"])
+    await expect(lines.locator(".dashboard-legend")).toContainText(label);
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(errors).toEqual([]);
 

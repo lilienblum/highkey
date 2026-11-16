@@ -5,11 +5,13 @@ export function e2eEnvironment(root: string, run: string) {
   const name = "piko-e2e";
   return {
     name,
-    apiName: `${name}-api`,
+    ingestName: `${name}-ingest`,
     directory: join(root, ".tako", "e2e", run),
     env: {
       PIKO_E2E_RUN: run,
-      PIKO_API_URL: `https://${name}-api.test`,
+      // The tests call the API where browsers do: on the dashboard.
+      PIKO_API_URL: `https://${name}.test`,
+      PIKO_INGEST_URL: `https://${name}-ingest.test`,
       PIKO_DASHBOARD_URL: `https://${name}.test`,
       PIKO_REALTIME: "1",
       SSL_CERT_FILE: join(root, ".tako", "dev-ca.pem"),
@@ -24,6 +26,7 @@ export function assertIsolatedE2E(env: Record<string, string | undefined>) {
   const expected = e2eEnvironment(".", run).env;
   if (
     env.PIKO_API_URL !== expected.PIKO_API_URL ||
+    env.PIKO_INGEST_URL !== expected.PIKO_INGEST_URL ||
     env.PIKO_DASHBOARD_URL !== expected.PIKO_DASHBOARD_URL
   )
     throw new Error("Browser tests must use their disposable E2E apps, never the preview.");

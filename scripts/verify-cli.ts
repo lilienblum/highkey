@@ -1,7 +1,7 @@
 // Exercises the actual Rust example against a local API, and verifies typed output.
 export {};
 
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3000";
 async function request(path: string, body: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: "POST",
@@ -19,7 +19,7 @@ const product = await request("/products", {
 const { key } = await request(`/products/${product.id}/keys`, { label: "CLI example" });
 const from = new Date().toISOString();
 async function run(command: string, overrides: Record<string, string | undefined>) {
-  const child = Bun.spawn(["cargo", "run", "-p", "piko", "--example", "cli", "--", command], {
+  const child = Bun.spawn(["cargo", "run", "-p", "piko-sdk", "--example", "cli", "--", command], {
     env: {
       ...process.env,
       PIKO_ENDPOINT: endpoint,

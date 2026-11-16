@@ -1,5 +1,5 @@
 import { Piko, type Event } from "../sdk/typescript/client";
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3000";
 async function admin<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",

@@ -67,7 +67,24 @@ if (!stop) {
       throw new Error("Could not create the development change-notification secret");
   }
 }
-for (const config of ["tako.api.toml", "tako.dashboard.toml"]) {
+if (!stop) {
+  // Events and logs live in ClickHouse: a persistent local server, migrated on every start.
+  const clickhouse = Bun.spawn(["bun", "scripts/clickhouse.ts", "dev-up"], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if ((await clickhouse.exited) !== 0)
+    throw new Error("Could not start ClickHouse; is Docker running?");
+  // The ingest app serves /tracker.js from the SDK's browser bundle.
+  const sdk = Bun.spawn(["bun", "run", "build:sdk"], {
+    cwd: root,
+    stdout: "ignore",
+    stderr: "inherit",
+  });
+  if ((await sdk.exited) !== 0) throw new Error("Could not build the browser tracker");
+}
+for (const config of ["tako.ingest.toml", "tako.dashboard.toml"]) {
   const command = stop
     ? ["tako", "-c", config, "dev", "stop"]
     : ["tako", "-c", config, "dev", "--background"];
@@ -82,5 +99,5 @@ for (const config of ["tako.api.toml", "tako.dashboard.toml"]) {
 }
 if (!stop)
   console.log(
-    "Piko: https://piko.test · API: https://piko-api.test\nStop both apps with bun run dev:stop.",
+    "Piko: https://piko.test · Ingest: https://piko-ingest.test\nStop both apps with bun run dev:stop; ClickHouse keeps running (bun scripts/clickhouse.ts dev-down stops it).",
   );

@@ -38,3 +38,13 @@ export async function receiveChanges(request: Request): Promise<Response> {
     return Response.json({ error: "Live updates temporarily unavailable" }, { status: 503 });
   }
 }
+
+/** Publishes a change made in this process (a dashboard, view or workspace write). */
+export function publishChange(product: string, signal: "events" | "logs" | "dashboards"): void {
+  if (!realtimeEnabled()) return;
+  changes
+    .publish({ type: "changed", data: { version: 2, changes: [{ product, signals: [signal] }] } })
+    .catch(() => {
+      // Live updates are a hint; an open dashboard also refreshes on its own schedule.
+    });
+}

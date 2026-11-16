@@ -1,2 +1,6 @@
 [test]
 root = "./sdk"
+
+# The agent guide (guide.md) is served as text; Vite does the same with a plugin.
+[loader]
+".md" = "text"

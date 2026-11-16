@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "apps/ingest", "sdk/rust"]
+members = ["apps/ingest", "sdk/rust"]
 resolver = "2"
 
 [profile.dev]

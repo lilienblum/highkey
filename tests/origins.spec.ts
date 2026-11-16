@@ -42,7 +42,8 @@ test("browser keys enforce editable origin restrictions through the dashboard pr
   await dialog.getByLabel("Allowed origins", { exact: true }).fill("https://example.com");
   await dialog.getByRole("button", { name: "Save origins" }).click();
   await expect(dialog).not.toBeVisible();
-  expect((await send()).status).toBe(403);
+  // The ingest app caches a key for up to 5 s, so a change applies within that.
+  await expect.poll(async () => (await send()).status, { timeout: 10_000 }).toBe(403);
   await page.reload();
   await page.getByRole("button", { name: "Edit allowed origins for Website browser" }).click();
   await expect(dialog.getByLabel("Allowed origins", { exact: true })).toHaveValue(
@@ -51,7 +52,7 @@ test("browser keys enforce editable origin restrictions through the dashboard pr
   await dialog.getByLabel("Allowed origins", { exact: true }).fill("");
   await dialog.getByRole("button", { name: "Save origins" }).click();
   await expect(dialog).not.toBeVisible();
-  expect((await send()).body.duplicates).toBe(1);
+  await expect.poll(async () => (await send()).body.duplicates, { timeout: 10_000 }).toBe(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Edit allowed origins for Website browser" }).click();
   await expect(dialog.getByRole("button", { name: "Save origins" })).toBeVisible();

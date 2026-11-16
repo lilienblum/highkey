@@ -1,5 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { E2E_SERVER, startClickHouse, stopClickHouse } from "./clickhouse";
 import { e2eConfig, e2eEnvironment } from "./e2e-config";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -10,12 +11,14 @@ if (!Bun.which("tako"))
 if (!(await Bun.file(setup.env.SSL_CERT_FILE).exists()))
   throw new Error("Initialize local TLS and the notification secret once with bun dev.");
 
+const clickhouseUrl = `http://127.0.0.1:${E2E_SERVER.port}`;
 const templates: { name: string; template: string; vars: Record<string, string> }[] = [
   {
-    name: setup.apiName,
-    template: "tako.api.toml",
+    name: setup.ingestName,
+    template: "tako.ingest.toml",
     vars: {
-      PIKO_DATA_DIR: setup.directory,
+      PIKO_CLICKHOUSE_URL: clickhouseUrl,
+      PIKO_CLICKHOUSE_PASSWORD: E2E_SERVER.ingestPassword,
       PIKO_CHANGE_URL: `${setup.env.PIKO_DASHBOARD_URL}/_piko/changes`,
     },
   },
@@ -23,7 +26,10 @@ const templates: { name: string; template: string; vars: Record<string, string> 
     name: setup.name,
     template: "tako.dashboard.toml",
     vars: {
-      PIKO_API_URL: setup.env.PIKO_API_URL,
+      PIKO_DATA_DIR: setup.directory,
+      PIKO_INGEST_URL: setup.env.PIKO_INGEST_URL,
+      PIKO_CLICKHOUSE_URL: clickhouseUrl,
+      PIKO_CLICKHOUSE_PASSWORD: E2E_SERVER.password,
       __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${setup.name}.tako,${setup.name}.test`,
     },
   },
@@ -83,9 +89,14 @@ let exitCode = 1;
 const attempted: typeof configs = [];
 try {
   previous = await runningApps();
-  if (previous.some((app) => [setup.name, setup.apiName].includes(app.name)))
+  if (previous.some((app) => [setup.name, setup.ingestName].includes(app.name)))
     throw new Error("A previous piko-e2e app is still running; stop it before another test run.");
   await mkdir(setup.directory, { recursive: true });
+  // A fresh, empty ClickHouse for this run, migrated before either app starts.
+  await stopClickHouse(E2E_SERVER.name);
+  await startClickHouse(E2E_SERVER);
+  if ((await command(["bun", "run", "build:sdk"])) !== 0)
+    throw new Error("Could not build the browser tracker");
   for (const config of configs) {
     if (interrupted) throw new Error("E2E startup interrupted");
     const template = await Bun.file(`${root}${config.template}`).text();
@@ -96,7 +107,7 @@ try {
       throw new Error(`Could not start ${config.name}`);
   }
   // The first addition of a TLS name can restart Tako's daemon. Restore any
-  // registrations it dropped, including the API started just before the dashboard.
+  // registrations it dropped, including the ingest app started just before the dashboard.
   await restoreApps([...previous.map((app) => app.config), ...configs.map((app) => app.path)]);
   if (interrupted) throw new Error("E2E startup interrupted");
   console.log(`Disposable E2E workspace: ${setup.env.PIKO_DASHBOARD_URL}`);
@@ -114,6 +125,7 @@ try {
   await restoreApps(previous.map((app) => app.config));
   const remaining = new Set((await runningApps()).map((app) => app.config));
   const stopped = attempted.every((config) => !remaining.has(config.path));
+  await stopClickHouse(E2E_SERVER.name).catch((error) => console.error(error));
   if (stopped) {
     await rm(setup.directory, { recursive: true, force: true });
     for (const config of configs) await rm(config.path, { force: true });

@@ -23,8 +23,8 @@ export const getDashboard = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }): Promise<StoredDashboard | null> => {
     if (!key.test(data.project) || !key.test(data.dashboard)) return null;
-    const { proxyApi } = await import("./api-gateway");
-    const response = await proxyApi(
+    const { serveApi } = await import("./api/serve");
+    const response = await serveApi(
       new Request(
         `http://localhost/api/read/products/${encodeURIComponent(data.project)}/dashboards/${encodeURIComponent(data.dashboard)}`,
       ),
@@ -32,7 +32,7 @@ export const getDashboard = createServerFn({ method: "GET" })
     if (response.status === 404) return null;
     if (!response.ok)
       throw new Error(
-        "Could not load this dashboard. Check that the API is running and try again.",
+        "Could not load this dashboard. Check that ClickHouse is running and try again.",
       );
     const dashboard = await response.json();
     if (!dashboard || typeof dashboard !== "object" || !Array.isArray(dashboard.document?.widgets))

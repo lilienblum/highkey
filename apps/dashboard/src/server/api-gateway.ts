@@ -1,69 +1,49 @@
-import { tako } from "tako.sh";
 import { readBoundedBody } from "./request-body";
 
-// Bound buffered uploads before they reach the API's own admission limit.
+// The dashboard serves every /api path itself except ingestion, which belongs to the ingest app.
+// Routes that cannot reach the ingest app directly (native development, a single-route tunnel)
+// arrive here and are forwarded to PIKO_INGEST_URL, with /tracker.js, which the ingest app serves.
+
+const INGEST_PATHS = ["/api/ingest", "/api/logs/ingest", "/api/logs/v1/logs", "/tracker.js"];
+
+/** Whether a path belongs to the ingest app. */
+export function isIngestPath(pathname: string): boolean {
+  return INGEST_PATHS.includes(pathname);
+}
+
+// Bound buffered uploads before they reach the ingest app's own admission limit.
 const maxPendingIngestions = 64;
 let pendingIngestions = 0;
 
-/**
- * Forwards a request to the API. `pathname` defaults to the request's own path; aliases such as
- * `/mcp` pass the API path they stand for.
- */
-export async function proxyApi(request: Request, pathname?: string): Promise<Response> {
+/** Forwards an ingestion request (or the tracker) to the ingest app. */
+export async function proxyIngest(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  if (pathname !== undefined) url.pathname = pathname;
-  const isIngest = ["/api/ingest", "/api/logs/ingest", "/api/logs/v1/logs"].includes(url.pathname);
-  const isUpload = isIngest && request.method === "POST";
+  const isUpload = url.pathname !== "/tracker.js" && request.method === "POST";
+  const cors = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "Retry-After",
+  };
   const unavailable = (message: string) =>
-    Response.json(
-      { error: message },
-      {
-        status: 503,
-        headers: {
-          "Retry-After": "1",
-          ...(isIngest
-            ? { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "Retry-After" }
-            : {}),
-        },
-      },
-    );
+    Response.json({ error: message }, { status: 503, headers: { "Retry-After": "1", ...cors } });
   if (isUpload && pendingIngestions >= maxPendingIngestions)
     return unavailable("Too many pending ingestion requests; retry shortly");
   const upstream = new URL(
     url.pathname + url.search,
-    process.env.PIKO_API_URL ?? "http://127.0.0.1:3001",
+    process.env.PIKO_INGEST_URL ?? "http://127.0.0.1:3001",
   );
+  // Only what ingestion reads travels on: never cookies, Access identities or client addresses.
   const headers = new Headers();
   for (const name of [
     "accept",
     "content-type",
     "content-encoding",
-    "x-piko-admin",
-    "x-piko-origin",
-    "mcp-protocol-version",
-    "mcp-session-id",
-    "last-event-id",
+    "authorization",
     "origin",
     "access-control-request-method",
     "access-control-request-headers",
   ]) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
-  }
-  if (isIngest) {
-    const key = request.headers.get("authorization");
-    if (key !== null) headers.set("authorization", key);
-  }
-  // Dashboard-to-API service credentials remain server-side. Ingestion keeps its own bearer key.
-  const credentials = tako.secrets as typeof tako.secrets & {
-    readonly PIKO_API_ACCESS_CLIENT_ID?: string;
-    readonly PIKO_API_ACCESS_CLIENT_SECRET?: string;
-  };
-  const accessId = credentials.PIKO_API_ACCESS_CLIENT_ID;
-  const accessSecret = credentials.PIKO_API_ACCESS_CLIENT_SECRET;
-  if (accessId && accessSecret) {
-    headers.set("CF-Access-Client-Id", accessId);
-    headers.set("CF-Access-Client-Secret", accessSecret);
   }
   if (isUpload) pendingIngestions++;
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(13_000)]);
@@ -80,10 +60,10 @@ export async function proxyApi(request: Request, pathname?: string): Promise<Res
     });
   } catch (error) {
     if (error instanceof Response) {
-      if (isIngest) error.headers.set("Access-Control-Allow-Origin", "*");
+      error.headers.set("Access-Control-Allow-Origin", "*");
       return error;
     }
-    return unavailable("API is unavailable; retry shortly");
+    return unavailable("Ingestion is unavailable; retry shortly");
   } finally {
     if (isUpload) pendingIngestions--;
   }

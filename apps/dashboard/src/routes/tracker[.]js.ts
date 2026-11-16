@@ -1,18 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import source from "virtual:piko-tracker";
+import { proxyIngest } from "../server/api-gateway";
 
+// The ingest app serves the tracker, so it stays up through dashboard deploys. This forward is
+// for setups whose edge sends everything to the dashboard.
 export const Route = createFileRoute("/tracker.js")({
-  server: {
-    handlers: {
-      GET: () =>
-        new Response(source, {
-          headers: {
-            "Content-Type": "application/javascript; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=3600",
-            "X-Content-Type-Options": "nosniff",
-          },
-        }),
-    },
-  },
+  server: { handlers: { GET: ({ request }) => proxyIngest(request) } },
 });

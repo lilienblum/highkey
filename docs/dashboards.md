@@ -258,7 +258,7 @@ An events view and a logs view may share a slug. Then pass `kind` to get, delete
 
 ## Worked examples
 
-Each block below is checked against the schema and the validation rules by `cargo test -p piko --test dashboards_docs`. Paste one into `validate_dashboard`, or ask your agent for something like it.
+Each block below is checked against the schema and the validation rules by the dashboard's tests (`bun test ./apps/dashboard/test/dashboards-docs.test.ts`). Paste one into `validate_dashboard`, or ask your agent for something like it.
 
 ### Checkout error rate
 

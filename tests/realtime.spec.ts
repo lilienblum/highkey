@@ -174,8 +174,14 @@ test("public ingestion keys cannot publish channel refresh notifications", async
   expect(await response.json()).toEqual({ live: true });
 });
 
-function hinted(envelope: ChangeEnvelope, product: string) {
-  return envelope.changes?.some((change) => change.product === product) ?? false;
+function hinted(envelope: ChangeEnvelope, product: string, signal?: string) {
+  return (
+    envelope.changes?.some(
+      (change) =>
+        change.product === product &&
+        (signal === undefined || (change.signals as string[]).includes(signal)),
+    ) ?? false
+  );
 }
 
 function listen(baseUrl?: string, lastEventId?: string) {
@@ -210,9 +216,10 @@ test("ephemeral hints reach connected subscribers without replaying disconnected
         .toBe(true);
     first.close();
     const missed = await fixture("tool", 1);
-    // The observer proves publication finished while the other subscriber was absent.
+    // The observer proves publication finished while the other subscriber was absent: the
+    // dashboard hints its own writes at once, and the ingest app hints the events after them.
     await expect
-      .poll(() => observer.messages.some((message) => hinted(message.data, missed.id)))
+      .poll(() => observer.messages.some((message) => hinted(message.data, missed.id, "events")))
       .toBe(true);
     // Existing clients may reconnect with a cursor from the previous durable channel.
     const reconnected = listen(baseURL, "1");

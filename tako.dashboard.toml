@@ -20,4 +20,6 @@ route = "piko.test"
 SSL_CERT_FILE = ".tako/dev-ca.pem"
 # Trust only the linked Tako CA: stale same-named CAs in the system keychain break verification.
 NODE_USE_SYSTEM_CA = "0"
-PIKO_API_URL = "https://piko-api.test"
+PIKO_INGEST_URL = "https://piko-ingest.test"
+PIKO_CLICKHOUSE_URL = "http://127.0.0.1:8123"
+PIKO_CLICKHOUSE_PASSWORD = "piko-dev"

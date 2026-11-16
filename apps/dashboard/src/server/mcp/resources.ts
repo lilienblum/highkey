@@ -1,6 +1,6 @@
 // The MCP resources (the dashboard JSON Schema and the agent guide) and the build_dashboard prompt.
 import schema from "../dashboards/dashboard.v1.schema.json";
-import guide from "../dashboards/guide.md" with { type: "text" };
+import guide from "../dashboards/guide.md";
 
 export const SCHEMA_URI = "piko://schema/dashboard.v1";
 export const GUIDE_URI = "piko://docs/dashboards";

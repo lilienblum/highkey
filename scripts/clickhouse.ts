@@ -39,6 +39,15 @@ export const TEST_SERVER: ServerOptions = {
   ingestPassword: "piko-ingest-test",
 };
 
+/** Each browser-test run gets its own disposable server, apart from `bun test`'s. */
+export const E2E_SERVER: ServerOptions = {
+  name: "piko-e2e-clickhouse",
+  port: 18124,
+  tmpfs: true,
+  password: "piko-e2e",
+  ingestPassword: "piko-ingest-e2e",
+};
+
 export const DEV_SERVER: ServerOptions = {
   name: "piko-dev-clickhouse",
   port: 8123,

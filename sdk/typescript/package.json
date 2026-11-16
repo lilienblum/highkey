@@ -27,7 +27,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.build.json && bun build ./browser.ts --target=browser --format=esm --minify --outfile=dist/tracker.js",
     "prepack": "bun run build"
   },
   "publishConfig": {

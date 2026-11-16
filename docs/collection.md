@@ -97,15 +97,15 @@ PIKO_TELEMETRY=1 PIKO_ENDPOINT=http://127.0.0.1:3001 \
 PIKO_INGESTION_KEY=pk_YOUR_KEY cargo run -p piko-sdk --example collect
 ```
 
-## Existing Rust CLI worker
+## Rust CLI example
 
-The implementation is in `apps/api/src/telemetry.rs`; the runnable example is `apps/api/examples/cli.rs`.
+`sdk/rust/examples/cli.rs` reports each command a CLI runs, on the SDK's bounded delivery: 800 ms in all (`PIKO_TELEMETRY_TIMEOUT_MS`, 1–5000), retries included, and a failed send never fails the command.
 
 ```sh
 PIKO_TELEMETRY=1 \
 PIKO_ENDPOINT=http://127.0.0.1:3000 \
 PIKO_INGESTION_KEY=pk_YOUR_KEY \
-cargo run -p piko --example cli -- build
+cargo run -p piko-sdk --example cli -- build
 ```
 
 The example sends only when `PIKO_TELEMETRY=1`, an endpoint, and a key are configured. `DO_NOT_TRACK=1` disables collection even when enabled. Try `-- fail` to report failure and exit nonzero. Events carry `command`, app `version`, `os`, `arch`, boolean `success`, and numeric `duration_ms`. Command labels are restricted to `build`, `fail`, `check`, `init`, `dev`, and `deploy`; other arguments are reported as `other`. The example does not create an installation ID automatically. Set `PIKO_INSTALLATION_ID` only to an optional random ID chosen under your application’s telemetry preference. To measure installations, generate one random ID once and store it in your application's configuration directory only with the user's chosen telemetry setting. Do not send usernames, machine names, arguments, filesystem paths, or command output by default.
