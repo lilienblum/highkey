@@ -40,7 +40,10 @@ export interface EventsQuery {
 const LIMITS =
   "Use hour/day/week/month buckets, a positive range ≤366 days (hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters";
 const NUMERIC = ["sum", "avg", "p50", "p95", "min", "max"];
-const MEASURES = ["count", "actors", ...NUMERIC];
+/** The measures the Events page runs. */
+export const MEASURES = ["count", "actors", ...NUMERIC];
+/** The filter ops the Events page runs. */
+export const EVENTS_PAGE_OPS = ["eq", "ne", "gt", "gte", "lt", "lte"];
 const DAY = 86_400_000;
 
 function time(value: string, name: string): Date {

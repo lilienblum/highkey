@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { checkDocument, parseDocument } from "../src/server/dashboards/validate";
+import { checkView, parseView } from "../src/server/views";
 
 const DOCS = new URL("../../../docs/dashboards.md", import.meta.url);
 const GUIDE = new URL("../src/server/dashboards/guide.md", import.meta.url);
@@ -39,6 +40,20 @@ describe("documentation examples", () => {
       for (const match of text.matchAll(/"signal": "(\w+)"/g)) signals.add(match[1] as string);
     }
     expect([...signals].sort()).toEqual(["events", "funnel", "logs", "retention"]);
+  });
+
+  test("view_examples_in_the_docs_and_the_guide_validate", () => {
+    const views = [...blocks("piko-view"), ...blocks("view", GUIDE)];
+    expect(views.length).toBeGreaterThanOrEqual(4);
+    const kinds = new Set<string>();
+    for (const { line, text } of views) {
+      const parsed = parseView(JSON.parse(text));
+      if (!parsed.ok)
+        throw new Error(`view at line ${line}: ${JSON.stringify(parsed.report.errors)}`);
+      expect({ line, errors: checkView(parsed.value).errors }).toEqual({ line, errors: [] });
+      kinds.add(parsed.value.kind);
+    }
+    expect([...kinds].sort()).toEqual(["events", "logs"]);
   });
 
   test("the_agent_guide_examples_validate_and_never_mention_sql", () => {

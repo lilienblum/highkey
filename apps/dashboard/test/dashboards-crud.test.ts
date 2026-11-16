@@ -111,10 +111,16 @@ describe("dashboard storage", () => {
     const unknown = Bun.randomUUIDv7();
     const from = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const to = new Date().toISOString();
+    const widget = document("Board").widgets[0];
+    const view = { version: 1, name: "View", query: { measure: "count" } };
     for (const [method, p, body] of [
       ["GET", "/api/read/products/nope/dashboards", undefined],
+      ["GET", "/api/read/products/nope/catalog", undefined],
+      ["GET", "/api/read/products/nope/views", undefined],
       ["POST", "/api/read/products/nope/query", { from, to }],
+      ["POST", "/api/read/products/nope/widgets/run", { widget, from, to }],
       ["POST", `/api/products/${unknown}/dashboards`, { document: document("Board") }],
+      ["POST", `/api/products/${unknown}/views`, { document: view }],
     ] as const) {
       const reply = await call(ctx, method, p, body);
       expect({
@@ -133,20 +139,29 @@ describe("dashboard storage", () => {
     }
   });
 
-  test("dashboards_sort_by_name_ignoring_case", async () => {
+  test("dashboards_and_views_sort_by_name_ignoring_case", async () => {
     const shop = await project(ctx, "Shop");
-    for (const name of ["Zeta", "apple", "Mango"]) await create(shop.id, name);
+    for (const name of ["Zeta", "apple", "Mango"]) {
+      await create(shop.id, name);
+      const view = { version: 1, name, query: { measure: "count" } };
+      expect(
+        (await call(ctx, "POST", `/api/products/${shop.id}/views`, { document: view })).status,
+      ).toBe(200);
+    }
     const names = (list: { name: string }[]) => list.map((d) => d.name);
     expect(names((await read("/api/read/products/shop/dashboards")).json)).toEqual([
       "apple",
       "Mango",
       "Zeta",
     ]);
-    expect(names((await read("/api/products")).json[0].dashboards)).toEqual([
+    expect(names((await read("/api/read/products/shop/views")).json)).toEqual([
       "apple",
       "Mango",
       "Zeta",
     ]);
+    const listed = (await read("/api/products")).json[0];
+    expect(names(listed.dashboards)).toEqual(["apple", "Mango", "Zeta"]);
+    expect(names(listed.views)).toEqual(["apple", "Mango", "Zeta"]);
   });
 
   test("concurrent_saves_with_the_same_base_have_one_winner", async () => {

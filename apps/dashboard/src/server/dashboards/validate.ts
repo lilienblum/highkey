@@ -165,6 +165,11 @@ function prune(value: unknown): unknown {
   return out;
 }
 
+/** Any document as stored: absent optional fields dropped, defaults kept. */
+export function serialize(value: unknown): string {
+  return JSON.stringify(prune(value));
+}
+
 /** The document as stored and measured: absent optional fields dropped, defaults kept. */
 export function serializeDocument(doc: Document): string {
   return JSON.stringify(prune(doc));
@@ -173,7 +178,14 @@ export function serializeDocument(doc: Document): string {
 const chars = (s: string) => [...s].length;
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
-function textLength(r: Report, path: string, s: string, min: number, max: number, what: string) {
+export function textLength(
+  r: Report,
+  path: string,
+  s: string,
+  min: number,
+  max: number,
+  what: string,
+) {
   const n = chars(s);
   if (n < min || n > max) r.error(path, `${what} must be ${min}–${max} characters`);
 }
