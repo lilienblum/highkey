@@ -68,6 +68,16 @@ describe("registry and access", () => {
     expect(users.rows).toBe(1);
   });
 
+  test("a_new_key_is_mirrored_at_once", async () => {
+    const { id } = await project(ctx, "Fresh key", 30);
+    const key = await call(ctx, "POST", `/api/products/${id}/keys`, { label: "web" });
+    expect(key.status).toBe(200);
+    // No other change runs a mirror, so only the key's own write can have put it there.
+    expect(await registry(id)).toEqual([
+      { kind: "events", revoked: 0, retention_days: 30, allowed_origins: [], source_id: id },
+    ]);
+  });
+
   test("retention_changes_update_expiry_without_early_deletes", async () => {
     const { id } = await project(ctx, "Retention", 60);
     await call(ctx, "POST", `/api/products/${id}/keys`, { label: "web" });

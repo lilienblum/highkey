@@ -398,8 +398,9 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
   const events = queries.some((q) => !readsLogs(q));
   const logs = queries.some(readsLogs);
   let series: SeriesResult[] = [];
-  let listRows: unknown[] | null = null;
-  let columns: Table["columns"] | null = null;
+  // Assigned inside the read callback, so typed explicitly rather than narrowed to null.
+  let listRows = null as unknown[] | null;
+  let columns = null as Table["columns"] | null;
   const ran: Issue[] = [];
   if (events || logs) {
     const releases: (() => void)[] = [];

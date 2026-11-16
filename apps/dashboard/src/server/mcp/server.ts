@@ -1,0 +1,182 @@
+// The MCP server: tools, resources and a prompt for building dashboards and saved views, over
+// MCP's streamable HTTP transport in its stateless form. Each POST carries one JSON-RPC message
+// and gets one JSON response; there are no sessions and no server-sent events. `/api/read/mcp`
+// lists only the read tools, `/api/mcp` everything. No browser may call MCP: a request that
+// carries an Origin is refused, so the read path's CORS cannot reach it.
+import type { ApiContext } from "../api/context";
+import { route } from "../api/router";
+import { SchemaParser, ShapeError } from "../dashboards/shape";
+import catalog from "./catalog.json";
+import { type Args, errorBody, type Tool } from "./common";
+import { readTools } from "./read-tools";
+import { buildDashboardPrompt, readResource } from "./resources";
+import { workspaceTools } from "./workspace-tools";
+import { writeTools } from "./write-tools";
+
+export const INSTRUCTIONS =
+  "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios, funnel queries for step-by-step conversion and retention queries for cohorts. There is no SQL: every query is an events, logs, funnel or retention query, and line charts take up to 6 lines. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug.";
+
+/** The same cap as every other API request. */
+const MAX_BODY_BYTES = 256 * 1024;
+const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+/** Every tool the read path may list: a new tool reaches /api/read/mcp only by being added here. */
+const READ_TOOLS = new Set(Object.keys(readTools));
+const HANDLERS: Record<string, Tool> = { ...readTools, ...writeTools, ...workspaceTools };
+
+type Definition = (typeof catalog.tools)[number];
+const definitions = new Map<string, Definition>(catalog.tools.map((t) => [t.name, t]));
+for (const name of Object.keys(HANDLERS))
+  if (!definitions.has(name)) throw new Error(`MCP tool ${name} has no definition`);
+for (const name of definitions.keys())
+  if (!HANDLERS[name]) throw new Error(`MCP tool ${name} has no handler`);
+
+const parsers = new Map(
+  catalog.tools.map((t) => [t.name, new SchemaParser(t.inputSchema)] as const),
+);
+
+class RpcError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** The arguments as the tool's schema reads them; unknown arguments are ignored, as serde did. */
+function argumentsFor(definition: Definition, value: unknown): Args {
+  const given = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
+  const known = definition.inputSchema.properties ?? {};
+  const kept = Object.fromEntries(Object.entries(given).filter(([key]) => key in known));
+  const parsed = (parsers.get(definition.name) as SchemaParser).parse(
+    definition.inputSchema,
+    kept,
+  ) as Args;
+  // An argument written as null is an absent one.
+  return Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== null));
+}
+
+const text = (value: unknown) => [{ type: "text", text: JSON.stringify(value) }];
+
+async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
+  const name = String(params.name ?? "");
+  const definition = definitions.get(name);
+  if (!definition || (mode === "read" && !READ_TOOLS.has(name)))
+    throw new RpcError(-32602, `Unknown tool: ${name}`);
+  let args: Args;
+  try {
+    args = argumentsFor(definition, params.arguments);
+  } catch (error) {
+    if (!(error instanceof ShapeError)) throw error;
+    const at = error.path ? ` at ${error.path}` : "";
+    return {
+      content: [{ type: "text", text: `failed to deserialize parameters${at}: ${error.message}` }],
+      isError: true,
+    };
+  }
+  try {
+    return { content: text(await (HANDLERS[name] as Tool)(ctx, args)), isError: false };
+  } catch (error) {
+    return { content: text(errorBody(error)), isError: true };
+  }
+}
+
+async function dispatch(ctx: ApiContext, mode: "read" | "full", method: string, params: Args) {
+  switch (method) {
+    case "initialize": {
+      const asked = String(params.protocolVersion ?? "");
+      return {
+        protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : catalog.protocolVersion,
+        capabilities: { prompts: {}, resources: {}, tools: {} },
+        serverInfo: catalog.serverInfo,
+        instructions: INSTRUCTIONS,
+      };
+    }
+    case "ping":
+      return {};
+    case "tools/list":
+      return {
+        tools: catalog.tools.filter((t) => mode === "full" || READ_TOOLS.has(t.name)),
+      };
+    case "tools/call":
+      return callTool(ctx, mode, params);
+    case "resources/list":
+      return { resources: catalog.resources };
+    case "resources/templates/list":
+      return { resourceTemplates: [] };
+    case "resources/read": {
+      const uri = String(params.uri ?? "");
+      const found = readResource(uri);
+      if (!found) throw new RpcError(-32002, `No resource ${uri}`);
+      return { contents: [{ uri, mimeType: found.mimeType, text: found.text }] };
+    }
+    case "prompts/list":
+      return { prompts: catalog.prompts };
+    case "prompts/get": {
+      if (params.name !== "build_dashboard")
+        throw new RpcError(-32602, `No prompt ${String(params.name)}`);
+      const goal = params.arguments?.goal;
+      if (typeof goal !== "string") throw new RpcError(-32602, "The goal argument is required");
+      return {
+        description: "Build and save a dashboard",
+        messages: [{ role: "user", content: { type: "text", text: buildDashboardPrompt(goal) } }],
+      };
+    }
+    default:
+      throw new RpcError(-32601, `Method not found: ${method}`);
+  }
+}
+
+const rpcError = (id: unknown, code: number, message: string, status = 200) =>
+  Response.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { status });
+
+/** The handler for one MCP endpoint. */
+export function mcpHandler(
+  ctx: ApiContext,
+  mode: "read" | "full",
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    if (request.headers.has("origin"))
+      return Response.json({ error: "Browsers may not call MCP" }, { status: 403 });
+    if (request.method !== "POST")
+      return Response.json(
+        { error: "Method not allowed" },
+        { status: 405, headers: { allow: "POST" } },
+      );
+    const declared = Number(request.headers.get("content-length") ?? 0);
+    if (declared > MAX_BODY_BYTES)
+      return Response.json({ error: "Request body is too large" }, { status: 413 });
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.length > MAX_BODY_BYTES)
+      return Response.json({ error: "Request body is too large" }, { status: 413 });
+    let message: unknown;
+    try {
+      message = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      return rpcError(null, -32700, "Parse error", 400);
+    }
+    if (typeof message !== "object" || message === null || Array.isArray(message))
+      return rpcError(null, -32600, "Send one JSON-RPC message per request", 400);
+    const { id, method, params } = message as { id?: unknown; method?: unknown; params?: Args };
+    if (typeof method !== "string") {
+      // A response to a request of ours; this server sends none, so there is nothing to do.
+      return new Response(null, { status: 202 });
+    }
+    // A notification, such as notifications/initialized, needs no answer.
+    if (id === undefined) return new Response(null, { status: 202 });
+    try {
+      const result = await dispatch(ctx, mode, method, params ?? {});
+      return Response.json({ jsonrpc: "2.0", id, result });
+    } catch (error) {
+      if (error instanceof RpcError) return rpcError(id, error.code, error.message);
+      console.error("MCP request failed", error);
+      return rpcError(id, -32603, "Internal error");
+    }
+  };
+}
+
+export function registerMcp(): void {
+  route("POST", "/api/mcp", (request, ctx) => mcpHandler(ctx, "full")(request));
+  route("POST", "/api/read/mcp", (request, ctx) => mcpHandler(ctx, "read")(request));
+}
