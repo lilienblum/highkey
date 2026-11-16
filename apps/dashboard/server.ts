@@ -1,4 +1,7 @@
-// The dashboard owns this gateway. The Rust API has no frontend dependency.
+// The dashboard's production server: static assets, then the TanStack Start bundle, which serves
+// the pages, the API and MCP.
+import { stopOnSignals } from "./shutdown";
+
 const bundlePath = "./dist/server/server.js";
 const { default: start } = (await import(bundlePath)) as {
   default: { fetch(request: Request): Promise<Response> };
@@ -43,5 +46,5 @@ const server = Bun.serve({
     });
   },
 });
+stopOnSignals(server);
 console.log(`Piko dashboard: ${server.url}`);
-export {};
