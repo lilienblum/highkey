@@ -253,3 +253,20 @@ async fn log_retention_comes_from_the_log_key() {
         (time + chrono::Duration::days(7)).timestamp()
     );
 }
+
+#[tokio::test]
+async fn date_like_string_attributes_stay_strings() {
+    let app = app().await;
+    let (id, key) = project(30).await;
+    let mut dated = log("dated");
+    dated["attributes"] = json!({"deadline": "2026-11-15", "at": "2026-11-15T10:00:00Z"});
+    let (status, ack) = ingest(&app, &key, dated).await;
+    assert_eq!(status, 200, "{ack}");
+    let rows = admin_query(&format!(
+        "SELECT dynamicType(attributes.deadline) AS a, dynamicType(attributes.at) AS b, toString(attributes.at) AS at FROM piko.logs WHERE product_id = '{id}'"
+    ))
+    .await;
+    assert_eq!(rows[0]["a"], "String");
+    assert_eq!(rows[0]["b"], "String");
+    assert_eq!(rows[0]["at"], "2026-11-15T10:00:00Z");
+}

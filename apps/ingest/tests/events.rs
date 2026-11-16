@@ -475,3 +475,24 @@ async fn dotted_property_keys_round_trip() {
         json!({"utm.source": "newsletter", "plan": "pro"})
     );
 }
+
+#[tokio::test]
+async fn date_like_string_properties_stay_strings() {
+    let (app, _) = app().await;
+    let (id, key) = project(30).await;
+    let mut dated = event("dated", json!(1));
+    dated["properties"] = json!({
+        "trial_ends_at": "2026-11-15",
+        "published_at": "2026-11-15T10:00:00.123+02:00",
+        "seen_at": "2026-11-15 10:00:00",
+    });
+    assert_eq!(ingest(&app, &key, dated).await.status, 200);
+    let rows = admin_query(&format!(
+        "SELECT dynamicType(properties.trial_ends_at) AS a, dynamicType(properties.published_at) AS b, dynamicType(properties.seen_at) AS c, toString(properties.published_at) AS published FROM piko.events WHERE product_id = '{id}'"
+    ))
+    .await;
+    assert_eq!(rows[0]["a"], "String");
+    assert_eq!(rows[0]["b"], "String");
+    assert_eq!(rows[0]["c"], "String");
+    assert_eq!(rows[0]["published"], "2026-11-15T10:00:00.123+02:00");
+}

@@ -224,6 +224,10 @@ async fn write<R: Row>(inner: &Inner<R>, product: Uuid, jobs: Vec<Job<R>>) {
                     ("async_insert", "1"),
                     ("wait_for_async_insert", "1"),
                     ("json_type_escape_dots_in_keys", "1"),
+                    // A string that looks like a date stays the string it was sent as; inference
+                    // would store it as a Date, drop its offset, and stop string filters matching.
+                    ("input_format_try_infer_dates", "0"),
+                    ("input_format_try_infer_datetimes", "0"),
                 ],
             )
             .await;
