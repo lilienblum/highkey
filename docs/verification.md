@@ -1,5 +1,7 @@
 # Verification record
 
+Entries dated before 16 November 2026 verified the earlier architecture: one Rust API (`apps/api`) on DuckDB, run natively with `tako.api.toml` at `piko-api.test`. They are kept as history. Their commands and hosts, such as `cargo build --release -p piko` and `piko-e2e-api.test`, no longer describe the current stack, and their counts and measurements apply to that architecture only. The [newest entry](#clickhouse-and-the-ingest-app--2026-11-16), at the end, lists the current checks.
+
 ## 2 November 2026: compact overview and reporting periods
 
 Verified the Plausible-inspired dashboard changes on the two isolated Tako test apps:
@@ -162,7 +164,7 @@ The **21 Rust tests** include two new source/migration tests: independent source
 
 The local API was stopped before a full data-directory backup, then restarted for the additive migration. The original Orbit website and CLI counts remained **7,236** and **3,694**, including after a second API restart. The combined Orbit demo contains **14,624 events across Website, iOS app, and CLI sources**. A repeated seed committed zero new events in all three sources. Browser inspection covered combined Overview, mobile and CLI defaults, source Settings, and the narrow Settings screenshot.
 
-An immediate post-restart test setup encountered controlled 503 ingestion responses while startup retention swept the accumulated local project files. The final suite ran after that sweep completed. `/health` reports process health; it is not a promise that ingestion cannot encounter backpressure. Retry semantics still apply during maintenance. The [source-schema benchmark](benchmark.md#project-source-schema-follow-up--2026-11-01) measured 13,721 committed events/sec and 107.1 ms query p95 on the shared development host; its explicit workload and concurrency limitations are recorded there.
+An immediate post-restart test setup encountered controlled 503 ingestion responses while startup retention swept the accumulated local project files. The final suite ran after that sweep completed. `/health` reports process health; it is not a promise that ingestion cannot encounter backpressure. Retry semantics still apply during maintenance. The source-schema benchmark ([raw results](benchmark-sources-results.json)) measured 13,721 committed events/sec and 107.1 ms query p95 on the shared development host; its explicit workload and concurrency limitations are recorded there.
 
 Source deletion/merging and native Swift/Kotlin SDKs are not implemented; mobile has HTTP examples. Retention and optional identity remain project-scoped. This update was not deployed to production. Pre-source binaries require restoration of the complete pre-upgrade backup to write again; this is documented in the API migration notes.
 
@@ -365,3 +367,32 @@ A separate Compose project, disposable volume, and random loopback port verified
 Tako CLI `0.0.0-4b587df` also started the same services through a disposable config using those prebuilt images. Trusted local HTTPS returned the dashboard health/runtime responses and proxied the private API successfully. That routing check did not repeat the full source build under Tako. Local DNS was bypassed with curl's `--resolve` while CA and hostname verification remained enabled. Test apps, containers, volumes, and fixtures were removed afterward.
 
 No production deployment, external Access configuration, backup restoration into a separate stack, full browser suite, or Rust test/Clippy rerun was performed for this configuration/documentation change. Production rollout and rollback behavior follow Tako's documented Compose contract and were not exercised against a remote server.
+
+## ClickHouse and the ingest app — 2026-11-16
+
+The Rust API was replaced by two apps on self-hosted ClickHouse: `apps/ingest` receives events and logs and serves `/tracker.js`, and the dashboard serves every other path, with management state in SQLite. Events and logs moved from per-project DuckDB files to ClickHouse tables with TTL retention, deduplication became exact for 24 hours, each project reads through its own ClickHouse user, and dashboard documents lost their SQL signal. `compose.yaml` became one file for standalone Compose and a Tako Compose group.
+
+This change is verified with:
+
+```sh
+bun run fmt
+bun fmt:check
+bun typecheck
+bun lint
+bun scripts/clickhouse.ts test-up
+bun run test
+bun run build
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+bun run test:e2e
+bun run test:load
+bun scripts/compose-smoke.ts
+```
+
+- `cargo test` runs the ingest app against the test ClickHouse: server-version and contract checks, key lookup and revocation within the cache lifetime, origin rules before the payload, atomic validation, deduplication within the window and a merge keeping the first copy beyond it, retention by event time, OTLP formats and limits, capacity and connection-loss 503s, acknowledged events surviving an ingest crash, change hints that skip duplicate retries, and the Rust SDK's delivery.
+- `bun run test` runs the SDK and script tests and the dashboard server tests: management, the Explore and Logs queries, widget runs including funnels and retention, dashboard and view storage and validation, the MCP tools against recorded fixtures, migrations, the key registry and its reconcile, and the escape tests that keep each project's reader inside its own rows.
+- `bun run test:e2e` runs the Chromium suite against disposable Tako apps and their own ClickHouse.
+- `bun run test:load` compares ingest acknowledgment latency with and without heavy dashboard reads, and fails if any ingest request fails or if the loaded p99 is more than twice the unloaded one or reaches 250 ms.
+- `bun scripts/compose-smoke.ts` builds the Compose stack with fresh passwords and checks that an event sent through the dashboard reaches Explore.
+
+Results for these runs are not recorded in this entry. These checks do not cover the Tako Compose group (host-plus-path routes and channels are not verified yet), the backup and restore procedures in [the Compose guide](compose.md#backups-and-restore), native production against an external ClickHouse, or Cloudflare Access. `bun benchmark` and `bun benchmark:logs` run on the same stack; [the benchmark report](benchmark.md) records their measurements and the load test's.

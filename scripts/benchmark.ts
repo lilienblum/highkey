@@ -1,43 +1,21 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { cpus, totalmem, platform, release, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+// Mixed ingestion and query benchmark: four ingestion workers against the release ingest app
+// while two workers run Explore queries through the dashboard's API, on a ClickHouse of its own.
+import { cpus, platform, release, totalmem } from "node:os";
 import { Piko, type Event } from "../sdk/typescript/client";
+import { containerMemory, peakSampler, processRss, startStack } from "./bench-stack";
 const duration = Number(process.env.BENCH_SECONDS ?? 15);
 const preload = Number(process.env.BENCH_PRELOAD ?? 10000);
 const port = Number(process.env.BENCH_PORT ?? 3199);
-// Fail before spawning or writing fixtures if another service owns the requested port.
-const reservation = Bun.serve({
-  hostname: "127.0.0.1",
-  port,
-  fetch: () => new Response(null, { status: 503 }),
-});
+// Fail before starting anything if another service owns the requested ingest port.
+const reservation = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response(null) });
 await reservation.stop(true);
-const dir = await mkdtemp(join(tmpdir(), "piko-bench-"));
-const endpoint = `http://127.0.0.1:${port}`;
-const log = Bun.file(join(dir, "server.log"));
-const processHandle = Bun.spawn([resolve("target/release/piko")], {
-  env: {
-    ...process.env,
-    PIKO_DATA_DIR: dir,
-    PIKO_BIND: `127.0.0.1:${port}`,
-    PIKO_QUERY_CONCURRENCY: "4",
-    PIKO_QUEUE_CAPACITY: "64",
-  },
-  stdout: log,
-  stderr: log,
-});
+const stack = await startStack("piko-bench-clickhouse", 18126, port);
+const endpoint = stack.ingest;
 let peakRss = 0;
 let baselineRss = 0;
-const rss = () => {
-  const output = Bun.spawnSync([
-    "ps",
-    "-o",
-    "rss=",
-    "-p",
-    String(processHandle.pid),
-  ]).stdout.toString();
-  return Number(output.trim()) * 1024;
-};
+let peakClickHouse = 0;
+let baselineClickHouse = 0;
+const rss = () => processRss(stack.ingestPid);
 const times = { ingest: [] as number[], query: [] as number[] };
 const errors: Record<string, number> = {};
 let accepted = 0;
@@ -48,7 +26,7 @@ const percentile = (values: number[], p: number) => {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? null;
 };
 async function request(path: string, body?: unknown) {
-  const r = await fetch(`${endpoint}/api${path}`, {
+  const r = await fetch(`${stack.dashboard}/api${path}`, {
     method: body ? "POST" : "GET",
     headers: { "x-piko-admin": "1", "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -75,22 +53,8 @@ function batch(product: number, sequence: number, size = 100): Event[] {
     },
   }));
 }
-let sampler: ReturnType<typeof setInterval> | undefined;
+let samplers: ReturnType<typeof peakSampler>[] = [];
 try {
-  let ready = false;
-  const startupDeadline = Date.now() + 10_000;
-  while (Date.now() < startupDeadline) {
-    if (processHandle.exitCode !== null)
-      throw new Error(`API exited during startup: ${await log.text()}`);
-    try {
-      if ((await fetch(`${endpoint}/health`, { signal: AbortSignal.timeout(500) })).ok) {
-        ready = true;
-        break;
-      }
-    } catch {}
-    await Bun.sleep(50);
-  }
-  if (!ready) throw new Error(`API startup failed: ${await log.text()}`);
   const products: { id: string; client: Piko }[] = [];
   for (const kind of ["website", "tool"]) {
     const p = await request("/products", { name: `Benchmark ${kind}`, retention_days: 90 });
@@ -103,11 +67,9 @@ try {
   for (let i = 0; i < Math.ceil(preload / 100); i++) {
     await products[i % 2].client.sendBatch(batch(i % 2, i, Math.min(100, preload - i * 100)));
   }
-  baselineRss = rss();
-  peakRss = baselineRss;
-  sampler = setInterval(() => {
-    peakRss = Math.max(peakRss, rss());
-  }, 250);
+  baselineRss = await rss();
+  baselineClickHouse = await containerMemory(stack.clickhouse.container);
+  samplers = [peakSampler(rss), peakSampler(() => containerMemory(stack.clickhouse.container))];
   const started = performance.now();
   const deadline = started + duration * 1000;
   const ingestWorkers = Array.from({ length: 4 }, (_, worker) =>
@@ -158,6 +120,10 @@ try {
   );
   await Promise.all([...ingestWorkers, ...queryWorkers]);
   const elapsed = (performance.now() - started) / 1000;
+  const [ingestPeak = 0, clickhousePeak = 0] = await Promise.all(samplers.map((s) => s.stop()));
+  samplers = [];
+  peakRss = Math.max(baselineRss, ingestPeak);
+  peakClickHouse = Math.max(baselineClickHouse, clickhousePeak);
   let stored = 0;
   for (const product of products) {
     const result = await request(`/products/${product.id}/query`, {
@@ -181,13 +147,12 @@ try {
       bun: Bun.version,
       rust: Bun.spawnSync(["rustc", "--version"]).stdout.toString().trim(),
       profile: "release",
-      duckdb: "2.0.0 (duckdb-rs 1.20000.1)",
-      query_connections: 4,
-      queue_batches: 64,
-      duckdb_threads: 2,
-      duckdb_memory_limit_per_product: "64MB",
-      max_open_product_databases: 8,
-      layout: "one DuckDB file per product",
+      clickhouse_image: stack.clickhouse.image,
+      clickhouse_memory_limit: stack.clickhouse.memory,
+      clickhouse_storage: "tmpfs",
+      ingest_queue_capacity: Number(process.env.PIKO_QUEUE_CAPACITY ?? 64),
+      dashboard_query_concurrency: Number(process.env.PIKO_QUERY_CONCURRENCY ?? 4),
+      layout: "one ClickHouse table for every project, read through per-project views",
     },
     workload: {
       preload_events: preload,
@@ -199,7 +164,7 @@ try {
       actual_seconds: elapsed,
       dedup_retry_every_batches: 10,
       notes:
-        "Closed-loop localhost HTTP. 30-day dataset; query computes summary, daily buckets, top groups, count, and 25 events. Timer includes final request drain. RSS sampled every 250 ms; API process only.",
+        "Closed-loop localhost HTTP: ingestion to the ingest app, queries to the dashboard's API on Bun. 30-day dataset; query computes summary, daily buckets, top groups, count, and 25 events. Timer includes final request drain. Ingest RSS and ClickHouse container memory sampled every second.",
     },
     results: {
       accepted_events: accepted,
@@ -218,8 +183,10 @@ try {
         p95: percentile(times.query, 0.95),
         p99: percentile(times.query, 0.99),
       },
-      baseline_rss_bytes: baselineRss,
-      peak_rss_bytes: peakRss,
+      ingest_baseline_rss_bytes: baselineRss,
+      ingest_peak_rss_bytes: peakRss,
+      clickhouse_baseline_memory_bytes: baselineClickHouse,
+      clickhouse_peak_memory_bytes: peakClickHouse,
       errors,
     },
   };
@@ -227,8 +194,6 @@ try {
   await Bun.write(output, `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 } finally {
-  if (sampler) clearInterval(sampler);
-  processHandle.kill("SIGTERM");
-  await processHandle.exited;
-  await rm(dir, { recursive: true, force: true });
+  for (const sampler of samplers) await sampler.stop();
+  await stack.stop();
 }

@@ -38,7 +38,7 @@ function literal(value: string): string {
 async function ensureIngestUser(admin: ClickHouse, password: string): Promise<void> {
   const identified = `IDENTIFIED WITH sha256_password BY ${literal(password)}`;
   await admin.command(`CREATE USER IF NOT EXISTS piko_ingest ${identified}`);
-  await admin.command(`ALTER USER piko_ingest ${identified}`);
+  await admin.command(`ALTER USER piko_ingest ${identified} SETTINGS PROFILE 'piko_ingest'`);
   await admin.command("GRANT INSERT, SELECT ON piko.events TO piko_ingest");
   await admin.command("GRANT INSERT, SELECT ON piko.logs TO piko_ingest");
   await admin.command("GRANT SELECT ON piko.ingest_keys TO piko_ingest");

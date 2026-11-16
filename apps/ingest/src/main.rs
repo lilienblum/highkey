@@ -41,8 +41,9 @@ async fn run(managed: bool) -> anyhow::Result<()> {
         })
         .transpose()?;
     let mut config = Config::from_env()?;
-    if let Some(password) = secret(managed, "PIKO_CLICKHOUSE_PASSWORD") {
-        config.clickhouse.password = password;
+    if managed {
+        config.clickhouse.password =
+            piko_ingest::config::ingest_password(|name| secret(managed, name));
     }
     let state = start(config).await?;
     let notifications = delivery

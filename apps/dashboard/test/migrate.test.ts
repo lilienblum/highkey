@@ -79,6 +79,33 @@ describe("ClickHouse migrations", () => {
     expect(result.data[0]?.version).toBe(CONTRACT_VERSION);
   });
 
+  test("ingestion runs in a priority workload with a short insert flush, readers in a capped one", async () => {
+    const setting = async (client: ClickHouse, name: string) =>
+      (
+        await client.query<{ value: string }>(
+          "SELECT toString(getSetting({name:String})) AS value",
+          {
+            params: { name },
+          },
+        )
+      ).data[0]?.value;
+    const ingest = new ClickHouse({ url, user: "piko_ingest", password: ingestPassword });
+    expect(await setting(ingest, "workload")).toBe("piko_ingest");
+    expect(await setting(ingest, "async_insert_busy_timeout_max_ms")).toBe("50");
+    const workloads = await admin.query<{ name: string; parent: string }>(
+      "SELECT name, parent FROM system.workloads WHERE name LIKE 'piko%' ORDER BY name",
+    );
+    expect(workloads.data).toEqual([
+      { name: "piko", parent: "" },
+      { name: "piko_ingest", parent: "piko" },
+      { name: "piko_readers", parent: "piko" },
+    ]);
+    const profile = await admin.query<{ value: string }>(
+      "SELECT value FROM system.settings_profile_elements WHERE profile_name = 'piko_reader' AND setting_name = 'workload'",
+    );
+    expect(profile.data).toEqual([{ value: "piko_readers" }]);
+  });
+
   test("piko_ingest can write and read events but nothing else", async () => {
     const ingest = new ClickHouse({ url, user: "piko_ingest", password: ingestPassword });
     const product = crypto.randomUUID();

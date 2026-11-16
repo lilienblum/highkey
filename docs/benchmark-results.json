@@ -1,23 +1,22 @@
 {
-  "measured_at": "2026-11-01T05:41:19.332Z",
+  "measured_at": "2026-11-16T02:24:00.662Z",
   "hardware": {
     "cpu": "Apple M1 Pro",
     "logical_cpus": 10,
     "memory_bytes": 17179869184,
-    "os": "darwin 25.6.0",
+    "os": "darwin 27.2.0",
     "architecture": "arm64"
   },
   "runtime": {
     "bun": "1.4.4",
     "rust": "rustc 1.95.0 (59807616e 2026-04-14)",
     "profile": "release",
-    "duckdb": "2.0.0 (duckdb-rs 1.20000.1)",
-    "query_connections": 4,
-    "queue_batches": 64,
-    "duckdb_threads": 2,
-    "duckdb_memory_limit_per_product": "64MB",
-    "max_open_product_databases": 8,
-    "layout": "one DuckDB file per product"
+    "clickhouse_image": "clickhouse/clickhouse-server:26.8.37.168",
+    "clickhouse_memory_limit": "4g",
+    "clickhouse_storage": "tmpfs",
+    "ingest_queue_capacity": 64,
+    "dashboard_query_concurrency": 4,
+    "layout": "one ClickHouse table for every project, read through per-project views"
   },
   "workload": {
     "preload_events": 10000,
@@ -26,29 +25,31 @@
     "ingest_workers": 4,
     "query_workers": 2,
     "requested_seconds": 15,
-    "actual_seconds": 15.077740583,
+    "actual_seconds": 15.084277834,
     "dedup_retry_every_batches": 10,
-    "notes": "Closed-loop localhost HTTP. 30-day dataset; query computes summary, daily buckets, top groups, count, and 25 events. Timer includes final request drain. RSS sampled every 250 ms; API process only."
+    "notes": "Closed-loop localhost HTTP: ingestion to the ingest app, queries to the dashboard's API on Bun. 30-day dataset; query computes summary, daily buckets, top groups, count, and 25 events. Timer includes final request drain. Ingest RSS and ClickHouse container memory sampled every second."
   },
   "results": {
-    "accepted_events": 228300,
-    "verified_stored_events": 238300,
-    "duplicate_events": 22800,
-    "events_per_second": 15141.525929780615,
-    "successful_queries": 676,
-    "queries_per_second": 44.834303672937786,
+    "accepted_events": 88000,
+    "verified_stored_events": 98000,
+    "duplicate_events": 8800,
+    "events_per_second": 5833.88883236079,
+    "successful_queries": 408,
+    "queries_per_second": 27.04803004094548,
     "ingestion_ms": {
-      "p50": 23.489125000000058,
-      "p95": 28.28479199999856,
-      "p99": 35.02395900000192
+      "p50": 65.40070899999955,
+      "p95": 75.40399999999863,
+      "p99": 80.90520800000013
     },
     "query_ms": {
-      "p50": 38.22087499999907,
-      "p95": 105.38562499999898,
-      "p99": 132.65333300000202
+      "p50": 72.48283400000037,
+      "p95": 100.17545899999823,
+      "p99": 107.06533300000228
     },
-    "baseline_rss_bytes": 66682880,
-    "peak_rss_bytes": 264732672,
+    "ingest_baseline_rss_bytes": 17760256,
+    "ingest_peak_rss_bytes": 20283392,
+    "clickhouse_baseline_memory_bytes": 283849523.2,
+    "clickhouse_peak_memory_bytes": 930611200,
     "errors": {}
   }
 }

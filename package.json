@@ -14,6 +14,7 @@
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test ./sdk ./scripts ./apps/dashboard/test",
     "test:e2e": "bun scripts/e2e.ts",
+    "test:load": "bun scripts/load-test.ts",
     "benchmark:logs": "bun scripts/benchmark-logs.ts",
     "benchmark": "bun scripts/benchmark.ts",
     "seed": "bun scripts/seed.ts",

@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { cpus, platform, release, tmpdir, totalmem } from "node:os";
-import { join, resolve } from "node:path";
+// Logs benchmark: four workers send logs to the release ingest app while two workers run log
+// searches through the dashboard's API, on a ClickHouse of its own.
+import { cpus, platform, release, totalmem } from "node:os";
+import { containerMemory, peakSampler, processRss, startStack } from "./bench-stack";
 
 function setting(name: string, fallback: number, max: number) {
   const value = Number(process.env[name] ?? fallback);
@@ -12,24 +13,10 @@ const seconds = setting("BENCH_SECONDS", 15, 3600);
 const preload = setting("BENCH_PRELOAD", 100_000, 10_000_000);
 const batchSize = setting("BENCH_BATCH_SIZE", 100, 100);
 const port = setting("BENCH_PORT", 3198, 65535);
+// Fail before starting anything if another service owns the requested ingest port.
 const reservation = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response(null) });
 await reservation.stop(true);
-const directory = await mkdtemp(join(tmpdir(), "piko-log-bench-"));
-const serverLog = Bun.file(join(directory, "server.log"));
-const api = Bun.spawn([resolve(process.env.BENCH_BINARY ?? "target/release/piko")], {
-  env: {
-    ...process.env,
-    TAKO_DATA_DIR: undefined,
-    TAKO_BUILD: undefined,
-    TAKO_BOOTSTRAP_DATA: undefined,
-    PIKO_CHANGE_URL: undefined,
-    PIKO_DATA_DIR: directory,
-    PIKO_BIND: `127.0.0.1:${port}`,
-  },
-  stdout: serverLog,
-  stderr: serverLog,
-});
-const endpoint = `http://127.0.0.1:${port}`;
+const stack = await startStack("piko-bench-logs-clickhouse", 18127, port);
 const now = Date.now();
 const range = {
   from: new Date(now - 7 * 86_400_000).toISOString(),
@@ -44,13 +31,10 @@ let accepted = 0;
 let duplicates = 0;
 let baselineRss = 0;
 let peakRss = 0;
-let sampler: ReturnType<typeof setInterval> | undefined;
-const rss = () =>
-  Number(
-    Bun.spawnSync(["ps", "-o", "rss=", "-p", String(api.pid)])
-      .stdout.toString()
-      .trim(),
-  ) * 1024;
+let baselineClickHouse = 0;
+let peakClickHouse = 0;
+let samplers: ReturnType<typeof peakSampler>[] = [];
+const rss = () => processRss(stack.ingestPid);
 const percentile = (values: number[], fraction: number) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] ?? null;
@@ -61,7 +45,8 @@ const latency = (values: number[]) => ({
   p99: percentile(values, 0.99),
 });
 async function request<T>(path: string, body: unknown, key?: string): Promise<T> {
-  const response = await fetch(`${endpoint}/api${path}`, {
+  // Ingestion carries a key and goes to the ingest app; everything else to the dashboard.
+  const response = await fetch(`${key ? stack.ingest : stack.dashboard}/api${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -94,22 +79,10 @@ function records(worker: number, sequence: number, size = batchSize) {
   });
 }
 try {
-  const deadline = Date.now() + 10_000;
-  let ready = false;
-  while (Date.now() < deadline) {
-    if (api.exitCode !== null) throw new Error(`API exited: ${await serverLog.text()}`);
-    try {
-      ready = (await fetch(`${endpoint}/health`, { signal: AbortSignal.timeout(500) })).ok;
-      if (ready) break;
-    } catch {}
-    await Bun.sleep(50);
-  }
-  if (!ready) throw new Error(`API startup failed: ${await serverLog.text()}`);
   for (const name of ["Log benchmark A", "Log benchmark B"]) {
     const project = await request<{ id: string }>("/products", {
       name,
       retention_days: 7,
-      initial_source: { name: "API" },
     });
     const { key } = await request<{ key: string }>(`/products/${project.id}/logs/keys`, {
       label: "Benchmark",
@@ -126,11 +99,9 @@ try {
     if (ack.accepted !== Math.min(batchSize, preload - start) || ack.duplicates !== 0)
       throw new Error("Preload acknowledgment mismatch");
   }
-  baselineRss = rss();
-  peakRss = baselineRss;
-  sampler = setInterval(() => {
-    peakRss = Math.max(peakRss, rss());
-  }, 250);
+  baselineRss = await rss();
+  baselineClickHouse = await containerMemory(stack.clickhouse.container);
+  samplers = [peakSampler(rss), peakSampler(() => containerMemory(stack.clickhouse.container))];
   const started = performance.now();
   const stopAt = started + seconds * 1000;
   const recordError = (error: unknown) => {
@@ -191,6 +162,10 @@ try {
     ),
   ]);
   const elapsed = (performance.now() - started) / 1000;
+  const [ingestPeak = 0, clickhousePeak = 0] = await Promise.all(samplers.map((s) => s.stop()));
+  samplers = [];
+  peakRss = Math.max(baselineRss, ingestPeak);
+  peakClickHouse = Math.max(baselineClickHouse, clickhousePeak);
   let stored = 0;
   for (const project of projects) {
     const result = await request<Result>(`/products/${project.id}/logs/query`, range);
@@ -208,14 +183,14 @@ try {
       architecture: process.arch,
     },
     runtime: {
-      binary: process.env.BENCH_BINARY ?? "target/release/piko",
+      binary: "target/release/piko-ingest",
       bun: Bun.version,
       profile: "release",
-      duckdb: "2.0.0 (duckdb-rs 1.20000.1)",
-      log_query_slots: 2,
+      clickhouse_image: stack.clickhouse.image,
+      clickhouse_memory_limit: stack.clickhouse.memory,
+      clickhouse_storage: "tmpfs",
+      log_query_gate: 1,
       log_queue_requests: 16,
-      duckdb_threads: 1,
-      duckdb_memory_limit_per_project: "32MB",
     },
     workload: {
       preload_logs: preload,
@@ -226,7 +201,7 @@ try {
       requested_seconds: seconds,
       actual_seconds: elapsed,
       notes:
-        "Closed-loop localhost HTTP; six-day out-of-order timestamps, 64 services, message substring and typed JSON filters. Includes request drain; retries every ten batches. Preload is excluded. No retention sweep, network transport, or production capacity claim.",
+        "Closed-loop localhost HTTP: logs to the ingest app, searches to the dashboard's API on Bun; six-day out-of-order timestamps, 64 services, message substring and typed JSON filters. Includes request drain; retries every ten batches. Preload is excluded. No retention sweep, network transport, or production capacity claim.",
     },
     results: {
       accepted_logs: accepted,
@@ -237,8 +212,10 @@ try {
       queries_per_second: times.query.length / elapsed,
       ingestion_ms: latency(times.ingest),
       query_ms: latency(times.query),
-      baseline_rss_bytes: baselineRss,
-      peak_rss_bytes: peakRss,
+      ingest_baseline_rss_bytes: baselineRss,
+      ingest_peak_rss_bytes: peakRss,
+      clickhouse_baseline_memory_bytes: baselineClickHouse,
+      clickhouse_peak_memory_bytes: peakClickHouse,
       errors,
     },
   };
@@ -250,8 +227,6 @@ try {
   if (Object.keys(errors).length)
     throw new Error("Benchmark requests failed; inspect report errors");
 } finally {
-  if (sampler) clearInterval(sampler);
-  api.kill("SIGTERM");
-  await api.exited;
-  await rm(directory, { recursive: true, force: true });
+  for (const sampler of samplers) await sampler.stop();
+  await stack.stop();
 }
