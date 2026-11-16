@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS products(
@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS views(
   kind TEXT NOT NULL CHECK (kind IN ('events','logs')), slug TEXT NOT NULL, name TEXT NOT NULL,
   document TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   UNIQUE(product_id, kind, slug));
+CREATE TABLE IF NOT EXISTS retention_changes(
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  signal TEXT NOT NULL CHECK (signal IN ('events','logs')), due_ms INTEGER NOT NULL,
+  final INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(product_id, signal));
 `;
 
 export class Store {

@@ -89,6 +89,19 @@ export async function ensureProjectAccess(
   await admin.command(`GRANT SELECT ON ${database}.* TO ${user}`);
 }
 
+/**
+ * The projects (as `id32`) whose database holds all four views and whose reader exists with its
+ * grant: everything `ensureProjectAccess` creates, read in one query.
+ */
+export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
+  const result = await admin.query<{ id: string }>(
+    `SELECT substring(database, 8) AS id FROM system.tables WHERE startsWith(database, 'piko_p_') AND name IN ('events', 'all_events', 'logs', 'all_logs') GROUP BY database HAVING count() = 4
+     INTERSECT
+     SELECT substring(user_name, 8) AS id FROM system.grants WHERE startsWith(user_name, 'piko_r_') AND access_type = 'SELECT' AND database = concat('piko_p_', substring(user_name, 8)) AND table IS NULL`,
+  );
+  return new Set(result.data.map((row) => row.id));
+}
+
 /** One ClickHouse client per project, signed in as that project's reader. */
 export class Readers {
   private readonly clients = new Map<string, ClickHouse>();

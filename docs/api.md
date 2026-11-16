@@ -112,7 +112,7 @@ On network failure, timeout, or 5xx/429, retry **the exact same IDs and timestam
 
 The ingest app reads keys from ClickHouse's `piko.ingest_keys` registry. The dashboard writes a key's row after each key, origin, source or retention change commits in SQLite, and rewrites the whole registry from SQLite at startup and every minute, which repairs a write that failed. The ingest app caches each lookup for 5 seconds (an unknown key for 1 second), so revocation and origin changes take effect within 5 seconds. A new key works once its row is written. Requests already authorized may finish.
 
-Each new row expires at its event time plus the key's current retention. Changing a project's retention also rewrites the expiry of the rows already stored; see [capacity and limits](#capacity-and-limits). Ingestion is deliberately CORS-enabled without cookies; management is not.
+Each new row expires at its event time plus the key's current retention. Changing a project's retention also rewrites the expiry of the rows already stored, after the registry has the new retention, and once more after the 5-second cache has passed, for rows stored meanwhile; see [capacity and limits](#capacity-and-limits). If ClickHouse is unreachable, the change is saved and the next successful reconcile, within a minute of ClickHouse returning, applies it. Ingestion is deliberately CORS-enabled without cookies; management is not.
 
 ## Query
 
@@ -224,7 +224,7 @@ Dashboard, view and MCP errors share one body:
 | `conflict`              | 409  | An MCP workspace tool hit a conflict, such as a name that already exists                                                                               | Choose another value                                                                     |
 | `rate_limited`          | 429  | More than 30 dashboard or view writes in a minute for the project, HTTP and MCP together; failed attempts count                                        | Wait `Retry-After` seconds (`retry_after_secs` over MCP)                                 |
 | `busy`                  | 503  | No free query slot, or the project's ClickHouse query limit was reached: a save's benchmark (`Retry-After: 5`) or any other request (`Retry-After: 1`) | Retry in a few seconds                                                                   |
-| `analytics_unavailable` | 503  | The project's ClickHouse user or views are not set up yet, or ClickHouse is unreachable (`Retry-After: 5`)                                             | Retry shortly; the dashboard sets up project access at startup and every minute          |
+| `analytics_unavailable` | 503  | The project's ClickHouse user or views are not set up yet, or ClickHouse is unreachable (`Retry-After: 5`)                                             | Retry shortly; the dashboard sets up missing project access at startup and every minute  |
 | `query_timeout`         | 503  | A widget run did not finish within its `timeout_ms`; no `Retry-After`, since it repeats                                                                | Narrow the widget or raise `timeout_ms` (up to 10,000)                                   |
 | `internal`              | 5xx  | An MCP workspace tool failed unexpectedly                                                                                                              | Retry once; check the dashboard's log                                                    |
 

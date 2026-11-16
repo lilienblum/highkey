@@ -14,7 +14,13 @@ import {
 } from "./db/keys";
 import { cacheFavicon, type Product, type ProductInput, product, saveProduct } from "./db/products";
 import { type Source, type SourceInput, saveSource } from "./db/sources";
-import { afterCommit, applyRetention, mirrorKey, mirrorProject } from "./registry";
+import {
+  afterCommit,
+  applyRetentionChanges,
+  mirrorKey,
+  mirrorProject,
+  retentionChanged,
+} from "./registry";
 import { fetchIcon } from "./website";
 
 let fetchingIcons = 0;
@@ -48,12 +54,12 @@ export async function updateProject(
   input: ProductInput,
 ): Promise<Product> {
   const before = product(ctx.store, id).retention_days;
-  const project = saveProduct(ctx.store, id, input);
-  if (project.retention_days !== before)
-    await afterCommit(async () => {
-      await applyRetention(ctx, project.id, "piko.events", project.retention_days);
-      await mirrorProject(ctx, project.id);
-    });
+  const project = ctx.store.transaction(() => {
+    const saved = saveProduct(ctx.store, id, input);
+    if (saved.retention_days !== before) retentionChanged(ctx, saved.id, "events");
+    return saved;
+  });
+  if (project.retention_days !== before) await applyRetentionChanges(ctx, project.id);
   ctx.changes.notify(project.id, "dashboards");
   return withFavicon(ctx, project);
 }
@@ -130,11 +136,12 @@ export async function connectSource(
 }
 
 export async function updateLogSettings(ctx: ApiContext, id: string, days: number) {
-  const retention = setLogRetention(ctx.store, id, days);
-  await afterCommit(async () => {
-    await applyRetention(ctx, id, "piko.logs", retention);
-    await mirrorProject(ctx, id);
+  const retention = ctx.store.transaction(() => {
+    const saved = setLogRetention(ctx.store, id, days);
+    retentionChanged(ctx, id, "logs");
+    return saved;
   });
+  await applyRetentionChanges(ctx, id);
   return { retention_days: retention };
 }
 

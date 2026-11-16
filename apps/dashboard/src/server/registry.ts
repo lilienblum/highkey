@@ -1,9 +1,9 @@
 // The ingest app reads keys from piko.ingest_keys. SQLite stays the source of truth: every key,
 // source or retention change is mirrored after it commits, and `reconcile` rewrites the whole
-// registry (and each project's ClickHouse access) at startup and every minute, repairing any
-// mirror write that failed.
+// registry every minute, recreates whatever project access ClickHouse is missing (all of it at
+// startup), and applies retention changes that have not reached the stored rows yet.
 import type { ApiContext } from "./api/context";
-import { ensureProjectAccess } from "./clickhouse/access";
+import { ensureProjectAccess, id32, provisionedProjects } from "./clickhouse/access";
 import { logRetention } from "./db/keys";
 import { productRow, products } from "./db/products";
 
@@ -83,14 +83,101 @@ export async function applyRetention(
   );
 }
 
-export async function reconcile(ctx: ApiContext): Promise<{ projects: number; keys: number }> {
-  let keys = 0;
-  const all = products(ctx.store);
-  for (const project of all) {
-    await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
-    keys += await mirrorProject(ctx, project.id);
+/** The ingest app caches a key, with its retention, for up to this long. */
+const KEY_CACHE_MS = 5_000;
+/** Registry rows per insert when reconcile rewrites the registry. */
+const MIRROR_CHUNK = 10_000;
+
+type Signal = "events" | "logs";
+const TABLES = { events: "piko.events", logs: "piko.logs" } as const;
+
+/**
+ * Records that a project's stored rows must follow its new retention. Call it in the transaction
+ * that changes the retention, so the change cannot be lost if ClickHouse is unreachable.
+ */
+export function retentionChanged(ctx: ApiContext, productId: string, signal: Signal): void {
+  ctx.store.db
+    .query(
+      "INSERT INTO retention_changes(product_id, signal, due_ms, final) VALUES (?, ?, ?, 0) ON CONFLICT(product_id, signal) DO UPDATE SET due_ms = excluded.due_ms, final = 0",
+    )
+    .run(productId, signal, ctx.now().getTime());
+}
+
+/**
+ * Applies the retention changes that are due, for one project or all. Each first mirrors the
+ * project's keys, so the ingest app stamps new rows with the new retention once its cache has
+ * expired, then rewrites the stored rows' expiry. It runs once more after that cache has passed,
+ * for rows stored meanwhile with the old retention. A failure leaves the change due for the next
+ * reconcile. Returns how many failed.
+ */
+export async function applyRetentionChanges(ctx: ApiContext, productId?: string): Promise<number> {
+  const due = ctx.store.db
+    .query(
+      `SELECT product_id, signal, due_ms, final FROM retention_changes WHERE due_ms <= ?${productId ? " AND product_id = ?" : ""}`,
+    )
+    .all(...[ctx.now().getTime(), ...(productId ? [productId] : [])]) as {
+    product_id: string;
+    signal: Signal;
+    due_ms: number;
+    final: number;
+  }[];
+  let failed = 0;
+  for (const change of due) {
+    try {
+      await mirrorProject(ctx, change.product_id);
+      const days =
+        change.signal === "events"
+          ? productRow(ctx.store, change.product_id).retention_days
+          : logRetention(ctx.store, change.product_id);
+      await applyRetention(ctx, change.product_id, TABLES[change.signal], days);
+      // Only if no newer change arrived meanwhile; a newer one starts over.
+      const same = "WHERE product_id = ? AND signal = ? AND due_ms = ? AND final = ?";
+      const args = [change.product_id, change.signal, change.due_ms, change.final] as const;
+      if (change.final) ctx.store.db.query(`DELETE FROM retention_changes ${same}`).run(...args);
+      else
+        ctx.store.db
+          .query(`UPDATE retention_changes SET final = 1, due_ms = ? ${same}`)
+          .run(ctx.now().getTime() + KEY_CACHE_MS + 1_000, ...args);
+    } catch (error) {
+      failed++;
+      console.warn(
+        `Retention change for project ${change.product_id} not applied; the next reconcile retries it`,
+        error,
+      );
+    }
   }
-  return { projects: all.length, keys };
+  return failed;
+}
+
+/**
+ * Repairs what ClickHouse should hold. `full` re-creates every project's access, as the first
+ * reconcile after a start does, so new view definitions and reader settings take effect; other
+ * runs re-create only what is missing. One project's failure does not stop the others.
+ */
+export async function reconcile(
+  ctx: ApiContext,
+  options: { full?: boolean } = {},
+): Promise<{ projects: number; keys: number; failed: number }> {
+  const all = products(ctx.store);
+  const ready = options.full ? new Set<string>() : await provisionedProjects(ctx.admin);
+  let failed = 0;
+  for (const project of all) {
+    if (ready.has(id32(project.id))) continue;
+    try {
+      await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
+    } catch (error) {
+      failed++;
+      console.warn(
+        `Access for project ${project.id} not created; the next reconcile retries`,
+        error,
+      );
+    }
+  }
+  const keys = all.flatMap((project) => rows(ctx, project.id));
+  for (let start = 0; start < keys.length; start += MIRROR_CHUNK)
+    await ctx.admin.insert("piko.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
+  failed += await applyRetentionChanges(ctx);
+  return { projects: all.length, keys: keys.length, failed };
 }
 
 /** Deletes expired rows now, rather than at the next TTL merge. */

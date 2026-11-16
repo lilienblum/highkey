@@ -132,7 +132,7 @@ Application rollback restores earlier images and configuration against the same 
 
 ## Backups and restore
 
-Back up two things: ClickHouse's `piko` database, which holds events, logs and the key registry, and the dashboard's `state.sqlite`, which holds projects, sources, key hashes, settings, dashboards and views. The rest of ClickHouse's Piko state is rebuilt: `migrate` creates the schema, settings profiles and shared users, and at startup and every minute the dashboard recreates each project's views, reader user and grant from `state.sqlite` and rewrites the key registry. Tako's app-data backups **do not include Docker named volumes**, so use these procedures for the Tako group too, on the deployment server. Take both backups at about the same time, and store them outside the source/build context with restricted access.
+Back up two things: ClickHouse's `piko` database, which holds events, logs and the key registry, and the dashboard's `state.sqlite`, which holds projects, sources, key hashes, settings, dashboards and views. The rest of ClickHouse's Piko state is rebuilt: `migrate` creates the schema, settings profiles and shared users, and from `state.sqlite` the dashboard recreates each project's views, reader user and grant at startup, recreates whatever is missing every minute, and rewrites the key registry. Tako's app-data backups **do not include Docker named volumes**, so use these procedures for the Tako group too, on the deployment server. Take both backups at about the same time, and store them outside the source/build context with restricted access.
 
 ### ClickHouse
 

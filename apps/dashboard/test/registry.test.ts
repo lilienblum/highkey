@@ -1,9 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readerUser } from "../src/server/clickhouse/access";
+import { projectDatabase, readerUser } from "../src/server/clickhouse/access";
 import { ClickHouse } from "../src/server/clickhouse/client";
 import { readAs } from "../src/server/queries/read";
 import { reconcile } from "../src/server/registry";
-import { call, project, seedEvents, type TestContext, testAdmin, testContext } from "./helpers";
+import { startJobs } from "../src/server/jobs";
+import {
+  call,
+  project,
+  seedEvents,
+  seedLogs,
+  type TestContext,
+  testAdmin,
+  testContext,
+} from "./helpers";
 
 let ctx: TestContext;
 let admin: ClickHouse;
@@ -37,6 +46,51 @@ async function expiry(productId: string) {
       { params: { p: productId } },
     )
   ).data;
+}
+
+async function logExpiry(productId: string) {
+  return (
+    await admin.query<{ log_id: string; days: number }>(
+      "SELECT log_id, dateDiff('day', toDateTime(timestamp), expires_at) AS days FROM piko.logs FINAL WHERE product_id = {p:UUID} ORDER BY log_id",
+      { params: { p: productId } },
+    )
+  ).data;
+}
+
+/** Gives rows the expiry `days` after their time, as the ingest app stamps them. */
+async function stampExpiry(table: "piko.events" | "piko.logs", productId: string, days: number) {
+  const time = table === "piko.events" ? "event_time" : "timestamp";
+  await admin.command(
+    `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {p:UUID} SETTINGS mutations_sync = 2`,
+    { params: { p: productId, days } },
+  );
+}
+
+const unreachable = () =>
+  new ClickHouse({ url: "http://127.0.0.1:1", user: "piko_admin", password: "x" });
+
+/** Swaps ctx.admin for one that records (and may refuse) every command, until restored. */
+function recordCommands(refuse?: (sql: string) => boolean) {
+  const working = ctx.admin;
+  const commands: string[] = [];
+  ctx.admin = new Proxy(working, {
+    get(target, name) {
+      if (name === "command")
+        return (sql: string, options?: unknown) => {
+          commands.push(sql);
+          if (refuse?.(sql)) return Promise.reject(new Error("refused by the test"));
+          return target.command(sql, options as never);
+        };
+      const value = Reflect.get(target, name);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return {
+    commands,
+    restore() {
+      ctx.admin = working;
+    },
+  };
 }
 
 describe("registry and access", () => {
@@ -165,4 +219,125 @@ describe("registry and access", () => {
     expect(second.keys).toBe(first.keys);
     expect(await registry(id)).toEqual(rows);
   });
+
+  test("a_retention_change_during_an_outage_is_applied_by_reconcile", async () => {
+    const { id } = await project(ctx, "Outage retention", 30);
+    await call(ctx, "POST", `/api/products/${id}/keys`, { label: "web" });
+    await seedEvents(id, [{ event_id: "old", time: new Date(Date.now() - 25 * 86_400_000) }]);
+    await stampExpiry("piko.events", id, 30);
+    const working = ctx.admin;
+    ctx.admin = unreachable();
+    try {
+      const patched = await call(ctx, "PATCH", `/api/products/${id}`, {
+        name: "Outage retention",
+        retention_days: 90,
+      });
+      expect(patched.status).toBe(200);
+    } finally {
+      ctx.admin = working;
+    }
+    // Until it is applied the row would be deleted at 30 days, though the project keeps 90.
+    await reconcile(ctx);
+    expect(await expiry(id)).toEqual([{ event_id: "old", days: 90 }]);
+    expect((await registry(id))[0]?.retention_days).toBe(90);
+  }, 60_000);
+
+  test("a_log_retention_change_during_an_outage_is_applied_by_reconcile", async () => {
+    const { id } = await project(ctx, "Outage log retention", 30);
+    await seedLogs(id, [{ log_id: "old", time: new Date(Date.now() - 5 * 86_400_000) }]);
+    await stampExpiry("piko.logs", id, 7);
+    const working = ctx.admin;
+    ctx.admin = unreachable();
+    try {
+      const patched = await call(ctx, "PATCH", `/api/products/${id}/logs/settings`, {
+        retention_days: 30,
+      });
+      expect(patched.status).toBe(200);
+    } finally {
+      ctx.admin = working;
+    }
+    await reconcile(ctx);
+    expect(await logExpiry(id)).toEqual([{ log_id: "old", days: 30 }]);
+  }, 60_000);
+
+  test("rows_stored_with_the_cached_retention_after_a_change_are_repaired", async () => {
+    const { id } = await project(ctx, "Cached retention", 30);
+    await call(ctx, "POST", `/api/products/${id}/keys`, { label: "web" });
+    const patched = await call(ctx, "PATCH", `/api/products/${id}`, {
+      name: "Cached retention",
+      retention_days: 90,
+    });
+    expect(patched.status).toBe(200);
+    // The ingest app caches a key with its retention for 5 s, so a row it stores just after the
+    // change still expires at 30 days.
+    await seedEvents(id, [{ event_id: "late" }]);
+    await stampExpiry("piko.events", id, 30);
+    const now = ctx.now;
+    ctx.now = () => new Date(Date.now() + 10_000);
+    try {
+      await reconcile(ctx);
+    } finally {
+      ctx.now = now;
+    }
+    expect(await expiry(id)).toEqual([{ event_id: "late", days: 90 }]);
+  }, 60_000);
+
+  test("reconcile_recreates_only_missing_access", async () => {
+    const kept = await project(ctx, "Kept access", 30);
+    const broken = await project(ctx, "Broken access", 30);
+    await reconcile(ctx);
+    await admin.command(`DROP VIEW ${projectDatabase(broken.id)}.logs`);
+    const recorded = recordCommands();
+    try {
+      await reconcile(ctx);
+    } finally {
+      recorded.restore();
+    }
+    expect(recorded.commands.some((sql) => sql.includes(projectDatabase(kept.id)))).toBe(false);
+    expect(
+      recorded.commands.some((sql) => sql.includes(`${projectDatabase(broken.id)}.logs`)),
+    ).toBe(true);
+    const logs = await readAs(ctx, broken.id, (reader) =>
+      reader.query<{ n: number }>("SELECT count() AS n FROM all_logs"),
+    );
+    expect(logs.data[0]?.n).toBe(0);
+  }, 60_000);
+
+  test("one_failing_project_does_not_stop_reconcile", async () => {
+    const failing = await project(ctx, "Failing access", 30);
+    const later = await project(ctx, "Later access", 30);
+    await admin.command(`DROP VIEW ${projectDatabase(failing.id)}.logs`);
+    await admin.command(`DROP VIEW ${projectDatabase(later.id)}.logs`);
+    const recorded = recordCommands((sql) => sql.includes(projectDatabase(failing.id)));
+    let result: Awaited<ReturnType<typeof reconcile>>;
+    try {
+      result = await reconcile(ctx);
+    } finally {
+      recorded.restore();
+    }
+    expect(result.failed).toBe(1);
+    const logs = await readAs(ctx, later.id, (reader) =>
+      reader.query<{ n: number }>("SELECT count() AS n FROM all_logs"),
+    );
+    expect(logs.data[0]?.n).toBe(0);
+    await reconcile(ctx);
+  }, 60_000);
+
+  test("the_first_reconcile_after_start_refreshes_every_project", async () => {
+    const { id } = await project(ctx, "Refreshed at start", 30);
+    await reconcile(ctx);
+    const recorded = recordCommands();
+    const stop = startJobs(ctx);
+    try {
+      const deadline = Date.now() + 30_000;
+      while (!recorded.commands.some((sql) => sql.includes(`${projectDatabase(id)}.events`))) {
+        if (Date.now() > deadline)
+          throw new Error("the first reconcile did not refresh the project");
+        await Bun.sleep(50);
+      }
+    } finally {
+      stop();
+      recorded.restore();
+    }
+  }, 60_000);
 });
