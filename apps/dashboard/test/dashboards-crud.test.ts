@@ -54,8 +54,11 @@ describe("dashboard storage", () => {
       document: document("Checkout Health"),
     });
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(created.bench).toEqual([]);
-    expect(created.warnings).toEqual([]);
+    expect(created.bench.map((b: { widget: string }) => b.widget)).toEqual(["views"]);
+    // The bench's run warns that no page_view events have arrived yet.
+    expect(created.warnings.map((w: { path: string }) => w.path)).toEqual([
+      "/widgets/0/queries/views/event",
+    ]);
     const base = `/api/read/products/${shop.id}/dashboards`;
     const bySlug = await read(`${base}/checkout-health`);
     expect(bySlug.status).toBe(200);

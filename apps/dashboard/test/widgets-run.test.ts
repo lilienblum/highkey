@@ -356,7 +356,10 @@ describe("widget runs", () => {
     expect(body.sources).toHaveLength(1);
     expect(body.retention).toEqual({ events_days: 365, logs_days: 7 });
     expect(body.limits.max_widgets).toBe(24);
-    expect(body.sql.events.map((c: { name: string }) => c.name)).toContain("event_time");
+    // Dashboards hold no SQL, so the catalog lists no tables or columns.
+    expect(body.sql).toBeUndefined();
+    expect(body.limits.funnel_steps).toEqual({ min: 2, max: 8 });
+    expect(body.limits.retention_periods).toEqual({ min: 1, max: 12, default: 8 });
     expect((await call(ctx, "GET", `/api/read/products/${shop.id}/catalog`)).json.events).toEqual(
       body.events,
     );

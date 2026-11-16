@@ -9,8 +9,7 @@ import { resolveProduct } from "../db/products";
 import { listSources } from "../db/sources";
 import { facets, LEVELS } from "../queries/logs";
 import { readAs } from "../queries/read";
-import { FUNCTIONS, PARAMETERS, TABLES } from "./sql-catalog";
-import type { Document, Widget } from "./spec";
+import type { Document, Filter, QuerySpec, Widget } from "./spec";
 import { nearest } from "./suggest";
 import { type Issue, limitsJson, type Report } from "./validate";
 
@@ -45,7 +44,25 @@ export function unknownEvent(path: string, name: string, known: Iterable<string>
   };
 }
 
-/** Warnings for named events with no events at all: one LIMIT 1 probe per named query. */
+/** The event names a query reads, each with its path inside the query and its filters. */
+export function namedEvents(q: QuerySpec): { path: string; event: string; filters: Filter[] }[] {
+  if (q.signal === "events")
+    return q.event ? [{ path: "/event", event: q.event, filters: q.filters ?? [] }] : [];
+  if (q.signal === "funnel")
+    return q.steps.map((step, i) => ({
+      path: `/steps/${i}/event`,
+      event: step.event,
+      filters: step.filters ?? [],
+    }));
+  if (q.signal === "retention")
+    return [
+      { path: "/start/event", event: q.start.event, filters: q.start.filters ?? [] },
+      { path: "/return/event", event: q.return.event, filters: q.return.filters ?? [] },
+    ];
+  return [];
+}
+
+/** Warnings for named events with no events at all: one LIMIT 1 probe per distinct name. */
 export async function unknownEvents(
   reader: ClickHouse,
   widget: Widget,
@@ -53,30 +70,29 @@ export async function unknownEvents(
   signal?: AbortSignal,
 ): Promise<Issue[]> {
   const named = Object.entries(widget.queries).flatMap(([id, q]) =>
-    q.signal === "events" && q.event ? [[id, q.event] as const] : [],
+    namedEvents(q).map((n) => [`${id}${n.path}`, n.event] as const),
   );
+  const missing = new Map<string, boolean>();
   const issues: Issue[] = [];
   let known: string[] | null = null;
-  for (const [id, name] of named) {
-    const found = await reader.query(
-      "SELECT 1 FROM all_events WHERE name = {name:String} LIMIT 1",
-      { params: { name }, settings, signal },
-    );
-    if (found.rows > 0) continue;
+  for (const [at, name] of named) {
+    if (!missing.has(name)) {
+      const found = await reader.query(
+        "SELECT 1 FROM all_events WHERE name = {name:String} LIMIT 1",
+        { params: { name }, settings, signal },
+      );
+      missing.set(name, found.rows === 0);
+    }
+    if (!missing.get(name)) continue;
     known ??= (
       await reader.query<{ name: string }>(
         "SELECT DISTINCT name FROM all_events ORDER BY name LIMIT 100",
         { settings, signal },
       )
     ).data.map((r) => r.name);
-    issues.push(unknownEvent(`/queries/${id}/event`, name, known));
+    issues.push(unknownEvent(`/queries/${at}`, name, known));
   }
   return issues;
-}
-
-async function columns(reader: ClickHouse, table: string) {
-  const described = await reader.query<{ name: string; type: string }>(`DESCRIBE TABLE ${table}`);
-  return described.data.map((c) => ({ name: c.name, type: c.type }));
 }
 
 export async function catalog(ctx: ApiContext, project: string) {
@@ -127,28 +143,12 @@ export async function catalog(ctx: ApiContext, project: string) {
         )
       ).data.map((r) => r.level),
     );
-    const eventColumns = await columns(reader, "events");
-    const logColumns = await columns(reader, "logs");
     return {
       project: { id: product.id, slug: product.slug, name: product.name },
       events: { names: names.data.map((r) => r.name), properties },
       logs: { ...logFacets, levels: LEVELS.filter((l) => present.has(l)) },
       sources: sources.map((s) => ({ id: s.id, name: s.name })),
       retention: { events_days: product.retention_days, logs_days: logsDays },
-      sql: {
-        events: eventColumns,
-        all_events: eventColumns,
-        logs: logColumns,
-        all_logs: logColumns,
-        tables: TABLES.map(([name, database, scoped, description]) => ({
-          name,
-          database,
-          scoped,
-          description,
-        })),
-        parameters: PARAMETERS,
-        functions: FUNCTIONS.map(([name, call, description]) => ({ name, call, description })),
-      },
       limits: limitsJson(),
     };
   });
@@ -173,14 +173,20 @@ export function warnUnknown(widget: Widget, base: string, found: Catalog, report
       });
   };
   for (const [id, q] of Object.entries(widget.queries)) {
-    if (q.signal !== "events") continue;
     const at = `${base}/queries/${id}`;
-    if (q.event && names.size < MAX_KEYS && !names.has(q.event))
-      report.warnings.push(unknownEvent(`${at}/event`, q.event, names));
+    for (const named of namedEvents(q)) {
+      if (names.size < MAX_KEYS && !names.has(named.event))
+        report.warnings.push(unknownEvent(`${at}${named.path}`, named.event, names));
+      const filters = named.path.replace(/\/event$/, "/filters");
+      for (const [i, f] of named.filters.entries())
+        property(`${at}${filters}/${i}/property`, f.property);
+    }
+    if (q.signal !== "events") continue;
     if (q.property) property(`${at}/property`, q.property);
     if (q.group_by?.startsWith("property:")) property(`${at}/group_by`, q.group_by.slice(9));
-    for (const [i, f] of (q.filters ?? []).entries())
-      property(`${at}/filters/${i}/property`, f.property);
+    if (!q.event)
+      for (const [i, f] of (q.filters ?? []).entries())
+        property(`${at}/filters/${i}/property`, f.property);
   }
 }
 

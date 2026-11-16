@@ -164,7 +164,7 @@ function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange
       case "ranking":
         return <RankingBody {...shared} />;
       case "table":
-        return <SqlTableBody {...shared} />;
+        return <DataTableBody {...shared} />;
       case "events":
         return <EventRowsBody {...shared} />;
       default:
@@ -233,7 +233,7 @@ type BodyProps = {
 };
 
 const groupByOf = (query?: QuerySpec) =>
-  query && query.signal !== "sql" ? query.group_by : undefined;
+  query?.signal === "events" || query?.signal === "logs" ? query.group_by : undefined;
 
 /** A series' own unit wins over the view's. */
 function measureView(widget: Widget, index: number): View {
@@ -465,8 +465,8 @@ function RowTime({ timestamp }: { timestamp: number }) {
   );
 }
 
-/** An SQL table: the result's own columns under a sticky header, scrolling inside the widget. */
-function SqlTableBody({ widget, result, loading }: BodyProps) {
+/** A table: the result's own columns under a sticky header, scrolling inside the widget. */
+function DataTableBody({ widget, result, loading }: BodyProps) {
   const { timeZone } = useDisplayPreferences();
   const columns = tableColumns(result?.columns);
   const kinds = columns.map((column) => cellKind(column.type));
@@ -525,6 +525,7 @@ function SqlTableBody({ widget, result, loading }: BodyProps) {
                       value={row[index]}
                       kind={kind}
                       column={columns[index].name}
+                      unit={columns[index].unit}
                       timeZone={timeZone}
                     />
                   </TableCell>
@@ -542,14 +543,18 @@ function CellValue({
   value,
   kind,
   column,
+  unit,
   timeZone,
 }: {
   value: unknown;
   kind: CellKind;
   column: string;
+  unit?: Unit;
   timeZone: string;
 }) {
   if (value === null || value === undefined) return <span className="dashboard-cell-null">—</span>;
+  if (unit && kind === "number" && typeof value === "number")
+    return <>{formatMeasure(value, { unit })}</>;
   const time = kind === "timestamp" ? validTime(value) : null;
   if (time !== null) {
     const full = displayTimestamp(time, timeZone);

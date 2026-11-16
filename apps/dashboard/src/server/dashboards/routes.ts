@@ -5,6 +5,7 @@ import type { ApiContext } from "../api/context";
 import { json, noContent } from "../api/errors";
 import { route } from "../api/router";
 import { resolveProduct } from "../db/products";
+import { benchWidgets } from "./bench";
 import { catalog, warnUnknownDocument } from "./catalog";
 import schema from "./dashboard.v1.schema.json";
 import { parseRunRequest, runWidget } from "./run";
@@ -30,7 +31,7 @@ export interface SaveChecks {
   warnings: unknown[];
 }
 
-/** What a save runs before it writes: SQL verification and the benchmark (see sql.ts, bench.ts). */
+/** What a save runs before it writes: the benchmark (see bench.ts). */
 export type BeforeSave = (
   ctx: ApiContext,
   product: string,
@@ -42,7 +43,7 @@ export function setBeforeSave(check: BeforeSave): void {
   beforeSave = check;
 }
 
-/** Extra validation a validate request runs after the rules: catalog warnings and SQL. */
+/** Extra validation a validate request runs after the rules: catalog warnings. */
 export type ValidateExtras = (
   ctx: ApiContext,
   product: string,
@@ -132,6 +133,9 @@ export async function validateFor(ctx: ApiContext, project: string, value: unkno
 }
 
 export function registerDashboards(): void {
+  setBeforeSave((ctx, product, doc, previous) =>
+    benchWidgets(ctx, product, doc.widgets, previous?.widgets ?? null),
+  );
   setValidateExtras(async (ctx, product, doc, report) =>
     warnUnknownDocument(doc, await catalog(ctx, product), report),
   );

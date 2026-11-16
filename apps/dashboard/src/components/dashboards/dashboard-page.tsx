@@ -48,7 +48,7 @@ export function signalsOf(dashboard: DashboardDocument): Signal[] {
   const signals = new Set<Signal>();
   for (const widget of dashboard.widgets)
     for (const query of Object.values(widget.queries ?? {}))
-      signals.add(query.signal === "sql" ? query.database : query.signal);
+      signals.add(query.signal === "logs" ? "logs" : "events");
   return [...signals].sort();
 }
 

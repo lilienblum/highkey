@@ -169,19 +169,25 @@ test("seriesDisplayLabel prefers explicit labels, then measures, then the expres
   expect(hasSeriesLabel(base, 0)).toBe(false);
 });
 
-test("SQL queries are labelled by their series label or query id", () => {
+test("funnels are labelled by what they count, and retention by its name", () => {
+  const steps = [{ event: "visit" }, { event: "signup" }];
   const widget = {
     id: "w",
     title: "W",
-    view: { type: "line" as const },
-    queries: {
-      slow: { signal: "sql" as const, database: "events" as const, sql: "SELECT 1" },
-    },
+    view: { type: "ranking" as const },
+    queries: { f: { signal: "funnel" as const, steps } },
   };
-  expect(queryLabel(widget.queries.slow)).toBe("SQL");
-  expect(seriesDisplayLabel(widget, 0)).toBe("slow");
-  expect(seriesDisplayLabel({ ...widget, series: [{ expr: "slow", label: "Slow" }] }, 0)).toBe(
-    "Slow",
+  expect(seriesDisplayLabel(widget, 0)).toBe("Actors");
+  expect(queryLabel({ signal: "funnel", steps, by: "session" })).toBe("Sessions");
+  expect(
+    queryLabel({
+      signal: "retention",
+      start: { event: "signup" },
+      return: { event: "page_view" },
+    }),
+  ).toBe("Retention");
+  expect(seriesDisplayLabel({ ...widget, series: [{ expr: "f", label: "Buyers" }] }, 0)).toBe(
+    "Buyers",
   );
 });
 
@@ -212,6 +218,24 @@ test("cellKind groups DuckDB types", () => {
   expect(cellKind("VARCHAR")).toBe("text");
   expect(cellKind("UUID")).toBe("text");
   expect(cellKind("TIME")).toBe("text");
+});
+
+test("cellKind groups ClickHouse types", () => {
+  expect(cellKind("UInt64")).toBe("number");
+  expect(cellKind("Int32")).toBe("number");
+  expect(cellKind("Float64")).toBe("number");
+  expect(cellKind("Decimal(18, 3)")).toBe("number");
+  expect(cellKind("Nullable(Float64)")).toBe("number");
+  expect(cellKind("DateTime64(3, 'UTC')")).toBe("timestamp");
+  expect(cellKind("DateTime")).toBe("timestamp");
+  expect(cellKind("Date")).toBe("date");
+  expect(cellKind("Date32")).toBe("date");
+  expect(cellKind("Bool")).toBe("boolean");
+  expect(cellKind("Array(String)")).toBe("json");
+  expect(cellKind("Map(String, UInt64)")).toBe("json");
+  expect(cellKind("Tuple(a UInt8)")).toBe("json");
+  expect(cellKind("LowCardinality(String)")).toBe("text");
+  expect(cellKind("String")).toBe("text");
 });
 
 test("formatCell renders nulls, numbers and booleans as text", () => {

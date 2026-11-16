@@ -151,6 +151,23 @@ export interface RunOptions {
   settings?: Record<string, string | number>;
 }
 
+/** A query's parameters, deadline and settings: the window, the source and the run's own. */
+export function scoped(
+  w: Window,
+  source: string | null,
+  run: RunOptions,
+  params: Record<string, unknown>,
+): QueryOptions {
+  return {
+    params: params as QueryOptions["params"],
+    signal: run.signal,
+    settings: {
+      ...runSettings({ from: w.from, to: w.to, source, bucket: w.bucket }),
+      ...(run.settings ?? {}),
+    },
+  };
+}
+
 function options(
   c: Compiled,
   w: Window,
@@ -158,14 +175,7 @@ function options(
   run: RunOptions,
   params = c.params.values,
 ): QueryOptions {
-  return {
-    params,
-    signal: run.signal,
-    settings: {
-      ...runSettings({ from: w.from, to: w.to, source, bucket: w.bucket }),
-      ...(run.settings ?? {}),
-    },
-  };
+  return scoped(w, source, run, params);
 }
 
 async function buckets(

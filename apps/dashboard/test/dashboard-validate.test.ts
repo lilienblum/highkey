@@ -53,8 +53,17 @@ const shapeError = (value: Json) => {
   return result.report.errors[0];
 };
 
-const sql = (database: string, text: string) => ({ signal: "sql", database, sql: text });
-const one = () => sql("events", "SELECT 1 AS value");
+const funnel = (extra: Json = {}) => ({
+  signal: "funnel",
+  steps: [{ event: "visit" }, { event: "signup" }],
+  ...extra,
+});
+const retention = (extra: Json = {}) => ({
+  signal: "retention",
+  start: { event: "signup" },
+  return: { event: "page_view" },
+  ...extra,
+});
 
 describe("dashboard documents", () => {
   test("spec_example_is_valid", () => {
@@ -349,81 +358,103 @@ describe("dashboard documents", () => {
       expect({ path, found: errors([widget]).includes(path) }).toEqual({ path, found: true });
   });
 
-  test("sql_static_rules", () => {
+  test("funnel_and_retention_rules", () => {
+    const w = (view: string, queries: Json, extra: Json = {}) => ({
+      id: "a",
+      title: "t",
+      view: { type: view },
+      queries,
+      ...extra,
+    });
+    const steps = (k: number) => Array.from({ length: k }, (_, i) => ({ event: `e${i}` }));
     const cases: [Json, string][] = [
+      [w("ranking", { f: funnel({ steps: steps(1) }) }), "/widgets/0/queries/f/steps"],
+      [w("ranking", { f: funnel({ steps: steps(9) }) }), "/widgets/0/queries/f/steps"],
+      [w("ranking", { f: funnel({ window: "0h" }) }), "/widgets/0/queries/f/window"],
+      [w("ranking", { f: funnel({ window: "2w" }) }), "/widgets/0/queries/f/window"],
       [
-        { id: "a", title: "t", view: { type: "table" }, queries: { a: { signal: "events" } } },
+        w("ranking", { f: funnel({ steps: [{ event: "" }, { event: "b" }] }) }),
+        "/widgets/0/queries/f/steps/0/event",
+      ],
+      [
+        w("ranking", {
+          f: funnel({
+            steps: [
+              { event: "a", filters: [{ property: "p", op: "gt", value: "x" }] },
+              { event: "b" },
+            ],
+          }),
+        }),
+        "/widgets/0/queries/f/steps/0/filters/0/value",
+      ],
+      [w("stat", { f: funnel() }), "/widgets/0/queries/f"],
+      [w("line", { f: funnel() }), "/widgets/0/queries/f"],
+      [
+        w(
+          "ranking",
+          { f: funnel(), b: { signal: "events", group_by: "name" } },
+          {
+            series: [{ expr: "f" }, { expr: "b" }],
+          },
+        ),
         "/widgets/0/queries",
       ],
+      [w("ranking", { r: retention() }), "/widgets/0/queries/r"],
+      [w("table", { r: retention(), f: funnel() }), "/widgets/0/queries"],
+      [w("table", { r: retention({ periods: 0 }) }), "/widgets/0/queries/r/periods"],
+      [w("table", { r: retention({ periods: 13 }) }), "/widgets/0/queries/r/periods"],
+      [w("table", { r: retention() }, { series: [{ expr: "r" }] }), "/widgets/0/series"],
+      [w("table", { a: { signal: "events" } }), "/widgets/0/queries/a/group_by"],
       [
-        { id: "a", title: "t", view: { type: "table" }, queries: { a: one(), b: one() } },
-        "/widgets/0/queries",
+        w("table", {
+          a: { signal: "events", group_by: "name" },
+          b: { signal: "events", group_by: "source" },
+        }),
+        "/widgets/0/queries/b/group_by",
       ],
-      [
-        {
-          id: "a",
-          title: "t",
-          view: { type: "table" },
-          queries: { a: one() },
-          series: [{ expr: "a" }],
-        },
-        "/widgets/0/series",
-      ],
-      [
-        { id: "a", title: "t", view: { type: "logs" }, queries: { a: sql("logs", "SELECT 1") } },
-        "/widgets/0/queries/a",
-      ],
-      [
-        { id: "a", title: "t", view: { type: "events" }, queries: { a: one() } },
-        "/widgets/0/queries/a",
-      ],
-      [
-        { id: "a", title: "t", view: { type: "stat" }, queries: { a: sql("events", "  ") } },
-        "/widgets/0/queries/a/sql",
-      ],
-      [
-        {
-          id: "a",
-          title: "t",
-          view: { type: "stat" },
-          queries: { a: sql("events", "x".repeat(8001)) },
-        },
-        "/widgets/0/queries/a/sql",
-      ],
+      [w("events", { f: funnel() }), "/widgets/0/queries/f"],
     ];
     for (const [widget, path] of cases)
-      expect({ path, found: errors([widget]).includes(path) }).toEqual({ path, found: true });
-    const ranking = {
-      id: "a",
-      title: "t",
-      view: { type: "ranking" },
-      queries: {
-        a: sql("events", "SELECT name AS label, count() AS value FROM events GROUP BY 1"),
-        b: { signal: "events", group_by: "name" },
-      },
-      series: [{ expr: "a" }, { expr: "b" }],
-    };
-    expect(errors([ranking])).toEqual([]);
-    expect(
-      errors([{ id: "a", title: "t", view: { type: "table" }, queries: { a: one() } }]),
-    ).toEqual([]);
-    const logsRange = {
-      id: "a",
-      title: "t",
-      view: { type: "stat" },
-      range: "90d",
-      queries: { a: sql("logs", "SELECT 1 AS value") },
-    };
-    expect(
-      checkDocument(parsed(doc([logsRange]))).warnings.some((i) => i.path === "/widgets/0/range"),
-    ).toBe(true);
-    const databse: Json = { id: "a", title: "t", view: { type: "stat" }, queries: { a: one() } };
-    databse.queries.a.databse = "events";
-    expect(shapeError(doc([databse]))?.path).toBe("/widgets/0/queries/a/databse");
-    const skip: Json = { id: "a", title: "t", view: { type: "stat" }, queries: { a: one() } };
-    skip.queries.a.missing = "skip";
-    expect(shapeError(doc([skip]))?.path).toBe("/widgets/0/queries/a/missing");
-    expect(limitsJson().max_sql_chars).toBe(8000);
+      expect({ path, found: errors([widget]) }).toEqual({
+        path,
+        found: expect.arrayContaining([path]),
+      });
+    for (const widget of [
+      w("ranking", { f: funnel() }),
+      w(
+        "ranking",
+        { f: funnel({ steps: steps(8), window: "24h", by: "session" }) },
+        {
+          series: [{ expr: "f * 2" }],
+        },
+      ),
+      w("table", { f: funnel() }),
+      w("table", { r: retention({ periods: 12, period: "month" }) }, { range: "366d" }),
+      w("table", {
+        a: { signal: "events", group_by: "name" },
+        b: { signal: "events", measure: "actors", group_by: "name" },
+      }),
+      w("table", { a: { signal: "logs", group_by: "service" } }),
+    ])
+      expect(errors([widget])).toEqual([]);
+    // A retention widget whose range cannot hold its periods says so.
+    const short = checkDocument(parsed(doc([w("table", { r: retention() }, { range: "14d" })])));
+    expect(short.errors).toEqual([]);
+    expect(short.warnings.map((i) => i.path)).toContain("/widgets/0/queries/r/periods");
+    const sqlQuery = shapeError(
+      doc([w("stat", { a: { signal: "sql", database: "events", sql: "SELECT 1 AS value" } })]),
+    );
+    expect(sqlQuery?.path).toBe("/widgets/0/queries/a/signal");
+    expect(sqlQuery?.message).toBe(
+      "unknown variant `sql`, expected one of `events`, `logs`, `funnel`, `retention`",
+    );
+    expect(shapeError(doc([w("table", { r: retention({ period: "year" }) })]))?.path).toBe(
+      "/widgets/0/queries/r/period",
+    );
+    expect(shapeError(doc([w("ranking", { f: funnel({ by: "device" }) })]))?.path).toBe(
+      "/widgets/0/queries/f/by",
+    );
+    expect(JSON.stringify(limitsJson())).not.toContain("sql");
   });
 
   test("long_ranges_warn_and_malformed_ranges_never_panic", () => {
@@ -589,7 +620,24 @@ describe("dashboard documents", () => {
               attribute: "ms",
               group_by: "service",
             },
-            c: { signal: "sql", database: "events", sql: "SELECT 1 AS value", missing: "zero" },
+            c: {
+              signal: "funnel",
+              steps: [
+                { event: "a", filters: [{ property: "p", op: "eq", value: "x" }] },
+                { event: "b" },
+              ],
+              window: "1d",
+              by: "actor",
+              source_id: "s",
+            },
+            d: {
+              signal: "retention",
+              start: { event: "a", filters: [{ property: "p", op: "eq", value: "x" }] },
+              return: { event: "b" },
+              period: "week",
+              periods: 4,
+              source_id: "s",
+            },
           },
           series: [
             {
@@ -612,6 +660,12 @@ describe("dashboard documents", () => {
       ["/widgets/0/queries/a/extra", (d: Json) => (d.widgets[0].queries.a.extra = 1)],
       ["/widgets/0/queries/b/extra", (d: Json) => (d.widgets[0].queries.b.extra = 1)],
       ["/widgets/0/queries/c/extra", (d: Json) => (d.widgets[0].queries.c.extra = 1)],
+      [
+        "/widgets/0/queries/c/steps/1/extra",
+        (d: Json) => (d.widgets[0].queries.c.steps[1].extra = 1),
+      ],
+      ["/widgets/0/queries/d/extra", (d: Json) => (d.widgets[0].queries.d.extra = 1)],
+      ["/widgets/0/queries/d/return/extra", (d: Json) => (d.widgets[0].queries.d.return.extra = 1)],
       ["/widgets/0/series/0/extra", (d: Json) => (d.widgets[0].series[0].extra = 1)],
       [
         "/widgets/0/series/0/thresholds/0/extra",

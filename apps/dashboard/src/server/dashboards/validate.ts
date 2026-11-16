@@ -9,18 +9,19 @@ import {
   type Document,
   type EventsQuery,
   effectiveCompare,
+  type Filter,
+  type FunnelQuery,
   type LogsQuery,
   type QuerySpec,
+  type RetentionQuery,
   readsLogs,
-  type SqlQuery,
+  type Step,
   seriesOrDefault,
+  typed,
   type Widget,
 } from "./spec";
 
 export const MAX_DOCUMENT_BYTES = 65_536;
-export const MAX_SQL_CHARS = 8_000;
-export const MAX_SQL_ROWS = 10_000;
-export const MAX_TABLE_COLUMNS = 50;
 export const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 
 export const Limits = {
@@ -56,6 +57,12 @@ export const Limits = {
   SIZE_HEIGHTS: [1, 2, 3],
   MAX_TEXT_FILTER_BYTES: 128,
   MAX_SEARCH_BYTES: 512,
+  MIN_FUNNEL_STEPS: 2,
+  MAX_FUNNEL_STEPS: 8,
+  DEFAULT_FUNNEL_WINDOW: "7d",
+  MIN_RETENTION_PERIODS: 1,
+  MAX_RETENTION_PERIODS: 12,
+  DEFAULT_RETENTION_PERIODS: 8,
 } as const;
 
 export function limitsJson() {
@@ -94,9 +101,13 @@ export function limitsJson() {
     range_pattern: "^\\d{1,3}(h|d)$",
     size_widths: Limits.SIZE_WIDTHS,
     size_heights: Limits.SIZE_HEIGHTS,
-    max_sql_chars: MAX_SQL_CHARS,
-    max_sql_rows: MAX_SQL_ROWS,
-    max_table_columns: MAX_TABLE_COLUMNS,
+    funnel_steps: { min: Limits.MIN_FUNNEL_STEPS, max: Limits.MAX_FUNNEL_STEPS },
+    funnel_window: { pattern: "^\\d{1,3}(h|d)$", default: Limits.DEFAULT_FUNNEL_WINDOW },
+    retention_periods: {
+      min: Limits.MIN_RETENTION_PERIODS,
+      max: Limits.MAX_RETENTION_PERIODS,
+      default: Limits.DEFAULT_RETENTION_PERIODS,
+    },
   };
 }
 
@@ -249,7 +260,7 @@ export function checkWidget(w: Widget, base: string, r: Report): void {
   for (const [id, query] of Object.entries(w.queries)) {
     if (!validQueryId(id))
       r.error(`${base}/queries/${id}`, "Query ids must match [a-z][a-z0-9_]{0,15}");
-    checkQuery(query, `${base}/queries/${id}`, r);
+    checkQuery(query, `${base}/queries/${id}`, r, w);
   }
   checkShape(w, base, r);
 }
@@ -283,7 +294,30 @@ function checkView(w: Widget, base: string, range: number | null, r: Report) {
 }
 
 function groupBy(q: QuerySpec): string | null {
-  return q.signal === "sql" ? null : (q.group_by ?? null);
+  return typed(q) ? (q.group_by ?? null) : null;
+}
+
+/** Funnel and retention queries: each shapes its whole widget, so it is the only query. */
+function checkSpecial(w: Widget, kind: string, qpath: string, r: Report): boolean {
+  const entries = Object.entries(w.queries);
+  const special = entries.filter(([, q]) => !typed(q));
+  for (const [id, q] of special) {
+    if (q.signal === "funnel" && kind !== "ranking" && kind !== "table")
+      r.error(
+        `${qpath}/${id}`,
+        "A funnel query needs a ranking or table view",
+        "Show the steps as a ranking, or as a table with conversion columns",
+      );
+    if (q.signal === "retention" && kind !== "table")
+      r.error(`${qpath}/${id}`, "A retention query needs a table view", "Set view.type to table");
+  }
+  if (special.length > 0 && entries.length !== 1)
+    r.error(
+      qpath,
+      "A funnel or retention query must be the widget's only query",
+      "Move the other queries to a widget of their own",
+    );
+  return special.length > 0;
 }
 
 function checkShape(w: Widget, base: string, r: Report) {
@@ -294,22 +328,6 @@ function checkShape(w: Widget, base: string, r: Report) {
   if (kind === "text") {
     if (n > 0) r.error(qpath, "Text widgets take no queries");
     if (w.series != null) r.error(`${base}/series`, "Text widgets take no series");
-    return;
-  }
-  if (kind === "table") {
-    const sql = entries.filter(([, q]) => q.signal === "sql").length;
-    if (n !== 1 || sql !== 1)
-      r.error(
-        qpath,
-        "A table widget needs exactly one SQL query",
-        'Give the widget one query with "signal": "sql"',
-      );
-    if (w.series != null)
-      r.error(
-        `${base}/series`,
-        "A table widget takes no series",
-        "Remove series; the table shows the query's columns",
-      );
     return;
   }
   if (kind === "events" || kind === "logs") {
@@ -327,6 +345,26 @@ function checkShape(w: Widget, base: string, r: Report) {
     if (w.series != null) r.error(`${base}/series`, `A ${kind} widget takes no series`);
     return;
   }
+  const special = checkSpecial(w, kind, qpath, r);
+  if (kind === "table") {
+    if (w.series != null)
+      r.error(
+        `${base}/series`,
+        "A table widget takes no series",
+        "Remove series; the table shows one column per query",
+      );
+    if (special) return;
+    if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–4 queries");
+    for (const [id, q] of entries)
+      if (groupBy(q) === null)
+        r.error(
+          `${qpath}/${id}/group_by`,
+          "Table widgets need a group_by",
+          "Each group is a row, such as group_by name, a property or a service",
+        );
+    sharedGroupBy(entries, qpath, r);
+    return;
+  }
   if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–4 queries");
   const runs = queryRuns(w);
   if (runs > Limits.MAX_QUERY_RUNS_PER_WIDGET)
@@ -336,21 +374,11 @@ function checkShape(w: Widget, base: string, r: Report) {
       qpath,
       `${runs} query runs per refresh including the previous period; this widget may load slowly`,
     );
-  const typed = entries.filter(([, q]) => q.signal !== "sql");
-  if (typed.length > 0) {
-    const first = groupBy((typed[0] as [string, QuerySpec])[1]);
-    for (const [id, q] of typed.slice(1))
-      if (groupBy(q) !== first)
-        r.error(
-          `${qpath}/${id}/group_by`,
-          "Every query in a widget must share the same group_by",
-          "Give all queries the same group_by, or remove it from all of them",
-        );
-  }
+  sharedGroupBy(entries, qpath, r);
   const grouped = n > 0 && groupBy((entries[0] as [string, QuerySpec])[1]) !== null;
   if (kind === "ranking")
     for (const [id, q] of entries)
-      if (q.signal !== "sql" && groupBy(q) === null)
+      if (typed(q) && groupBy(q) === null)
         r.error(`${qpath}/${id}/group_by`, "Ranking widgets need a group_by");
   const series = seriesOrDefault(w);
   const spath = `${base}/series`;
@@ -394,31 +422,78 @@ function checkShape(w: Widget, base: string, r: Report) {
         );
 }
 
+function sharedGroupBy(entries: [string, QuerySpec][], qpath: string, r: Report) {
+  const queries = entries.filter(([, q]) => typed(q));
+  if (queries.length === 0) return;
+  const first = groupBy((queries[0] as [string, QuerySpec])[1]);
+  for (const [id, q] of queries.slice(1))
+    if (groupBy(q) !== first)
+      r.error(
+        `${qpath}/${id}/group_by`,
+        "Every query in a widget must share the same group_by",
+        "Give all queries the same group_by, or remove it from all of them",
+      );
+}
+
 function nonEmpty(r: Report, path: string, value: string | null | undefined, max: number) {
   if (value != null && (value.length === 0 || bytes(value) > max))
     r.error(path, `Must be 1–${max} bytes`);
 }
 
-function checkQuery(q: QuerySpec, p: string, r: Report) {
+function checkQuery(q: QuerySpec, p: string, r: Report, w: Widget) {
   if (q.signal === "events") checkEvents(q, p, r);
   else if (q.signal === "logs") checkLogs(q, p, r);
-  else checkSql(q, p, r);
+  else if (q.signal === "funnel") checkFunnel(q, p, r);
+  else checkRetention(q, p, r, w.range ?? null);
 }
 
-/** The size of the text. What the SQL does is verified by ClickHouse (see sql.ts). */
-function checkSql(q: SqlQuery, p: string, r: Report) {
-  const n = chars(q.sql);
-  if (!q.sql.trim())
+function checkStep(step: Step, p: string, r: Report) {
+  if (step.event.length === 0 || bytes(step.event) > Limits.MAX_TEXT_FILTER_BYTES)
+    r.error(`${p}/event`, `Must be 1–${Limits.MAX_TEXT_FILTER_BYTES} bytes`);
+  checkFilters(step.filters ?? [], `${p}/filters`, r);
+}
+
+export function checkFunnel(q: FunnelQuery, p: string, r: Report): void {
+  if (q.steps.length < Limits.MIN_FUNNEL_STEPS || q.steps.length > Limits.MAX_FUNNEL_STEPS)
+    r.error(`${p}/steps`, "A funnel needs 2–8 steps");
+  q.steps.forEach((step, i) => {
+    checkStep(step, `${p}/steps/${i}`, r);
+  });
+  if (rangeHours(q.window) === null)
     r.error(
-      `${p}/sql`,
-      "sql is empty",
-      "Write one SELECT, such as SELECT count() AS value FROM events",
+      `${p}/window`,
+      `Invalid window \`${q.window}\``,
+      "Use 1–3 digits and h or d, such as 1h or 7d",
     );
-  else if (n > MAX_SQL_CHARS)
-    r.error(
-      `${p}/sql`,
-      `sql is ${n} characters; the limit is ${MAX_SQL_CHARS}`,
-      "Shorten the query, for example by naming repeated parts in a WITH clause",
+  nonEmpty(r, `${p}/source_id`, q.source_id, Limits.MAX_TEXT_FILTER_BYTES);
+}
+
+const PERIOD_DAYS = { day: 1, week: 7, month: 28 } as const;
+
+export function checkRetention(
+  q: RetentionQuery,
+  p: string,
+  r: Report,
+  range: string | null,
+): void {
+  checkStep(q.start, `${p}/start`, r);
+  checkStep(q.return, `${p}/return`, r);
+  nonEmpty(r, `${p}/source_id`, q.source_id, Limits.MAX_TEXT_FILTER_BYTES);
+  if (q.periods < Limits.MIN_RETENTION_PERIODS || q.periods > Limits.MAX_RETENTION_PERIODS) {
+    r.error(`${p}/periods`, "periods must be 1–12");
+    return;
+  }
+  const days = (q.periods + 1) * PERIOD_DAYS[q.period];
+  const hours = range == null ? null : rangeHours(range);
+  if (hours === null)
+    r.warn(
+      `${p}/periods`,
+      `Without a widget range the dashboard's range decides how many of the ${q.periods} periods have data; set range to at least ${days}d`,
+    );
+  else if (hours < days * 24)
+    r.warn(
+      `${p}/periods`,
+      `The range is shorter than the cohort's period and ${q.periods} more; later periods stay empty. Set range to at least ${days}d, or lower periods`,
     );
 }
 
@@ -426,20 +501,7 @@ export function checkEvents(q: EventsQuery, p: string, r: Report): void {
   for (const name of ["event", "source_id", "identity_kind"] as const)
     nonEmpty(r, `${p}/${name}`, q[name], Limits.MAX_TEXT_FILTER_BYTES);
   checkMeasure(!["count", "actors"].includes(q.measure), q.property, "property", validKey, p, r);
-  const filters = q.filters ?? [];
-  if (filters.length > Limits.MAX_FILTERS) r.error(`${p}/filters`, "At most 8 filters per query");
-  filters.forEach((f, i) => {
-    const fp = `${p}/filters/${i}`;
-    if (!validKey(f.property)) r.error(`${fp}/property`, "Invalid property key");
-    if (!["eq", "ne", "gt", "gte", "lt", "lte"].includes(f.op))
-      r.error(`${fp}/op`, "op must be eq, ne, gt, gte, lt or lte");
-    else if (typeof f.value !== "number") {
-      if (typeof f.value !== "string" && typeof f.value !== "boolean")
-        r.error(`${fp}/value`, "value must be a string, number or boolean");
-      else if (!["eq", "ne"].includes(f.op))
-        r.error(`${fp}/value`, "Ordered comparisons require a number");
-    }
-  });
+  checkFilters(q.filters ?? [], `${p}/filters`, r);
   if (q.group_by != null) {
     const g = q.group_by;
     const ok =
@@ -452,6 +514,22 @@ export function checkEvents(q: EventsQuery, p: string, r: Report): void {
         "Use name, source, source_id, identity_kind or property:<key>",
       );
   }
+}
+
+function checkFilters(filters: Filter[], p: string, r: Report) {
+  if (filters.length > Limits.MAX_FILTERS) r.error(p, "At most 8 filters per query");
+  filters.forEach((f, i) => {
+    const fp = `${p}/${i}`;
+    if (!validKey(f.property)) r.error(`${fp}/property`, "Invalid property key");
+    if (!["eq", "ne", "gt", "gte", "lt", "lte"].includes(f.op))
+      r.error(`${fp}/op`, "op must be eq, ne, gt, gte, lt or lte");
+    else if (typeof f.value !== "number") {
+      if (typeof f.value !== "string" && typeof f.value !== "boolean")
+        r.error(`${fp}/value`, "value must be a string, number or boolean");
+      else if (!["eq", "ne"].includes(f.op))
+        r.error(`${fp}/value`, "Ordered comparisons require a number");
+    }
+  });
 }
 
 const attributeKey = (s: string) => s.length > 0 && bytes(s) <= 128;

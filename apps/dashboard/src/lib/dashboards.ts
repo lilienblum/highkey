@@ -76,13 +76,27 @@ export type LogsQuery = {
   attribute?: string;
   group_by?: string;
 };
-export type SqlQuery = {
-  signal: "sql";
-  database: "events" | "logs";
-  sql: string;
-  missing?: "zero" | "null";
+/** A funnel step or a retention start or return: an event with optional property filters. */
+export type Step = {
+  event: string;
+  filters?: { property: string; op: string; value: string | number | boolean }[];
 };
-export type QuerySpec = EventsQuery | LogsQuery | SqlQuery;
+export type FunnelQuery = {
+  signal: "funnel";
+  steps: Step[];
+  window?: string;
+  by?: "actor" | "session";
+  source_id?: string;
+};
+export type RetentionQuery = {
+  signal: "retention";
+  start: Step;
+  return: Step;
+  period?: "day" | "week" | "month";
+  periods?: number;
+  source_id?: string;
+};
+export type QuerySpec = EventsQuery | LogsQuery | FunnelQuery | RetentionQuery;
 export type Widget = {
   id: string;
   title: string;
@@ -126,7 +140,8 @@ export type SeriesResult = {
   previous_points?: { time: number; value: number | null }[];
   groups?: { label: string | number | boolean | null; value: number | null }[];
 };
-export type ResultColumn = { name: string; type: string };
+/** A table column; `unit` says how to show its numbers, such as `ratio` for shares from 0 to 1. */
+export type ResultColumn = { name: string; type: string; unit?: Unit };
 export type RunResult = {
   widget: string;
   range: {
@@ -140,7 +155,7 @@ export type RunResult = {
   series: SeriesResult[];
   /** Event or log rows for list views; arrays of cell values (one per column) for a table. */
   rows: Record<string, unknown>[] | unknown[][] | null;
-  /** A table view's result columns, each `{ name, type }` (or `[name, type]`) with a DuckDB type. */
+  /** A table view's columns, each `{ name, type, unit? }` (or `[name, type]`) with a ClickHouse type. */
   columns?: (ResultColumn | [string, string])[] | null;
   elapsed_ms: number;
   warnings: Issue[];
@@ -263,7 +278,8 @@ const measureNames = {
 } as const;
 /** What a query measures, in words: "Events", "Actors", "Avg duration_ms"; logs counts read "Logs". */
 export function queryLabel(query: QuerySpec): string {
-  if (query.signal === "sql") return "SQL";
+  if (query.signal === "funnel") return query.by === "session" ? "Sessions" : "Actors";
+  if (query.signal === "retention") return "Retention";
   const measure = query.measure ?? "count";
   if (measure === "count") return query.signal === "logs" ? "Logs" : "Events";
   if (measure === "actors") return "Actors";
@@ -283,8 +299,7 @@ export function seriesDisplayLabel(widget: Widget, index: number): string | unde
   const expr = widget.series ? series?.expr.trim() : Object.keys(widget.queries)[index];
   if (expr === undefined) return undefined;
   const query = Object.hasOwn(widget.queries, expr) ? widget.queries[expr] : undefined;
-  // An SQL query has no measure to name, so it reads as its id.
-  return query && query.signal !== "sql" ? queryLabel(query) : expr;
+  return query ? queryLabel(query) : expr;
 }
 
 /** Whether a series was given its own label; the title already names a lone unlabelled stat. */
@@ -303,14 +318,26 @@ export function tableColumns(columns: RunResult["columns"]): ResultColumn[] {
 }
 
 export type CellKind = "number" | "timestamp" | "date" | "boolean" | "json" | "text";
-/** How a DuckDB type is shown: times arrive as epoch milliseconds, structures as JSON. */
+/**
+ * How a column type is shown, in ClickHouse's names (or DuckDB's, from older APIs): times arrive
+ * as epoch milliseconds, structures as JSON.
+ */
 export function cellKind(type: string): CellKind {
-  const t = type.trim().toUpperCase();
-  if (t === "JSON" || t.endsWith("]") || /^(STRUCT|MAP|UNION)\b/.test(t)) return "json";
-  if (t === "BOOLEAN") return "boolean";
-  if (t === "DATE") return "date";
-  if (/^TIMESTAMP/.test(t)) return "timestamp";
-  if (/^(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|FLOAT|DOUBLE|REAL|DECIMAL|NUMERIC|BIGNUM)\b/.test(t))
+  let t = type.trim().toUpperCase();
+  for (;;) {
+    const inner = /^(NULLABLE|LOWCARDINALITY)\((.*)\)$/.exec(t);
+    if (!inner) break;
+    t = (inner[2] as string).trim();
+  }
+  if (t === "JSON" || t.endsWith("]") || /^(STRUCT|MAP|UNION|ARRAY|TUPLE)\b/.test(t)) return "json";
+  if (t === "BOOLEAN" || t === "BOOL") return "boolean";
+  if (t === "DATE" || t === "DATE32") return "date";
+  if (/^(TIMESTAMP|DATETIME)/.test(t)) return "timestamp";
+  if (
+    /^(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|U?INT\d+|FLOAT\d*|DOUBLE|REAL|DECIMAL\d*|NUMERIC|BIGNUM)\b/.test(
+      t,
+    )
+  )
     return "number";
   return "text";
 }

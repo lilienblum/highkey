@@ -1,6 +1,6 @@
 # Custom dashboards, saved views and MCP
 
-Piko dashboards are JSON documents that the API owns. A dashboard is a list of widgets; each widget runs typed queries over a project's events and logs (or one guarded SQL query), combines them with formulas, and picks a view. Saved views are named queries for the Events and Logs pages.
+Piko dashboards are JSON documents that the API owns. A dashboard is a list of widgets; each widget runs typed queries over a project's events and logs, including funnels and retention, combines them with formulas, and picks a view. Saved views are named queries for the Events and Logs pages.
 
 Nobody drags widgets around in Piko. You describe what you want to your AI agent, and it builds the document over [MCP](#ask-your-ai). Piko validates every save, times every widget before it saves, keeps revisions, and answers mistakes with JSON paths and hints. The page shows the result: dashboards appear under Overview in the sidebar, views under Events and Logs. See [the dashboard guide](dashboard.md#dashboards) for the UI.
 
@@ -62,22 +62,22 @@ Locally, `url = "http://127.0.0.1:3000/mcp"` is enough.
 
 Every tool takes `project` as an id or slug. Start with `describe_project`.
 
-| Tool                                                          | Path | What it does                                                                                           |
-| ------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
-| `list_projects`, `describe_project`                           | both | Projects. Event names and properties, log services and levels, sources, retention, SQL columns, limits |
-| `run_widget`                                                  | both | Runs one widget; returns the newest 200 points per series or the first 50 rows, the range, warnings    |
-| `sample_events`, `sample_logs`                                | both | Up to 20 of the newest raw events or logs of the last 7 days                                           |
-| `list_dashboards`, `get_dashboard`, `list_revisions`          | both | Read dashboards and their revisions                                                                    |
-| `validate_dashboard`                                          | both | Checks a document without saving; returns `{valid, errors, warnings}`                                  |
-| `list_views`, `get_view`                                      | both | Read saved views                                                                                       |
-| `list_sources`, `get_log_settings`                            | both | Sources of a project; log retention                                                                    |
-| `save_dashboard`, `restore_revision`, `delete_dashboard`      | full | Create or replace (with `base_revision`), undo, delete                                                 |
-| `save_view`, `delete_view`                                    | full | Create or replace a view; delete it                                                                    |
-| `create_project`, `update_project`                            | full | Projects and their retention                                                                           |
-| `create_source`, `update_source`, `connect_source`            | full | Sources; `connect_source` also makes an ingestion key and returns setup snippets                       |
-| `list_keys`, `create_key`, `update_key_origins`, `revoke_key` | full | Ingestion keys                                                                                         |
-| `list_log_keys`, `create_log_key`, `revoke_log_key`           | full | Log keys                                                                                               |
-| `update_log_settings`                                         | full | Log retention (1-365 days)                                                                             |
+| Tool                                                          | Path | What it does                                                                                        |
+| ------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------- |
+| `list_projects`, `describe_project`                           | both | Projects. Event names and properties, log services and levels, sources, retention, limits           |
+| `run_widget`                                                  | both | Runs one widget; returns the newest 200 points per series or the first 50 rows, the range, warnings |
+| `sample_events`, `sample_logs`                                | both | Up to 20 of the newest raw events or logs of the last 7 days                                        |
+| `list_dashboards`, `get_dashboard`, `list_revisions`          | both | Read dashboards and their revisions                                                                 |
+| `validate_dashboard`                                          | both | Checks a document without saving; returns `{valid, errors, warnings}`                               |
+| `list_views`, `get_view`                                      | both | Read saved views                                                                                    |
+| `list_sources`, `get_log_settings`                            | both | Sources of a project; log retention                                                                 |
+| `save_dashboard`, `restore_revision`, `delete_dashboard`      | full | Create or replace (with `base_revision`), undo, delete                                              |
+| `save_view`, `delete_view`                                    | full | Create or replace a view; delete it                                                                 |
+| `create_project`, `update_project`                            | full | Projects and their retention                                                                        |
+| `create_source`, `update_source`, `connect_source`            | full | Sources; `connect_source` also makes an ingestion key and returns setup snippets                    |
+| `list_keys`, `create_key`, `update_key_origins`, `revoke_key` | full | Ingestion keys                                                                                      |
+| `list_log_keys`, `create_log_key`, `revoke_log_key`           | full | Log keys                                                                                            |
+| `update_log_settings`                                         | full | Log retention (1-365 days)                                                                          |
 
 `delete_dashboard`, `delete_view`, `revoke_key` and `revoke_log_key` need a `confirm` argument equal to the slug (dashboard, view) or id (keys). A mismatch changes nothing and returns `confirm_mismatch`.
 
@@ -118,7 +118,11 @@ What the agent can see and change is a trust decision: read [privacy](privacy.md
 - Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`.
 - `measure` is `count`, or `sum`, `avg`, `p50`, `p95`, `min` or `max` over a numeric `attribute`. `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
 
-**SQL**: `{"signal": "sql", "database": "events", "sql": "SELECT ..."}`. See [guarded SQL](#guarded-sql).
+**Funnel**: `{"signal": "funnel", "steps": [{"event": "visit"}, {"event": "signup"}], "window": "7d"}`. See [funnels and retention](#funnels-and-retention).
+
+**Retention**: `{"signal": "retention", "start": {"event": "signup"}, "return": {"event": "page_view"}}`. See [funnels and retention](#funnels-and-retention).
+
+There is no SQL: every query is one of these four, so a document stays valid whatever the storage engine, Piko can bound what each query costs, and every widget can be read and edited as structured data. Self-hosters who want ad-hoc SQL can point their own tools at their ClickHouse.
 
 ### Formulas
 
@@ -126,68 +130,23 @@ What the agent can see and change is a trust decision: read [privacy](privacy.md
 
 `expr` is arithmetic over query ids: `+ - * /`, parentheses, numbers, a unary minus, and the functions `abs(x)`, `min(a, b)` and `max(a, b)`. For example `errors / requests * 100`. A formula is at most 200 characters and 16 levels deep. Division by zero gives no value rather than an error, so a bucket with no requests is a gap. An unknown id is reported with the nearest known one.
 
-A grouped time series (`group_by` on a line, area or bar) allows one series and at most 6 groups. Rankings need a `group_by` (or an SQL `label` and `value`).
+A grouped time series (`group_by` on a line, area or bar) allows one series and at most 6 groups. Rankings need a `group_by`, or a funnel.
 
-### Guarded SQL
+### Funnels and retention
 
-A widget can run one read-only DuckDB `SELECT` of up to 8,000 characters over the project's own events or logs. It is how you build things the typed queries cannot, such as churn.
+A **funnel** counts how many actors reach each of its steps in order:
 
-A query names its database with `"database": "events"` or `"database": "logs"`, and reads it by two names:
+- `steps` are 2-8 events in order, each `{"event": "...", "filters": [...]}` with filters like an events query's. Steps may repeat an event; a repeated name is labelled with its position, as in `visit (3)`.
+- The last step must happen within `window` of the first: 1-3 digits and `h` or `d`, default `7d`. Other events in between do not break the chain.
+- `by` is `actor` (default: an `actor_id` with its `identity_kind`) or `session` (each `session_id` of an actor is its own attempt). Events without an `actor_id`, or without a `session_id` when counting sessions, are not counted.
+- A funnel is its widget's only query. In a `ranking` view it draws a bar per step in step order, and formulas see each step's count (its total is the last step). In a `table` view it has the columns `step`, `actors` (or `sessions`), `conversion` (the share of the first step) and `from_previous` (the share of the step before), both from 0 to 1.
 
-| Name         | Holds                                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------- |
-| `events`     | Only the events in the dashboard's range (`event_time` from `$from` up to `$to`) and selected source |
-| `all_events` | Every event the project keeps, of every source: history, such as cohorts that began before the range |
-| `logs`       | Only the logs in the dashboard's range (`timestamp` from `$from` up to `$to`) and selected source    |
-| `all_logs`   | Every log the project keeps, of every source                                                         |
+**Retention** follows cohorts:
 
-So `SELECT count(*) AS value FROM events` already follows the date range and source picker, and a previous-period comparison runs it again over the previous range. Read `all_events` or `all_logs` only when a query needs rows outside the range, and filter them yourself with the parameters below where the range or source should apply. A WITH table of your own named `events` replaces the scoped one inside that query, as any WITH does. These names are views, so they have no `rowid`; use `event_id` or `log_id` to tell rows apart.
-
-`bucket(event_time)` (or `bucket(timestamp)` over logs) returns the start of the row's bucket in epoch milliseconds: the dashboard's `$bucket`, in UTC with weeks starting on Monday, exactly the buckets the chart draws. It also takes a `TIMESTAMP` or a `DATE`; cast a `TIMESTAMP WITH TIME ZONE`, such as `now()`, with `::TIMESTAMP`. `SELECT bucket(event_time) AS time, count(*) AS value FROM events GROUP BY 1` is a time series.
-
-In earlier versions `events` and `logs` held all history in SQL: a query that relied on that should read `all_events` or `all_logs` instead, and one that already filters on `$from` and `$to` works unchanged.
-
-Piko checks the statement before every save, validation and run. DuckDB's own parser must report one statement that is a `SELECT`; it may read only those two names of its database (and its own WITH tables), may call no side-effecting function, and may use only these named parameters:
-
-| Parameter | Meaning                                            |
-| --------- | -------------------------------------------------- |
-| `$from`   | Start of the range, epoch milliseconds (inclusive) |
-| `$to`     | End of the range, epoch milliseconds (exclusive)   |
-| `$bucket` | `hour`, `day`, `week` or `month`                   |
-| `$source` | A source id, or `NULL` for all sources             |
-
-Some functions are refused by name, each with a hint that says what to use instead. DuckDB's memory limit covers its buffers and aggregates but not a single string or list value, so functions that can build one larger than the server's memory are refused along with those that change state or read the server's settings:
-
-| Refused                                                              | Use instead                                                                                  |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `repeat`                                                             | Write the text out, or join short literals with `\|\|`                                       |
-| `lpad`, `rpad`                                                       | Pad with a literal and cut, as in `right('00' \|\| n::VARCHAR, 2)`; `strftime` for dates     |
-| `printf`, `format`                                                   | Build text with `\|\|` and casts, as in `name \|\| ': ' \|\| count(*)::VARCHAR`              |
-| `bitstring`                                                          | Write the bits as a literal, as in `'0101'::BIT`                                             |
-| `bar`                                                                | A `bar` or `ranking` view                                                                    |
-| `list_resize`, `array_resize`                                        | `list_slice` or `[a:b]`                                                                      |
-| `range(…)` and `generate_series(…)` as values (they return lists)    | Their table forms, as in `SELECT i FROM range(10) t(i)`, with `list(i)` when you need a list |
-| `WITH RECURSIVE`                                                     | A table function such as `range`, and window functions for running totals                    |
-| `nextval`, `currval`, `setseed`, `write_log`, `sleep_ms`, `pg_sleep` | `row_number() OVER (…)` to number rows; the others have no use in a widget                   |
-| `current_setting`, `getvariable`                                     | The parameters above                                                                         |
-| Built-in macros that call any of these                               | As for the function the macro calls; the hint names it                                       |
-
-The list is not exhaustive. A value can still grow by other routes, such as nested `replace` calls that each multiply a string. Unless you opt in to a memory ceiling with `PIKO_MEMORY_LIMIT` on Linux (see [the resource model](api.md#resource-model)), such a query grows until the kernel's OOM killer stops the API; with a ceiling it fails with an Out of Memory error instead.
-
-`events` and `all_events` have `product_id`, `event_id`, `name`, `source`, `source_id`, `event_time` (epoch ms), `received_at`, `actor_id`, `identity_kind`, `session_id` and `properties` (JSON). `logs` and `all_logs` have `log_id`, `source_id`, `timestamp` (epoch ms), `received_at`, `level`, `message`, `service`, `environment`, `trace_id`, `span_id`, `request_id` and `attributes` (JSON). `describe_project` returns the exact columns with their types under `sql`, which names are scoped, the parameters and `bucket`.
-
-The result's column names decide its shape:
-
-| Columns                           | Shape                         | Views                 |
-| --------------------------------- | ----------------------------- | --------------------- |
-| `value`                           | one number                    | `stat`                |
-| `time`, `value`, optional `group` | a time series (one per group) | `line`, `area`, `bar` |
-| `label`, `value`                  | a ranking                     | `ranking`             |
-| anything (up to 50 columns)       | a table                       | `table`               |
-
-A query may also set `"missing": "zero"` so absent buckets count as 0; the default is `null`, which draws a gap. Results stop at 10,000 rows (and 4 MiB) with a warning. DECIMAL, HUGEINT and other big integers arrive as strings in run results so no digits are lost. Queries run in a transaction that is rolled back, under the widget's `timeout_ms`.
-
-A query that reads only `all_events` or `all_logs`, without `$from` or `$to`, shows all history whatever the range, and gets a warning that says so. Read `events` or `logs` where you can, and filter early. A widget that takes more than 3 seconds on the last 7 days is refused at save time.
+- Each actor joins the cohort of the period of their first `start` event in the range. `period` is `day`, `week` (from Monday) or `month`, in UTC, default `week`.
+- For each of `periods` (1-12, default 8) following periods, it measures the share of the cohort that sent a `return` event in that period. `start` and `return` are steps, so both take `filters`, and they may be the same event.
+- It is its widget's only query, in a `table` view: one row per cohort with the columns `cohort` (the start of the period, epoch milliseconds), `size`, then `p0` (the cohort's own period, always 1) up to `p8`, each from 0 to 1. A period that has not begun by the end of the range has no value yet, rather than 0.
+- Give the widget a `range` that holds the cohort's period and every later one, such as `63d` for 8 weeks; otherwise only the newest cohorts fit in the dashboard's range. A shorter or missing range warns.
 
 ## Views
 
@@ -197,9 +156,9 @@ A query that reads only `all_events` or `all_logs`, without `$from` or `$to`, sh
 | --------------------- | ----------------------------------------------------------------------------------------------- |
 | `stat`                | One headline number, with an optional `sparkline`                                               |
 | `line`, `area`, `bar` | A time series. `stacked` for area and bar. `bucket` is `auto`, `hour`, `day`, `week` or `month` |
-| `ranking`             | The top groups; `limit` is 1-50 (default 10)                                                    |
+| `ranking`             | The top groups, or a funnel's steps; `limit` is 1-50 (default 10)                               |
 | `events`, `logs`      | The newest rows. Exactly one query of its own signal, count measure, no `group_by`, no series   |
-| `table`               | Arbitrary columns from one SQL query; no series                                                 |
+| `table`               | A retention grid or funnel, or a row per group of typed queries with a column each; no series   |
 | `text`                | Markdown in `view.markdown` (up to 2,000 characters), no queries                                |
 
 Display options: `unit` (`number`, `percent`, `ratio`, `ms`, `seconds`, `bytes`), `decimals` (0-4), and `prefix` and `suffix` (up to 8 characters each). A series' own `unit` wins over the view's.
@@ -238,7 +197,7 @@ A widget's `range` is `24h` or `30d` (one to three digits, then `h` or `d`); wit
 | Ranking `limit`                             | 1-50 (default 10)                                 |
 | Filters per query                           | 8                                                 |
 | Formula                                     | 200 characters, 16 levels deep                    |
-| SQL                                         | 8,000 characters, 10,000 rows, 50 table columns   |
+| Funnel steps / retention periods            | 2-8 / 1-12 (default 8)                            |
 | Name or title / description / markdown      | 1-80 / 280 / 2,000 characters                     |
 | `id` / query id                             | `[a-z0-9-]{1,40}` / `[a-z][a-z0-9_]{0,15}`        |
 | Revisions kept                              | The newest 50, plus the newest of each origin     |
@@ -246,13 +205,13 @@ A widget's `range` is `24h` or `30d` (one to three digits, then `h` or `d`); wit
 
 ### Clamping and retention
 
-A range that is too long is clamped, never an error. Event queries show at most the newest 366 days, log queries (and SQL over logs) 31 days, and hourly buckets are limited to 31 days (a longer hourly range uses an automatic bucket). `run_widget` reports `range.clamped` with the requested range and a warning, and the widget's footer reads "Newest 31 days".
+A range that is too long is clamped, never an error. Event queries show at most the newest 366 days, log queries 31 days, and hourly buckets are limited to 31 days (a longer hourly range uses an automatic bucket). `run_widget` reports `range.clamped` with the requested range and a warning, and the widget's footer reads "Newest 31 days".
 
 Retention is separate: events are kept for the project's retention (365 days for new projects) and logs for the log retention (7 days by default, 1-365). Older buckets are simply empty, and a widget that reads logs over a longer range says "Logs kept 7 days" in its footer. An unknown event name or property only warns, because the data may arrive later.
 
 ### Saves are checked and timed
 
-Every save is validated, SQL is verified against the project's data, and each new or changed widget runs once over the last 7 days (or its own `range`). A widget takes at most the smaller of its `timeout_ms` and 3 seconds, and a whole save has 15 seconds. A widget slower than 1 second saves with a warning; one that exceeds its budget is refused as `too_slow`. Unchanged widgets are not timed again.
+Every save is validated, and each new or changed widget runs once over the last 7 days (or its own `range`). A widget takes at most the smaller of its `timeout_ms` and 3 seconds, and a whole save has 15 seconds. A widget slower than 1 second saves with a warning; one that exceeds its budget is refused as `too_slow`, with a hint on narrowing it (a `range`, filters, a shorter funnel `window` or fewer retention `periods`). Unchanged widgets are not timed again.
 
 Writes are limited to 30 per minute per project, shared by HTTP and MCP, and failed attempts count. Over the limit you get `429 rate_limited` with `Retry-After`.
 
@@ -393,9 +352,9 @@ A stat of signups per visit as a percent. It is red under 2%, yellow from 2%, gr
 }
 ```
 
-### Weekly churn in SQL
+### Weekly retention
 
-Churn is not a typed measure, so this uses SQL. A person churned in a week when they were active (sent any event with an `actor_id`) the week before and not this week. The first week in the range needs the week before it, which `events` does not hold, so the query reads `all_events` and filters it by the range (reaching one week further back) and by the source itself. The widget buckets by week, lower is better, and the current partial week is left out so it does not look like a drop. Change `actor_id` to whatever identity you collect.
+Do people who sign up come back? Each row is a week's signups; each column is the share of them that viewed a page in each later week. The range holds a cohort's own week and the 8 after it, so the oldest cohort in the table has every period filled in.
 
 ```json piko-dashboard
 {
@@ -403,17 +362,18 @@ Churn is not a typed measure, so this uses SQL. A person churned in a week when 
   "name": "Retention",
   "widgets": [
     {
-      "id": "weekly-churn",
-      "title": "Weekly churned actors",
-      "description": "Actors active the week before and not in this week",
-      "view": { "type": "bar", "bucket": "week", "better": "down" },
-      "size": { "w": 12, "h": 2 },
+      "id": "weekly-retention",
+      "title": "Weekly retention",
+      "description": "Share of each week's signups that came back in each later week",
+      "view": { "type": "table" },
+      "range": "63d",
       "queries": {
-        "churned": {
-          "signal": "sql",
-          "database": "events",
-          "missing": "zero",
-          "sql": "WITH active AS (SELECT DISTINCT actor_id, date_trunc('week', epoch_ms(event_time)) AS week FROM all_events WHERE actor_id IS NOT NULL AND event_time >= $from - 604800000 AND event_time < $to AND ($source IS NULL OR source_id = $source)) SELECT previous.week + INTERVAL 7 DAY AS time, count(*) AS value FROM active previous LEFT JOIN active this ON this.actor_id = previous.actor_id AND this.week = previous.week + INTERVAL 7 DAY WHERE this.actor_id IS NULL AND previous.week + INTERVAL 7 DAY < date_trunc('week', epoch_ms($to)) GROUP BY 1"
+        "r": {
+          "signal": "retention",
+          "start": { "event": "signup" },
+          "return": { "event": "page_view" },
+          "period": "week",
+          "periods": 8
         }
       }
     }
@@ -421,7 +381,7 @@ Churn is not a typed measure, so this uses SQL. A person churned in a week when 
 }
 ```
 
-A table is just as direct; this one lists the busiest events in the range:
+A table of typed queries has a row per group and a column per query; this one lists the busiest events in the range with how many actors sent each:
 
 ```json piko-dashboard
 {
@@ -431,50 +391,53 @@ A table is just as direct; this one lists the busiest events in the range:
     {
       "id": "by-name",
       "title": "Events by name",
-      "view": { "type": "table" },
+      "view": { "type": "table", "limit": 20 },
       "queries": {
-        "q": {
-          "signal": "sql",
-          "database": "events",
-          "sql": "SELECT name, count(*) AS events FROM events GROUP BY name ORDER BY events DESC LIMIT 20"
-        }
+        "events": { "signal": "events", "group_by": "name" },
+        "actors": { "signal": "events", "measure": "actors", "group_by": "name" }
       }
     }
   ]
 }
 ```
 
-### New and returning actors in SQL
+### Checkout funnel
 
-`events` and `all_events` work together when a cohort began before the range. The stat counts the people active in the range who were also active before it. The chart counts new people per bucket: `all_events` gives each person's first event, in the selected source when one is picked, and `bucket` puts it on the chart's buckets. Both filter `all_events` by the source themselves, since only `events` follows the source picker.
+The ranking draws the funnel's steps as bars. The table repeats it for pro-plan visitors, counting each session as its own attempt, with the conversion from the first step and from the step before.
 
 ```json piko-dashboard
 {
   "version": 1,
-  "name": "Audience",
+  "name": "Checkout funnel",
   "widgets": [
     {
-      "id": "returning",
-      "title": "Returning actors",
-      "view": { "type": "stat" },
+      "id": "funnel",
+      "title": "Visit to purchase",
+      "view": { "type": "ranking" },
       "queries": {
-        "returning": {
-          "signal": "sql",
-          "database": "events",
-          "sql": "SELECT count(DISTINCT actor_id) AS value FROM events WHERE actor_id IN (SELECT actor_id FROM all_events WHERE event_time < $from AND ($source IS NULL OR source_id = $source))"
+        "f": {
+          "signal": "funnel",
+          "steps": [{ "event": "page_view" }, { "event": "add_to_cart" }, { "event": "purchase" }],
+          "window": "1d"
         }
       }
     },
     {
-      "id": "new-actors",
-      "title": "New actors",
-      "view": { "type": "bar" },
+      "id": "funnel-pro",
+      "title": "Pro plan funnel",
+      "view": { "type": "table" },
       "queries": {
-        "new": {
-          "signal": "sql",
-          "database": "events",
-          "missing": "zero",
-          "sql": "SELECT bucket(first_seen) AS time, count(*) AS value FROM (SELECT actor_id, min(event_time) AS first_seen FROM all_events WHERE actor_id IS NOT NULL AND ($source IS NULL OR source_id = $source) GROUP BY actor_id) WHERE first_seen >= $from AND first_seen < $to GROUP BY 1"
+        "f": {
+          "signal": "funnel",
+          "steps": [
+            {
+              "event": "pricing_view",
+              "filters": [{ "property": "plan", "op": "eq", "value": "pro" }]
+            },
+            { "event": "checkout_started" },
+            { "event": "purchase" }
+          ],
+          "by": "session"
         }
       }
     }

@@ -9,6 +9,8 @@ export class DashboardError extends Error {
     readonly status: number,
     readonly body: Record<string, unknown>,
     readonly retryAfter: number | null = null,
+    /** A timeout spent waiting for a query slot, which is Piko's load rather than the widget's cost. */
+    readonly queued = false,
   ) {
     super(String(body.error));
     this.name = "DashboardError";
@@ -42,8 +44,13 @@ export const conflict = (revision: number) =>
 export const limit = (message: string) =>
   new DashboardError(400, { error: message, code: "limit" });
 
-export const timedOut = (afterMs: number) =>
-  new DashboardError(503, { error: `Timed out after ${afterMs / 1000} s`, code: "query_timeout" });
+export const timedOut = (afterMs: number, queued = false) =>
+  new DashboardError(
+    503,
+    { error: `Timed out after ${afterMs / 1000} s`, code: "query_timeout" },
+    null,
+    queued,
+  );
 
 export const tooSlow = (report: Report) =>
   new DashboardError(400, {

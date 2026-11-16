@@ -39,6 +39,10 @@
       "required": ["property", "op", "value"],
       "type": "object"
     },
+    "FunnelBy": {
+      "enum": ["actor", "session"],
+      "type": "string"
+    },
     "LogFilter": {
       "additionalProperties": false,
       "properties": {
@@ -54,8 +58,8 @@
       "enum": ["count", "sum", "avg", "p50", "p95", "min", "max"],
       "type": "string"
     },
-    "Missing": {
-      "enum": ["null", "zero"],
+    "Period": {
+      "enum": ["day", "week", "month"],
       "type": "string"
     },
     "QuerySpec": {
@@ -143,25 +147,65 @@
         },
         {
           "additionalProperties": false,
-          "description": "A read-only ClickHouse SELECT over the project's views. `events` (or `logs`) holds only\nthe dashboard's range and source, `all_events` (or `all_logs`) all history, and\n`bucket(event_time)` gives a row's bucket. Its result columns decide its shape: `value`;\n`time` and `value` (plus an optional `group`); `label` and `value`; or any columns for a\ntable. `{from:DateTime64(3)}`, `{to:DateTime64(3)}`, `{bucket:String}` and `{source:String}` are bound by name.",
+          "description": "Ordered steps, each an event with optional filters. Counts how many actors (or sessions) reach each step, in order, within `window` of their first step. Its result is one group per step; its total is the last step.",
           "properties": {
-            "database": {
-              "$ref": "#/$defs/SqlDatabase"
-            },
-            "missing": {
-              "$ref": "#/$defs/Missing",
-              "default": "null",
-              "description": "What an absent bucket or group counts as."
+            "by": {
+              "$ref": "#/$defs/FunnelBy",
+              "default": "actor"
             },
             "signal": {
-              "const": "sql",
+              "const": "funnel",
               "type": "string"
             },
-            "sql": {
+            "source_id": {
+              "type": ["string", "null"]
+            },
+            "steps": {
+              "items": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "array"
+            },
+            "window": {
+              "default": "7d",
+              "description": "How long after the first step the last may happen: 1\u20133 digits and h or d.",
               "type": "string"
             }
           },
-          "required": ["signal", "database", "sql"],
+          "required": ["signal", "steps"],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Cohorts of actors by the period of their first `start` event in the range, and the share of each cohort that sent a `return` event in each following period. Its result is a table: cohort, size and p0 (the cohort's own period, always 1) to p<periods>.",
+          "properties": {
+            "period": {
+              "$ref": "#/$defs/Period",
+              "default": "week"
+            },
+            "periods": {
+              "default": 8,
+              "description": "How many periods after the cohort's own: 1\u201312.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "return": {
+              "$ref": "#/$defs/Step"
+            },
+            "signal": {
+              "const": "retention",
+              "type": "string"
+            },
+            "source_id": {
+              "type": ["string", "null"]
+            },
+            "start": {
+              "$ref": "#/$defs/Step"
+            }
+          },
+          "required": ["signal", "start", "return"],
           "type": "object"
         }
       ]
@@ -224,9 +268,21 @@
       "required": ["w", "h"],
       "type": "object"
     },
-    "SqlDatabase": {
-      "enum": ["events", "logs"],
-      "type": "string"
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "type": "string"
+        },
+        "filters": {
+          "items": {
+            "$ref": "#/$defs/Filter"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["event"],
+      "type": "object"
     },
     "Threshold": {
       "additionalProperties": false,
@@ -325,7 +381,7 @@
         },
         {
           "const": "table",
-          "description": "Arbitrary columns from one SQL query.",
+          "description": "One retention query or funnel, or typed queries sharing a group_by: one row per group and one column per query.",
           "type": "string"
         }
       ]

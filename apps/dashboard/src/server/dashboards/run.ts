@@ -11,6 +11,7 @@ import { readAs } from "../queries/read";
 import { unknownEvents } from "./catalog";
 import { detailed, invalid, timedOut } from "./errors";
 import { evaluate as evaluateFormula, parseFormula } from "./formula";
+import { measureFunnel } from "./funnel";
 import {
   autoBucket,
   emptyMeasured,
@@ -23,12 +24,14 @@ import {
   type Shape,
   type Window,
 } from "./metrics";
+import { measureRetention, type Table } from "./retention";
 import {
   type Color,
   effectiveCompare,
   type QuerySpec,
   readsLogs,
   seriesOrDefault,
+  typed,
   type Widget,
 } from "./spec";
 import { checkWidget, type Issue, Limits, parseWidget, Report, rangeHours } from "./validate";
@@ -104,7 +107,7 @@ export interface SeriesResult {
 }
 
 function groupBy(q: QuerySpec | undefined): string | null {
-  return q && (q.signal === "events" || q.signal === "logs") ? (q.group_by ?? null) : null;
+  return q && typed(q) ? (q.group_by ?? null) : null;
 }
 
 function groupedTimeSeries(w: Widget): boolean {
@@ -126,9 +129,8 @@ export function shapeFor(w: Widget): Shape {
 }
 
 function fillsZero(q: QuerySpec): boolean {
-  if (q.signal === "events" || q.signal === "logs")
-    return ["count", "actors", "sum"].includes(q.measure);
-  return false;
+  if (typed(q)) return ["count", "actors", "sum"].includes(q.measure);
+  return true;
 }
 
 const labelText = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
@@ -224,6 +226,21 @@ export function evaluate(
   return out;
 }
 
+/** One query over `w`: a funnel measures its steps as groups, and its total is the last step. */
+async function measureOne(
+  q: QuerySpec,
+  w: Window,
+  shape: Shape,
+  run: RunOptions,
+): Promise<Measured> {
+  if (q.signal === "funnel") {
+    const groups = await measureFunnel(q, w, run);
+    return { ...emptyMeasured(), total: groups.at(-1)?.value ?? null, groups };
+  }
+  if (q.signal === "retention") throw bad("A retention query runs only in a table view");
+  return measure(q, w, shape, run);
+}
+
 /** Every query over `w`. The first query picks the groups the others are measured for. */
 async function measureAll(
   widget: Widget,
@@ -236,20 +253,16 @@ async function measureAll(
   const [firstEntry, ...rest] = entries;
   if (!firstEntry) return out;
   const [firstId, first] = firstEntry;
-  const typed = (q: QuerySpec) => {
-    if (q.signal !== "events" && q.signal !== "logs") throw bad("This query kind cannot run yet");
-    return q;
-  };
   let others: Shape;
   if (shape.kind === "grouped") {
-    const top = await measure(
-      typed(first),
+    const top = await measureOne(
+      first,
       w,
       { kind: "groups", limit: GROUPED_SERIES, labels: null },
       run,
     );
-    const measured = await measure(
-      typed(first),
+    const measured = await measureOne(
+      first,
       w,
       { kind: "grouped", labels: top.groups.map((g) => g.label) },
       run,
@@ -257,15 +270,69 @@ async function measureAll(
     out.set(firstId, measured);
     others = { kind: "grouped", labels: measured.grouped.map(([l]) => l) };
   } else {
-    const measured = await measure(typed(first), w, shape, run);
+    const measured = await measureOne(first, w, shape, run);
     out.set(firstId, measured);
     others =
       shape.kind === "groups" && shape.labels === null
         ? { kind: "groups", limit: shape.limit, labels: measured.groups.map((g) => g.label) }
         : shape;
   }
-  for (const [id, q] of rest) out.set(id, await measure(typed(q), w, others, run));
+  for (const [id, q] of rest) out.set(id, await measureOne(q, w, others, run));
   return out;
+}
+
+/** The group's column name: the group_by without its property: or attribute: prefix. */
+const groupColumn = (by: string) => by.replace(/^(property|attribute):/, "");
+
+/**
+ * A table view: a retention grid; a funnel's steps with their conversion from the first and the
+ * previous step; or one row per group of typed queries, with a column per query.
+ */
+async function runTable(widget: Widget, w: Window, run: RunOptions): Promise<Table> {
+  const entries = Object.entries(widget.queries);
+  const first = entries[0]?.[1];
+  if (!first) return { columns: [], rows: [] };
+  if (first.signal === "retention") return measureRetention(first, w, run);
+  if (first.signal === "funnel") {
+    const steps = await measureFunnel(first, w, run);
+    const top = steps[0]?.value ?? 0;
+    const share = (value: number | null, of: number | null | undefined) =>
+      value != null && of ? value / of : null;
+    return {
+      columns: [
+        { name: "step", type: "String" },
+        { name: first.by === "session" ? "sessions" : "actors", type: "UInt64" },
+        { name: "conversion", type: "Float64", unit: "ratio" },
+        { name: "from_previous", type: "Float64", unit: "ratio" },
+      ],
+      rows: steps.map((step, i) => [
+        step.label,
+        step.value,
+        share(step.value, top),
+        share(step.value, i === 0 ? top : steps[i - 1]?.value),
+      ]),
+    };
+  }
+  const limit = widget.view.limit ?? DEFAULT_RANKING_LIMIT;
+  const measured = await measureAll(widget, w, { kind: "groups", limit, labels: null }, run);
+  const ids = entries.map(([id]) => id);
+  const fill = new Map(entries.map(([id, q]) => [id, fillsZero(q) ? 0 : null]));
+  const rows = (measured.get(ids[0] as string)?.groups ?? []).map((group) => [
+    group.label,
+    ...ids.map(
+      (id) =>
+        measured.get(id)?.groups.find((g) => same(g.label, group.label))?.value ??
+        fill.get(id) ??
+        null,
+    ),
+  ]);
+  return {
+    columns: [
+      { name: groupColumn(groupBy(first) ?? "label"), type: "String" },
+      ...ids.map((id) => ({ name: id, type: "Float64" })),
+    ],
+    rows,
+  };
 }
 
 const unknownSource = () =>
@@ -331,7 +398,8 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
   const events = queries.some((q) => !readsLogs(q));
   const logs = queries.some(readsLogs);
   let series: SeriesResult[] = [];
-  let listRows: Record<string, unknown>[] | null = null;
+  let listRows: unknown[] | null = null;
+  let columns: Table["columns"] | null = null;
   const ran: Issue[] = [];
   if (events || logs) {
     const releases: (() => void)[] = [];
@@ -339,11 +407,11 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
       for (const gate of [logs ? ctx.gates.logs : null, events ? ctx.gates.events : null]) {
         if (!gate) continue;
         const release = await gate.acquire(deadline);
-        if (!release) throw timedOut(timeoutMs);
+        if (!release) throw timedOut(timeoutMs, true);
         releases.push(release);
       }
       const left = deadline - Date.now();
-      if (left <= 0) throw timedOut(timeoutMs);
+      if (left <= 0) throw timedOut(timeoutMs, true);
       const signal = AbortSignal.timeout(left);
       const settings = { max_execution_time: Math.min(10, Math.max(1, Math.ceil(left / 1000))) };
       await readAs(ctx, product, async (reader) => {
@@ -351,8 +419,11 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
         ran.push(...(await unknownEvents(reader, widget, settings, signal)));
         if (widget.view.type === "events" || widget.view.type === "logs") {
           const first = queries[0];
-          if (first && (first.signal === "events" || first.signal === "logs"))
-            listRows = await rows(first, effective.window, LIST_ROWS, run);
+          if (first && typed(first)) listRows = await rows(first, effective.window, LIST_ROWS, run);
+        } else if (widget.view.type === "table") {
+          const table = await runTable(widget, effective.window, run);
+          columns = table.columns;
+          listRows = table.rows;
         } else {
           const shape = shapeFor(widget);
           const grouped = shape.kind === "grouped";
@@ -395,7 +466,7 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
     },
     series,
     rows: listRows,
-    columns: null,
+    columns,
     elapsed_ms: Date.now() - started,
     warnings,
   };

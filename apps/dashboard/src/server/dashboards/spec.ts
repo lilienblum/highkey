@@ -64,14 +64,37 @@ export interface LogsQuery {
   group_by?: string | null;
 }
 
-export interface SqlQuery {
-  signal: "sql";
-  database: "events" | "logs";
-  sql: string;
-  missing: "null" | "zero";
+/** One event, with optional property filters: a funnel step, or a retention start or return. */
+export interface Step {
+  event: string;
+  filters?: Filter[];
 }
 
-export type QuerySpec = EventsQuery | LogsQuery | SqlQuery;
+export interface FunnelQuery {
+  signal: "funnel";
+  steps: Step[];
+  window: string;
+  by: "actor" | "session";
+  source_id?: string | null;
+}
+
+export type Period = "day" | "week" | "month";
+
+export interface RetentionQuery {
+  signal: "retention";
+  start: Step;
+  return: Step;
+  period: Period;
+  periods: number;
+  source_id?: string | null;
+}
+
+export type QuerySpec = EventsQuery | LogsQuery | FunnelQuery | RetentionQuery;
+
+/** Events and logs: the queries that measure totals, buckets and groups. */
+export type TypedQuery = EventsQuery | LogsQuery;
+export const typed = (q: QuerySpec): q is TypedQuery =>
+  q.signal === "events" || q.signal === "logs";
 
 export interface Threshold {
   at: number;
@@ -109,7 +132,7 @@ export interface Document {
 export const SCHEMA_ID = "/api/read/schemas/dashboard.v1.json";
 
 export function readsLogs(q: QuerySpec): boolean {
-  return q.signal === "logs" || (q.signal === "sql" && q.database === "logs");
+  return q.signal === "logs";
 }
 
 /** The comparison a view runs: stat, line, area and bar compare with the previous period unless `none`. */
