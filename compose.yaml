@@ -1,43 +1,111 @@
+# One file for standalone Docker Compose (`docker compose up --build -d`) and for a Tako Compose
+# group (tako.compose.toml). Events and logs live in ClickHouse; the dashboard keeps projects,
+# keys and dashboards in SQLite on its own volume.
+#
+# Required: PIKO_CLICKHOUSE_PASSWORD (ClickHouse's admin user, which the dashboard and the
+# migrate job use) and PIKO_INGEST_CLICKHOUSE_PASSWORD (the ingest app's user, which migrate
+# creates). Optional: PIKO_CLICKHOUSE_MEMORY (default 4g), PIKO_PORT (default 3000).
 services:
-  api:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.37.168
+    environment:
+      CLICKHOUSE_USER: piko_admin
+      CLICKHOUSE_PASSWORD: ${PIKO_CLICKHOUSE_PASSWORD:?Set PIKO_CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      # Tables and the SQL-created users and grants both live here.
+      - piko-clickhouse:/var/lib/clickhouse
+      - ./deploy/clickhouse/config.d/piko.xml:/etc/clickhouse-server/config.d/piko.xml:ro
+      - ./deploy/clickhouse/users.d/piko.xml:/etc/clickhouse-server/users.d/piko.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${PIKO_CLICKHOUSE_MEMORY:-4g}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # A one-shot job: creates or upgrades Piko's tables, views and users, then exits.
+  migrate:
     build:
       context: .
-      target: api
+      target: dashboard
+    command: ["bun", "run", "migrate"]
     environment:
-      PIKO_QUERY_CONCURRENCY: 4
-      PIKO_QUEUE_CAPACITY: 64
-    volumes:
-      - piko-data:/data
+      PIKO_CLICKHOUSE_URL: http://clickhouse:8123
+      PIKO_CLICKHOUSE_PASSWORD: ${PIKO_CLICKHOUSE_PASSWORD:?Set PIKO_CLICKHOUSE_PASSWORD}
+      PIKO_INGEST_CLICKHOUSE_PASSWORD: ${PIKO_INGEST_CLICKHOUSE_PASSWORD:?Set PIKO_INGEST_CLICKHOUSE_PASSWORD}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+
+  ingest:
+    build:
+      context: .
+      target: ingest
+    x-tako:
+      envs:
+        development:
+          route: piko-ingest.test
+    environment:
+      PIKO_CLICKHOUSE_URL: http://clickhouse:8123
+      PIKO_CLICKHOUSE_USER: piko_ingest
+      PIKO_CLICKHOUSE_PASSWORD: ${PIKO_INGEST_CLICKHOUSE_PASSWORD:?Set PIKO_INGEST_CLICKHOUSE_PASSWORD}
     expose:
       - "3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     stop_grace_period: 30s
-    # SQLite/DuckDB require exactly one owner of the persistent directory.
+    # Exact deduplication needs one ingest process. It holds no state, so an update can start
+    # the new container before stopping the old one.
     deploy:
       replicas: 1
       update_config:
-        order: stop-first
+        order: start-first
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3001/health"]
       interval: 10s
       timeout: 3s
       retries: 5
+
   dashboard:
     build:
       context: .
       target: dashboard
+    x-tako:
+      envs:
+        development:
+          route: piko.test
     environment:
-      PIKO_API_URL: http://api:3001
+      PIKO_CLICKHOUSE_URL: http://clickhouse:8123
+      PIKO_CLICKHOUSE_PASSWORD: ${PIKO_CLICKHOUSE_PASSWORD:?Set PIKO_CLICKHOUSE_PASSWORD}
+      PIKO_INGEST_URL: http://ingest:3001
+      PIKO_DATA_DIR: /data
+    volumes:
+      - piko-data:/data
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${PIKO_PORT:-3000}:3000"
     depends_on:
-      api:
+      migrate:
+        condition: service_completed_successfully
+      ingest:
         condition: service_healthy
     restart: unless-stopped
+    # SQLite needs exactly one owner of /data, so an update stops the old container first.
     deploy:
       replicas: 1
       update_config:
-        order: start-first
+        order: stop-first
     healthcheck:
       test:
         [
@@ -49,5 +117,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
 volumes:
+  piko-clickhouse:
   piko-data:
