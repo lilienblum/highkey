@@ -502,16 +502,86 @@ describe("dashboard documents", () => {
   test("query_run_budget_counts_previous_period", () => {
     const over = line();
     over.view.compare = "previous_period";
-    for (const id of ["c", "d", "e"]) over.queries[id] = { signal: "events" };
-    over.series = [{ expr: "errors+requests+c+d+e" }];
+    for (const id of ["c", "d", "e", "f", "g"]) over.queries[id] = { signal: "events" };
+    over.series = [{ expr: "errors+requests+c+d+e+f+g" }];
     expect(errors([over])).toContain("/widgets/0/queries");
+    const six = line();
+    six.view.compare = "previous_period";
+    for (const id of ["c", "d", "e", "f"]) six.queries[id] = { signal: "events" };
+    six.series = ["errors", "requests", "c", "d", "e", "f"].map((expr) => ({ expr }));
+    expect(errors([six])).toEqual([]);
+    const seven = structuredClone(six);
+    seven.series.push({ expr: "c * 2" });
+    expect(errors([seven])).toContain("/widgets/0/series");
     const warned = line();
     warned.view.compare = "previous_period";
     warned.queries.c = { signal: "events" };
-    warned.series = [{ expr: "errors+requests+c" }];
+    warned.queries.d = { signal: "events" };
+    warned.series = [{ expr: "errors+requests+c+d" }];
     const report = checkDocument(parsed(doc([warned])));
     expect(report.errors).toEqual([]);
     expect(report.warnings.some((i) => i.path === "/widgets/0/queries")).toBe(true);
+  });
+
+  test("filter_ops_and_measures_rules", () => {
+    const stat = (query: Json) => ({
+      id: "a",
+      title: "t",
+      view: { type: "stat" },
+      queries: { a: query },
+    });
+    const events = (filter: Json) => stat({ signal: "events", filters: [filter] });
+    const logs = (filter: Json) => stat({ signal: "logs", filters: [filter] });
+    const value = "/widgets/0/queries/a/filters/0/value";
+    const cases: [Json, string][] = [
+      [events({ property: "p", op: "exists", value: 1 }), value],
+      [events({ property: "p", op: "eq" }), value],
+      [events({ property: "p", op: "in", value: "x" }), value],
+      [events({ property: "p", op: "in", value: [] }), value],
+      [events({ property: "p", op: "in", value: Array.from({ length: 51 }, (_, i) => i) }), value],
+      [events({ property: "p", op: "in", value: [{ a: 1 }] }), value],
+      [events({ property: "p", op: "contains", value: 5 }), value],
+      [logs({ attribute: "a", op: "gt", value: "x" }), value],
+      [logs({ attribute: "a", op: "not_exists", value: true }), value],
+      [stat({ signal: "events", measure: "unique" }), "/widgets/0/queries/a/property"],
+      [
+        stat({ signal: "events", measure: "sessions", property: "p" }),
+        "/widgets/0/queries/a/property",
+      ],
+      [stat({ signal: "logs", measure: "unique" }), "/widgets/0/queries/a/attribute"],
+      [
+        stat({
+          signal: "funnel",
+          steps: [{ event: "a", filters: [{ property: "p", op: "in", value: 1 }] }, { event: "b" }],
+        }),
+        "/widgets/0/queries/a/steps/0/filters/0/value",
+      ],
+    ];
+    for (const [widget, path] of cases)
+      expect({ path, found: errors([widget]) }).toEqual({
+        path,
+        found: expect.arrayContaining([path]),
+      });
+    for (const widget of [
+      events({ property: "p", op: "exists" }),
+      events({ property: "p", op: "not_in", value: ["a", 1, true] }),
+      events({ property: "p", op: "not_contains", value: "x" }),
+      logs({ attribute: "a", op: "lte", value: 3 }),
+      logs({ attribute: "a", value: "eu" }),
+      stat({ signal: "events", measure: "unique", property: "p" }),
+      stat({ signal: "events", measure: "new_actors", event: "signup" }),
+      stat({ signal: "events", measure: "returning_actors" }),
+      stat({ signal: "events", measure: "p99", property: "ms" }),
+      stat({ signal: "logs", measure: "p90", attribute: "ms" }),
+    ])
+      expect(errors([widget])).toEqual([]);
+    const like = shapeError(doc([events({ property: "p", op: "like", value: "x" })]));
+    expect(like?.path).toBe("/widgets/0/queries/a/filters/0/op");
+    expect(like?.message).toStartWith("unknown variant `like`");
+    expect(limitsJson().max_queries_per_widget).toBe(6);
+    expect(limitsJson().max_series_per_widget).toBe(6);
+    expect(limitsJson().max_query_runs_per_widget).toBe(12);
+    expect(limitsJson().max_in_values).toBe(50);
   });
 
   test("invalid_group_by_keys_are_errors", () => {

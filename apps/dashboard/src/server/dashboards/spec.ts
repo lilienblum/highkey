@@ -28,15 +28,32 @@ export interface View {
   markdown?: string | null;
 }
 
+export type FilterOp =
+  | "eq"
+  | "ne"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "in"
+  | "not_in"
+  | "contains"
+  | "not_contains"
+  | "exists"
+  | "not_exists";
+
 export interface Filter {
   property: string;
-  op: string;
-  value: unknown;
+  op: FilterOp;
+  /** Absent for exists and not_exists. */
+  value?: unknown;
 }
 
 export interface LogFilter {
   attribute: string;
-  value: unknown;
+  /** Absent means eq. */
+  op?: FilterOp | null;
+  value?: unknown;
 }
 
 export interface EventsQuery {
@@ -44,7 +61,21 @@ export interface EventsQuery {
   event?: string | null;
   source_id?: string | null;
   identity_kind?: string | null;
-  measure: "count" | "actors" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
+  measure:
+    | "count"
+    | "actors"
+    | "sessions"
+    | "new_actors"
+    | "returning_actors"
+    | "unique"
+    | "sum"
+    | "avg"
+    | "p50"
+    | "p90"
+    | "p95"
+    | "p99"
+    | "min"
+    | "max";
   property?: string | null;
   filters?: Filter[];
   group_by?: string | null;
@@ -59,7 +90,7 @@ export interface LogsQuery {
   source_id?: string | null;
   search?: string | null;
   filters?: LogFilter[];
-  measure: "count" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
+  measure: "count" | "unique" | "sum" | "avg" | "p50" | "p90" | "p95" | "p99" | "min" | "max";
   attribute?: string | null;
   group_by?: string | null;
 }

@@ -96,3 +96,26 @@ test("Open in Logs opens the newest 31 days and skips queries Logs cannot expres
   ).toBeUndefined();
   expect(logsLink({ signal: "logs", level: "loud" }, span, product)).toBeUndefined();
 });
+
+test("filters the Events and Logs pages cannot express withhold the link", () => {
+  for (const filter of [
+    { property: "plan", op: "in", value: ["pro", "team"] },
+    { property: "title", op: "contains", value: "checkout" },
+    { property: "plan", op: "exists" },
+  ])
+    expect(eventsLink({ signal: "events", filters: [filter] }, span, product)).toBeUndefined();
+  for (const filter of [
+    { attribute: "region", op: "in", value: ["eu", "us"] },
+    { attribute: "route", op: "contains", value: "checkout" },
+    { attribute: "region", op: "not_exists" },
+    { attribute: "region", op: "ne", value: "eu" },
+  ])
+    expect(logsLink({ signal: "logs", filters: [filter] }, span, product)).toBeUndefined();
+  expect(
+    logsLink(
+      { signal: "logs", filters: [{ attribute: "region", op: "eq", value: "eu" }] },
+      span,
+      product,
+    ),
+  ).toBeDefined();
+});

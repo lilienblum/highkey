@@ -10,6 +10,11 @@ type Span = { from: string; to: string };
 type Sources = Pick<Product, "sources">;
 /** Logs reads at most 31 days at once. */
 const LOGS_SPAN_MS = 31 * DAY_MS;
+/** The filter ops the Events page offers; dashboards also have in, contains and exists. */
+const EVENTS_OPS = ["eq", "ne", "gt", "gte", "lt", "lte"];
+type Scalar = string | number | boolean;
+const scalar = (value: unknown): value is Scalar =>
+  typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 
 /**
  * Events narrowed by everything the widget's query narrows by (its event, every filter, a pinned
@@ -22,8 +27,18 @@ export function eventsLink(
   product: Sources,
   sourceId?: string,
 ): (ExploreSearch & WorkspaceSearch) | undefined {
-  const { signal: _signal, ...rest } = query;
-  const spec = queryToSpec({ ...rest, measure: rest.measure ?? "count" });
+  const { signal: _signal, filters, ...rest } = query;
+  const plain = (filters ?? []).map((filter) =>
+    EVENTS_OPS.includes(filter.op) && scalar(filter.value)
+      ? { property: filter.property, op: filter.op, value: filter.value }
+      : null,
+  );
+  if (plain.some((filter) => filter === null)) return;
+  const spec = queryToSpec({
+    ...rest,
+    filters: plain as { property: string; op: string; value: Scalar }[],
+    measure: rest.measure ?? "count",
+  });
   if (!explorable(spec)) return;
   return {
     source: sourceParam(product.sources, sourceId),
@@ -50,8 +65,12 @@ export function logsLink(
   product: Sources,
   sourceId?: string,
 ): (LogsSearch & WorkspaceSearch) | undefined {
-  if (query.filters?.some((filter) => filter.value === null)) return;
-  const filters = query.filters as LogViewQuery["filters"];
+  // The Logs page filters attributes by equality only.
+  if (query.filters?.some((filter) => (filter.op ?? "eq") !== "eq" || !scalar(filter.value)))
+    return;
+  const filters = query.filters?.map(({ attribute, value }) => ({ attribute, value })) as
+    | LogViewQuery["filters"]
+    | undefined;
   const to = Date.parse(span.to);
   const from = Math.max(Date.parse(span.from), to - LOGS_SPAN_MS);
   const search: LogsSearch = {

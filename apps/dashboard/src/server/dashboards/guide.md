@@ -21,19 +21,20 @@ Work in this order: `describe_project`, then `run_widget` for each widget, then 
 
 ## Queries
 
-`queries` maps a query id (`[a-z][a-z0-9_]{0,15}`) to a query. A widget has 1-4 queries, and every query must be used by a series. Every query in a widget must share the same `group_by`.
+`queries` maps a query id (`[a-z][a-z0-9_]{0,15}`) to a query. A widget has 1-6 queries, and every query must be used by a series. Every query in a widget must share the same `group_by`.
 
 **Events**: `{"signal": "events", "event": "checkout", "measure": "count"}`.
 
-- `measure` is `count` (default), `actors`, `sum`, `avg`, `p50`, `p95`, `min` or `max`. The last six need a numeric `property`. An actor is an `actor_id` with its `identity_kind`; events without an `actor_id` are not counted as actors.
-- `filters` (at most 8) are `{"property": "plan", "op": "eq", "value": "pro"}` with `op` of `eq`, `ne`, `gt`, `gte`, `lt` or `lte`. Ordered comparisons need a number.
+- `measure` is `count` (default), `actors`, `sessions` (distinct `session_id`), `new_actors`, `returning_actors`, `unique`, `sum`, `avg`, `p50`, `p90`, `p95`, `p99`, `min` or `max`. `unique` counts the distinct values of a `property`; the rest from `sum` on need a numeric `property`. An actor is an `actor_id` with its `identity_kind`; events without an `actor_id` are not counted as actors.
+- `new_actors` counts actors whose first matching event, in all the history the project keeps, falls in the range (or, on a chart, in the bucket); `returning_actors` counts actors in the range who were first seen before it (or before the bucket). On a chart the two add up to `actors` in every bucket. Both follow the query's `event` and `filters`, so `{"event": "purchase", "measure": "new_actors"}` counts first-time buyers.
+- `filters` (at most 8) are `{"property": "plan", "op": "eq", "value": "pro"}`. `op` is `eq`, `ne`, `gt`, `gte`, `lt` or `lte` (ordered comparisons need a number); `in` or `not_in` with a list of 1-50 values, as in `"value": ["pro", "team"]`; `contains` or `not_contains` with text, ignoring case; or `exists` or `not_exists` with no `value`. A value matches only its own JSON type, so `5` never matches `"5"`, and a negated op (`ne`, `not_in`, `not_contains`) never matches an event without the property.
 - `group_by` is `name`, `source`, `source_id`, `identity_kind` or `property:<key>`. `source_id` and `identity_kind` scope the query.
 
 **Logs**: `{"signal": "logs", "min_level": "error", "service": "checkout"}`.
 
 - `level` matches one level exactly; `min_level` (`warn`, `error` or `fatal`) matches that level and above. Use one of them. Levels are trace, debug, info, warn, error, fatal.
-- Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`.
-- `measure` is `count`, or `sum`, `avg`, `p50`, `p95`, `min`, `max` over a numeric `attribute`. `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
+- Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`, which take the same `op`s as event filters (default `eq`).
+- `measure` is `count`, or `unique` (distinct values), `sum`, `avg`, `p50`, `p90`, `p95`, `p99`, `min` or `max` over an `attribute` (numeric from `sum` on). `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
 - Logs are kept for 31 days, so a widget with a logs query covers at most 31 days.
 
 **Funnel**: `{"signal": "funnel", "steps": [{"event": "visit"}, {"event": "signup"}], "window": "7d"}`.
@@ -50,7 +51,7 @@ Work in this order: `describe_project`, then `run_widget` for each widget, then 
 
 ## Series and formulas
 
-`series` is a list of 1-4 `{"expr": "...", "label": "...", "color": "...", "unit": "...", "thresholds": [...]}`. Without `series`, each query is a series. `expr` is arithmetic over query ids: `+ - * /`, parentheses, numbers, a unary minus, and the functions `abs(x)`, `min(a, b)` and `max(a, b)`, for example `errors / requests * 100`. A formula is at most 200 characters. Division by zero gives no value, not an error. An unknown id is reported with the nearest known one.
+`series` is a list of 1-6 `{"expr": "...", "label": "...", "color": "...", "unit": "...", "thresholds": [...]}`. Without `series`, each query is a series. `expr` is arithmetic over query ids: `+ - * /`, parentheses, numbers, a unary minus, and the functions `abs(x)`, `min(a, b)` and `max(a, b)`, for example `errors / requests * 100`. A formula is at most 200 characters. Division by zero gives no value, not an error. An unknown id is reported with the nearest known one.
 
 A grouped time series (`group_by` on a line, area or bar) allows one series and at most 6 groups. Rankings need a `group_by`, or a funnel.
 
@@ -69,7 +70,7 @@ Display options: `unit` (`number`, `percent`, `ratio`, `ms`, `seconds`, `bytes`)
 
 ## Compare and better
 
-Stat, line, area and bar widgets compare with the previous period of the same length unless `view.compare` is `none`. `compare: "previous_period"` asks for it on other views. A grouped series has no previous period; a ranking compares totals. Growth is coloured as good or bad by `view.better`: `up` (default) or `down` when lower is better. Durations (`ms`, `seconds`) default to `down`. Each comparison runs the queries again, so a widget may run at most 8 queries per refresh, including previous periods.
+Stat, line, area and bar widgets compare with the previous period of the same length unless `view.compare` is `none`. `compare: "previous_period"` asks for it on other views. A grouped series has no previous period; a ranking compares totals. Growth is coloured as good or bad by `view.better`: `up` (default) or `down` when lower is better. Durations (`ms`, `seconds`) default to `down`. Each comparison runs the queries again, so a widget may run at most 12 queries per refresh, including previous periods; one with 6 queries and a comparison is at that limit.
 
 ## Colors and thresholds
 
@@ -280,6 +281,50 @@ Weekly retention of new signups over 8 weeks, with a range that holds every peri
           "return": { "event": "page_view" },
           "period": "week",
           "periods": 8
+        }
+      }
+    }
+  ]
+}
+```
+
+New and returning actors as a stat, a stacked chart whose bars add up to all actors, and first-time buyers on two plans:
+
+```json document
+{
+  "version": 1,
+  "name": "Audience",
+  "widgets": [
+    {
+      "id": "returning",
+      "title": "Returning actors",
+      "view": { "type": "stat" },
+      "queries": { "returning": { "signal": "events", "measure": "returning_actors" } }
+    },
+    {
+      "id": "new-vs-returning",
+      "title": "New and returning actors",
+      "view": { "type": "bar", "stacked": true, "compare": "none" },
+      "queries": {
+        "fresh": { "signal": "events", "measure": "new_actors" },
+        "back": { "signal": "events", "measure": "returning_actors" }
+      },
+      "series": [
+        { "expr": "fresh", "label": "New", "color": "aqua" },
+        { "expr": "back", "label": "Returning", "color": "violet" }
+      ]
+    },
+    {
+      "id": "first-buyers",
+      "title": "First-time buyers by plan",
+      "view": { "type": "ranking" },
+      "queries": {
+        "buyers": {
+          "signal": "events",
+          "event": "purchase",
+          "measure": "new_actors",
+          "filters": [{ "property": "plan", "op": "in", "value": ["pro", "team"] }],
+          "group_by": "property:plan"
         }
       }
     }

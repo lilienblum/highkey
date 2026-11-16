@@ -27,10 +27,10 @@ export const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 export const Limits = {
   MAX_DASHBOARDS_PER_PROJECT: 50,
   MAX_WIDGETS: 24,
-  MAX_QUERIES_PER_WIDGET: 4,
-  MAX_SERIES_PER_WIDGET: 4,
-  MAX_QUERY_RUNS_PER_WIDGET: 8,
-  WARN_QUERY_RUNS_PER_WIDGET: 4,
+  MAX_QUERIES_PER_WIDGET: 6,
+  MAX_SERIES_PER_WIDGET: 6,
+  MAX_QUERY_RUNS_PER_WIDGET: 12,
+  WARN_QUERY_RUNS_PER_WIDGET: 6,
   WARN_QUERY_RUNS_PER_DOCUMENT: 40,
   MAX_GROUPED_SERIES: 6,
   MIN_RANKING_LIMIT: 1,
@@ -57,6 +57,7 @@ export const Limits = {
   SIZE_HEIGHTS: [1, 2, 3],
   MAX_TEXT_FILTER_BYTES: 128,
   MAX_SEARCH_BYTES: 512,
+  MAX_IN_VALUES: 50,
   MIN_FUNNEL_STEPS: 2,
   MAX_FUNNEL_STEPS: 8,
   DEFAULT_FUNNEL_WINDOW: "7d",
@@ -80,6 +81,7 @@ export function limitsJson() {
       default: Limits.DEFAULT_RANKING_LIMIT,
     },
     max_filters: Limits.MAX_FILTERS,
+    max_in_values: Limits.MAX_IN_VALUES,
     max_event_range_days: Limits.MAX_EVENT_RANGE_DAYS,
     max_hourly_range_days: Limits.MAX_HOURLY_RANGE_DAYS,
     max_log_range_days: Limits.MAX_LOG_RANGE_DAYS,
@@ -354,7 +356,7 @@ function checkShape(w: Widget, base: string, r: Report) {
         "Remove series; the table shows one column per query",
       );
     if (special) return;
-    if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–4 queries");
+    if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–6 queries");
     for (const [id, q] of entries)
       if (groupBy(q) === null)
         r.error(
@@ -365,10 +367,10 @@ function checkShape(w: Widget, base: string, r: Report) {
     sharedGroupBy(entries, qpath, r);
     return;
   }
-  if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–4 queries");
+  if (n < 1 || n > Limits.MAX_QUERIES_PER_WIDGET) r.error(qpath, "A widget needs 1–6 queries");
   const runs = queryRuns(w);
   if (runs > Limits.MAX_QUERY_RUNS_PER_WIDGET)
-    r.error(qpath, `${runs} query runs per refresh including the previous period; the limit is 8`);
+    r.error(qpath, `${runs} query runs per refresh including the previous period; the limit is 12`);
   else if (runs > Limits.WARN_QUERY_RUNS_PER_WIDGET)
     r.warn(
       qpath,
@@ -383,7 +385,7 @@ function checkShape(w: Widget, base: string, r: Report) {
   const series = seriesOrDefault(w);
   const spath = `${base}/series`;
   if (w.series != null && (series.length < 1 || series.length > Limits.MAX_SERIES_PER_WIDGET))
-    r.error(spath, "A widget needs 1–4 series");
+    r.error(spath, "A widget needs 1–6 series");
   if (grouped && ["line", "area", "bar"].includes(kind) && series.length > 1)
     r.error(
       w.series != null ? `${spath}/1` : qpath,
@@ -500,7 +502,7 @@ export function checkRetention(
 export function checkEvents(q: EventsQuery, p: string, r: Report): void {
   for (const name of ["event", "source_id", "identity_kind"] as const)
     nonEmpty(r, `${p}/${name}`, q[name], Limits.MAX_TEXT_FILTER_BYTES);
-  checkMeasure(!["count", "actors"].includes(q.measure), q.property, "property", validKey, p, r);
+  checkMeasure(FIELD_MEASURES.includes(q.measure), q.property, "property", validKey, p, r);
   checkFilters(q.filters ?? [], `${p}/filters`, r);
   if (q.group_by != null) {
     const g = q.group_by;
@@ -516,19 +518,57 @@ export function checkEvents(q: EventsQuery, p: string, r: Report): void {
   }
 }
 
+/** Measures over a property (events) or attribute (logs); the rest count rows, actors or sessions. */
+const FIELD_MEASURES = ["unique", "sum", "avg", "p50", "p90", "p95", "p99", "min", "max"];
+
+/** A filter's value for its op: none for exists, a list for in, a string for contains. */
+function checkFilterValue(f: { op?: string | null; value?: unknown }, fp: string, r: Report) {
+  const op = f.op ?? "eq";
+  const present = f.value !== undefined;
+  const scalar = (v: unknown) =>
+    typeof v === "string"
+      ? bytes(v) <= Limits.MAX_SEARCH_BYTES
+      : typeof v === "number" || typeof v === "boolean";
+  if (op === "exists" || op === "not_exists") {
+    if (present) r.error(`${fp}/value`, `${op} takes no value`, "Remove value");
+    return;
+  }
+  if (!present) {
+    r.error(`${fp}/value`, `${op} needs a value`);
+    return;
+  }
+  if (op === "in" || op === "not_in") {
+    if (
+      !Array.isArray(f.value) ||
+      f.value.length < 1 ||
+      f.value.length > Limits.MAX_IN_VALUES ||
+      !f.value.every(scalar)
+    )
+      r.error(
+        `${fp}/value`,
+        `${op} needs a list of 1–${Limits.MAX_IN_VALUES} strings, numbers or booleans`,
+        'Such as ["pro", "team"]',
+      );
+    return;
+  }
+  if (op === "contains" || op === "not_contains") {
+    if (typeof f.value !== "string" || f.value.length === 0 || !scalar(f.value))
+      r.error(`${fp}/value`, `${op} needs text of 1–${Limits.MAX_SEARCH_BYTES} bytes`);
+    return;
+  }
+  if (typeof f.value === "number") return;
+  if (!scalar(f.value))
+    r.error(`${fp}/value`, "value must be a string (≤512 bytes), number or boolean");
+  else if (op !== "eq" && op !== "ne")
+    r.error(`${fp}/value`, "Ordered comparisons require a number");
+}
+
 function checkFilters(filters: Filter[], p: string, r: Report) {
   if (filters.length > Limits.MAX_FILTERS) r.error(p, "At most 8 filters per query");
   filters.forEach((f, i) => {
     const fp = `${p}/${i}`;
     if (!validKey(f.property)) r.error(`${fp}/property`, "Invalid property key");
-    if (!["eq", "ne", "gt", "gte", "lt", "lte"].includes(f.op))
-      r.error(`${fp}/op`, "op must be eq, ne, gt, gte, lt or lte");
-    else if (typeof f.value !== "number") {
-      if (typeof f.value !== "string" && typeof f.value !== "boolean")
-        r.error(`${fp}/value`, "value must be a string, number or boolean");
-      else if (!["eq", "ne"].includes(f.op))
-        r.error(`${fp}/value`, "Ordered comparisons require a number");
-    }
+    checkFilterValue(f, fp, r);
   });
 }
 
@@ -557,13 +597,9 @@ export function checkLogs(q: LogsQuery, p: string, r: Report): void {
   filters.forEach((f, i) => {
     const fp = `${p}/filters/${i}`;
     if (!attributeKey(f.attribute)) r.error(`${fp}/attribute`, "attribute must be 1–128 bytes");
-    const scalar =
-      typeof f.value === "string"
-        ? bytes(f.value) <= Limits.MAX_SEARCH_BYTES
-        : typeof f.value === "number" || typeof f.value === "boolean";
-    if (!scalar) r.error(`${fp}/value`, "value must be a string (≤512 bytes), number or boolean");
+    checkFilterValue(f, fp, r);
   });
-  checkMeasure(q.measure !== "count", q.attribute, "attribute", attributeKey, p, r);
+  checkMeasure(FIELD_MEASURES.includes(q.measure), q.attribute, "attribute", attributeKey, p, r);
   if (q.group_by != null) {
     const g = q.group_by;
     const ok =
@@ -589,5 +625,8 @@ function checkMeasure(
   if (numeric && field == null) r.error(`${p}/${name}`, `This measure needs a ${name}`);
   else if (numeric && field != null && !valid(field)) r.error(`${p}/${name}`, `Invalid ${name}`);
   else if (!numeric && field != null)
-    r.error(`${p}/${name}`, `${name} is only used by sum, avg, p50, p95, min and max`);
+    r.error(
+      `${p}/${name}`,
+      `${name} is only used by unique, sum, avg, p50, p90, p95, p99, min and max`,
+    );
 }

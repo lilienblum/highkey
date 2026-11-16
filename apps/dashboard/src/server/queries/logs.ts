@@ -4,14 +4,16 @@ import { bad } from "../api/errors";
 import { fields } from "../api/body";
 import { runSettings } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
-import { Params, scalarEquals, typedValue, validKey } from "./properties";
+import { filterCondition, Params, typedValue, validKey } from "./properties";
 
 export const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 const DAY = 86_400_000;
 
 export interface LogFilter {
   attribute: string;
-  value: string | number | boolean;
+  /** Absent means eq; the Logs page sends only equalities. */
+  op?: string | null;
+  value?: unknown;
 }
 
 export interface LogsQuery {
@@ -132,7 +134,9 @@ export function logConditions(
   if (q.search)
     conditions.push(`positionCaseInsensitiveUTF8(message, ${params.add("String", q.search)}) > 0`);
   for (const filter of q.filters)
-    conditions.push(scalarEquals(attribute(filter.attribute, params), filter.value, params));
+    conditions.push(
+      filterCondition(attribute(filter.attribute, params), filter.op, filter.value, params),
+    );
   if (q.min_level) {
     const levels = LEVELS.slice(LEVELS.indexOf(q.min_level as (typeof LEVELS)[number]));
     conditions.push(`level IN (${levels.map((level) => params.add("String", level)).join(", ")})`);

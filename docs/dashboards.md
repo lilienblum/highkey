@@ -104,19 +104,20 @@ What the agent can see and change is a trust decision: read [privacy](privacy.md
 
 ### Queries
 
-`queries` maps a query id (`[a-z][a-z0-9_]{0,15}`) to a query. A widget has 1-4 queries, and every query must be used by a series. All queries in a widget must share the same `group_by`.
+`queries` maps a query id (`[a-z][a-z0-9_]{0,15}`) to a query. A widget has 1-6 queries, and every query must be used by a series. All queries in a widget must share the same `group_by`.
 
 **Events**: `{"signal": "events", "event": "checkout", "measure": "count"}`
 
-- `measure` is `count` (default), `actors`, `sum`, `avg`, `p50`, `p95`, `min` or `max`. The last six need a numeric `property`.
-- `filters` (at most 8) are `{"property": "plan", "op": "eq", "value": "pro"}` with `op` of `eq`, `ne`, `gt`, `gte`, `lt` or `lte`. Ordered comparisons need a number.
+- `measure` is `count` (default), `actors`, `sessions` (distinct `session_id`), `new_actors`, `returning_actors`, `unique`, `sum`, `avg`, `p50`, `p90`, `p95`, `p99`, `min` or `max`. `unique` counts the distinct values of a `property`; the rest from `sum` on need a numeric `property`. An actor is an `actor_id` with its `identity_kind`; events without an `actor_id` are not counted as actors.
+- `new_actors` counts actors whose first matching event, in all the history the project keeps, falls in the range (or, on a chart, in the bucket); `returning_actors` counts actors in the range who were first seen before it (or before the bucket). On a chart the two add up to `actors` in every bucket. Both follow the query's `event` and `filters`, so `{"event": "purchase", "measure": "new_actors"}` counts first-time buyers.
+- `filters` (at most 8) are `{"property": "plan", "op": "eq", "value": "pro"}`. `op` is `eq`, `ne`, `gt`, `gte`, `lt` or `lte` (ordered comparisons need a number); `in` or `not_in` with a list of 1-50 values, as in `"value": ["pro", "team"]`; `contains` or `not_contains` with text, ignoring case; or `exists` or `not_exists` with no `value`. A value matches only its own JSON type, so `5` never matches `"5"`, and a negated op (`ne`, `not_in`, `not_contains`) never matches an event without the property.
 - `group_by` is `name`, `source`, `source_id`, `identity_kind` or `property:<key>`. `source_id` and `identity_kind` also scope the query.
 
 **Logs**: `{"signal": "logs", "min_level": "error", "service": "checkout"}`
 
 - `level` matches one level exactly; `min_level` (`warn`, `error` or `fatal`) matches that level and above. Use one of them. The levels are trace, debug, info, warn, error and fatal.
-- Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`.
-- `measure` is `count`, or `sum`, `avg`, `p50`, `p95`, `min` or `max` over a numeric `attribute`. `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
+- Also `service`, `environment`, `source_id`, `search` (message text, up to 512 bytes) and `filters` of `{"attribute": "region", "value": "eu"}`, which take the same `op`s as event filters (default `eq`).
+- `measure` is `count`, or `unique` (distinct values), `sum`, `avg`, `p50`, `p90`, `p95`, `p99`, `min` or `max` over an `attribute` (numeric from `sum` on). `group_by` is `level`, `service`, `environment` or `attribute:<key>`.
 
 **Funnel**: `{"signal": "funnel", "steps": [{"event": "visit"}, {"event": "signup"}], "window": "7d"}`. See [funnels and retention](#funnels-and-retention).
 
@@ -126,7 +127,7 @@ There is no SQL: every query is one of these four, so a document stays valid wha
 
 ### Formulas
 
-`series` is a list of 1-4 `{"expr": "...", "label": "...", "color": "...", "unit": "...", "thresholds": [...]}`. Without `series`, each query is a series.
+`series` is a list of 1-6 `{"expr": "...", "label": "...", "color": "...", "unit": "...", "thresholds": [...]}`. Without `series`, each query is a series.
 
 `expr` is arithmetic over query ids: `+ - * /`, parentheses, numbers, a unary minus, and the functions `abs(x)`, `min(a, b)` and `max(a, b)`. For example `errors / requests * 100`. A formula is at most 200 characters and 16 levels deep. Division by zero gives no value rather than an error, so a bucket with no requests is a gap. An unknown id is reported with the nearest known one.
 
@@ -165,7 +166,7 @@ Display options: `unit` (`number`, `percent`, `ratio`, `ms`, `seconds`, `bytes`)
 
 ### Compare and better
 
-Stat, line, area and bar widgets compare with the previous period of the same length, and show it as, for example, "+15% vs prior 7d" in a small tile or "+15% vs previous 7 days" on a larger one. Set `view.compare` to `"none"` to opt out, or `"previous_period"` to ask for it on other views. A grouped series has no previous period; a ranking compares totals. A previous value of 0 or none shows a dash. Each comparison runs the queries again, so a widget may run at most 8 queries per refresh, counting previous periods.
+Stat, line, area and bar widgets compare with the previous period of the same length, and show it as, for example, "+15% vs prior 7d" in a small tile or "+15% vs previous 7 days" on a larger one. Set `view.compare` to `"none"` to opt out, or `"previous_period"` to ask for it on other views. A grouped series has no previous period; a ranking compares totals. A previous value of 0 or none shows a dash. Each comparison runs the queries again, so a widget may run at most 12 queries per refresh, counting previous periods; one with 6 queries and a comparison is at that limit.
 
 `view.better` says which direction is good, so growth is coloured as an outcome: `up` (default) or `down` when lower is better. Durations (`ms` and `seconds`) default to `down`.
 
@@ -191,11 +192,11 @@ A widget's `range` is `24h` or `30d` (one to three digits, then `h` or `d`); wit
 | Saved views per project (both kinds)        | 100                                               |
 | Document size                               | 65,536 bytes                                      |
 | Widgets per dashboard                       | 24                                                |
-| Queries / series per widget                 | 4 / 4                                             |
-| Query runs per widget, with previous period | 8                                                 |
+| Queries / series (lines) per widget         | 6 / 6                                             |
+| Query runs per widget, with previous period | 12                                                |
 | Groups in a grouped series                  | 6                                                 |
 | Ranking `limit`                             | 1-50 (default 10)                                 |
-| Filters per query                           | 8                                                 |
+| Filters per query / values in an `in` list  | 8 / 50                                            |
 | Formula                                     | 200 characters, 16 levels deep                    |
 | Funnel steps / retention periods            | 2-8 / 1-12 (default 8)                            |
 | Name or title / description / markdown      | 1-80 / 280 / 2,000 characters                     |
@@ -438,6 +439,52 @@ The ranking draws the funnel's steps as bars. The table repeats it for pro-plan 
             { "event": "purchase" }
           ],
           "by": "session"
+        }
+      }
+    }
+  ]
+}
+```
+
+### New and returning actors
+
+The stat counts the people active in the range who were first seen before it. The chart splits each bucket's actors into new and returning, so the stacked bars add up to all actors. The ranking counts first-time buyers on the pro and team plans: `new_actors` follows the query's `event` and `filters`, so a person counts in the bucket of their first purchase, not their first visit.
+
+```json piko-dashboard
+{
+  "version": 1,
+  "name": "Audience",
+  "widgets": [
+    {
+      "id": "returning",
+      "title": "Returning actors",
+      "view": { "type": "stat" },
+      "queries": { "returning": { "signal": "events", "measure": "returning_actors" } }
+    },
+    {
+      "id": "new-vs-returning",
+      "title": "New and returning actors",
+      "view": { "type": "bar", "stacked": true, "compare": "none" },
+      "queries": {
+        "fresh": { "signal": "events", "measure": "new_actors" },
+        "back": { "signal": "events", "measure": "returning_actors" }
+      },
+      "series": [
+        { "expr": "fresh", "label": "New", "color": "aqua" },
+        { "expr": "back", "label": "Returning", "color": "violet" }
+      ]
+    },
+    {
+      "id": "first-buyers",
+      "title": "First-time buyers by plan",
+      "view": { "type": "ranking" },
+      "queries": {
+        "buyers": {
+          "signal": "events",
+          "event": "purchase",
+          "measure": "new_actors",
+          "filters": [{ "property": "plan", "op": "in", "value": ["pro", "team"] }],
+          "group_by": "property:plan"
         }
       }
     }

@@ -1,11 +1,11 @@
 // Typed widget queries (events and logs) compiled to ClickHouse SQL over the project's scoped
 // views, and measured as a total, buckets, groups or grouped buckets.
 import { bad } from "../api/errors";
-import { type Bucket, runSettings } from "../clickhouse/access";
+import { type Bucket, RANGE_FROM, runSettings, SOURCE_SCOPE } from "../clickhouse/access";
 import type { ClickHouse, QueryOptions } from "../clickhouse/client";
 import { measure as eventMeasure, predicate as eventPredicate } from "../queries/events";
 import { attribute, LEVELS, logConditions } from "../queries/logs";
-import { bucketGrid, numeric, Params, path, validKey } from "../queries/properties";
+import { bucketGrid, distinctValues, numeric, Params, path, validKey } from "../queries/properties";
 import type { EventsQuery, LogsQuery } from "./spec";
 
 export interface Window {
@@ -48,7 +48,32 @@ export interface Measured {
 
 export const emptyMeasured = (): Measured => ({ total: null, points: [], groups: [], grouped: [] });
 
-export const missingIsZero = (measure: string) => ["count", "actors", "sum"].includes(measure);
+/** Measures that count, so an absent bucket or group is 0 rather than a gap. */
+export const COUNTING = [
+  "count",
+  "actors",
+  "sessions",
+  "new_actors",
+  "returning_actors",
+  "unique",
+  "sum",
+];
+export const missingIsZero = (measure: string) => COUNTING.includes(measure);
+
+/**
+ * Stands for the start of the period a new or returning actor is judged against: the range's
+ * start for a total or a group, and each row's bucket for a time series.
+ */
+const PERIOD_START = "__piko_period_start__";
+const atWindow = (measure: string) => measure.replaceAll(PERIOD_START, RANGE_FROM);
+const atBucket = (measure: string, time: string) =>
+  measure.replaceAll(PERIOD_START, `bucket(${time})`);
+
+/** The range's events, each with its actor's first matching event in all retained history. */
+function withFirstSeen(where: string): string {
+  const firsts = `SELECT ifNull(identity_kind, '') AS kind, actor_id AS actor, min(event_time) AS first_seen FROM all_events WHERE actor_id IS NOT NULL AND ${SOURCE_SCOPE} AND ${where} GROUP BY kind, actor`;
+  return `(SELECT event_time, name, source, source_id, identity_kind, actor_id, session_id, properties, f.first_seen AS first_seen FROM events INNER JOIN (${firsts}) AS f ON ifNull(identity_kind, '') = f.kind AND actor_id = f.actor)`;
+}
 
 /** A label expression that yields the group's value as JSON text, as `JSON.stringify` writes it. */
 function jsonLabel(expression: string, dynamic: boolean): string {
@@ -58,7 +83,8 @@ function jsonLabel(expression: string, dynamic: boolean): string {
 }
 
 interface Compiled {
-  table: "events" | "logs";
+  /** A scoped view, or a subquery over one. */
+  table: string;
   time: string;
   measure: string;
   where: string;
@@ -67,9 +93,11 @@ interface Compiled {
   params: Params;
 }
 
+const ACTOR = "(identity_kind, actor_id)";
+
 function compileEvents(q: EventsQuery): Compiled {
-  if (q.measure !== "count" && q.measure !== "actors") {
-    if (!q.property) throw bad("Numeric measures need a property");
+  if (!["count", "actors", "sessions", "new_actors", "returning_actors"].includes(q.measure)) {
+    if (!q.property) throw bad("This measure needs a property");
     path("properties", q.property);
   }
   const params = new Params();
@@ -88,6 +116,18 @@ function compileEvents(q: EventsQuery): Compiled {
   else if (by.startsWith("property:") && validKey(by.slice(9)))
     label = jsonLabel(path("properties", by.slice(9)), true);
   else throw bad("Group by name, source, source_id, identity_kind or property:<key>");
+  if (q.measure === "new_actors" || q.measure === "returning_actors") {
+    const compare = q.measure === "new_actors" ? ">=" : "<";
+    return {
+      table: withFirstSeen(where),
+      time: "event_time",
+      measure: `uniqExactIf(${ACTOR}, actor_id IS NOT NULL AND first_seen ${compare} ${PERIOD_START})`,
+      where,
+      label,
+      missingZero: true,
+      params,
+    };
+  }
   return {
     table: "events",
     time: "event_time",
@@ -103,14 +143,16 @@ function compileLogs(q: LogsQuery): Compiled {
   const params = new Params();
   let measure = "count()";
   if (q.measure !== "count") {
-    if (!q.attribute) throw bad("Numeric measures need an attribute");
-    const number = numeric(attribute(q.attribute, params));
+    if (!q.attribute) throw bad("This measure needs an attribute");
+    const value = attribute(q.attribute, params);
+    const quantiles: Record<string, number> = { p50: 0.5, p90: 0.9, p95: 0.95, p99: 0.99 };
+    const level = quantiles[q.measure];
     measure =
-      q.measure === "p50"
-        ? `quantileExactInclusiveOrNull(0.5)(${number})`
-        : q.measure === "p95"
-          ? `quantileExactInclusiveOrNull(0.95)(${number})`
-          : `${q.measure}OrNull(${number})`;
+      q.measure === "unique"
+        ? distinctValues(value)
+        : level !== undefined
+          ? `quantileExactInclusiveOrNull(${level})(${numeric(value)})`
+          : `${q.measure}OrNull(${numeric(value)})`;
   }
   if (q.min_level && !LEVELS.includes(q.min_level as (typeof LEVELS)[number]))
     throw bad("Invalid log level");
@@ -186,7 +228,7 @@ async function buckets(
   where: string,
   params: Record<string, unknown>,
 ): Promise<Point[]> {
-  const value = `toNullable(toFloat64(${c.measure}))`;
+  const value = `toNullable(toFloat64(${atBucket(c.measure, c.time)}))`;
   const rows = await run.reader.query<{ time: number; value: number | null }>(
     `SELECT toUnixTimestamp64Milli(bucket(${c.time})) AS time, ${value} AS value FROM ${c.table} WHERE ${where} GROUP BY time`,
     options(c, w, source, run, params as never),
@@ -208,7 +250,7 @@ export async function measure(
 ): Promise<Measured> {
   const c = q.signal === "events" ? compileEvents(q) : compileLogs(q);
   const source = q.source_id ?? run.source;
-  const value = `toNullable(toFloat64(${c.measure}))`;
+  const value = `toNullable(toFloat64(${atWindow(c.measure)}))`;
   const total = await run.reader.query<{ value: number | null }>(
     `SELECT ${value} AS value FROM ${c.table} WHERE ${c.where}`,
     options(c, w, source, run),
@@ -251,7 +293,7 @@ export async function rows(
   const c = q.signal === "events" ? compileEvents(q) : compileLogs(q);
   const source = q.source_id ?? run.source;
   const sql =
-    c.table === "events"
+    q.signal === "events"
       ? `SELECT toString(source_id) AS source_id, event_id, name, source, toUnixTimestamp64Milli(event_time) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, actor_id, identity_kind, session_id, properties FROM events WHERE ${c.where} ORDER BY event_time DESC, event_id DESC LIMIT ${limit}`
       : `SELECT log_id, toString(source_id) AS source_id, toUnixTimestamp64Milli(timestamp) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, toString(level) AS level, message, service, environment, trace_id, span_id, request_id, attributes FROM (SELECT * FROM logs WHERE ${c.where} ORDER BY timestamp DESC, log_id DESC LIMIT ${limit}) ORDER BY timestamp DESC, log_id DESC`;
   return (await run.reader.query<Record<string, unknown>>(sql, options(c, w, source, run))).data;

@@ -51,8 +51,34 @@ export function comparesPreviousPeriod(view: Pick<View, "type" | "compare">) {
 export function lowerIsBetter(view: Pick<View, "unit" | "better">) {
   return view.better ? view.better === "down" : view.unit === "ms" || view.unit === "seconds";
 }
-export type EventMeasure = "count" | "actors" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
-export type LogMeasure = "count" | "sum" | "avg" | "p50" | "p95" | "min" | "max";
+export type EventMeasure =
+  | "count"
+  | "actors"
+  | "sessions"
+  | "new_actors"
+  | "returning_actors"
+  | "unique"
+  | "sum"
+  | "avg"
+  | "p50"
+  | "p90"
+  | "p95"
+  | "p99"
+  | "min"
+  | "max";
+export type LogMeasure =
+  | "count"
+  | "unique"
+  | "sum"
+  | "avg"
+  | "p50"
+  | "p90"
+  | "p95"
+  | "p99"
+  | "min"
+  | "max";
+/** A filter value: a scalar, a list for in and not_in, or none for exists and not_exists. */
+export type FilterValue = string | number | boolean | (string | number | boolean)[];
 export type EventsQuery = {
   signal: "events";
   event?: string;
@@ -60,7 +86,7 @@ export type EventsQuery = {
   identity_kind?: string;
   measure?: EventMeasure;
   property?: string;
-  filters?: { property: string; op: string; value: string | number | boolean }[];
+  filters?: { property: string; op: string; value?: FilterValue }[];
   group_by?: string;
 };
 export type LogsQuery = {
@@ -71,7 +97,7 @@ export type LogsQuery = {
   environment?: string;
   source_id?: string;
   search?: string;
-  filters?: { attribute: string; value: string | number | boolean | null }[];
+  filters?: { attribute: string; op?: string; value?: FilterValue | null }[];
   measure?: LogMeasure;
   attribute?: string;
   group_by?: string;
@@ -79,7 +105,7 @@ export type LogsQuery = {
 /** A funnel step or a retention start or return: an event with optional property filters. */
 export type Step = {
   event: string;
-  filters?: { property: string; op: string; value: string | number | boolean }[];
+  filters?: { property: string; op: string; value?: FilterValue }[];
 };
 export type FunnelQuery = {
   signal: "funnel";
@@ -269,12 +295,21 @@ export function thresholdColor(
 }
 
 const measureNames = {
+  unique: "Unique",
   sum: "Sum",
   avg: "Avg",
   p50: "p50",
+  p90: "p90",
   p95: "p95",
+  p99: "p99",
   min: "Min",
   max: "Max",
+} as const;
+const countNames = {
+  actors: "Actors",
+  sessions: "Sessions",
+  new_actors: "New actors",
+  returning_actors: "Returning actors",
 } as const;
 /** What a query measures, in words: "Events", "Actors", "Avg duration_ms"; logs counts read "Logs". */
 export function queryLabel(query: QuerySpec): string {
@@ -282,9 +317,10 @@ export function queryLabel(query: QuerySpec): string {
   if (query.signal === "retention") return "Retention";
   const measure = query.measure ?? "count";
   if (measure === "count") return query.signal === "logs" ? "Logs" : "Events";
-  if (measure === "actors") return "Actors";
+  if (measure in countNames) return countNames[measure as keyof typeof countNames];
   const field = query.signal === "events" ? query.property : query.attribute;
-  return field ? `${measureNames[measure]} ${field}` : measureNames[measure];
+  const name = measureNames[measure as keyof typeof measureNames];
+  return field ? `${name} ${field}` : name;
 }
 
 /**

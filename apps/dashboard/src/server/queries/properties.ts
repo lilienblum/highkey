@@ -44,6 +44,57 @@ export function scalarEquals(expression: string, value: unknown, params: Params)
   throw bad("Ordered comparisons require numbers; eq/ne require scalar values");
 }
 
+const ORDERED: Record<string, string> = { gt: ">", gte: ">=", lt: "<", lte: "<=" };
+
+/**
+ * One filter on a typed JSON value. A negated op (ne, not_in, not_contains) never matches an
+ * absent value, and every op but exists and not_exists compares within one JSON type.
+ */
+export function filterCondition(
+  expression: string,
+  op: string | null | undefined,
+  value: unknown,
+  params: Params,
+): string {
+  const present = `dynamicType(${expression}) != 'None'`;
+  switch (op ?? "eq") {
+    case "exists":
+      return `(${present})`;
+    case "not_exists":
+      return `(dynamicType(${expression}) = 'None')`;
+    case "eq":
+      return scalarEquals(expression, value, params);
+    case "ne":
+      return typeof value === "number"
+        ? `(${numeric(expression)} != ${params.add("Float64", value)})`
+        : `(${present} AND NOT ${scalarEquals(expression, value, params)})`;
+    case "in":
+    case "not_in": {
+      if (!Array.isArray(value) || value.length === 0) throw bad("in and not_in need a list");
+      const any = `(${value.map((v) => scalarEquals(expression, v, params)).join(" OR ")})`;
+      return op === "in" ? any : `(${present} AND NOT coalesce(${any}, false))`;
+    }
+    case "contains":
+    case "not_contains": {
+      if (typeof value !== "string") throw bad("contains and not_contains need text");
+      const at = `positionCaseInsensitiveUTF8(dynamicElement(${expression}, 'String'), ${params.add("String", value)})`;
+      return `(dynamicType(${expression}) = 'String' AND ${at} ${op === "contains" ? "> 0" : "= 0"})`;
+    }
+    default: {
+      const ordered = ORDERED[op as string];
+      if (!ordered) throw bad("Unknown filter op");
+      if (typeof value !== "number")
+        throw bad("Ordered comparisons require numbers; eq/ne require scalar values");
+      return `(${numeric(expression)} ${ordered} ${params.add("Float64", value)})`;
+    }
+  }
+}
+
+/** A distinct count of present values, telling 1 and "1" apart. */
+export function distinctValues(expression: string): string {
+  return `uniqExactIf((dynamicType(${expression}), toString(${expression})), dynamicType(${expression}) != 'None')`;
+}
+
 /** Reads a typed JSON value from a `dynamicType`/`toString` pair in a result row. */
 export function typedValue(type: string, text: string | null): unknown {
   if (text === null || type === "None") return null;

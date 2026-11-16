@@ -52,11 +52,16 @@ const EVENT_COLUMNS =
 const LOG_COLUMNS =
   "source_id, log_id, timestamp, received_at, level, message, service, environment, trace_id, span_id, request_id, attributes";
 
+/** The start of a run's range, as the scoped views read it. */
+export const RANGE_FROM =
+  "fromUnixTimestamp64Milli(toInt64(getSettingOrDefault('SQL_piko_from', 0)), 'UTC')";
+const RANGE_TO = "fromUnixTimestamp64Milli(toInt64(getSettingOrDefault('SQL_piko_to', 0)), 'UTC')";
+const SOURCE = "toString(getSettingOrDefault('SQL_piko_source', ''))";
+/** The run's source, as the scoped views apply it: every source when none is set. */
+export const SOURCE_SCOPE = `(${SOURCE} = '' OR source_id = toUUIDOrZero(${SOURCE}))`;
+
 function scoped(time: string): string {
-  const from = "fromUnixTimestamp64Milli(toInt64(getSettingOrDefault('SQL_piko_from', 0)), 'UTC')";
-  const to = "fromUnixTimestamp64Milli(toInt64(getSettingOrDefault('SQL_piko_to', 0)), 'UTC')";
-  const source = "toString(getSettingOrDefault('SQL_piko_source', ''))";
-  return `${time} >= ${from} AND ${time} < ${to} AND (${source} = '' OR source_id = toUUIDOrZero(${source}))`;
+  return `${time} >= ${RANGE_FROM} AND ${time} < ${RANGE_TO} AND ${SOURCE_SCOPE}`;
 }
 
 /** Creates or refreshes a project's database, views, reader user and grant. Idempotent. */

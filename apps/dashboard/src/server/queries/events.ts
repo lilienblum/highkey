@@ -6,10 +6,11 @@ import { type Bucket, runSettings } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
 import {
   bucketGrid,
+  distinctValues,
+  filterCondition,
   numeric,
   Params,
   path,
-  scalarEquals,
   typedValue,
   validKey,
 } from "./properties";
@@ -17,7 +18,7 @@ import {
 export interface Filter {
   property: string;
   op: string;
-  value: unknown;
+  value?: unknown;
 }
 
 export interface EventsQuery {
@@ -123,8 +124,16 @@ export function measure(q: { measure: string; property?: string | null }): strin
       return `${q.measure}OrNull(${number()})`;
     case "p50":
       return `quantileExactInclusiveOrNull(0.5)(${number()})`;
+    case "p90":
+      return `quantileExactInclusiveOrNull(0.9)(${number()})`;
     case "p95":
       return `quantileExactInclusiveOrNull(0.95)(${number()})`;
+    case "p99":
+      return `quantileExactInclusiveOrNull(0.99)(${number()})`;
+    case "unique":
+      return distinctValues(path("properties", q.property as string));
+    case "sessions":
+      return "uniqExactIf(session_id, session_id IS NOT NULL)";
     default:
       return "count()";
   }
@@ -139,23 +148,10 @@ export function predicate(q: EventsQuery, params: Params): string {
     ["identity_kind", q.identity_kind],
   ] as const)
     if (value != null) parts.push(`${column} = ${params.add("String", value)}`);
-  const ops: Record<string, string> = { eq: "=", ne: "!=", gt: ">", gte: ">=", lt: "<", lte: "<=" };
-  for (const filter of q.filters) {
-    const expression = path("properties", filter.property);
-    const op = ops[filter.op];
-    if (!op) throw bad("Filter op must be eq/ne/gt/gte/lt/lte");
-    if (typeof filter.value === "number") {
-      parts.push(`${numeric(expression)} ${op} ${params.add("Float64", filter.value)}`);
-    } else if (
-      (typeof filter.value === "string" || typeof filter.value === "boolean") &&
-      (filter.op === "eq" || filter.op === "ne")
-    ) {
-      const equal = scalarEquals(expression, filter.value, params);
-      parts.push(
-        filter.op === "eq" ? equal : `(dynamicType(${expression}) != 'None' AND NOT ${equal})`,
-      );
-    } else throw bad("Ordered comparisons require numbers; eq/ne require scalar values");
-  }
+  for (const filter of q.filters)
+    parts.push(
+      filterCondition(path("properties", filter.property), filter.op, filter.value, params),
+    );
   return parts.join(" AND ");
 }
 

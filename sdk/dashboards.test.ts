@@ -116,6 +116,20 @@ test("overviewTemplate is a valid shape with unique ids and no orange", () => {
   expect(JSON.stringify(doc)).not.toContain("orange");
 });
 
+test("queryLabel names the richer measures", () => {
+  expect(queryLabel({ signal: "events", measure: "sessions" })).toBe("Sessions");
+  expect(queryLabel({ signal: "events", measure: "new_actors" })).toBe("New actors");
+  expect(queryLabel({ signal: "events", measure: "returning_actors" })).toBe("Returning actors");
+  expect(queryLabel({ signal: "events", measure: "unique", property: "country" })).toBe(
+    "Unique country",
+  );
+  expect(queryLabel({ signal: "events", measure: "p99", property: "ms" })).toBe("p99 ms");
+  expect(queryLabel({ signal: "logs", measure: "p90", attribute: "ms" })).toBe("p90 ms");
+  expect(queryLabel({ signal: "logs", measure: "unique", attribute: "region" })).toBe(
+    "Unique region",
+  );
+});
+
 test("queryLabel names what a query measures", () => {
   expect(queryLabel({ signal: "events" })).toBe("Events");
   expect(queryLabel({ signal: "events", measure: "count", event: "signup" })).toBe("Events");

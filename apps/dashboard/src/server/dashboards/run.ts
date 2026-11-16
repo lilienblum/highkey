@@ -18,6 +18,7 @@ import {
   type GroupValue,
   type Measured,
   measure,
+  missingIsZero,
   type Point,
   type RunOptions,
   rows,
@@ -129,8 +130,7 @@ export function shapeFor(w: Widget): Shape {
 }
 
 function fillsZero(q: QuerySpec): boolean {
-  if (typed(q)) return ["count", "actors", "sum"].includes(q.measure);
-  return true;
+  return typed(q) ? missingIsZero(q.measure) : true;
 }
 
 const labelText = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));

@@ -22,22 +22,56 @@
       ]
     },
     "EventMeasure": {
-      "enum": ["count", "actors", "sum", "avg", "p50", "p95", "min", "max"],
+      "enum": [
+        "count",
+        "actors",
+        "sessions",
+        "new_actors",
+        "returning_actors",
+        "unique",
+        "sum",
+        "avg",
+        "p50",
+        "p90",
+        "p95",
+        "p99",
+        "min",
+        "max"
+      ],
       "type": "string"
     },
     "Filter": {
       "additionalProperties": false,
       "properties": {
         "op": {
-          "type": "string"
+          "$ref": "#/$defs/FilterOp"
         },
         "property": {
           "type": "string"
         },
-        "value": true
+        "value": {
+          "description": "A string, number or boolean; a list of 1-50 of them for in and not_in; a string for contains and not_contains; absent for exists and not_exists."
+        }
       },
-      "required": ["property", "op", "value"],
+      "required": ["property", "op"],
       "type": "object"
+    },
+    "FilterOp": {
+      "enum": [
+        "eq",
+        "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "in",
+        "not_in",
+        "contains",
+        "not_contains",
+        "exists",
+        "not_exists"
+      ],
+      "type": "string"
     },
     "FunnelBy": {
       "enum": ["actor", "session"],
@@ -49,13 +83,26 @@
         "attribute": {
           "type": "string"
         },
-        "value": true
+        "value": {
+          "description": "As for an event filter."
+        },
+        "op": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilterOp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent means eq."
+        }
       },
-      "required": ["attribute", "value"],
+      "required": ["attribute"],
       "type": "object"
     },
     "LogMeasure": {
-      "enum": ["count", "sum", "avg", "p50", "p95", "min", "max"],
+      "enum": ["count", "unique", "sum", "avg", "p50", "p90", "p95", "p99", "min", "max"],
       "type": "string"
     },
     "Period": {
