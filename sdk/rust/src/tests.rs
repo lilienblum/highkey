@@ -268,3 +268,20 @@ fn invalid_configuration_and_oversized_batches_fail_locally() {
     assert!(event::encode_batch(&vec![big; 5]).is_err());
     assert!(event::encode_batch(&vec![event(); 100]).is_ok());
 }
+
+#[test]
+fn a_503_retry_after_longer_than_the_budget_is_shortened_to_fit() {
+    let client = client(Mock::new(vec![
+        Ok(Response {
+            status: 503,
+            body: "busy".into(),
+            retry_after: Some(Duration::from_secs(1)),
+        }),
+        response(200, r#"{"accepted":1,"duplicates":0}"#),
+    ]));
+    assert!(run(client.send(&event())).is_ok());
+    let sleeps = client.transport.sleeps.lock().unwrap().clone();
+    assert_eq!(sleeps.len(), 1);
+    // Half of what remains of the 800 ms budget, so the retry has time to finish.
+    assert!(sleeps[0] > Duration::from_millis(300) && sleeps[0] <= Duration::from_millis(400));
+}

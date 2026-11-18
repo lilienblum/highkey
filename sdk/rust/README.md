@@ -52,7 +52,7 @@ let piko = Piko::with_options(
 )?;
 ```
 
-The default total deadline is 800 ms with one retry. It covers requests, response reads, and backoff. Only network failures, 429, and 5xx retry. Numeric `Retry-After` is respected; a delay beyond the remaining budget ends delivery. The exact JSON is reused. Responses are limited to 16 KiB. Dropping the send future cancels its I/O; there is no worker to shut down. The built-in transport requires an active Tokio runtime with time and I/O enabled.
+The default total deadline is 800 ms with one retry. It covers requests, response reads, and backoff. Only network failures, 429, and 5xx retry. Numeric `Retry-After` is respected within the budget: after a 429 a delay beyond the remaining budget ends delivery, and after a 5xx it is shortened to half of what remains, so the retry still happens. The exact JSON is reused. Responses are limited to 16 KiB. Dropping the send future cancels its I/O; there is no worker to shut down. The built-in transport requires an active Tokio runtime with time and I/O enabled.
 
 `Error` distinguishes configuration/validation errors, HTTP status errors, network failures, invalid acknowledgments, oversized responses, and deadlines. Keys and event bodies are not included in the client's debug output. Never log transport requests or private properties.
 

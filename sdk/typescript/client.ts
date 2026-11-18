@@ -117,7 +117,13 @@ export class Piko {
         lastError = new DeliveryError(message?.error ?? "Delivery failed", response.status);
         if (response.status < 500 && response.status !== 429) throw lastError;
         const retryAfter = Number(response.headers.get("retry-after") ?? 0);
-        if (Number.isFinite(retryAfter)) backoff = Math.max(backoff, retryAfter * 1000);
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          // A 429 asks the client to slow down, so its wait is honoured or the send gives up. A 5xx
+          // is temporary: when its wait outlasts the budget, retry halfway through what remains.
+          const wait = retryAfter * 1000;
+          const fit = response.status === 429 ? wait : Math.min(wait, (deadline - Date.now()) / 2);
+          backoff = Math.max(backoff, fit);
+        }
       } catch (error) {
         if (
           error instanceof DeliveryError &&

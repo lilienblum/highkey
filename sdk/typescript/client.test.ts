@@ -51,6 +51,41 @@ test("retry-after cannot extend total deadline", async () => {
   expect(performance.now() - start).toBeLessThan(150);
 });
 
+test("a 503 whose retry-after outlasts the budget is still retried within it", async () => {
+  const attempts: number[] = [];
+  const start = performance.now();
+  globalThis.fetch = (async () => {
+    attempts.push(performance.now() - start);
+    return attempts.length === 1
+      ? new Response("{}", { status: 503, headers: { "retry-after": "1" } })
+      : Response.json({ accepted: 1, duplicates: 0 });
+  }) as unknown as typeof fetch;
+  const result = await new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 400 }).send({
+    name: "test",
+    source: "cli",
+  });
+  expect(result.accepted).toBe(1);
+  expect(attempts).toHaveLength(2);
+  // Halfway through what remained, leaving the retry time to finish.
+  expect(attempts[1]).toBeGreaterThan(150);
+  expect(attempts[1]).toBeLessThan(400);
+});
+
+test("a 429's retry-after is never shortened", async () => {
+  let attempts = 0;
+  globalThis.fetch = (async () => {
+    attempts++;
+    return new Response("{}", { status: 429, headers: { "retry-after": "10" } });
+  }) as unknown as typeof fetch;
+  await expect(
+    new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 400 }).send({
+      name: "test",
+      source: "cli",
+    }),
+  ).rejects.toThrow();
+  expect(attempts).toBe(1);
+});
+
 test("delivery does not attach credentials or referrer and rejects redirects", async () => {
   globalThis.fetch = (async (_input: unknown, init: RequestInit) => {
     expect(init.credentials).toBe("omit");

@@ -25,7 +25,7 @@ await piko.send({
 });
 ```
 
-`sendBatch` accepts 1–100 events. IDs and timestamps are materialized once before retrying, preserving deduplication. The total request deadline includes retries and backoff. Redirects are refused, cookies and Referer are omitted, and an optional `signal` cancels delivery. 400/401/413/422 are not retried; retryable network/server failures and 429 get at most one retry by default. A Retry-After longer than the remaining deadline ends delivery immediately. Awaited sends return durable acknowledgment or throw a delivery error; catch errors if analytics must not fail your business operation.
+`sendBatch` accepts 1–100 events. IDs and timestamps are materialized once before retrying, preserving deduplication. The total request deadline includes retries and backoff. Redirects are refused, cookies and Referer are omitted, and an optional `signal` cancels delivery. 400/401/413/422 are not retried; retryable network/server failures and 429 get at most one retry by default. A 429's Retry-After longer than the remaining deadline ends delivery immediately; a 5xx's is shortened to half of what remains, so the one retry still happens. Awaited sends return durable acknowledgment or throw a delivery error; catch errors if analytics must not fail your business operation.
 
 ## Browser tracker
 
@@ -110,7 +110,7 @@ cargo run -p piko-sdk --example cli -- build
 
 The example sends only when `PIKO_TELEMETRY=1`, an endpoint, and a key are configured. `DO_NOT_TRACK=1` disables collection even when enabled. Try `-- fail` to report failure and exit nonzero. Events carry `command`, app `version`, `os`, `arch`, boolean `success`, and numeric `duration_ms`. Command labels are restricted to `build`, `fail`, `check`, `init`, `dev`, and `deploy`; other arguments are reported as `other`. The example does not create an installation ID automatically. Set `PIKO_INSTALLATION_ID` only to an optional random ID chosen under your application’s telemetry preference. To measure installations, generate one random ID once and store it in your application's configuration directory only with the user's chosen telemetry setting. Do not send usernames, machine names, arguments, filesystem paths, or command output by default.
 
-The example runs its command first, then sends one event with the SDK's `send`, through `Piko::with_options` and the configured deadline. The SDK refuses redirects, retries once with the original ID and timestamp, honors Retry-After within the remaining deadline, and gives up when the deadline expires. The example ignores the send's result, so analytics failure never changes the CLI result or delays exit beyond that deadline.
+The example runs its command first, then sends one event with the SDK's `send`, through `Piko::with_options` and the configured deadline. The SDK refuses redirects, retries once with the original ID and timestamp, honors Retry-After within the remaining deadline (a 5xx's longer delay is shortened to half of what remains), and gives up when the deadline expires. The example ignores the send's result, so analytics failure never changes the CLI result or delays exit beyond that deadline.
 
 To exercise the actual Rust example and verify its stored types locally, run `bun scripts/verify-cli.ts` while Piko is running at `PIKO_API_URL` (default `http://127.0.0.1:3000`, as under `bun run dev:standalone` or Compose). It creates a small **Rust CLI example** project visible in the dashboard.
 

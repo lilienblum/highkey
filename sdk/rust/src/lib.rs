@@ -78,7 +78,9 @@ impl Request<'_> {
 pub struct Response {
     pub status: u16,
     pub body: String,
-    /// Parsed Retry-After delay, if present. The SDK never retries earlier than this.
+    /// Parsed Retry-After delay, if present. After a 429 the SDK never retries earlier than
+    /// this; after a 5xx it waits this long when the budget allows, and otherwise retries
+    /// halfway through what remains.
     pub retry_after: Option<Duration>,
 }
 
@@ -218,7 +220,16 @@ impl<T: Transport> Piko<T> {
                 }
                 Ok(response) => {
                     let retryable = response.status == 429 || (500..600).contains(&response.status);
-                    delay = delay.max(response.retry_after.unwrap_or_default());
+                    // A 429 asks the client to slow down, so its wait is honoured or the send
+                    // gives up. A 5xx is temporary: when its wait outlasts the budget, retry
+                    // halfway through what remains.
+                    let wait = response.retry_after.unwrap_or_default();
+                    let wait = if response.status == 429 {
+                        wait
+                    } else {
+                        wait.min(deadline.saturating_duration_since(Instant::now()) / 2)
+                    };
+                    delay = delay.max(wait);
                     let error = Error::Http {
                         status: response.status,
                         body: response.body,
