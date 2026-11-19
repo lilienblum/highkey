@@ -1,0 +1,166 @@
+// Who is looking at the dashboard, and what the account screens need to know: the signed-in
+// person with their organizations, which sign-in options this server offers, an invitation's
+// details for its Join page, and an agent's name for the consent page.
+import { createServerFn } from "@tanstack/react-start";
+
+export interface ViewerOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
+export interface Viewer {
+  user: { id: string; name: string; email: string; serverAdmin: boolean; twoFactor: boolean };
+  activeOrganizationId: string | null;
+  organizations: ViewerOrganization[];
+}
+
+export interface AuthSetup {
+  /** Email is configured: verification, password reset and invitation emails. */
+  email: boolean;
+  /** Anyone may sign up, or only the first account and invited people. */
+  signup: "open" | "invite";
+  /** No account exists yet: the first one administers the server. */
+  firstAccount: boolean;
+  social: { github: boolean; google: boolean };
+}
+
+export interface InvitationDetails {
+  id: string;
+  email: string;
+  role: string;
+  organization: string;
+  inviter: { name: string; email: string };
+  expiresAt: string;
+  status: "pending" | "accepted" | "rejected" | "canceled" | "expired";
+}
+
+async function context() {
+  const [{ apiContext }, { getRequest }] = await Promise.all([
+    import("./api/context"),
+    import("@tanstack/react-start/server"),
+  ]);
+  return { ctx: apiContext(), request: getRequest() };
+}
+
+/** The signed-in person, or null. */
+export const getViewer = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Viewer | null> => {
+    const { ctx, request } = await context();
+    const auth = await ctx.auth();
+    const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
+    if (!session) return null;
+    const { all } = await import("./db/db");
+    const organizations = await all<ViewerOrganization>(
+      ctx.db,
+      `SELECT o.id, o.name, o.slug, m.role FROM member m JOIN organization o ON o.id = m."organizationId"
+       WHERE m."userId" = ? ORDER BY o.name COLLATE NOCASE, o.id`,
+      [session.user.id],
+    );
+    const user = session.user as typeof session.user & {
+      role?: string | null;
+      twoFactorEnabled?: boolean | null;
+    };
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        serverAdmin: user.role === "admin",
+        twoFactor: Boolean(user.twoFactorEnabled),
+      },
+      activeOrganizationId: session.session.activeOrganizationId ?? null,
+      organizations,
+    };
+  },
+);
+
+/** What the sign-in and sign-up screens offer on this server. */
+export const getAuthSetup = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AuthSetup> => {
+    const { ctx } = await context();
+    const auth = await ctx.auth();
+    const { one } = await import("./db/db");
+    const users = await one<{ n: number }>(ctx.db, 'SELECT count(*) AS n FROM "user"');
+    const options = auth.options as {
+      emailVerification?: unknown;
+      socialProviders?: { github?: unknown; google?: unknown };
+    };
+    return {
+      email: Boolean(options.emailVerification),
+      signup: process.env.HIGHKEY_SIGNUP === "open" ? "open" : "invite",
+      firstAccount: Number(users?.n ?? 0) === 0,
+      social: {
+        github: Boolean(options.socialProviders?.github),
+        google: Boolean(options.socialProviders?.google),
+      },
+    };
+  },
+);
+
+const ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * An invitation's Join page details: who invited whom, to which organization, as what. Anyone
+ * holding the link may read them, the way the email would show them; accepting needs the
+ * invited person's account.
+ */
+export const getInvitationDetails = createServerFn({ method: "GET" })
+  .validator((id: unknown) => {
+    if (typeof id !== "string" || !ID.test(id)) throw new Error("Not an invitation link");
+    return id;
+  })
+  .handler(async ({ data: id }): Promise<InvitationDetails | null> => {
+    const { ctx } = await context();
+    const { one } = await import("./db/db");
+    const row = await one<{
+      id: string;
+      email: string;
+      role: string | null;
+      status: string;
+      expires_at: string | number;
+      organization: string;
+      inviter_name: string;
+      inviter_email: string;
+    }>(
+      ctx.db,
+      `SELECT i.id, i.email, i.role, i.status, i."expiresAt" AS expires_at, o.name AS organization,
+         u.name AS inviter_name, u.email AS inviter_email
+       FROM invitation i JOIN organization o ON o.id = i."organizationId"
+       JOIN "user" u ON u.id = i."inviterId" WHERE i.id = ?`,
+      [id],
+    );
+    if (!row) return null;
+    const expiresAt = new Date(row.expires_at);
+    const status =
+      row.status === "pending" && expiresAt.getTime() < Date.now()
+        ? "expired"
+        : (row.status as InvitationDetails["status"]);
+    return {
+      id: row.id,
+      email: row.email,
+      role: row.role ?? "member",
+      organization: row.organization,
+      inviter: { name: row.inviter_name, email: row.inviter_email },
+      expiresAt: expiresAt.toISOString(),
+      status,
+    };
+  });
+
+/** The name an agent registered with, for the consent page. */
+export const getAgentName = createServerFn({ method: "GET" })
+  .validator((clientId: unknown) => {
+    if (typeof clientId !== "string" || clientId.length > 2048) throw new Error("Not a client");
+    return clientId;
+  })
+  .handler(async ({ data: clientId }): Promise<string | null> => {
+    const { ctx } = await context();
+    const { one } = await import("./db/db");
+    const row = await one<{ name: string | null }>(
+      ctx.db,
+      'SELECT name FROM "oauthClient" WHERE "clientId" = ?',
+      [clientId],
+    );
+    return row?.name ?? null;
+  });

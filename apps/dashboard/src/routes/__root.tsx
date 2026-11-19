@@ -4,26 +4,54 @@ import {
   createRootRouteWithContext,
   retainSearchParams,
   HeadContent,
+  Outlet,
+  redirect,
   Scripts,
   ScriptOnce,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { getWorkspace } from "@/server/workspace";
+import { getViewer, type Viewer } from "@/server/viewer";
+import { isAccountScreen, isPublicPath } from "@/lib/auth-routes";
 import type { ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { validateWorkspaceSearch } from "@/lib/workspace-search";
 import { sidebarScript } from "@/lib/preferences";
 import styles from "../styles.css?url";
+// Signing in or out, joining and switching organizations all load a new page, so in the browser
+// the viewer from the first load stays right; asking again on every navigation (each filter
+// change is one) would only add a round trip. The server asks on every request.
+let browserViewer: Promise<Viewer | null> | undefined;
+function currentViewer(): Promise<Viewer | null> {
+  if (typeof window === "undefined") return getViewer();
+  browserViewer ??= getViewer().catch((error) => {
+    browserViewer = undefined;
+    throw error;
+  });
+  return browserViewer;
+}
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   validateSearch: validateWorkspaceSearch,
   search: {
     middlewares: [retainSearchParams(["source", "days", "period", "snapshot", "from", "to"])],
   },
+  // Everyone signs in first; account screens (signing in, joining) are the only public pages.
+  beforeLoad: async ({ location }) => {
+    const viewer = await currentViewer();
+    if (!viewer && !isPublicPath(location.pathname))
+      throw redirect({ href: `/sign-in?redirect=${encodeURIComponent(location.href)}` });
+    return { viewer };
+  },
   // The project catalog renders on the server and is reused by client navigation; mutations
   // refresh it in the shell, and the workspace error screen retries it with router.invalidate().
-  loader: async () => ({ initialProducts: await getWorkspace(), serverNow: Date.now() }),
+  // Account screens show no workspace, so they load none.
+  loader: async ({ location }) => ({
+    initialProducts: isAccountScreen(location.pathname) ? [] : await getWorkspace(),
+    serverNow: Date.now(),
+  }),
   staleTime: Number.POSITIVE_INFINITY,
   shouldReload: false,
   headers: () => ({ "Cache-Control": "private, no-store" }),
@@ -54,6 +82,9 @@ function Root() {
   const { initialProducts, serverNow } = Route.useLoaderData();
   // The router's client: one per page load, so results stay cached across navigation.
   const { queryClient } = Route.useRouteContext();
+  const accountScreen = useRouterState({
+    select: (state) => isAccountScreen(state.location.pathname),
+  });
   return (
     <QueryClientProvider client={queryClient}>
       <DisplayPreferencesProvider>
@@ -67,7 +98,11 @@ function Root() {
           }}
           reveal={{ order: "together", duration: 120, hold: 150 }}
         >
-          <AppShell initialProducts={initialProducts} serverNow={serverNow} />
+          {accountScreen ? (
+            <Outlet />
+          ) : (
+            <AppShell initialProducts={initialProducts} serverNow={serverNow} />
+          )}
         </SkulletProvider>
       </DisplayPreferencesProvider>
     </QueryClientProvider>

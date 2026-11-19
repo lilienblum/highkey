@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL;
 test("event timezone persists across reload, changes event inspection, and leaves raw timestamps intact", async ({
@@ -7,7 +8,7 @@ test("event timezone persists across reload, changes event inspection, and leave
   const admin = async (path: string, body: unknown) => {
     const response = await fetch(`${api}/api${path}`, {
       method: "POST",
-      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify(body),
     });
     expect(response.ok).toBe(true);

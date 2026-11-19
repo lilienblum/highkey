@@ -1,3 +1,4 @@
+import { useRouteContext } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChangeChannel } from "@/lib/use-change-channel";
 import { matches, parseChangeEnvelope, type Signal } from "@/lib/change-envelope";
@@ -142,7 +143,8 @@ function ChangeSubscription({
   const previousStatus = useRef("connecting");
   const dashboardsChanged = useRef(onDashboardsChanged);
   dashboardsChanged.current = onDashboardsChanged;
-  const { status } = useChangeChannel((message) => {
+  const { viewer } = useRouteContext({ from: "__root__" });
+  const { status } = useChangeChannel(viewer?.activeOrganizationId ?? null, (message) => {
     if (message.type !== "changed" || !productId) return;
     const change = parseChangeEnvelope(message.data);
     if (!change) return;

@@ -1,0 +1,243 @@
+/* Account screens: one panel on the workspace ground. Its head is the sidebar identity block
+   (sidebar ground, dither bloom, mark and wordmark), so signing in and arriving look continuous. */
+.auth-screen {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+}
+.auth-panel {
+  width: min(400px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--sidebar);
+  overflow: hidden;
+}
+.auth-identity {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 16px;
+}
+.auth-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 24px 24px;
+}
+.auth-body > h1 {
+  text-wrap: balance;
+}
+.auth-lead {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+/* The lead belongs to its heading: closer to it than the form is. */
+.auth-body > h1 + .auth-lead {
+  margin-top: -12px;
+}
+.auth-lead strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.auth-form [data-slot="field"] {
+  gap: 8px;
+}
+.auth-form .auth-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+.auth-field-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.auth-field-row a,
+.auth-footer a,
+.auth-link {
+  color: var(--primary);
+  font-size: 13px;
+  text-underline-offset: 3px;
+}
+.auth-field-row a:hover,
+.auth-footer a:hover,
+.auth-link:hover {
+  text-decoration: underline;
+}
+/* Like the destructive alert: a red frame and red words on the panel's own ground. */
+.auth-error {
+  padding: 10px 12px;
+  border: 1px solid var(--destructive);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--destructive);
+}
+.auth-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.auth-notice strong {
+  color: var(--foreground);
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.auth-social {
+  display: grid;
+  gap: 8px;
+}
+.auth-social [data-slot="button"] {
+  width: 100%;
+}
+.auth-footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+/* The six-digit code: one wide field, digits spaced like the authenticator shows them. */
+.auth-code {
+  height: 48px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.4em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* Facts an invitation or a grant states: who, where, what. */
+.auth-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-inset);
+  font-size: 13px;
+}
+.auth-facts dt {
+  color: var(--muted-foreground);
+}
+.auth-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+}
+/* A choice between a few options (organizations, access): full-width rows, one selected. */
+.auth-choices {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.auth-choice {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 4px 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
+}
+.auth-choice:hover {
+  background: var(--surface-hover);
+}
+.auth-choice:has(input:checked) {
+  border-color: var(--primary);
+}
+.auth-choice:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.auth-choice:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.auth-choice input {
+  grid-row: span 2;
+  margin: 3px 0 0;
+  accent-color: var(--primary);
+}
+.auth-choice-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.auth-choice-detail {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+.auth-actions > * {
+  flex: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-choice {
+    transition: none;
+  }
+}
+.auth-hint {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.auth-text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.auth-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.auth-check input {
+  accent-color: var(--primary);
+}
+.auth-legend {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+}

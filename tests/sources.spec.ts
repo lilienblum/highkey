@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 async function select(page: Page, name: string, value: string) {
   if (name === "Select source") {
@@ -160,7 +161,7 @@ test("source creation retries a failed catalog refresh without creating the sour
 }) => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({
       name: `Source retry ${Date.now()}`,
 
@@ -219,7 +220,7 @@ test("automatic and pinned source icons survive renames without changing analyti
   test.setTimeout(60_000);
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ name: `Icons ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);

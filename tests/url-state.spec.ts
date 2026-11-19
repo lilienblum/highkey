@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Product } from "../apps/dashboard/src/lib/api";
+import { apiHeaders } from "./auth";
 const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("The isolated E2E API must be configured");
 let project: Product;
@@ -7,7 +8,7 @@ let other: Product;
 async function post(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);

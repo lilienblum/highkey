@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL;
 test("optional website persists, suggests the browser origin, and can be cleared", async ({
@@ -31,7 +32,7 @@ test("project icons load only from Highkey and failed images fall back without s
 }) => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify({ name: `Cached icon ${Date.now()}`, retention_days: 30 }),
   });
   const project = await response.json();

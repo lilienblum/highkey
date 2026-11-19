@@ -97,4 +97,22 @@ describe("live hints", () => {
     expect(await verifyChannel(ctx, { params: { org }, cookie: "forged.value" })).toBe(false);
     expect(sessionCookieName("http://127.0.0.1:3000")).toBe("better-auth.session_token");
   });
+
+  test("an_api_key_subscribes_only_to_its_own_organization", async () => {
+    const auth = await ctx.auth();
+    const org = await orgOf(ctx.session);
+    const key = (await call(ctx, "POST", "/api/keys", { name: "Wallboard", access: "read" })).json
+      .key as string;
+    const bearer = (value: string) => ({ scheme: "Bearer", value });
+    expect(await verifyChannel(ctx, { params: { org }, header: bearer(key) })).toMatchObject({
+      subject: expect.any(String),
+    });
+    const other = await signUp(auth, "other@example.com");
+    expect(
+      await verifyChannel(ctx, { params: { org: await orgOf(other) }, header: bearer(key) }),
+    ).toBe(false);
+    expect(await verifyChannel(ctx, { params: { org }, header: bearer("hk_not_a_key") })).toBe(
+      false,
+    );
+  });
 });

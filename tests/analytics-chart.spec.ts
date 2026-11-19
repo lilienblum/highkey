@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { QueryResult } from "../apps/dashboard/src/lib/api";
+import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 let productId: string;
@@ -30,7 +31,7 @@ test.use({ timezoneId: "America/Los_Angeles", hasTouch: true });
 test.beforeAll(async () => {
   const response = await fetch(`${api}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify({ name: `TanStack rendering ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);

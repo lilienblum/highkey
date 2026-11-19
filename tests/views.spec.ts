@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL;
 if (!endpoint) throw new Error("Run dashboard browser tests through bun test:e2e.");
@@ -18,7 +19,7 @@ async function admin<T>(
 ) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method,
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   expect(response.ok, `${path}: ${response.status}`).toBe(true);

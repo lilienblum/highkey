@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL;
 if (!endpoint) throw new Error("Run dashboard browser tests through bun test:e2e.");
@@ -7,7 +8,7 @@ type Project = { id: string; slug: string; name: string };
 async function admin<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   expect(response.ok, `${path}: ${response.status}`).toBe(true);
@@ -496,10 +497,13 @@ test("/mcp on the dashboard host is the API's MCP server and still refuses brows
       clientInfo: { name: "e2e", version: "1" },
     },
   };
-  const headers = {
-    "content-type": "application/json",
-    accept: "application/json, text/event-stream",
-  };
+  // An agent connects with an API key (or OAuth); a browser session alone is refused.
+  const headers = apiHeaders({ accept: "application/json, text/event-stream" });
+  const session = await page.request.post("/mcp", {
+    headers: { "content-type": "application/json", accept: headers.accept as string },
+    data: initialize,
+  });
+  expect(session.status()).toBe(401);
   const agent = await page.request.post("/mcp", { headers, data: initialize });
   expect(agent.status()).toBe(200);
   expect((await agent.json()).result.serverInfo.name).toBe("highkey");
@@ -660,7 +664,7 @@ test("revisions list origins and restore an earlier version", async ({ page }) =
   });
   const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify({
       base_revision: 1,
       document: { ...checkoutDashboard, name: `${original} edited` },
@@ -943,7 +947,7 @@ test("without channels, a dashboard an agent creates or edits appears by polling
   const renamed = `${original} edited`;
   const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify({ base_revision: 1, document: { ...checkoutDashboard, name: renamed } }),
   });
   expect(saved.ok, `save: ${saved.status}`).toBe(true);

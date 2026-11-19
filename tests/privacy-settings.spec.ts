@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 test("Settings defaults to one year without changing existing retention or collection defaults", async ({
   page,
@@ -6,7 +7,7 @@ test("Settings defaults to one year without changing existing retention or colle
   const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
   const response = await fetch(`${api}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify({
       name: `Privacy settings ${Date.now()}`,
 

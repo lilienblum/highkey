@@ -1,26 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel } from "tako.sh/client";
 
-/** The signed-in person's active organization, which selects their live stream. */
-async function activeOrganization(signal: AbortSignal): Promise<string | null> {
-  const response = await fetch("/api/auth/get-session", { credentials: "same-origin", signal });
-  if (!response.ok) return null;
-  const body = (await response.json()) as { session?: { activeOrganizationId?: string | null } };
-  return body?.session?.activeOrganizationId ?? null;
-}
-
 // Refresh hints need no client-side message history. The transport reconnects automatically.
-// Each organization has its own stream, which only its members may open.
-export function useChangeChannel(onMessage: (message: { type: string; data: unknown }) => void) {
+// Each organization has its own stream, which only its members may open; the server render
+// names the active one, so the subscription starts with the page.
+export function useChangeChannel(
+  org: string | null,
+  onMessage: (message: { type: string; data: unknown }) => void,
+) {
   const handler = useRef(onMessage);
   handler.current = onMessage;
   const [status, setStatus] = useState<"connecting" | "open">("connecting");
-  const [org, setOrg] = useState<string | null>(null);
-  useEffect(() => {
-    const aborted = new AbortController();
-    activeOrganization(aborted.signal).then(setOrg, () => setOrg(null));
-    return () => aborted.abort();
-  }, []);
   useEffect(() => {
     if (!org) return;
     const subscription = new Channel("analytics-changes", undefined, { org }).subscribe();

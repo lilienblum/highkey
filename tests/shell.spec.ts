@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 async function expectSourcesFit(page: Page) {
   const sources = page.locator(".workspace-sources");
@@ -13,7 +14,7 @@ let project: { id: string; name: string; slug: string };
 test.beforeAll(async () => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ name: `SSR ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);
@@ -21,7 +22,7 @@ test.beforeAll(async () => {
   for (let index = 1; index <= 6; index++) {
     const source = await fetch(`${endpoint}/api/products/${project.id}/sources`, {
       method: "POST",
-      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({ name: `Fixture source ${index}` }),
     });
     expect(source.ok).toBe(true);

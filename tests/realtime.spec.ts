@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { Channel, type ChannelMessage } from "tako.sh/client";
 import type { ChangeEnvelope } from "../apps/dashboard/src/lib/change-envelope";
+import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 test.skip(
@@ -12,7 +13,7 @@ type Fixture = { id: string; name: string; key: string };
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: apiHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
@@ -188,8 +189,12 @@ function hinted(envelope: ChangeEnvelope, product: string, signal?: string) {
 }
 
 function listen(baseUrl?: string, lastEventId?: string) {
-  const subscription = new Channel("analytics-changes").subscribe({
+  // The owner's organization's stream, with the owner's API key.
+  const subscription = new Channel("analytics-changes", undefined, {
+    org: process.env.HIGHKEY_E2E_ORG as string,
+  }).subscribe({
     baseUrl: baseUrl ?? "http://127.0.0.1:3000",
+    authorization: `Bearer ${process.env.HIGHKEY_E2E_KEY}`,
     lastEventId,
   });
   const stream = subscription.raw as EventTarget;

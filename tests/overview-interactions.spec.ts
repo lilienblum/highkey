@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiHeaders } from "./auth";
 const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("Use the isolated E2E runner");
 
@@ -9,7 +10,7 @@ test("live identity widget, in-place filters, and independent external row links
   async function post(path: string, body: unknown) {
     const response = await fetch(`${api}/api${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+      headers: apiHeaders(),
       body: JSON.stringify(body),
     });
     expect(response.ok).toBe(true);
@@ -98,13 +99,9 @@ test("Overview tiles and the activity headline show growth against the previous 
   const project = await post(
     "/products",
     { name: `Growth ${Date.now()}`, retention_days: 365 },
-    { "x-highkey-admin": "1" },
+    apiHeaders(),
   );
-  const { key } = await post(
-    `/products/${project.id}/keys`,
-    { label: "Growth" },
-    { "x-highkey-admin": "1" },
-  );
+  const { key } = await post(`/products/${project.id}/keys`, { label: "Growth" }, apiHeaders());
   const hours = (ago: number) => new Date(Date.now() - ago * 3_600_000).toISOString();
   // Four events this week against two in the week before: +100%, and no baseline for durations.
   await post(

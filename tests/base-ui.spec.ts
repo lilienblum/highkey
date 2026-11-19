@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL;
 let alpha: { id: string; name: string };
@@ -8,7 +9,7 @@ test.beforeAll(async () => {
   const create = async (name: string) => {
     const response = await fetch(`${api}/api/products`, {
       method: "POST",
-      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({ name, retention_days: 30 }),
     });
     expect(response.ok).toBe(true);
@@ -44,7 +45,12 @@ test("project select supports typeahead, keyboard selection, Escape and human-re
   await expect(page.getByRole("listbox")).not.toBeVisible();
   await expect(select).toBeFocused();
   await expect(select).toContainText(zulu.name);
-  expect(await context.cookies()).toEqual([]);
+  // The dashboard sets no cookie of its own; the session's is the only one.
+  expect(
+    (await context.cookies()).filter(
+      (cookie) => !cookie.name.endsWith("better-auth.session_token"),
+    ),
+  ).toEqual([]);
   await expect(page.getByRole("link", { name: "Events", exact: true })).toHaveAttribute(
     "href",
     `/projects/${zulu.slug}/events?source=all&days=7`,

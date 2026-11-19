@@ -1,12 +1,13 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 import type { Product, QueryResult } from "../apps/dashboard/src/lib/api";
+import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 const products = {} as Record<"website" | "tool" | "generic" | "anonymous", Product>;
 async function admin(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);

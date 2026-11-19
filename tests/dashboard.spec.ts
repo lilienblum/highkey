@@ -1,11 +1,12 @@
 import { displayTimestamp } from "../apps/dashboard/src/lib/display-time";
 import { expect, test, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 const apiUrl = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 const dashboard = process.env.HIGHKEY_DASHBOARD_URL ?? "http://127.0.0.1:3000";
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${apiUrl}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: apiHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);

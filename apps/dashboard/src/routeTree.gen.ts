@@ -10,18 +10,27 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SelectOrganizationRouteImport } from './routes/select-organization'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
+import { Route as TwoFactorRouteImport } from './routes/two-factor'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known.$'
 import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
 import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
+import { Route as JoinInvitationIdRouteImport } from './routes/join.$invitationId'
 import { Route as ProjectsProjectSlugRouteImport } from './routes/projects.$projectSlug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.$projectSlug.index'
@@ -36,6 +45,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EventsRoute = EventsRouteImport.update({
   id: '/events',
   path: '/events',
@@ -44,6 +58,11 @@ const EventsRoute = EventsRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
@@ -66,14 +85,44 @@ const McpRoute = McpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SelectOrganizationRoute = SelectOrganizationRouteImport.update({
+  id: '/select-organization',
+  path: '/select-organization',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackerDotjsRoute = TrackerDotjsRouteImport.update({
   id: '/tracker.js',
   path: '/tracker.js',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TwoFactorRoute = TwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
@@ -94,6 +143,11 @@ const HighkeyRuntimeRoute = HighkeyRuntimeRouteImport.update({
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinInvitationIdRoute = JoinInvitationIdRouteImport.update({
+  id: '/join/$invitationId',
+  path: '/join/$invitationId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectSlugRoute = ProjectsProjectSlugRouteImport.update({
@@ -144,18 +198,27 @@ const ProjectsProjectSlugDashboardsDashboardSlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/two-factor': typeof TwoFactorRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
+  '/join/$invitationId': typeof JoinInvitationIdRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
@@ -167,18 +230,27 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/two-factor': typeof TwoFactorRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
+  '/join/$invitationId': typeof JoinInvitationIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
@@ -190,18 +262,27 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/two-factor': typeof TwoFactorRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
+  '/join/$invitationId': typeof JoinInvitationIdRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
@@ -215,18 +296,27 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/consent'
     | '/events'
     | '/explore'
+    | '/forgot-password'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/reset-password'
+    | '/select-organization'
     | '/settings'
+    | '/sign-in'
+    | '/sign-up'
     | '/tracker.js'
+    | '/two-factor'
+    | '/verify-email'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
+    | '/join/$invitationId'
     | '/projects/$projectSlug'
     | '/api/auth/$'
     | '/projects/$projectSlug/events'
@@ -238,18 +328,27 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/consent'
     | '/events'
     | '/explore'
+    | '/forgot-password'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/reset-password'
+    | '/select-organization'
     | '/settings'
+    | '/sign-in'
+    | '/sign-up'
     | '/tracker.js'
+    | '/two-factor'
+    | '/verify-email'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
+    | '/join/$invitationId'
     | '/api/auth/$'
     | '/projects/$projectSlug/events'
     | '/projects/$projectSlug/explore'
@@ -260,18 +359,27 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/consent'
     | '/events'
     | '/explore'
+    | '/forgot-password'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/reset-password'
+    | '/select-organization'
     | '/settings'
+    | '/sign-in'
+    | '/sign-up'
     | '/tracker.js'
+    | '/two-factor'
+    | '/verify-email'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
+    | '/join/$invitationId'
     | '/projects/$projectSlug'
     | '/api/auth/$'
     | '/projects/$projectSlug/events'
@@ -284,18 +392,27 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConsentRoute: typeof ConsentRoute
   EventsRoute: typeof EventsRoute
   ExploreRoute: typeof ExploreRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LogsRoute: typeof LogsRoute
   McpRoute: typeof McpRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SelectOrganizationRoute: typeof SelectOrganizationRoute
   SettingsRoute: typeof SettingsRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   TrackerDotjsRoute: typeof TrackerDotjsRoute
+  TwoFactorRoute: typeof TwoFactorRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute
   HighkeyChangesRoute: typeof HighkeyChangesRoute
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
+  JoinInvitationIdRoute: typeof JoinInvitationIdRoute
   ProjectsProjectSlugRoute: typeof ProjectsProjectSlugRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -307,6 +424,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events': {
@@ -321,6 +445,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/llms-full.txt': {
@@ -351,6 +482,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/select-organization': {
+      id: '/select-organization'
+      path: '/select-organization'
+      fullPath: '/select-organization'
+      preLoaderRoute: typeof SelectOrganizationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -358,11 +503,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tracker.js': {
       id: '/tracker.js'
       path: '/tracker.js'
       fullPath: '/tracker.js'
       preLoaderRoute: typeof TrackerDotjsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/two-factor': {
+      id: '/two-factor'
+      path: '/two-factor'
+      fullPath: '/two-factor'
+      preLoaderRoute: typeof TwoFactorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/$': {
@@ -391,6 +564,13 @@ declare module '@tanstack/react-router' {
       path: '/api/$'
       fullPath: '/api/$'
       preLoaderRoute: typeof ApiSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join/$invitationId': {
+      id: '/join/$invitationId'
+      path: '/join/$invitationId'
+      fullPath: '/join/$invitationId'
+      preLoaderRoute: typeof JoinInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectSlug': {
@@ -476,18 +656,27 @@ const ProjectsProjectSlugRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConsentRoute: ConsentRoute,
   EventsRoute: EventsRoute,
   ExploreRoute: ExploreRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LogsRoute: LogsRoute,
   McpRoute: McpRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SelectOrganizationRoute: SelectOrganizationRoute,
   SettingsRoute: SettingsRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   TrackerDotjsRoute: TrackerDotjsRoute,
+  TwoFactorRoute: TwoFactorRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   DotwellKnownSplatRoute: DotwellKnownSplatRoute,
   HighkeyChangesRoute: HighkeyChangesRoute,
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
+  JoinInvitationIdRoute: JoinInvitationIdRoute,
   ProjectsProjectSlugRoute: ProjectsProjectSlugRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

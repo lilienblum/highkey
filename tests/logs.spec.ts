@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { apiHeaders } from "./auth";
 // The page is the log stream's only scroll container.
 async function scrollToEnd(page: Page) {
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -10,7 +11,7 @@ let key: string;
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: apiHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
