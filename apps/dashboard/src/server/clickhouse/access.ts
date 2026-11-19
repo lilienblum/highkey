@@ -99,6 +99,12 @@ export async function ensureProjectAccess(
   for (const sql of accessStatements(productId, secret)) await admin.command(sql);
 }
 
+/** Drops a project's reader user and its database with every view. Idempotent. */
+export async function dropProjectAccess(admin: ClickHouse, productId: string): Promise<void> {
+  await admin.command(`DROP USER IF EXISTS ${readerUser(productId)}`);
+  await admin.command(`DROP DATABASE IF EXISTS ${projectDatabase(productId)}`);
+}
+
 /**
  * A fingerprint of what project access looks like in this release with this reader secret: the
  * statements for a placeholder project, hashed (the derived password never leaves the hash). A

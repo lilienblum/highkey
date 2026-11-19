@@ -55,8 +55,13 @@ describe("access", () => {
   test("every_route_obeys_the_role_table", async () => {
     const routes = await registeredRoutes();
     expect(routes.length).toBeGreaterThan(30);
+    let doomed = 0;
     for (const route of routes) {
-      const path = concrete(route.pattern);
+      // Deleting a project is checked on one made for it, so the others keep theirs.
+      const path =
+        route.method === "DELETE" && route.pattern === "/api/products/:id"
+          ? `/api/products/${(await project(ctx, `Doomed ${++doomed}`)).id}`
+          : concrete(route.pattern);
       const scoped = route.pattern.includes(":id") || route.pattern.includes(":project");
       // MCP takes agents' tokens and API keys, never a browser session (mcp-oauth tests).
       const agentsOnly = route.pattern.endsWith("/mcp");

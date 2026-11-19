@@ -47,8 +47,10 @@ async function ensureRoutes(): Promise<void> {
   const { registerApiKeys } = await import("../auth/key-routes");
   const { registerConnections } = await import("../auth/connections");
   const { registerAdmin } = await import("../admin");
+  const { registerDeletion } = await import("../deletion");
   registerManagement();
   registerAdmin();
+  registerDeletion();
   registerApiKeys();
   registerConnections();
   registerQueries();

@@ -63,14 +63,19 @@ export async function product(db: Db, id: string): Promise<Product> {
   return withLinks(db, await productRow(db, id));
 }
 
-/** An organization's projects, or (without `orgId`) every project, for background work. */
+/**
+ * An organization's projects (never deleted ones), or (without `orgId`) every project, deleted ones
+ * included, for background work.
+ */
 export async function products(db: Db, orgId?: string): Promise<Product[]> {
   const rows =
     orgId === undefined
       ? await all<Row>(db, `SELECT ${ROW} FROM products ORDER BY created_at, id`)
-      : await all<Row>(db, `SELECT ${ROW} FROM products WHERE org_id = ? ORDER BY created_at, id`, [
-          orgId,
-        ]);
+      : await all<Row>(
+          db,
+          `SELECT ${ROW} FROM products WHERE org_id = ? AND deleted_at IS NULL ORDER BY created_at, id`,
+          [orgId],
+        );
   return Promise.all(rows.map((row) => withLinks(db, row)));
 }
 
@@ -80,22 +85,24 @@ export async function requireProduct(db: Db, id: string): Promise<void> {
 }
 
 /**
- * A project by id, or else by slug, within organization `orgId`: another organization's project
- * is missing, exactly like one that does not exist. Without `orgId` (background work only) any
+ * A project by id, or else by slug, within organization `orgId`: another organization's project,
+ * or a deleted one, is missing, exactly like one that does not exist. Without `orgId` (background work only) any
  * project matches by id.
  */
 export async function resolveProduct(db: Db, key: string, orgId?: string): Promise<Row> {
   const row =
     orgId === undefined
       ? await one<Row>(db, `SELECT ${ROW} FROM products WHERE id = ?`, [key])
-      : ((await one<Row>(db, `SELECT ${ROW} FROM products WHERE id = ? AND org_id = ?`, [
-          key,
-          orgId,
-        ])) ??
-        (await one<Row>(db, `SELECT ${ROW} FROM products WHERE slug = ? AND org_id = ?`, [
-          key,
-          orgId,
-        ])));
+      : ((await one<Row>(
+          db,
+          `SELECT ${ROW} FROM products WHERE id = ? AND org_id = ? AND deleted_at IS NULL`,
+          [key, orgId],
+        )) ??
+        (await one<Row>(
+          db,
+          `SELECT ${ROW} FROM products WHERE slug = ? AND org_id = ? AND deleted_at IS NULL`,
+          [key, orgId],
+        )));
   if (!row) throw projectMissing();
   return row;
 }

@@ -18,6 +18,7 @@ import { adoptOrphanProjects } from "../db/products";
 import { projectSlug } from "../db/sources";
 import { cimdFetch } from "./cimd-fetch";
 import { keyFrom } from "./keys";
+import { forgetOrganization, projectCount } from "./org-cleanup";
 import { type Mailer, resendMailer, type SocialProviders, socialFromEnv } from "./mailer";
 import { ac, roles } from "./roles";
 
@@ -36,6 +37,11 @@ export interface AuthOptions {
   mailer: Mailer | null;
   signup: "open" | "invite";
   keyRateLimit?: { timeWindow: number; maxRequests: number };
+  /**
+   * Runs before a person deletes their own account: refuses while they are the only owner of an
+   * organization with other members, and deletes what goes with them (deletion.ts).
+   */
+  beforeDeleteUser?: (userId: string) => Promise<void>;
   /** GitHub and Google sign-in, each present only when configured. */
   social?: SocialProviders;
   /** How agents' client metadata documents are fetched; tests serve their own. */
@@ -187,6 +193,22 @@ export function createAuth(options: AuthOptions) {
         }
       : undefined,
     socialProviders: options.social ?? {},
+    // People delete their own accounts (with their password), by the rules in deletion.ts.
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          try {
+            await options.beforeDeleteUser?.(user.id);
+          } catch (error) {
+            const status = (error as { status?: number }).status;
+            if (status === 409)
+              throw new APIError("CONFLICT", { message: (error as Error).message });
+            throw error;
+          }
+        },
+      },
+    },
     hooks: {
       // An invitation's response carries the link to its Join page, to copy when there is no
       // email (and to resend by hand when there is).
@@ -287,6 +309,18 @@ export function createAuth(options: AuthOptions) {
           },
         },
         organizationHooks: {
+          // An organization goes only once it has no projects (deleted ones count until wiped);
+          // then its keys and agent connections go with it.
+          beforeDeleteOrganization: async ({ organization: org }) => {
+            if (options.db && (await projectCount(options.db, org.id)) > 0)
+              throw new APIError("BAD_REQUEST", {
+                message:
+                  "Delete or move this organization's projects first; deleted projects count until they are wiped 7 days later",
+              });
+          },
+          afterDeleteOrganization: async ({ organization: org }) => {
+            if (options.db) await forgetOrganization(options.db, org.id);
+          },
           beforeUpdateOrganization: async ({ organization: changes, user, member }) => {
             if (changes.requireTwoFactor === undefined) return;
             if (!String(member.role).split(",").includes("owner"))
@@ -401,6 +435,13 @@ export function getAuth(): Promise<Auth> {
       publicUrl: process.env.HIGHKEY_PUBLIC_URL ?? "http://127.0.0.1:3000",
       secret: setting("BETTER_AUTH_SECRET"),
       mailer: mailerFromSettings(),
+      beforeDeleteUser: async (userId) => {
+        const [{ prepareUserDeletion }, { apiContext }] = await Promise.all([
+          import("../deletion"),
+          import("../api/context"),
+        ]);
+        await prepareUserDeletion(apiContext(), userId);
+      },
       signup: process.env.HIGHKEY_SIGNUP === "open" ? "open" : "invite",
       social: socialFromEnv({
         HIGHKEY_GITHUB_CLIENT_ID: setting("HIGHKEY_GITHUB_CLIENT_ID"),

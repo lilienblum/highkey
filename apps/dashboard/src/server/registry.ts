@@ -1,13 +1,16 @@
 // The ingest app reads keys from highkey.ingest_keys. The management database stays the source of truth: every key,
 // source or retention change is mirrored after it commits, and `reconcile` rewrites the whole
 // registry every minute, recreates whatever project access ClickHouse is missing (all of it when
-// a release changes what access looks like), and applies retention changes that have not
-// reached the stored rows yet. Under Tako this runs as the `reconcile` workflow.
+// a release changes what access looks like), applies retention changes that have not reached the
+// stored rows yet, and starts the wipe of a project whose 7-day grace has passed. Under Tako this
+// runs as the `reconcile` workflow.
 import type { ApiContext } from "./api/context";
 import { accessVersion, ensureProjectAccess, id32, provisionedProjects } from "./clickhouse/access";
 import { all, type Db, one } from "./db/db";
 import { logRetention } from "./db/keys";
+import { projectMissing } from "./api/errors";
 import { productRow, products } from "./db/products";
+import { dueWipe, type WipePayload, wipeProject } from "./wipe";
 
 interface KeyRow {
   hash: string;
@@ -20,7 +23,16 @@ interface KeyRow {
 const stamp = () => new Date().toISOString().replace("T", " ").replace("Z", "");
 
 async function rows(ctx: ApiContext, productId: string, keyId?: string) {
-  const eventRetention = (await productRow(ctx.db, productId)).retention_days;
+  const project = await one<{ retention_days: number; deleted_at: string | null }>(
+    ctx.db,
+    "SELECT retention_days, deleted_at FROM products WHERE id = ?",
+    [productId],
+  );
+  if (!project) throw projectMissing();
+  const eventRetention = project.retention_days;
+  // A deleted project's keys stop at once, without losing which were revoked before (a restore
+  // brings them back as they were).
+  const stopped = project.deleted_at !== null;
   const logDays = await logRetention(ctx.db, productId);
   const where = keyId ? "product_id = ? AND id = ?" : "product_id = ?";
   const args = keyId ? [productId, keyId] : [productId];
@@ -45,7 +57,7 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
     source_id: row.source_id,
     allowed_origins: JSON.parse(row.allowed_origins) as string[],
     retention_days: row.retention_days,
-    revoked: row.revoked,
+    revoked: stopped ? 1 : row.revoked,
     updated_at,
   }));
 }
@@ -168,8 +180,14 @@ export async function reconcile(
   const projects = await products(ctx.db);
   const ready = options.full ? new Set<string>() : await provisionedProjects(ctx.admin);
   let failed = 0;
+  const deleted = new Set(
+    (await all<{ id: string }>(ctx.db, "SELECT id FROM products WHERE deleted_at IS NOT NULL")).map(
+      (row) => row.id,
+    ),
+  );
   for (const project of projects) {
-    if (ready.has(id32(project.id))) continue;
+    // A deleted project keeps its access until its wipe drops it; never re-create it.
+    if (ready.has(id32(project.id)) || deleted.has(project.id)) continue;
     try {
       await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
     } catch (error) {
@@ -194,6 +212,7 @@ export async function reconcile(
  */
 export async function reconcileOnce(
   ctx: ApiContext,
+  options: { wipe?: (payload: WipePayload) => Promise<unknown> } = {},
 ): Promise<{ projects: number; keys: number; failed: number; full: boolean }> {
   const current = accessVersion(ctx.secret);
   const stored = await one<{ value: string }>(
@@ -207,6 +226,16 @@ export async function reconcileOnce(
       "INSERT INTO settings(key, value) VALUES ('access_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
       [current],
     );
+  // Then the oldest project past its 7-day grace: enqueued as a `wipe-project` run under Tako
+  // (a repeat enqueue is a no-op), wiped in place without it.
+  const due = await dueWipe(ctx.db, ctx.now());
+  if (due) {
+    const wipe = options.wipe ?? ((payload: WipePayload) => wipeProject(ctx, payload));
+    await wipe(due).catch((error) => {
+      result.failed++;
+      console.warn(`Wiping project ${due.project} failed; the next reconcile retries`, error);
+    });
+  }
   return { ...result, full };
 }
 

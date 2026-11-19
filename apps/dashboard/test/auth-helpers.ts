@@ -1,6 +1,7 @@
 // Better Auth on a test context's database, and requests to it as a browser would send them.
 import { type Auth, createAuth } from "../src/server/auth/auth";
 import type { Mailer, SocialProviders } from "../src/server/auth/mailer";
+import { prepareUserDeletion } from "../src/server/deletion";
 import type { BunDb } from "../src/server/db/bun-db";
 import type { TestContext } from "./helpers";
 
@@ -26,6 +27,7 @@ export function testAuth(
     keyRateLimit: options.keyRateLimit,
     cimdFetch: options.cimdFetch,
     social: options.social,
+    beforeDeleteUser: (userId) => prepareUserDeletion(ctx, userId),
   });
 }
 
