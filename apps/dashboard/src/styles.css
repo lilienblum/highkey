@@ -3467,6 +3467,13 @@ button.workspace-dashboards-menu-link {
   color: var(--muted-foreground);
   font-size: 13px;
 }
+.settings-muted a {
+  color: var(--primary);
+  text-underline-offset: 3px;
+}
+.settings-muted a:hover {
+  text-decoration: underline;
+}
 .settings-secret {
   display: flex;
   align-items: center;

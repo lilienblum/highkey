@@ -120,4 +120,24 @@ describe("server admin", () => {
     expect((await reset("another password entirely")).ok).toBe(false);
     expect((await call(ctx, "POST", "/api/admin/users/nobody/reset-link", {})).status).toBe(404);
   });
+
+  test("better_auths_own_admin_endpoints_are_closed", async () => {
+    // The server admin works through /api/admin, which keeps Highkey's rules (no impersonation,
+    // the deletion rules, reset links rather than setting passwords).
+    const auth = await ctx.auth();
+    for (const path of [
+      "/admin/impersonate-user",
+      "/admin/stop-impersonating",
+      "/admin/remove-user",
+      "/admin/set-user-password",
+      "/admin/set-role",
+      "/admin/create-user",
+      "/admin/update-user",
+      "/admin/ban-user",
+      "/admin/list-users",
+    ]) {
+      const response = await authRequest(auth, path, { userId: "x" }, ctx.session);
+      expect({ path, status: response.status }).toEqual({ path, status: 404 });
+    }
+  });
 });

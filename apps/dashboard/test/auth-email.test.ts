@@ -69,6 +69,8 @@ describe("email and two-factor", () => {
       password: PASSWORD,
     });
     expect(early.status).toBe(403);
+    // Signing in unverified sends a fresh link, so an expired one is never a dead end.
+    expect(requests).toHaveLength(2);
     const verify = link(String(email.text), "verify-email");
     expect(verify).toStartWith(`${TEST_ORIGIN}/api/auth/verify-email?token=`);
     await auth.handler(new Request(verify));

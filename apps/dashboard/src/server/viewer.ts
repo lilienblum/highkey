@@ -8,6 +8,8 @@ export interface ViewerOrganization {
   name: string;
   slug: string;
   role: string;
+  /** Its members must have two-factor codes on to open it. */
+  requireTwoFactor: boolean;
 }
 
 export interface Viewer {
@@ -49,15 +51,25 @@ export const getViewer = createServerFn({ method: "GET" }).handler(
   async (): Promise<Viewer | null> => {
     const { ctx, request } = await context();
     const auth = await ctx.auth();
-    const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
+    const session = await auth.api.getSession({ headers: request.headers }).catch(async (error) => {
+      // An outage is not a sign-out: say so instead of sending the person to sign in.
+      const { failIfStorageDown } = await import("./auth/actor");
+      await failIfStorageDown(ctx);
+      throw error;
+    });
     if (!session) return null;
     const { all } = await import("./db/db");
-    const organizations = await all<ViewerOrganization>(
+    const rows = await all<Omit<ViewerOrganization, "requireTwoFactor"> & { required: number }>(
       ctx.db,
-      `SELECT o.id, o.name, o.slug, m.role FROM member m JOIN organization o ON o.id = m."organizationId"
+      `SELECT o.id, o.name, o.slug, m.role, coalesce(o."requireTwoFactor", 0) AS required
+       FROM member m JOIN organization o ON o.id = m."organizationId"
        WHERE m."userId" = ? ORDER BY o.name COLLATE NOCASE, o.id`,
       [session.user.id],
     );
+    const organizations = rows.map(({ required, ...org }) => ({
+      ...org,
+      requireTwoFactor: Boolean(required),
+    }));
     const user = session.user as typeof session.user & {
       role?: string | null;
       twoFactorEnabled?: boolean | null;
@@ -147,6 +159,42 @@ export const getInvitationDetails = createServerFn({ method: "GET" })
       status,
     };
   });
+
+export interface PendingInvitation {
+  id: string;
+  organization: string;
+  role: string;
+  inviter: string;
+}
+
+/** The invitations waiting for the signed-in person's email, for the no-organization page. */
+export const getPendingInvitations = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PendingInvitation[]> => {
+    const { ctx, request } = await context();
+    const auth = await ctx.auth();
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return [];
+    const { all } = await import("./db/db");
+    const rows = await all<{
+      id: string;
+      organization: string;
+      role: string | null;
+      inviter: string;
+      expires_at: string | number;
+    }>(
+      ctx.db,
+      `SELECT i.id, o.name AS organization, i.role, u.name AS inviter, i."expiresAt" AS expires_at
+       FROM invitation i JOIN organization o ON o.id = i."organizationId"
+       JOIN "user" u ON u.id = i."inviterId"
+       WHERE lower(i.email) = lower(?) AND i.status = 'pending'
+       ORDER BY o.name COLLATE NOCASE, i.id`,
+      [session.user.email],
+    );
+    return rows
+      .filter((row) => new Date(row.expires_at).getTime() > Date.now())
+      .map(({ expires_at: _, role, ...row }) => ({ ...row, role: role ?? "member" }));
+  },
+);
 
 /** The name an agent registered with, for the consent page. */
 export const getAgentName = createServerFn({ method: "GET" })

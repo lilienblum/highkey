@@ -60,3 +60,9 @@ export function formatDate(value: string | null | undefined): string {
     day: "numeric",
   });
 }
+
+/** The organization this page shows, which every organization call names explicitly. */
+export function useOrganizationId(): string {
+  const { viewer } = useRouteContext({ from: "__root__" });
+  return viewer?.activeOrganizationId ?? "";
+}

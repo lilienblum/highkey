@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NameDialog } from "@/components/name-dialog";
 import { authPost } from "@/lib/auth-client";
+import { createOrganization } from "@/lib/organizations";
 import { useOrganizationSlug } from "@/lib/workspace-route";
 
 const ROLE: Record<string, string> = {
@@ -21,19 +22,6 @@ const ROLE: Record<string, string> = {
   member: "Member",
   viewer: "Viewer",
 };
-
-/** A short slug from a new organization's name; the server adds a suffix when it is taken. */
-function slugFor(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .split(/[^a-z0-9]/)
-      .filter(Boolean)
-      .join("-")
-      .slice(0, 48)
-      .replace(/-+$/, "") || "organization"
-  );
-}
 
 /**
  * The organization above the project picker, and the account: which organization the workspace
@@ -120,21 +108,8 @@ export function OrganizationMenu() {
         failure="Could not create the organization."
         finalFocus={trigger}
         onSubmit={async (name) => {
-          // Its address comes from the name; a taken or reserved one gets a number.
-          const base = slugFor(name);
-          for (let attempt = 1; attempt <= 5; attempt++) {
-            const slug = attempt === 1 ? base : `${base}-${attempt}`;
-            const created = await authPost<{ slug?: string }>("/organization/create", {
-              name,
-              slug,
-            });
-            if (created.ok && created.data?.slug) {
-              window.location.assign(`/${created.data.slug}`);
-              return new Promise<void>(() => {});
-            }
-            if (created.status !== 400) throw new Error(created.error ?? undefined);
-          }
-          throw new Error("That name’s address is taken. Try another name.");
+          window.location.assign(`/${await createOrganization(name)}`);
+          return new Promise<void>(() => {});
         }}
       />
     </>

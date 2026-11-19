@@ -23,7 +23,7 @@ export function signedOAuthQuery(search: string): string | undefined {
 
 const MESSAGES: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: "That email and password don’t match an account.",
-  EMAIL_NOT_VERIFIED: "Verify your email first; we sent you a link.",
+  EMAIL_NOT_VERIFIED: "Verify your email first: we just sent you a new link.",
   USER_ALREADY_EXISTS: "An account with this email already exists. Sign in instead.",
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
     "An account with this email already exists. Sign in instead.",
@@ -75,10 +75,35 @@ export async function authPost<T = unknown>(
   };
 }
 
-/** Where to go after signing in: a same-site path from `?redirect=`, else the Overview. */
-export function afterSignIn(search: string): string {
+/**
+ * Where to go after signing in: a path on this site from `?redirect=`, else the Overview. Anything
+ * a browser could read as another site (`//host`, `/\host`, control characters) is refused.
+ */
+export function afterSignIn(
+  search: string,
+  origin: string = typeof window === "undefined" ? "http://localhost" : window.location.origin,
+): string {
   const target = new URLSearchParams(search).get("redirect");
-  return target?.startsWith("/") && !target.startsWith("//") ? target : "/";
+  if (!target || !/^\/(?![/\\])[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*$/.test(target)) return "/";
+  try {
+    const url = new URL(target, origin);
+    if (url.origin !== origin) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * Where a verification link lands: the verify page, carrying the same-site page the account was
+ * going to (an invitation's Join page, say), so verifying leads back to it.
+ */
+export function verificationCallback(
+  search: string,
+  origin: string = typeof window === "undefined" ? "http://localhost" : window.location.origin,
+): string {
+  const target = afterSignIn(search, origin);
+  return target === "/" ? "/verify-email" : `/verify-email?redirect=${encodeURIComponent(target)}`;
 }
 
 /**

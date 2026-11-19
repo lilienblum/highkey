@@ -22,7 +22,14 @@ import {
 } from "@/components/ui/table";
 import { ValueSelect } from "@/components/value-select";
 import { authAction, authGet } from "@/lib/auth-client";
-import { formatDate, oversees, ROLE_LABEL, SettingsNav, useOrganizationRole } from "./settings-nav";
+import {
+  formatDate,
+  oversees,
+  ROLE_LABEL,
+  SettingsNav,
+  useOrganizationId,
+  useOrganizationRole,
+} from "./settings-nav";
 import { useLoaded } from "./use-loaded";
 
 interface Member {
@@ -54,9 +61,13 @@ function joinLink(id: string) {
 export function Members() {
   const { viewer } = useRouteContext({ from: "__root__" });
   const role = useOrganizationRole();
+  const organizationId = useOrganizationId();
   const manage = oversees(role);
   const org = useLoaded((signal) =>
-    authGet<FullOrganization>("/organization/get-full-organization", signal),
+    authGet<FullOrganization>(
+      `/organization/get-full-organization?organizationId=${encodeURIComponent(organizationId)}`,
+      signal,
+    ),
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -132,6 +143,7 @@ export function Members() {
                             onValueChange={(next) =>
                               void run(`role:${member.id}`, () =>
                                 authAction("/organization/update-member-role", {
+                                  organizationId,
                                   memberId: member.id,
                                   role: next,
                                 }),
@@ -155,6 +167,7 @@ export function Members() {
                               onClick={() =>
                                 void run(`remove:${member.id}`, () =>
                                   authAction("/organization/remove-member", {
+                                    organizationId,
                                     memberIdOrEmail: member.id,
                                   }),
                                 )
@@ -238,6 +251,7 @@ function InviteCard({
   roleOptions: readonly (readonly [string, string])[];
   onInvited: () => void;
 }) {
+  const organizationId = useOrganizationId();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [busy, setBusy] = useState(false);
@@ -251,7 +265,7 @@ function InviteCard({
     try {
       const invitation = await authAction<{ id: string; link?: string }>(
         "/organization/invite-member",
-        { email: email.trim(), role },
+        { email: email.trim(), role, organizationId },
       );
       setLink({ email: email.trim(), url: invitation.link ?? joinLink(invitation.id) });
       setEmail("");

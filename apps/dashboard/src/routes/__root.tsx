@@ -14,7 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { getWorkspace } from "@/server/workspace";
 import { activateOrganization, getViewer, type Viewer } from "@/server/viewer";
-import { isAccountScreen, isPublicPath } from "@/lib/auth-routes";
+import { ACCOUNT_SETTINGS, isAccountScreen, isPublicPath } from "@/lib/auth-routes";
+import { setPageOrganization } from "@/lib/api";
 import type { ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -45,25 +46,47 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   // Everyone signs in first; account screens (signing in, joining) are the only public pages.
   beforeLoad: async ({ location }) => {
     let viewer = await currentViewer();
-    if (!viewer && !isPublicPath(location.pathname))
-      throw redirect({ href: `/sign-in?redirect=${encodeURIComponent(location.href)}` });
+    if (!viewer) {
+      if (!isPublicPath(location.pathname))
+        throw redirect({ href: `/sign-in?redirect=${encodeURIComponent(location.href)}` });
+      return { viewer };
+    }
     // An address under /<organization>/ makes that organization the session's, before the
-    // workspace loads, so the API answers for it.
+    // workspace loads, so the API answers for it. A session whose organization is gone (deleted,
+    // or the person left it) opens the person's first one instead.
     const first = location.pathname.split("/")[1];
-    const addressed = viewer?.organizations.find((org) => org.slug === first);
-    if (viewer && addressed && addressed.id !== viewer.activeOrganizationId) {
-      if (await activateOrganization({ data: addressed.id }))
-        viewer = rememberViewer({ ...viewer, activeOrganizationId: addressed.id });
+    const addressed = viewer.organizations.find((org) => org.slug === first);
+    const open = viewer.organizations.some((org) => org.id === viewer?.activeOrganizationId);
+    const target = addressed ?? (open ? undefined : viewer.organizations[0]);
+    if (target && target.id !== viewer.activeOrganizationId) {
+      if (await activateOrganization({ data: target.id }))
+        viewer = rememberViewer({ ...viewer, activeOrganizationId: target.id });
+    }
+    if (!isAccountScreen(location.pathname) && location.pathname !== ACCOUNT_SETTINGS) {
+      // Without an organization, the person joins or creates one first.
+      if (viewer.organizations.length === 0) throw redirect({ href: "/welcome" });
+      // An organization requiring two-factor codes opens once the person has turned them on.
+      const active = viewer.organizations.find((org) => org.id === viewer?.activeOrganizationId);
+      if (active?.requireTwoFactor && !viewer.user.twoFactor)
+        throw redirect({ href: ACCOUNT_SETTINGS });
     }
     return { viewer };
   },
   // The project catalog renders on the server and is reused by client navigation; mutations
   // refresh it in the shell, and the workspace error screen retries it with router.invalidate().
-  // Account screens show no workspace, so they load none.
-  loader: async ({ location }) => ({
-    initialProducts: isAccountScreen(location.pathname) ? [] : await getWorkspace(),
-    serverNow: Date.now(),
-  }),
+  // Account screens show no workspace, so they load none; account settings open without one.
+  loader: async ({ location }) => {
+    if (isAccountScreen(location.pathname)) return { initialProducts: [], serverNow: Date.now() };
+    const workspace = await getWorkspace();
+    if ("blocked" in workspace) {
+      if (location.pathname !== ACCOUNT_SETTINGS)
+        throw redirect({
+          href: workspace.blocked === "two_factor_required" ? ACCOUNT_SETTINGS : "/welcome",
+        });
+      return { initialProducts: [], serverNow: Date.now() };
+    }
+    return { initialProducts: workspace.products, serverNow: Date.now() };
+  },
   staleTime: Number.POSITIVE_INFINITY,
   shouldReload: false,
   headers: () => ({ "Cache-Control": "private, no-store" }),
@@ -97,6 +120,9 @@ function Root() {
   const accountScreen = useRouterState({
     select: (state) => isAccountScreen(state.location.pathname),
   });
+  const { viewer } = Route.useRouteContext();
+  // Every API request from this page names its organization (see lib/api.ts).
+  if (typeof window !== "undefined") setPageOrganization(viewer?.activeOrganizationId ?? null);
   return (
     <QueryClientProvider client={queryClient}>
       <DisplayPreferencesProvider>

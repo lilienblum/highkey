@@ -21,7 +21,7 @@ async function softDelete(ctx: ApiContext, id: string): Promise<boolean> {
   const deleted =
     (await changes(
       ctx.db,
-      "UPDATE products SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+      "UPDATE products SET deleted_at = ?, wipe_attempted_at = NULL WHERE id = ? AND deleted_at IS NULL",
       [now(), id],
     )) === 1;
   if (!deleted) return false;

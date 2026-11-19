@@ -128,7 +128,36 @@ describe("deleting", () => {
     };
     await reconcileOnce(ctx, { wipe: enqueue });
     await reconcileOnce(ctx, { wipe: enqueue });
-    expect([...runs]).toEqual([[`wipe:${old.id}:${due.deletedAt}`, due]]);
+    expect([...runs.values()]).toEqual([expect.objectContaining(due)]);
+    expect([...runs.keys()][0]).toStartWith(`wipe:${old.id}:${due.deletedAt}:`);
+  });
+
+  test("a_failing_wipe_does_not_hold_up_the_others_and_is_tried_again_later", async () => {
+    const first = await furnished("First");
+    const second = await furnished("Second");
+    await call(ctx, "DELETE", `/api/products/${first.id}`);
+    await call(ctx, "DELETE", `/api/products/${second.id}`);
+    await age(first.id, 9);
+    await age(second.id, 8);
+    // Like Tako: a run id seen before (in any state, a dead one included) starts nothing.
+    const runs: string[] = [];
+    const seen = new Set<string>();
+    const enqueue = async (payload: WipePayload) => {
+      if (!seen.has(wipeRunId(payload))) runs.push(payload.project);
+      seen.add(wipeRunId(payload));
+    };
+    // The oldest first; while its run is under way or has failed, the next one gets its turn.
+    await reconcileOnce(ctx, { wipe: enqueue });
+    await reconcileOnce(ctx, { wipe: enqueue });
+    await reconcileOnce(ctx, { wipe: enqueue });
+    expect(runs).toEqual([first.id, second.id]);
+    // An hour on, a project still not wiped is tried again, as a new run.
+    await ctx.db.execute("UPDATE products SET wipe_attempted_at = ? WHERE id = ?", [
+      new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      first.id,
+    ]);
+    await reconcileOnce(ctx, { wipe: enqueue });
+    expect(runs).toEqual([first.id, second.id, first.id]);
   });
 
   test("a_wipe_leaves_no_events_logs_reader_views_or_rows", async () => {

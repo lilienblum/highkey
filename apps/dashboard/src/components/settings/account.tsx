@@ -67,11 +67,24 @@ function useAction(action: (form: FormData) => Promise<string | undefined>) {
 export function Account() {
   const { viewer } = useRouteContext({ from: "__root__" });
   if (!viewer) return null;
+  // The open organization requires codes this person has not turned on: it opens once they do.
+  const required = viewer.user.twoFactor
+    ? undefined
+    : viewer.organizations.find(
+        (org) => org.id === viewer.activeOrganizationId && org.requireTwoFactor,
+      );
   return (
     <>
       <SettingsNav />
       <PageHeader title="Account" description={`Signed in as ${viewer.user.email}.`} />
       <div className="settings-stack">
+        {required ? (
+          <Alert>
+            <AlertDescription>
+              {required.name} requires two-factor codes. Turn them on below to open its projects.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <Profile name={viewer.user.name} />
         <Password />
         <TwoFactor enabled={viewer.user.twoFactor} />

@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AuthError, AuthFrame } from "@/components/auth/auth-frame";
 import { SocialSignIn, SubmitButton, TextField, useAuthForm } from "@/components/auth/auth-fields";
-import { afterSignIn, authPost, follow } from "@/lib/auth-client";
+import { afterSignIn, authPost, follow, verificationCallback } from "@/lib/auth-client";
 import { getAuthSetup } from "@/server/viewer";
 
 export const Route = createFileRoute("/sign-in")({
@@ -28,6 +28,8 @@ function SignIn() {
       email: String(data.get("email") ?? "").trim(),
       password: String(data.get("password") ?? ""),
       rememberMe: true,
+      // An unverified address gets a new link, which returns here afterwards.
+      callbackURL: verificationCallback(window.location.search),
     });
     if (!result.ok) return result.error;
     if (result.data?.twoFactorRedirect)

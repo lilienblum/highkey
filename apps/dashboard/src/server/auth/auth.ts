@@ -185,6 +185,9 @@ export function createAuth(options: AuthOptions) {
     emailVerification: mailer
       ? {
           sendOnSignUp: true,
+          // An unverified sign-in sends a fresh link: an expired one is never a dead end, and
+          // accounts made before email was configured verify on their next sign-in.
+          sendOnSignIn: true,
           autoSignInAfterVerification: true,
           sendVerificationEmail: async ({ user, url }) =>
             mailer.send({
@@ -234,6 +237,25 @@ export function createAuth(options: AuthOptions) {
       "/api-key/list",
       "/api-key/update",
       "/api-key/delete",
+      // The admin plugin's own endpoints: the server admin works through /api/admin, which keeps
+      // Highkey's rules (no impersonation, the deletion rules, reset links, not set passwords).
+      ...[
+        "ban-user",
+        "create-user",
+        "get-user",
+        "has-permission",
+        "impersonate-user",
+        "list-user-sessions",
+        "list-users",
+        "remove-user",
+        "revoke-user-session",
+        "revoke-user-sessions",
+        "set-role",
+        "set-user-password",
+        "stop-impersonating",
+        "unban-user",
+        "update-user",
+      ].map((path) => `/admin/${path}`),
     ],
     databaseHooks: {
       user: {

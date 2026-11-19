@@ -3,7 +3,7 @@ import { useState } from "react";
 import { AuthError, AuthFrame, AuthNotice } from "@/components/auth/auth-frame";
 import { useHydrated } from "@/components/auth/auth-fields";
 import { Button } from "@/components/ui/button";
-import { authPost } from "@/lib/auth-client";
+import { afterSignIn, authPost, verificationCallback } from "@/lib/auth-client";
 
 // Where a verification link lands (Better Auth adds `?error=` when the link is spent), and where
 // a new account waits for its email.
@@ -28,7 +28,7 @@ function VerifyEmail() {
     setError(null);
     const result = await authPost("/send-verification-email", {
       email,
-      callbackURL: "/verify-email",
+      callbackURL: verificationCallback(search),
     });
     setPending(false);
     if (result.ok) setSent(true);
@@ -49,7 +49,7 @@ function VerifyEmail() {
           className="auth-submit"
           nativeButton={false}
           role="link"
-          render={<a href="/" />}
+          render={<a href={afterSignIn(search)} />}
         >
           Open Highkey
         </Button>
@@ -59,14 +59,19 @@ function VerifyEmail() {
     <AuthFrame
       title={failed ? "This link has expired" : "Check your email"}
       footer={
-        <>
-          Verified on another device? <a href="/sign-in">Sign in</a>
-        </>
+        failed ? undefined : (
+          <>
+            Verified on another device? <a href="/sign-in">Sign in</a>
+          </>
+        )
       }
     >
       <AuthNotice>
         {failed ? (
-          <p>Verification links work for an hour and only once. Sign in to get a new one.</p>
+          <p>
+            Verification links work for an hour and only once. Sign in, and we’ll email you a new
+            one.
+          </p>
         ) : (
           <p>
             We sent a link to <strong>{email || "your email address"}</strong>. Open it to verify
@@ -75,6 +80,17 @@ function VerifyEmail() {
         )}
       </AuthNotice>
       <AuthError>{error}</AuthError>
+      {failed ? (
+        <Button
+          size="lg"
+          className="auth-submit"
+          nativeButton={false}
+          role="link"
+          render={<a href="/sign-in" />}
+        >
+          Sign in
+        </Button>
+      ) : null}
       {email && !failed ? (
         <Button
           variant="outline"

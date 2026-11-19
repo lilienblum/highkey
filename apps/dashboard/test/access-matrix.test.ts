@@ -222,4 +222,45 @@ describe("access", () => {
     const anonymous = new Request(`${TEST_ORIGIN}/`);
     expect((await handleApi(visitorRequest(anonymous, "/api/products"), ctx)).status).toBe(401);
   });
+
+  test("a_page_acts_in_its_own_organization_whatever_the_session_has_open", async () => {
+    // Two tabs, two organizations: each page names its organization on every request, so a tab
+    // left open on one never writes into the one another tab switched the session to.
+    const auth = await ctx.auth();
+    const other = await signUp(auth, "neighbour@example.com");
+    const [theirs] = (await auth.api.listOrganizations({ headers: other })) as { id: string }[];
+    const invitation = (await auth.api.createInvitation({
+      body: { email: "tabs@example.com", role: "admin", organizationId: theirs?.id as string },
+      headers: other,
+    })) as { id: string };
+    const person = await joinAs(auth, ctx.session, "tabs@example.com", "admin");
+    const home = (await auth.api.getSession({ headers: ctx.session }))?.session
+      .activeOrganizationId as string;
+    await auth.api.acceptInvitation({ body: { invitationId: invitation.id }, headers: person });
+    // Another tab opened the first organization again.
+    await auth.api.setActiveOrganization({ body: { organizationId: home }, headers: person });
+    const as = { cookie: person.get("cookie") as string };
+    const created = await call(
+      ctx,
+      "POST",
+      "/api/products",
+      { name: "Second tab", retention_days: 30 },
+      { ...as, "x-highkey-organization": theirs?.id as string },
+    );
+    expect(created.status).toBe(200);
+    const listed = (org: string) =>
+      call(ctx, "GET", "/api/products", undefined, { ...as, "x-highkey-organization": org });
+    expect((await listed(theirs?.id as string)).json.map((p: { name: string }) => p.name)).toEqual([
+      "Second tab",
+    ]);
+    expect((await listed(home as string)).json.map((p: { name: string }) => p.name)).not.toContain(
+      "Second tab",
+    );
+    // An organization the person is not in is refused, never quietly replaced by another.
+    const stranger = await signUp(auth, "stranger-tabs@example.com");
+    const [strangers] = (await auth.api.listOrganizations({ headers: stranger })) as {
+      id: string;
+    }[];
+    expect((await listed(strangers?.id as string)).status).toBe(403);
+  });
 });

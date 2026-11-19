@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AuthError, AuthFrame } from "@/components/auth/auth-frame";
 import { SocialSignIn, SubmitButton, TextField, useAuthForm } from "@/components/auth/auth-fields";
-import { afterSignIn, authPost, follow } from "@/lib/auth-client";
+import { afterSignIn, authPost, follow, verificationCallback } from "@/lib/auth-client";
 import { getAuthSetup } from "@/server/viewer";
 
 export const Route = createFileRoute("/sign-up")({
@@ -23,13 +23,16 @@ function SignUp() {
       name: String(data.get("name") ?? "").trim(),
       email,
       password: String(data.get("password") ?? ""),
-      callbackURL: "/verify-email",
+      callbackURL: verificationCallback(window.location.search),
     });
     if (!result.ok) return result.error;
-    // With email configured, the account waits for its address to be verified.
-    if (setup.email && !result.data?.token)
-      window.location.assign(`/verify-email?email=${encodeURIComponent(email)}`);
-    else follow(result.data, afterSignIn(window.location.search));
+    // With email configured, the account waits for its address to be verified; the link (and a
+    // new one sent from the waiting page) returns to where the account was going.
+    if (setup.email && !result.data?.token) {
+      const going = new URLSearchParams(verificationCallback(window.location.search).split("?")[1]);
+      going.set("email", email);
+      window.location.assign(`/verify-email?${going}`);
+    } else follow(result.data, afterSignIn(window.location.search));
   });
   const title = setup.firstAccount ? "Set up Highkey" : "Create your account";
   const lead = setup.firstAccount

@@ -201,6 +201,31 @@
   line-height: 1.5;
   color: var(--muted-foreground);
 }
+/* Organizations to open or join: one framed row each, the action at its end. */
+.auth-places {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.auth-place {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.auth-place .auth-choice-detail {
+  grid-column: 1;
+}
+.auth-place-action {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-weight: 600;
+}
 .auth-actions {
   display: flex;
   gap: 8px;

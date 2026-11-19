@@ -23,7 +23,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ValueSelect } from "@/components/value-select";
 import { authAction, authGet } from "@/lib/auth-client";
-import { oversees, SettingsNav, useOrganizationRole } from "./settings-nav";
+import { oversees, SettingsNav, useOrganizationId, useOrganizationRole } from "./settings-nav";
+import { DeletedProjects } from "./deleted-projects";
 import { useLoaded } from "./use-loaded";
 
 interface FullOrganization {
@@ -45,8 +46,12 @@ function Failure({ message }: { message: string | null }) {
 
 export function OrganizationSettings() {
   const role = useOrganizationRole();
+  const organizationId = useOrganizationId();
   const org = useLoaded((signal) =>
-    authGet<FullOrganization>("/organization/get-full-organization", signal),
+    authGet<FullOrganization>(
+      `/organization/get-full-organization?organizationId=${encodeURIComponent(organizationId)}`,
+      signal,
+    ),
   );
   return (
     <>
@@ -63,6 +68,7 @@ export function OrganizationSettings() {
         ) : (
           <>
             <General org={org.data} editable={oversees(role)} />
+            {oversees(role) ? <DeletedProjects organizationSlug={org.data.slug} /> : null}
             {role === "owner" ? (
               <>
                 <RequireTwoFactor org={org.data} onChanged={org.reload} />
@@ -88,6 +94,7 @@ function General({ org, editable }: { org: FullOrganization; editable: boolean }
     setError(null);
     try {
       await authAction("/organization/update", {
+        organizationId: org.id,
         data: { name: name.trim(), ...(slug !== org.slug ? { slug: slug.trim() } : {}) },
       });
       // Its address may have changed: load everything afresh.
@@ -156,7 +163,10 @@ function RequireTwoFactor({ org, onChanged }: { org: FullOrganization; onChanged
     setBusy(true);
     setError(null);
     try {
-      await authAction("/organization/update", { data: { requireTwoFactor } });
+      await authAction("/organization/update", {
+        organizationId: org.id,
+        data: { requireTwoFactor },
+      });
       onChanged();
     } catch (failure) {
       setError((failure as Error).message);
@@ -208,8 +218,16 @@ function TransferOwnership({ org, onDone }: { org: FullOrganization; onDone: () 
     setBusy(true);
     setError(null);
     try {
-      await authAction("/organization/update-member-role", { memberId: target, role: "owner" });
-      await authAction("/organization/update-member-role", { memberId: mine.id, role: "admin" });
+      await authAction("/organization/update-member-role", {
+        organizationId: org.id,
+        memberId: target,
+        role: "owner",
+      });
+      await authAction("/organization/update-member-role", {
+        organizationId: org.id,
+        memberId: mine.id,
+        role: "admin",
+      });
       onDone();
     } catch (failure) {
       setError((failure as Error).message);

@@ -13,10 +13,19 @@ export const RESTORE_DAYS = 7;
 export interface WipePayload {
   project: string;
   deletedAt: string;
+  /** When this attempt started: each attempt is its own run. */
+  attemptedAt?: string;
 }
 
-/** The run id that makes a repeated enqueue of the same wipe a no-op. */
-export const wipeRunId = (payload: WipePayload) => `wipe:${payload.project}:${payload.deletedAt}`;
+/** How long a started wipe has before the reconcile tries it again as a new run. */
+export const WIPE_RETRY_MS = 3_600_000;
+
+/**
+ * The run id of one wipe attempt: repeating the enqueue of an attempt starts nothing, and a new
+ * attempt (an hour after one that failed for good) is a new run.
+ */
+export const wipeRunId = (payload: WipePayload) =>
+  `wipe:${payload.project}:${payload.deletedAt}:${payload.attemptedAt ?? "first"}`;
 
 /** Deletions at or before this moment are past their grace. */
 export function graceCutoff(now: Date): string {
@@ -24,16 +33,30 @@ export function graceCutoff(now: Date): string {
 }
 
 /**
- * The oldest project whose grace has passed, if any. One per reconcile, so wipes (each a
- * ClickHouse delete over a project's rows) run one project at a time.
+ * The next project whose grace has passed and whose wipe is not already under way: never
+ * attempted first (oldest deletion first), then the longest-waiting retry. It is marked as
+ * attempted now, so the next reconcile moves on to another project while this one runs, and a
+ * wipe that fails for good is tried again, as a new run, an hour later. One per reconcile, so
+ * wipes (each a ClickHouse delete over a project's rows) start one project at a time.
  */
 export async function dueWipe(db: Db, now: Date): Promise<WipePayload | null> {
-  const row = await one<{ id: string; deleted_at: string }>(
-    db,
-    "SELECT id, deleted_at FROM products WHERE deleted_at IS NOT NULL AND deleted_at <= ? ORDER BY deleted_at, id LIMIT 1",
-    [graceCutoff(now)],
-  );
-  return row ? { project: row.id, deletedAt: row.deleted_at } : null;
+  return db.transaction(async (tx) => {
+    const row = await one<{ id: string; deleted_at: string }>(
+      tx,
+      `SELECT id, deleted_at FROM products
+       WHERE deleted_at IS NOT NULL AND deleted_at <= ?
+         AND (wipe_attempted_at IS NULL OR wipe_attempted_at <= ?)
+       ORDER BY wipe_attempted_at IS NOT NULL, wipe_attempted_at, deleted_at, id LIMIT 1`,
+      [graceCutoff(now), new Date(now.getTime() - WIPE_RETRY_MS).toISOString()],
+    );
+    if (!row) return null;
+    const attemptedAt = now.toISOString();
+    await tx.execute("UPDATE products SET wipe_attempted_at = ? WHERE id = ?", [
+      attemptedAt,
+      row.id,
+    ]);
+    return { project: row.id, deletedAt: row.deleted_at, attemptedAt };
+  });
 }
 
 type Step = <T>(name: string, work: () => Promise<T>) => Promise<T>;

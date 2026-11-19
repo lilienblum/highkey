@@ -76,6 +76,15 @@ export class ApiError extends Error {
     super(message);
   }
 }
+/**
+ * The organization this page shows. Every request names it, so a tab keeps acting in its own
+ * organization even after another tab opens a different one in the same session.
+ */
+let pageOrganization: string | null = null;
+export function setPageOrganization(id: string | null): void {
+  pageOrganization = id;
+}
+
 export async function api<T>(
   path: string,
   method = "GET",
@@ -89,6 +98,7 @@ export async function api<T>(
     headers: {
       "content-type": "application/json",
       "x-highkey-origin": "dashboard",
+      ...(pageOrganization ? { "x-highkey-organization": pageOrganization } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

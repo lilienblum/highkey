@@ -5,7 +5,7 @@
 import { requireMcpAuth } from "@better-auth/mcp";
 import type { ApiContext } from "../api/context";
 import { ApiError } from "../api/errors";
-import { one } from "../db/db";
+import { one, StorageUnavailable } from "../db/db";
 import { mcpResource } from "./auth";
 import { keyFrom, keyMetadata } from "./keys";
 import { isRole, maxAccess, type Role } from "./roles";
@@ -68,6 +68,23 @@ async function standing(ctx: ApiContext, orgId: string, userId: string, notMembe
   return role;
 }
 
+/**
+ * Throws `StorageUnavailable` when the management database cannot be reached. Better Auth reads
+ * the same database through its own connection and reports an outage as its own 500 or as an
+ * invalid credential; before answering that way, Highkey asks its own connection, so an outage
+ * answers 503 with Retry-After instead of sending people to sign in or agents to re-authorize.
+ */
+export async function failIfStorageDown(ctx: ApiContext): Promise<void> {
+  try {
+    await ctx.db.execute("SELECT 1");
+  } catch (error) {
+    if (error instanceof StorageUnavailable) throw error;
+  }
+}
+
+/** The header the dashboard sends with the organization of the page making the request. */
+export const ORGANIZATION_HEADER = "x-highkey-organization";
+
 /** The actor the router resolved for this request; handlers behind the router always have one. */
 export function requireActor(ctx: ApiContext): Actor {
   if (!ctx.actor) throw new ApiError(401, "Sign in to use Highkey", {}, "unauthenticated");
@@ -80,7 +97,10 @@ export function requireActor(ctx: ApiContext): Actor {
  */
 async function keyActor(ctx: ApiContext, key: string): Promise<Actor> {
   const auth = await ctx.auth();
-  const result = await auth.api.verifyApiKey({ body: { key } });
+  const result = await auth.api.verifyApiKey({ body: { key } }).catch(async (error) => {
+    await failIfStorageDown(ctx);
+    throw error;
+  });
   if (result.error?.code === "RATE_LIMITED")
     throw new ApiError(
       429,
@@ -90,8 +110,11 @@ async function keyActor(ctx: ApiContext, key: string): Promise<Actor> {
     );
   const meta = result.valid ? keyMetadata(result.key?.metadata) : null;
   const userId = result.key?.referenceId;
-  if (!meta || !userId)
+  if (!meta || !userId) {
+    // The plugin reports a failed lookup as an invalid key.
+    await failIfStorageDown(ctx);
     throw new ApiError(401, "This API key is not valid or has expired", {}, "unauthenticated");
+  }
   const role = await standing(
     ctx,
     meta.orgId,
@@ -112,9 +135,15 @@ export async function resolveActor(ctx: ApiContext, request: Request): Promise<A
   const key = keyFrom(request.headers);
   if (key) return keyActor(ctx, key);
   const auth = await ctx.auth();
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({ headers: request.headers }).catch(async (error) => {
+    await failIfStorageDown(ctx);
+    throw error;
+  });
   if (!session) throw new ApiError(401, "Sign in to use Highkey", {}, "unauthenticated");
-  const orgId = session.session.activeOrganizationId;
+  // The dashboard names the organization of the page that sent the request; without it (other
+  // clients), the session's open organization. Either way the person must belong to it.
+  const orgId =
+    request.headers.get(ORGANIZATION_HEADER)?.trim() || session.session.activeOrganizationId;
   if (!orgId)
     throw new ApiError(403, "Join or create an organization first", {}, "no_organization");
   const role = await standing(
@@ -192,7 +221,15 @@ export async function withAccessToken(
   proceed: (actor: Actor) => Promise<Response>,
 ): Promise<Response> {
   const auth = await ctx.auth();
-  return requireMcpAuth(auth, async (_request, claims) => proceed(await tokenActor(ctx, claims)), {
-    resource: mcpResource(ctx.publicUrl),
-  })(request);
+  const response = await requireMcpAuth(
+    auth,
+    async (_request, claims) => proceed(await tokenActor(ctx, claims)),
+    { resource: mcpResource(ctx.publicUrl) },
+  )(request).catch(async (error) => {
+    await failIfStorageDown(ctx);
+    throw error;
+  });
+  // A token that could not be checked (the signing keys live in the database) reads as invalid.
+  if (response.status === 401) await failIfStorageDown(ctx);
+  return response;
 }

@@ -9,7 +9,7 @@ const PUBLIC = [
   "/reset-password",
   "/two-factor",
 ];
-const SIGNED_IN = ["/select-organization", "/consent"];
+const SIGNED_IN = ["/select-organization", "/consent", "/welcome"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC.includes(pathname) || pathname.startsWith("/join/");
@@ -52,6 +52,10 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   "join",
   "select-organization",
   "consent",
+  "welcome",
   "new",
   "organizations",
 ]);
+
+/** Account settings open without a usable organization: two-factor codes are turned on there. */
+export const ACCOUNT_SETTINGS = "/settings/account";

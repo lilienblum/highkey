@@ -28,6 +28,7 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as OrgSlugIndexRouteImport } from './routes/$orgSlug.index'
 import { Route as OrgSlugProjectSlugRouteImport } from './routes/$orgSlug.$projectSlug'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known.$'
@@ -142,6 +143,11 @@ const TwoFactorRoute = TwoFactorRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgSlugIndexRoute = OrgSlugIndexRouteImport.update({
@@ -269,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/tracker.js': typeof TrackerDotjsRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/welcome': typeof WelcomeRoute
   '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugRouteWithChildren
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
@@ -309,6 +316,7 @@ export interface FileRoutesByTo {
   '/tracker.js': typeof TrackerDotjsRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/welcome': typeof WelcomeRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
@@ -350,6 +358,7 @@ export interface FileRoutesById {
   '/tracker.js': typeof TrackerDotjsRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/welcome': typeof WelcomeRoute
   '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugRouteWithChildren
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
@@ -393,6 +402,7 @@ export interface FileRouteTypes {
     | '/tracker.js'
     | '/two-factor'
     | '/verify-email'
+    | '/welcome'
     | '/$orgSlug/$projectSlug'
     | '/.well-known/$'
     | '/_highkey/changes'
@@ -433,6 +443,7 @@ export interface FileRouteTypes {
     | '/tracker.js'
     | '/two-factor'
     | '/verify-email'
+    | '/welcome'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
@@ -473,6 +484,7 @@ export interface FileRouteTypes {
     | '/tracker.js'
     | '/two-factor'
     | '/verify-email'
+    | '/welcome'
     | '/$orgSlug/$projectSlug'
     | '/.well-known/$'
     | '/_highkey/changes'
@@ -515,6 +527,7 @@ export interface RootRouteChildren {
   TrackerDotjsRoute: typeof TrackerDotjsRoute
   TwoFactorRoute: typeof TwoFactorRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  WelcomeRoute: typeof WelcomeRoute
   DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute
   HighkeyChangesRoute: typeof HighkeyChangesRoute
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
@@ -662,6 +675,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$orgSlug/': {
@@ -862,6 +882,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrackerDotjsRoute: TrackerDotjsRoute,
   TwoFactorRoute: TwoFactorRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  WelcomeRoute: WelcomeRoute,
   DotwellKnownSplatRoute: DotwellKnownSplatRoute,
   HighkeyChangesRoute: HighkeyChangesRoute,
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,

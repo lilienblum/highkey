@@ -44,6 +44,7 @@ import {
 import { api, type Product } from "@/lib/api";
 import { highlight } from "@/lib/highlight";
 import { PageHeader, useWorkspace } from "./app-shell";
+import { ProjectLifecycle } from "./settings/project-lifecycle";
 import { SettingsNav } from "./settings/settings-nav";
 import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
@@ -245,6 +246,7 @@ export function Settings() {
         <>
           <ProductSettings key={product.id} product={product} />
           <LogSettings key={`logs-${product.id}`} product={product} sourceId={sourceId} />
+          <ProjectLifecycle key={`lifecycle-${product.id}`} product={product} />
         </>
       ) : (
         <Alert>
