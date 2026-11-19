@@ -15,6 +15,9 @@ export function e2eEnvironment(root: string, run: string) {
       HIGHKEY_DASHBOARD_URL: `https://${name}.test`,
       HIGHKEY_REALTIME: "1",
       SSL_CERT_FILE: join(root, ".tako", "dev-ca.pem"),
+      // Bun also needs it as an extra CA: through SSL_CERT_FILE alone, stale same-named CAs in
+      // the system keychain fail verification.
+      NODE_EXTRA_CA_CERTS: join(root, ".tako", "dev-ca.pem"),
     },
   };
 }

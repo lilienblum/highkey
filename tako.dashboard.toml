@@ -26,6 +26,8 @@ HIGHKEY_PUBLIC_URL = "https://highkey.test"
 SSL_CERT_FILE = ".tako/dev-ca.pem"
 # Trust only the linked Tako CA: stale same-named CAs in the system keychain break verification.
 NODE_USE_SYSTEM_CA = "0"
+# Bun versions that ignore NODE_USE_SYSTEM_CA verify the linked CA as an extra certificate.
+NODE_EXTRA_CA_CERTS = ".tako/dev-ca.pem"
 HIGHKEY_INGEST_URL = "https://highkey-ingest.test"
 HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
 HIGHKEY_CLICKHOUSE_PASSWORD = "highkey-dev"

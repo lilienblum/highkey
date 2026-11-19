@@ -18,6 +18,16 @@ describe("browser test isolation", () => {
     expect(() => assertIsolatedE2E(env)).not.toThrow();
     expect(() => e2eEnvironment("/highkey", "../app")).toThrow();
   });
+  test("bun_trusts_the_local_ca_as_an_extra_certificate", async () => {
+    // Bun rejects the dev certificate through SSL_CERT_FILE alone when stale CAs with the same
+    // name sit in the system keychain; an extra CA certificate verifies it.
+    const { env } = e2eEnvironment("/highkey", run);
+    expect(env.NODE_EXTRA_CA_CERTS).toBe("/highkey/.tako/dev-ca.pem");
+    const dashboard = Bun.TOML.parse(
+      await Bun.file(new URL("../tako.dashboard.toml", import.meta.url)).text(),
+    ) as { vars: { development: Record<string, string> } };
+    expect(dashboard.vars.development.NODE_EXTRA_CA_CERTS).toBe(".tako/dev-ca.pem");
+  });
   test("derives isolated apps from the real configs and explicitly isolates storage and notifications", async () => {
     const setup = e2eEnvironment("/highkey", run);
     const ingest = Bun.TOML.parse(
