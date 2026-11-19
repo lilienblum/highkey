@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { projectDatabase, readerUser } from "../src/server/clickhouse/access";
 import { ClickHouse } from "../src/server/clickhouse/client";
 import { readAs } from "../src/server/queries/read";
-import { reconcile } from "../src/server/registry";
-import { startJobs } from "../src/server/jobs";
+import { reconcile, reconcileOnce } from "../src/server/registry";
 import {
   call,
   project,
@@ -327,21 +326,27 @@ describe("registry and access", () => {
     await reconcile(ctx);
   }, 60_000);
 
-  test("the_first_reconcile_after_start_refreshes_every_project", async () => {
-    const { id } = await project(ctx, "Refreshed at start", 30);
-    await reconcile(ctx);
+  test("a_changed_access_version_triggers_one_full_pass", async () => {
+    const { id } = await project(ctx, "Versioned access", 30);
+    const first = await reconcileOnce(ctx);
+    expect(first.full).toBe(true);
+    const second = await reconcileOnce(ctx);
+    expect(second.full).toBe(false);
+    // A new reader secret (or new access code) changes the version: the next pass is full and
+    // re-creates the project's access.
+    const secret = ctx.secret;
+    ctx.secret = "rotated-reader-secret";
     const recorded = recordCommands();
-    const stop = startJobs(ctx);
     try {
-      const deadline = Date.now() + 30_000;
-      while (!recorded.commands.some((sql) => sql.includes(`${projectDatabase(id)}.events`))) {
-        if (Date.now() > deadline)
-          throw new Error("the first reconcile did not refresh the project");
-        await Bun.sleep(50);
-      }
+      const third = await reconcileOnce(ctx);
+      expect(third.full).toBe(true);
+      expect(recorded.commands.some((sql) => sql.includes(`${projectDatabase(id)}.events`))).toBe(
+        true,
+      );
     } finally {
-      stop();
       recorded.restore();
+      ctx.secret = secret;
+      await reconcileOnce(ctx);
     }
   }, 60_000);
 });

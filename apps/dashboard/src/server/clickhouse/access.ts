@@ -2,7 +2,7 @@
 // views. The views hard-code the project and read the shared tables as highkey_definer, so a
 // reader holds no grant on the shared tables at all. See "Isolation between projects" in the
 // design for the barriers this stacks.
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { ClickHouse } from "./client";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -69,29 +69,44 @@ function scoped(time: string): string {
   return `${time} >= ${RANGE_FROM} AND ${time} < ${RANGE_TO} AND ${SOURCE_SCOPE}`;
 }
 
+/** The statements that create or refresh a project's database, views, reader user and grant. */
+export function accessStatements(productId: string, secret: string): string[] {
+  const database = projectDatabase(productId);
+  const user = readerUser(productId);
+  const project = `product_id = '${productId.toLowerCase()}'`;
+  const view = (name: string, columns: string, table: string, where: string) =>
+    `CREATE OR REPLACE VIEW ${database}.${name} DEFINER = highkey_definer SQL SECURITY DEFINER AS SELECT ${columns} FROM ${table} WHERE ${where}`;
+  const identified = `IDENTIFIED WITH sha256_password BY '${readerPassword(productId, secret)}'`;
+  const options = `DEFAULT DATABASE ${database} SETTINGS PROFILE 'highkey_reader'`;
+  return [
+    `CREATE DATABASE IF NOT EXISTS ${database}`,
+    view("events", EVENT_COLUMNS, "highkey.events", `${project} AND ${scoped("event_time")}`),
+    view("all_events", EVENT_COLUMNS, "highkey.events", project),
+    view("logs", LOG_COLUMNS, "highkey.logs", `${project} AND ${scoped("timestamp")}`),
+    view("all_logs", LOG_COLUMNS, "highkey.logs", project),
+    `CREATE USER IF NOT EXISTS ${user} ${identified} ${options}`,
+    `ALTER USER ${user} ${identified} ${options}`,
+    `GRANT SELECT ON ${database}.* TO ${user}`,
+  ];
+}
+
 /** Creates or refreshes a project's database, views, reader user and grant. Idempotent. */
 export async function ensureProjectAccess(
   admin: ClickHouse,
   productId: string,
   secret: string,
 ): Promise<void> {
-  const database = projectDatabase(productId);
-  const user = readerUser(productId);
-  const project = `product_id = '${productId.toLowerCase()}'`;
-  const view = (name: string, columns: string, table: string, where: string) =>
-    admin.command(
-      `CREATE OR REPLACE VIEW ${database}.${name} DEFINER = highkey_definer SQL SECURITY DEFINER AS SELECT ${columns} FROM ${table} WHERE ${where}`,
-    );
-  await admin.command(`CREATE DATABASE IF NOT EXISTS ${database}`);
-  await view("events", EVENT_COLUMNS, "highkey.events", `${project} AND ${scoped("event_time")}`);
-  await view("all_events", EVENT_COLUMNS, "highkey.events", project);
-  await view("logs", LOG_COLUMNS, "highkey.logs", `${project} AND ${scoped("timestamp")}`);
-  await view("all_logs", LOG_COLUMNS, "highkey.logs", project);
-  const identified = `IDENTIFIED WITH sha256_password BY '${readerPassword(productId, secret)}'`;
-  const options = `DEFAULT DATABASE ${database} SETTINGS PROFILE 'highkey_reader'`;
-  await admin.command(`CREATE USER IF NOT EXISTS ${user} ${identified} ${options}`);
-  await admin.command(`ALTER USER ${user} ${identified} ${options}`);
-  await admin.command(`GRANT SELECT ON ${database}.* TO ${user}`);
+  for (const sql of accessStatements(productId, secret)) await admin.command(sql);
+}
+
+/**
+ * A fingerprint of what project access looks like in this release with this reader secret: the
+ * statements for a placeholder project, hashed (the derived password never leaves the hash). A
+ * new view definition, reader setting or secret changes it.
+ */
+export function accessVersion(secret: string): string {
+  const statements = accessStatements("00000000-0000-0000-0000-000000000000", secret);
+  return createHash("sha256").update(statements.join("\n")).digest("hex");
 }
 
 /**

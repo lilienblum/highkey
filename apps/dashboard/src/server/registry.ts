@@ -1,10 +1,11 @@
 // The ingest app reads keys from highkey.ingest_keys. The management database stays the source of truth: every key,
 // source or retention change is mirrored after it commits, and `reconcile` rewrites the whole
-// registry every minute, recreates whatever project access ClickHouse is missing (all of it at
-// startup), and applies retention changes that have not reached the stored rows yet.
+// registry every minute, recreates whatever project access ClickHouse is missing (all of it when
+// a release changes what access looks like), and applies retention changes that have not
+// reached the stored rows yet. Under Tako this runs as the `reconcile` workflow.
 import type { ApiContext } from "./api/context";
-import { ensureProjectAccess, id32, provisionedProjects } from "./clickhouse/access";
-import { all, type Db } from "./db/db";
+import { accessVersion, ensureProjectAccess, id32, provisionedProjects } from "./clickhouse/access";
+import { all, type Db, one } from "./db/db";
 import { logRetention } from "./db/keys";
 import { productRow, products } from "./db/products";
 
@@ -184,6 +185,29 @@ export async function reconcile(
     await ctx.admin.insert("highkey.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
   failed += await applyRetentionChanges(ctx);
   return { projects: projects.length, keys: keys.length, failed };
+}
+
+/**
+ * One scheduled reconcile: a full pass when project access in this release (or the reader
+ * secret) differs from what the last full pass recorded, otherwise only what is missing. The
+ * version is recorded after a full pass in which nothing failed.
+ */
+export async function reconcileOnce(
+  ctx: ApiContext,
+): Promise<{ projects: number; keys: number; failed: number; full: boolean }> {
+  const current = accessVersion(ctx.secret);
+  const stored = await one<{ value: string }>(
+    ctx.db,
+    "SELECT value FROM settings WHERE key = 'access_version'",
+  );
+  const full = stored?.value !== current;
+  const result = await reconcile(ctx, { full });
+  if (full && result.failed === 0)
+    await ctx.db.execute(
+      "INSERT INTO settings(key, value) VALUES ('access_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      [current],
+    );
+  return { ...result, full };
 }
 
 /** Deletes expired rows now, rather than at the next TTL merge. */

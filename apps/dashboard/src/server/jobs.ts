@@ -1,19 +1,22 @@
-// Background work: reconcile the key registry, project access and retention changes at start
-// and every minute. The first successful run after a start re-creates every project's access.
+// Background work without Tako (`dev:standalone`, a plain `bun` server): the reconcile that the
+// `reconcile` Tako workflow runs every minute under Tako, on an in-process timer instead.
 import type { ApiContext } from "./api/context";
-import { reconcile } from "./registry";
+import { reconcileOnce } from "./registry";
 
 export const RECONCILE_EVERY_MS = 60_000;
 
+/** Whether Tako runs this process, and with it the scheduled workflows. */
+export function underTako(): boolean {
+  return Boolean(process.env.TAKO_APP_NAME);
+}
+
 export function startJobs(ctx: ApiContext): () => void {
   let running = false;
-  let full = true;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
-      await reconcile(ctx, { full });
-      full = false;
+      await reconcileOnce(ctx);
     } catch (error) {
       console.warn("Reconcile failed; retrying in a minute", error);
     } finally {
