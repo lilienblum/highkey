@@ -53,3 +53,14 @@ export function lazyDb(open: () => Promise<Db>): Db {
     },
   };
 }
+
+let shared: Promise<Db | BunDb> | null = null;
+
+/** The process's management database, opened once and shared by the API and Better Auth. */
+export function managementDb(): Promise<Db | BunDb> {
+  shared ??= openDb().catch((error) => {
+    shared = null;
+    throw error;
+  });
+  return shared;
+}

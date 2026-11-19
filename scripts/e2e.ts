@@ -27,6 +27,7 @@ const templates: { name: string; template: string; vars: Record<string, string> 
     template: "tako.dashboard.toml",
     vars: {
       HIGHKEY_DATA_DIR: setup.directory,
+      HIGHKEY_PUBLIC_URL: setup.env.HIGHKEY_DASHBOARD_URL,
       HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
       HIGHKEY_CLICKHOUSE_URL: clickhouseUrl,
       HIGHKEY_CLICKHOUSE_PASSWORD: E2E_SERVER.password,

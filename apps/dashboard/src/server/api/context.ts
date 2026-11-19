@@ -6,7 +6,7 @@ import { ClickHouse } from "../clickhouse/client";
 import { type Gates, gatesFromEnv } from "../dashboards/gates";
 import { WriteLimit } from "../dashboards/limit";
 import type { Db } from "../db/db";
-import { lazyDb, openDb } from "../db/open";
+import { lazyDb, managementDb } from "../db/open";
 
 export type Signal = "events" | "logs" | "dashboards";
 
@@ -52,7 +52,7 @@ export function apiContext(): ApiContext {
   const password = secret("HIGHKEY_CLICKHOUSE_PASSWORD") ?? "";
   const readerSecret = secret("HIGHKEY_READER_SECRET") ?? password;
   singleton = {
-    db: lazyDb(openDb),
+    db: lazyDb(managementDb),
     admin: new ClickHouse({
       url,
       user: process.env.HIGHKEY_CLICKHOUSE_USER ?? "highkey_admin",

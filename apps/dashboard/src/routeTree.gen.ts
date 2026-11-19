@@ -22,6 +22,7 @@ import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
 import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as ProjectsProjectSlugRouteImport } from './routes/projects.$projectSlug'
+import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.$projectSlug.index'
 import { Route as ProjectsProjectSlugEventsRouteImport } from './routes/projects.$projectSlug.events'
 import { Route as ProjectsProjectSlugExploreRouteImport } from './routes/projects.$projectSlug.explore'
@@ -94,6 +95,11 @@ const ProjectsProjectSlugRoute = ProjectsProjectSlugRouteImport.update({
   path: '/projects/$projectSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectSlugIndexRoute =
   ProjectsProjectSlugIndexRouteImport.update({
     id: '/',
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
@@ -164,6 +171,7 @@ export interface FileRoutesByTo {
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
   '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/_highkey/runtime'
     | '/api/$'
     | '/projects/$projectSlug'
+    | '/api/auth/$'
     | '/projects/$projectSlug/events'
     | '/projects/$projectSlug/explore'
     | '/projects/$projectSlug/logs'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
+    | '/api/auth/$'
     | '/projects/$projectSlug/events'
     | '/projects/$projectSlug/explore'
     | '/projects/$projectSlug/logs'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/_highkey/runtime'
     | '/api/$'
     | '/projects/$projectSlug'
+    | '/api/auth/$'
     | '/projects/$projectSlug/events'
     | '/projects/$projectSlug/explore'
     | '/projects/$projectSlug/logs'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ProjectsProjectSlugRoute: typeof ProjectsProjectSlugRouteWithChildren
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -367,6 +380,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectSlug/': {
       id: '/projects/$projectSlug/'
       path: '/'
@@ -448,6 +468,7 @@ const rootRouteChildren: RootRouteChildren = {
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
   ProjectsProjectSlugRoute: ProjectsProjectSlugRouteWithChildren,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

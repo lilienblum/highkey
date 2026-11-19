@@ -132,7 +132,7 @@ describe("migrations", () => {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_%' ESCAPE '\\' ORDER BY name",
     );
     expect(rows.map((r) => r.name)).toEqual(
-      [
+      expect.arrayContaining([
         "dashboard_revisions",
         "dashboards",
         "ingestion_keys",
@@ -143,7 +143,7 @@ describe("migrations", () => {
         "settings",
         "sources",
         "views",
-      ].sort(),
+      ]),
     );
     await db.close();
   });

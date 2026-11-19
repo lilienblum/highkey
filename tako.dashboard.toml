@@ -22,6 +22,7 @@ route = "highkey.test"
 databases = { main = "highkey" }
 
 [vars.development]
+HIGHKEY_PUBLIC_URL = "https://highkey.test"
 SSL_CERT_FILE = ".tako/dev-ca.pem"
 # Trust only the linked Tako CA: stale same-named CAs in the system keychain break verification.
 NODE_USE_SYSTEM_CA = "0"
