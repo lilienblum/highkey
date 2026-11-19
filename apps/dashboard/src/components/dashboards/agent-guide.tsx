@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Product } from "@/lib/api";
 import { readPreference, savePreference } from "@/lib/preferences";
 
-const docsUrl = "https://github.com/lilienblum/piko/blob/master/docs/dashboards.md#ask-your-ai";
+const docsUrl = "https://github.com/lilienblum/piko/blob/v0/docs/dashboards.md#ask-your-ai";
 
 export type GuideDashboard = { slug: string; name: string; revision: number };
 export type GuideView = { slug: string; name: string; kind: "events" | "logs" };
