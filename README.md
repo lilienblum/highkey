@@ -5,7 +5,7 @@ Privacy-first, self-hosted product analytics and application logs for websites, 
 Highkey runs two independent applications on a self-hosted ClickHouse server:
 
 - **`apps/ingest`** — Rust/Axum/Tokio, package `highkey-ingest`. It only receives events and logs (`/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`) and serves the browser tracker at `/tracker.js`. It checks each key against ClickHouse's key registry, writes to ClickHouse, and acknowledges only after ClickHouse has stored the rows. It holds no state of its own and knows nothing about the dashboard.
-- **`apps/dashboard`** — React/TypeScript with **TanStack Start**, Vite, shadcn/ui on Base UI, [TanStack Charts](https://tanstack.com/charts/latest), and TanStack Table. Runs on **Bun** and serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. It keeps that management state in SQLite (`state.sqlite`), owns the ClickHouse schema (`clickhouse/migrations`), and mirrors keys and retention into ClickHouse. Authentication is handled by Cloudflare Access, outside the app.
+- **`apps/dashboard`** — React/TypeScript with **TanStack Start**, Vite, shadcn/ui on Base UI, [TanStack Charts](https://tanstack.com/charts/latest), and TanStack Table. Runs on **Bun** and serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. It keeps that management state in a Tako-hosted SQLite database (schema in `migrations/`), owns the ClickHouse schema (`clickhouse/migrations`), and mirrors keys and retention into ClickHouse. Authentication is handled by Cloudflare Access, outside the app.
 - **ClickHouse** — one node, never public. It stores events and logs with TTL retention. Each project reads its data as its own ClickHouse user, through views that hold only its rows.
 
 ```
@@ -50,7 +50,7 @@ There is no migration from the earlier DuckDB-based versions: start a new deploy
 
 Without Tako, build with `bun run build` and `cargo build --locked --release -p highkey-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/highkey-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
 
-The dashboard keeps `state.sqlite` (with its WAL files) in `HIGHKEY_DATA_DIR`: `$TAKO_DATA_DIR` under native Tako (locally `.tako/data/app`), and `./data` by default. Run exactly one dashboard process per data directory, on durable local storage, never a network filesystem. Events and logs live in ClickHouse. Back up both: ClickHouse with `BACKUP DATABASE highkey`, and `state.sqlite` with `VACUUM INTO`; see [backups and restore](docs/tako.md#backups-and-restore). Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
+Under Tako the dashboard keeps its management state in a Tako-hosted SQLite database bound as `main` (named `highkey`), whose schema is the numbered files in `migrations/`; Tako applies them and takes encrypted snapshots. Without Tako it uses a plain `state.sqlite` in `HIGHKEY_DATA_DIR` (`./data` by default), migrated by the dashboard itself; run one dashboard process per data directory, on durable local storage. Events and logs live in ClickHouse. Back up both: ClickHouse with `BACKUP DATABASE highkey`, and the management database with Tako's snapshots; see [backups and restore](docs/tako.md#backups-and-restore). Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
 
 Ingest app settings:
 
@@ -75,7 +75,7 @@ Dashboard settings:
 | `HIGHKEY_READER_SECRET`              | the admin password        | Derives each project's ClickHouse reader password                                              |
 | `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` | none                      | `bun run migrate` only: the password it gives `highkey_ingest`                                 |
 | `HIGHKEY_INGEST_URL`                 | `http://127.0.0.1:3001`   | Where the dashboard forwards the ingest paths and `/tracker.js`                                |
-| `HIGHKEY_DATA_DIR`                   | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite`                                                                    |
+| `HIGHKEY_DATA_DIR`                   | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite` when no Tako database is bound                                     |
 | `HIGHKEY_QUERY_CONCURRENCY`          | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
 | `HIGHKEY_CORS_ORIGINS`               | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
 | `HOST`, `PORT`                       | `127.0.0.1`, `3000`       | Standalone Bun dashboard listener                                                              |
@@ -148,7 +148,7 @@ See [the verification record](docs/verification.md) for measured checks and thei
 
 ## Scope and limitations
 
-- External access control, one ClickHouse node, one ingest process, one dashboard process. Tako updates both apps with a rolling replacement; for a few seconds the old and new dashboard share `state.sqlite`, and SQLite's locking serializes their writes. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference without removing it. No replication, multi-user permissions, or automatic backups yet.
+- External access control, one ClickHouse node, one ingest process, one dashboard process. Tako updates both apps with a rolling replacement; the old and new dashboard share the hosted database while they overlap. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference without removing it. No replication, multi-user permissions, or automatic backups yet.
 - Browser ingestion keys are intentionally public and write-only. They are not anti-abuse credentials; a key holder can submit fabricated events. There is global capacity backpressure, but no per-key fairness or bot detection.
 - Identity is explicit, optional, and project-scoped. There is no IP/user-agent fingerprinting. The browser tracker defaults to unidentified events and always honors Do Not Track and Global Privacy Control. Installations are distinct from website visitors and sessions.
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.

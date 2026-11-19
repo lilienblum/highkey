@@ -25,15 +25,17 @@ bun scripts/clickhouse.ts dev-down
 
 The development ClickHouse passwords are fixed in each config's `[vars.development]`; they protect nothing but the local server. The dashboard forwards the ingest paths and `/tracker.js` to `HIGHKEY_INGEST_URL` (`https://highkey-ingest.test`), so collectors and `bun seed` can use `https://highkey.test` alone.
 
-After upgrading Tako, restart any existing dev daemon as well as the apps. An app-only `tako dev --restart` does not replace an older daemon. Stop Highkey's apps before restarting it, so the dashboard closes `state.sqlite` cleanly.
+After upgrading Tako, restart any existing dev daemon as well as the apps. An app-only `tako dev --restart` does not replace an older daemon. Stop Highkey's apps before restarting it.
 
 The returned Tako HTTPS URLs are the supported development entrypoints. The runner links the public local Tako CA at `.tako/dev-ca.pem`; development-only `SSL_CERT_FILE` settings let Bun and Rust verify it even when their default trust stores differ from macOS. The dashboard also sets `NODE_USE_SYSTEM_CA=0` so Bun trusts only that file: stale certificates with the same "Tako Development CA" name in the system keychain otherwise cause `CERT_SIGNATURE_FAILURE`. Use the same variable for `bun seed` and other local Bun clients, or delete the stale keychain entries. Certificate verification stays enabled.
 
 The development runner creates a random shared `HIGHKEY_CHANGE_TOKEN` through the CLI's stdin interface if absent. Both configs share the repository's encrypted `.tako/secrets.json`. Never commit that directory or print the secret. Runtime code obtains it from SDK secrets, not browser environment variables. A token rotation requires restarting both apps.
 
-The dashboard stores `state.sqlite` under `$TAKO_DATA_DIR`, locally `.tako/data/app`; events and logs live in ClickHouse's volume. The ingest app has no data directory.
+The dashboard keeps its management state (projects, sources, key hashes, settings, dashboards, views) in a Tako database bound as `main` and named `highkey`. Under `tako dev`, Tako serves it from `.tako/data/databases/highkey.sqlite` and applies the numbered files in `migrations/` to it before the app starts and whenever one changes. The minute reconcile (key registry, project access, pending retention changes) runs as the `reconcile` Tako workflow in a separate worker. Events and logs live in ClickHouse's volume. The ingest app has no state.
 
-`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with `state.sqlite` in `./data` (or `HIGHKEY_DATA_DIR`). Standalone mode refreshes automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
+Before this change the dashboard kept a `state.sqlite` file under `$TAKO_DATA_DIR` (locally `.tako/data/app`). Tako does not move it: to keep local projects, import that file into the development database (`tako sqlite import highkey .tako/data/app/state.sqlite` with the dev apps stopped).
+
+`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with the management state in a plain SQLite file, `./data/state.sqlite` (or under `HIGHKEY_DATA_DIR`), to which the dashboard applies `migrations/` itself and records them the way Tako does. Without Tako the reconcile runs on a timer inside the dashboard. Standalone mode refreshes automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
 
 ## Realtime semantics
 
@@ -111,11 +113,16 @@ HIGHKEY_TRACKER_PATH = "sdk/typescript/dist/tracker.js"
 [envs.production]
 route = "highkey.example.com"
 servers = ["your-server"]
+network = "<your network id>"
+databases = { main = "highkey" }
+backup = { storage = "private_backups" }
 
 [vars.production]
 HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
 HIGHKEY_INGEST_URL = "https://highkey-ingest.example.com"
 ```
+
+The Tako database needs a network (`tako network` commands) and is created once on the server that will hold it: `tako sqlite create highkey --server your-server`. `backup.storage` names a private S3-compatible storage resource (`[storages.private_backups]`, with credentials set by `tako storages credentials private_backups --env production`) that receives the database's encrypted snapshots; without one, Tako takes no snapshots and losing the server loses the management state. Tako applies `migrations/` on every deploy, after a snapshot and before the new release starts.
 
 Set `HIGHKEY_CHANGE_TOKEN` for production through `tako -c tako.dashboard.toml secrets set HIGHKEY_CHANGE_TOKEN --env production`; the two root configs share this secret store. `HIGHKEY_READER_SECRET`, which derives each project's ClickHouse reader password, is optional and read only by the dashboard; it defaults to the admin password.
 
@@ -134,13 +141,13 @@ To update:
 
 1. Run `bun run migrate` against the production ClickHouse from the new release. Migrations only add, so the running apps keep working.
 2. Deploy the ingest app with `tako -c tako.ingest.toml deploy --env production`. It holds no state, so Tako's normal rolling replacement works. While the old and new processes overlap, a retry that reaches the other process can be stored twice until a merge removes it (see [deduplication](api.md#deduplication)).
-3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. `state.sqlite` must have one owner, but a native rolling update starts the replacement before it drains the old process, so the two overlap for a few seconds; SQLite's file locking serializes their writes on a local disk.
+3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. Tako applies any new file in `migrations/` first (they only add, so the running release keeps working), then replaces the app and its workflow worker. Old and new instances share the hosted database while they overlap.
 
 Do not delete an app to deploy an update; deletion can remove persistent data. No production deployment or Cloudflare configuration is performed by local setup.
 
 ## Backups and restore
 
-Back up two things: ClickHouse's `highkey` database, which holds events, logs and the key registry, and the dashboard's `state.sqlite`, which holds projects, sources, key hashes, settings, dashboards, views and pending retention changes. The rest of ClickHouse's Highkey state is rebuilt: `bun run migrate` creates the schema, settings profiles and shared users, and from `state.sqlite` the dashboard recreates each project's views, reader user and grant at startup, recreates whatever is missing every minute, and rewrites the key registry. Take both backups at about the same time, and store them with restricted access.
+Back up two things: ClickHouse's `highkey` database, which holds events, logs and the key registry, and the dashboard's Tako database `highkey`, which holds projects, sources, key hashes, settings, dashboards, views and pending retention changes. The rest of ClickHouse's Highkey state is rebuilt: `bun run migrate` creates the schema, settings profiles and shared users, and from the management database the `reconcile` workflow recreates whatever project access is missing every minute (all of it after a release changes it) and rewrites the key registry. Take the ClickHouse backup close to a database snapshot, and store both with restricted access.
 
 ### ClickHouse
 
@@ -158,17 +165,19 @@ RESTORE TABLE highkey.events, TABLE highkey.logs
 FROM S3('https://your-bucket.s3.amazonaws.com/highkey/2026-11-19', '<key id>', '<key secret>');
 ```
 
-`RESTORE` refuses tables that already hold rows, so do not restore into a server that has been ingesting. Restore `state.sqlite` next, then start the apps.
+`RESTORE` refuses tables that already hold rows, so do not restore into a server that has been ingesting. Restore the management database next, then start the apps.
 
-### SQLite
+### The management database
 
-`VACUUM INTO` writes a consistent copy of `state.sqlite` while the dashboard keeps running. On the server, in the dashboard's data directory (its `TAKO_DATA_DIR`):
+With a backup storage configured, Tako snapshots the `highkey` database every hour while it changes, before each deploy's migrations, and on demand (`tako sqlite backup highkey`); snapshots are consistent copies, checked, compressed and encrypted, and kept for 24 hours, then daily for a week and weekly for four weeks. Recovery is to a snapshot, so up to an hour of management changes can be lost with the server.
 
 ```sh
-sqlite3 state.sqlite "VACUUM INTO '/var/backups/highkey-state.sqlite'"
+tako sqlite backups highkey --json
+tako sqlite restore highkey --latest
+tako sqlite export highkey ./highkey-state.sqlite
 ```
 
-The copy holds key hashes and display prefixes, never key secrets. To restore, stop the dashboard, replace `state.sqlite` and delete its `state.sqlite-wal` and `state.sqlite-shm` files, and start it again. The dashboard rewrites the key registry from the restored file when it starts. Keys created after the snapshot are not in it, but their registry rows stay in ClickHouse, so they keep authorizing ingestion until those rows are removed from `highkey.ingest_keys`. Events of a project the snapshot does not hold stay stored, but no page shows them.
+A snapshot holds key hashes and display prefixes, never key secrets. A restore pauses the database briefly (requests get 503) and keeps the contents it replaced as a snapshot of its own. The next reconcile rewrites the key registry from the restored database. Keys created after the snapshot are not in it, but their registry rows stay in ClickHouse, so they keep authorizing ingestion until those rows are removed from `highkey.ingest_keys`. Events of a project the snapshot does not hold stay stored, but no page shows them.
 
 Local development and each deployed environment have separate storage; selecting another config does not copy data. To move an installation, take both backups, restore them on the new server as above, and check projects, keys, queries and duplicate retries before pointing collectors at it.
 

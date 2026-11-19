@@ -37,8 +37,8 @@ Network infrastructure still sees connection information such as IP addresses. Y
 ## What each app stores
 
 - **The ingest app** stores nothing of its own and has no data directory. It writes accepted events and logs to ClickHouse and keeps, in memory only, recent key lookups (a key's hash, project, source, allowed origins and retention) for up to five seconds.
-- **The dashboard** keeps `state.sqlite`: projects and their website addresses and cached favicons, sources, ingestion and log key hashes with their display prefixes and allowed origins, retention settings, dashboards with their revisions, and saved views. Key secrets are shown once at creation and never stored; only their SHA-256 hashes are.
-- **ClickHouse** holds the events (`highkey.events`) and logs (`highkey.logs`) exactly as collectors sent them, plus their receipt times and expiry. It also holds the key registry `highkey.ingest_keys`, which mirrors the key hashes, sources, origins and retention from `state.sqlite` so the ingest app can authorize requests, and one small database of views and one reader user per project. Its `query_log` keeps a record of recent queries for seven days, for diagnosing slow widgets.
+- **The dashboard** keeps its management database (the Tako database `highkey`, or `state.sqlite` without Tako): projects and their website addresses and cached favicons, sources, ingestion and log key hashes with their display prefixes and allowed origins, retention settings, dashboards with their revisions, and saved views. Key secrets are shown once at creation and never stored; only their SHA-256 hashes are.
+- **ClickHouse** holds the events (`highkey.events`) and logs (`highkey.logs`) exactly as collectors sent them, plus their receipt times and expiry. It also holds the key registry `highkey.ingest_keys`, which mirrors the key hashes, sources, origins and retention from the management database so the ingest app can authorize requests, and one small database of views and one reader user per project. Its `query_log` keeps a record of recent queries for seven days, for diagnosing slow widgets.
 
 ## Isolation between projects
 
@@ -68,7 +68,7 @@ When you connect an AI agent to Highkey's [MCP server](dashboards.md#ask-your-ai
 - `create_key`, `create_log_key` and `connect_source` return the new key's secret to the client, once. A full token can also create sources and projects, change retention and revoke keys.
 - **To prevent writes and key secrets, withhold the full token.** Give the agent a read-only Access token and the `/api/read/mcp` path (see [access](access.md#mcp-and-read-only-access)): it has no tool that changes anything or returns a secret. The sample tools and widget runs are still there, because they only read. To stop the agent seeing raw records at all, do not connect it, or connect it to a project that holds no sensitive data.
 - Highkey does not redact what the agent reads. Minimize collection and keep retention short, as described above.
-- Dashboards and saved views hold queries and formulas, not data. They are stored in the dashboard's `state.sqlite` and shown to anyone who opens the dashboard.
+- Dashboards and saved views hold queries and formulas, not data. They are stored in the dashboard's management database and shown to anyone who opens the dashboard.
 
 ## Multiple sources
 
