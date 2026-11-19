@@ -11,6 +11,7 @@ export function testAuth(
 ): Auth {
   return createAuth({
     database: { bun: (ctx.db as BunDb).raw },
+    db: ctx.db,
     publicUrl: TEST_ORIGIN,
     secret: "highkey-test-secret-at-least-32-characters",
     mailer: options.mailer === undefined ? null : options.mailer,

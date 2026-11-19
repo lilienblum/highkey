@@ -98,6 +98,7 @@ export async function saveProduct(
   db: Db,
   id: string | null,
   input: ProductInput,
+  orgId: string | null = null,
 ): Promise<Product> {
   validateProduct(input);
   const previous = id ? await product(db, id) : null;
@@ -117,10 +118,11 @@ export async function saveProduct(
       let slug = base;
       for (let suffix = 2; ; suffix++) {
         // The unique index arbitrates concurrent creators.
+        // Slugs are unique within an organization; there, the unique index arbitrates.
         const inserted = await changes(
           tx,
-          "INSERT INTO products(id, name, retention_days, created_at, website_url, slug) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(slug) DO NOTHING",
-          [productId, input.name.trim(), input.retention_days, now(), website, slug],
+          "INSERT INTO products(id, name, retention_days, created_at, website_url, slug, org_id) SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = ?6 AND org_id IS ?7) ON CONFLICT DO NOTHING",
+          [productId, input.name.trim(), input.retention_days, now(), website, slug, orgId],
         );
         if (inserted === 1) break;
         slug = `${base}-${suffix}`;
@@ -156,4 +158,9 @@ export async function favicon(db: Db, id: string): Promise<Uint8Array | null> {
     [id],
   );
   return row?.favicon ?? null;
+}
+
+/** Gives projects that belong to no organization to `orgId` (the first account's, on upgrade). */
+export async function adoptOrphanProjects(db: Db, orgId: string): Promise<number> {
+  return changes(db, "UPDATE products SET org_id = ? WHERE org_id IS NULL", [orgId]);
 }
