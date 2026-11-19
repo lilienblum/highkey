@@ -1,6 +1,7 @@
 // The dashboard API's errors. Management and ingestion-era endpoints answer `{ "error": ... }`
 // with the same messages the Rust API used; dashboard paths add codes on top (see
 // dashboards/errors.ts).
+import { StorageUnavailable } from "../db/db";
 
 export class ApiError extends Error {
   constructor(
@@ -42,6 +43,12 @@ export function noContent(): Response {
 /** Converts anything a handler threw into a response. Unexpected errors are logged, not shown. */
 export function errorResponse(error: unknown): Response {
   if (error instanceof Response) return error;
+  if (error instanceof StorageUnavailable)
+    return json(
+      { error: "Management storage is unavailable; retry shortly", code: "storage_unavailable" },
+      503,
+      { "Retry-After": "5" },
+    );
   if (error instanceof ApiError) {
     const headers = { ...error.headers };
     if ((error.status === 503 || error.status === 429) && !headers["Retry-After"])

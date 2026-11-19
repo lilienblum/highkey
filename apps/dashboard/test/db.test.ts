@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openBunDb } from "../src/server/db/bun-db";
 import type { Db } from "../src/server/db/db";
+import { openLibsqlDb } from "../src/server/db/libsql-db";
 import { applyMigrations, MIGRATIONS_DIR } from "../src/server/db/migrations";
 
 const dirs: string[] = [];
@@ -144,6 +145,54 @@ describe("migrations", () => {
         "views",
       ].sort(),
     );
+    await db.close();
+  });
+});
+
+describe.each([
+  ["bun:sqlite", () => openBunDb(":memory:")],
+  [
+    "libSQL",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "highkey-libsql-"));
+      dirs.push(dir);
+      return openLibsqlDb({ url: `file:${join(dir, "state.sqlite")}` });
+    },
+  ],
+] as const)("both drivers (%s)", (_name, open) => {
+  test("both_drivers_behave_the_same", async () => {
+    const db = open();
+    await db.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL, icon BLOB)");
+    await db.transaction(async (tx) => {
+      await tx.execute("INSERT INTO t(name, icon) VALUES (?, ?)", ["a", new Uint8Array([1, 2, 3])]);
+    });
+    const { rows } = await db.execute("SELECT id, name, icon FROM t");
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.id).toBe(1);
+    expect(rows[0]?.name).toBe("a");
+    expect(rows[0]?.icon).toBeInstanceOf(Uint8Array);
+    expect(Array.from((rows[0]?.icon ?? new Uint8Array()) as Uint8Array)).toEqual([1, 2, 3]);
+    const updated = await db.execute("UPDATE t SET name = ? WHERE id = ?", ["b", 1]);
+    expect(updated.rowsAffected).toBe(1);
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute("INSERT INTO t(name) VALUES ('c')");
+        throw new Error("abort");
+      }),
+    ).rejects.toThrow("abort");
+    const counted = await db.execute("SELECT count(*) AS n FROM t");
+    expect(Number(counted.rows[0]?.n)).toBe(1);
+    await db.script(
+      "CREATE TABLE u(id INTEGER); INSERT INTO u VALUES (1); INSERT INTO u VALUES (2);",
+    );
+    const u = await db.batch([{ sql: "SELECT count(*) AS n FROM u" }], "read");
+    expect(Number(u[0]?.rows[0]?.n)).toBe(2);
+    await db.close();
+  });
+
+  test("the_initial_migration_applies_on_both", async () => {
+    const db = open();
+    expect(await applyMigrations(db, "highkey", MIGRATIONS_DIR)).toContain("0001_initial.sql");
     await db.close();
   });
 });

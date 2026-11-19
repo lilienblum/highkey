@@ -15,6 +15,9 @@ include = ["apps/dashboard/dist/**", "apps/dashboard/src/channels/**", "apps/das
 
 [envs.development]
 route = "highkey.test"
+# Highkey's management state: Tako serves it from .tako/data/databases/highkey.sqlite and
+# applies migrations/ to it.
+databases = { main = "highkey" }
 
 [vars.development]
 SSL_CERT_FILE = ".tako/dev-ca.pem"
