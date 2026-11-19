@@ -3,7 +3,7 @@
 import { all, changes, type Db, one } from "../db/db";
 import { requireProduct } from "../db/products";
 import { projectSlug } from "../db/sources";
-import { newId, now } from "../db/sqlite";
+import { newId, now } from "../db/ids";
 import { conflict, invalid, limit, notFound } from "./errors";
 import type { Document } from "./spec";
 import { missingHint } from "./suggest";

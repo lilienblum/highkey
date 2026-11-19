@@ -2,7 +2,7 @@
 import { ApiError, bad, missing, sourceMissing } from "../api/errors";
 import { changes, type Db, one, all } from "./db";
 import { requireProduct } from "./products";
-import { newId, now } from "./sqlite";
+import { newId, now } from "./ids";
 
 export interface Source {
   icon: string | null;

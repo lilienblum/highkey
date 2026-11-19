@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openBunDb } from "../src/server/db/bun-db";
@@ -193,6 +193,29 @@ describe.each([
   test("the_initial_migration_applies_on_both", async () => {
     const db = open();
     expect(await applyMigrations(db, "highkey", MIGRATIONS_DIR)).toContain("0001_initial.sql");
+    await db.close();
+  });
+});
+
+describe("adopting a state file from before migrations", () => {
+  test("a_store_file_from_before_migrations_is_adopted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "highkey-legacy-"));
+    dirs.push(dir);
+    const path = join(dir, "state.sqlite");
+    // What the dashboard wrote before migrations/: today's tables and user_version 2.
+    const legacy = openBunDb(path);
+    await legacy.script(readFileSync(join(MIGRATIONS_DIR, "0001_initial.sql"), "utf8"));
+    await legacy.execute("PRAGMA user_version = 2");
+    await legacy.execute(
+      "INSERT INTO products(id, name, retention_days, created_at, slug) VALUES ('p', 'Kept', 30, 'now', 'kept')",
+    );
+    await legacy.close();
+    const db = openBunDb(path);
+    expect(await applyMigrations(db, "highkey", MIGRATIONS_DIR)).not.toContain("0001_initial.sql");
+    const { rows } = await db.execute("SELECT name FROM products");
+    expect(rows).toEqual([{ name: "Kept" }]);
+    const adopted = await db.execute("SELECT name FROM _tako_migrations");
+    expect(adopted.rows.map((r) => r.name)).toContain("0001_initial.sql");
     await db.close();
   });
 });

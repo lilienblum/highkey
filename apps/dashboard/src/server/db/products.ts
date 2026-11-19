@@ -4,7 +4,7 @@ import { bad, projectMissing } from "../api/errors";
 import { normalizeWebsite } from "../website";
 import { all, changes, type Db, one } from "./db";
 import { listSources, projectSlug, type Source } from "./sources";
-import { now, newId } from "./sqlite";
+import { now, newId } from "./ids";
 
 export interface Link {
   id: string;

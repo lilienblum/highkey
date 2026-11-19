@@ -5,7 +5,7 @@ import { normalizeOrigins } from "../origins";
 import { all, changes, type Db, one } from "./db";
 import { product, requireProduct } from "./products";
 import { getSource, keySource } from "./sources";
-import { newId, now } from "./sqlite";
+import { newId, now } from "./ids";
 
 export function hashSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");

@@ -25,7 +25,7 @@ import {
 import { all, changes, type Db, one } from "./db/db";
 import { requireProduct, resolveProduct } from "./db/products";
 import { projectSlug } from "./db/sources";
-import { newId, now } from "./db/sqlite";
+import { newId, now } from "./db/ids";
 import { EVENTS_PAGE_OPS, MEASURES } from "./queries/events";
 
 /** Views per project, across both kinds. */

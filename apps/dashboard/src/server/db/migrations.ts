@@ -5,11 +5,13 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Db } from "./db";
 
 /** The repository's `migrations/` directory, found from wherever this module was built. */
 function findMigrations(): string {
-  let dir = import.meta.dir;
+  // import.meta.url, not Bun's import.meta.dir: Vite's server runtime defines only the former.
+  let dir = dirname(fileURLToPath(import.meta.url));
   for (;;) {
     const candidate = join(dir, "migrations");
     if (existsSync(join(candidate, "0001_initial.sql"))) return candidate;
@@ -54,6 +56,24 @@ export async function applyMigrations(
     app,
   ]);
   const applied = new Map(rows.map((r) => [String(r.name), String(r.sha256)]));
+
+  // A state file the dashboard wrote before migrations/ existed already holds the initial
+  // schema: record it as applied instead of creating the tables again.
+  const initial = files.find((f) => f.name === "0001_initial.sql");
+  if (applied.size === 0 && initial) {
+    const existing = await db.execute(
+      "SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'products'",
+    );
+    if (existing.rows.length) {
+      const sql = readFileSync(join(dir, initial.name), "utf8");
+      const sha256 = createHash("sha256").update(sql).digest("hex");
+      await db.execute(
+        "INSERT INTO _tako_migrations(app, name, sha256, applied_at) VALUES (?, ?, ?, ?)",
+        [app, initial.name, sha256, new Date().toISOString()],
+      );
+      applied.set(initial.name, sha256);
+    }
+  }
 
   const done: string[] = [];
   for (const { name } of files) {

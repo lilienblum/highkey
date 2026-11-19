@@ -67,6 +67,11 @@ describe("browser test isolation", () => {
       (dashboard as { vars: { development: Record<string, string> } }).vars.development
         .HIGHKEY_API_URL,
     ).toBeUndefined();
+    // The development config binds the Tako database `highkey`; a test run must never share it, so
+    // the e2e dashboard keeps its state in its own data directory instead.
+    expect(
+      (dashboard as { envs: { development: Record<string, unknown> } }).envs.development.databases,
+    ).toBeUndefined();
     expect(e2eEnvironment("/highkey", "abcdef012345").directory).not.toBe(setup.directory);
   });
 });

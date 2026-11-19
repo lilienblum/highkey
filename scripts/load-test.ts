@@ -9,6 +9,7 @@
 // over the Overview widgets and an unbounded count over all history. It fails if any ingest
 // request fails, if the phase 2 p99 is more than twice phase 1's, or if it reaches 250 ms.
 import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
+import { applyMigrations } from "../apps/dashboard/src/server/db/migrations";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +20,6 @@ import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
 import { gatesFromEnv } from "../apps/dashboard/src/server/dashboards/gates";
 import { WriteLimit } from "../apps/dashboard/src/server/dashboards/limit";
 import { runWidget } from "../apps/dashboard/src/server/dashboards/run";
-import { Store } from "../apps/dashboard/src/server/db/sqlite";
 import { createEventKey, createProject } from "../apps/dashboard/src/server/operations";
 import { ADMIN_USER, type ServerOptions, startClickHouse, stopClickHouse } from "./clickhouse";
 
@@ -70,7 +70,6 @@ try {
   const { url } = await startClickHouse(LOAD_SERVER);
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: LOAD_SERVER.password });
   const ctx: ApiContext = {
-    store: Store.open(join(directory, "state.sqlite")),
     db: openBunDb(join(directory, "state.sqlite")),
     admin,
     readers: new Readers({ url, secret: LOAD_SERVER.password }),
@@ -81,6 +80,7 @@ try {
     gates: gatesFromEnv(),
     now: () => new Date(),
   };
+  await applyMigrations(ctx.db);
   const busy = await createProject(ctx, { name: "Busy", retention_days: 365, website_url: null });
   const quiet = await createProject(ctx, { name: "Quiet", retention_days: 365, website_url: null });
   const keys = [

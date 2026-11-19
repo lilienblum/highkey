@@ -1,6 +1,7 @@
 // The stack the benchmarks measure: a ClickHouse of its own (4 GB, tmpfs), the release ingest
 // binary, and the dashboard's API served by Bun as in production. Nothing outside it is touched.
 import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
+import { applyMigrations } from "../apps/dashboard/src/server/db/migrations";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,6 @@ import { Readers } from "../apps/dashboard/src/server/clickhouse/access";
 import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
 import { gatesFromEnv } from "../apps/dashboard/src/server/dashboards/gates";
 import { WriteLimit } from "../apps/dashboard/src/server/dashboards/limit";
-import { Store } from "../apps/dashboard/src/server/db/sqlite";
 import {
   ADMIN_USER,
   CLICKHOUSE_IMAGE,
@@ -47,7 +47,6 @@ export async function startStack(name: string, port: number, ingestPort: number)
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: server.password });
   const directory = mkdtempSync(join(tmpdir(), "highkey-bench-"));
   const ctx: ApiContext = {
-    store: Store.open(join(directory, "state.sqlite")),
     db: openBunDb(join(directory, "state.sqlite")),
     admin,
     readers: new Readers({ url, secret: server.password }),
@@ -58,6 +57,7 @@ export async function startStack(name: string, port: number, ingestPort: number)
     gates: gatesFromEnv(),
     now: () => new Date(),
   };
+  await applyMigrations(ctx.db);
   const http = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (r) => handleApi(r, ctx) });
   const build = Bun.spawn(["cargo", "build", "--locked", "--release", "-p", "highkey-ingest"], {
     cwd: root,

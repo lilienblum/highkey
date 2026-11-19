@@ -277,10 +277,11 @@ describe("dashboard storage", () => {
     expect((await call(ctx, "DELETE", p)).status).toBe(204);
     expect((await read("/api/read/products/shop/dashboards/board")).status).toBe(404);
     expect((await call(ctx, "DELETE", p)).status).toBe(404);
-    const left = ctx.store.db
-      .query("SELECT count(*) AS n FROM dashboard_revisions WHERE dashboard_id = ?")
-      .get(created.id) as { n: number };
-    expect(left.n).toBe(0);
+    const left = await ctx.db.execute(
+      "SELECT count(*) AS n FROM dashboard_revisions WHERE dashboard_id = ?",
+      [created.id],
+    );
+    expect(Number(left.rows[0]?.n)).toBe(0);
   });
 
   test("the_validate_slug_is_reserved_so_every_dashboard_is_readable_by_slug", async () => {

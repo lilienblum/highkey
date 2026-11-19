@@ -40,6 +40,9 @@ export function e2eConfig(template: string, name: string, vars: Record<string, s
   };
   config.name = name;
   config.envs.development.route = `${name}.test`;
+  // A test app never binds the development Tako database: it keeps its state in its own data
+  // directory, which teardown removes.
+  delete (config.envs.development as Record<string, unknown>).databases;
   Object.assign(config.vars.development, vars);
   return Bun.TOML.stringify(config);
 }

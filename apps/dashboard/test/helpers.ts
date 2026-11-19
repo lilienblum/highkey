@@ -1,9 +1,7 @@
 // Shared helpers for dashboard server tests: a fresh SQLite store per context, the shared test
 // ClickHouse, and direct inserts of events and logs.
 import { openBunDb } from "../src/server/db/bun-db";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { applyMigrations } from "../src/server/db/migrations";
 import type { ApiContext, Signal } from "../src/server/api/context";
 import { handleApi } from "../src/server/api/router";
 import { Readers } from "../src/server/clickhouse/access";
@@ -11,7 +9,6 @@ import { gatesFromEnv } from "../src/server/dashboards/gates";
 import { WriteLimit } from "../src/server/dashboards/limit";
 import { ClickHouse } from "../src/server/clickhouse/client";
 import { migrate } from "../src/server/clickhouse/migrate";
-import { Store } from "../src/server/db/sqlite";
 import { testClickHouse } from "./clickhouse";
 
 export interface TestContext extends ApiContext {
@@ -32,13 +29,11 @@ export async function testAdmin(): Promise<ClickHouse> {
 export async function testContext(options: { corsOrigins?: string[] } = {}): Promise<TestContext> {
   const server = await testClickHouse();
   const admin = await testAdmin();
-  const dir = mkdtempSync(join(tmpdir(), "highkey-dashboard-test-"));
-  const store = Store.open(join(dir, "state.sqlite"));
-  const db = openBunDb(join(dir, "state.sqlite"));
+  const db = openBunDb(":memory:");
+  await applyMigrations(db);
   const secret = "dashboard-test-secret";
   const signals: { product: string; signal: Signal }[] = [];
   return {
-    store,
     db,
     admin,
     readers: new Readers({ url: server.url, secret }),
@@ -52,8 +47,6 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
     signals,
     cleanup() {
       void db.close();
-      store.close();
-      rmSync(dir, { recursive: true, force: true });
     },
   };
 }

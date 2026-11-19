@@ -227,9 +227,10 @@ describe("saved views", () => {
     expect(created.json.kind).toBe("events");
     expect(created.json.document.kind).toBe("events");
     // A stored document written without `kind` still loads as an event view.
-    ctx.store.db
-      .query("UPDATE views SET document = json_remove(document, '$.kind') WHERE product_id = ?")
-      .run(shop.id);
+    await ctx.db.execute(
+      "UPDATE views SET document = json_remove(document, '$.kind') WHERE product_id = ?",
+      [shop.id],
+    );
     const got = await read(`${viewsPath(shop)}/plain`);
     expect(got.status).toBe(200);
     expect(got.json.kind).toBe("events");
