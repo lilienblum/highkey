@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { E2E_SERVER, startClickHouse, stopClickHouse } from "./clickhouse";
-import { e2eConfig, e2eEnvironment } from "./e2e-config";
+import { e2eApps, e2eConfig, e2eEnvironment } from "./e2e-config";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const run = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
@@ -11,30 +11,11 @@ if (!Bun.which("tako"))
 if (!(await Bun.file(setup.env.SSL_CERT_FILE).exists()))
   throw new Error("Initialize local TLS and the notification secret once with bun dev.");
 
-const clickhouseUrl = `http://127.0.0.1:${E2E_SERVER.port}`;
-const templates: { name: string; template: string; vars: Record<string, string> }[] = [
-  {
-    name: setup.ingestName,
-    template: "tako.ingest.toml",
-    vars: {
-      HIGHKEY_CLICKHOUSE_URL: clickhouseUrl,
-      HIGHKEY_CLICKHOUSE_PASSWORD: E2E_SERVER.ingestPassword,
-      HIGHKEY_CHANGE_URL: `${setup.env.HIGHKEY_DASHBOARD_URL}/_highkey/changes`,
-    },
-  },
-  {
-    name: setup.name,
-    template: "tako.dashboard.toml",
-    vars: {
-      HIGHKEY_DATA_DIR: setup.directory,
-      HIGHKEY_PUBLIC_URL: setup.env.HIGHKEY_DASHBOARD_URL,
-      HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
-      HIGHKEY_CLICKHOUSE_URL: clickhouseUrl,
-      HIGHKEY_CLICKHOUSE_PASSWORD: E2E_SERVER.password,
-      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${setup.name}.tako,${setup.name}.test`,
-    },
-  },
-];
+const templates = e2eApps(setup, {
+  url: `http://127.0.0.1:${E2E_SERVER.port}`,
+  password: E2E_SERVER.password,
+  ingestPassword: E2E_SERVER.ingestPassword,
+});
 const configs = templates.map((config) => ({
   ...config,
   path: `${root}.tako-e2e-${run}-${config.name}.toml`,

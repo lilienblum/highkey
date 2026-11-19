@@ -22,6 +22,42 @@ export function e2eEnvironment(root: string, run: string) {
   };
 }
 
+/**
+ * The two disposable apps a browser-test run starts from the real configs, with the variables
+ * that isolate them. Each app gets its ClickHouse credentials under the name it reads first,
+ * so the development values in the templates never leak into a test run.
+ */
+export function e2eApps(
+  setup: ReturnType<typeof e2eEnvironment>,
+  clickhouse: { url: string; password: string; ingestPassword: string },
+): { name: string; template: string; vars: Record<string, string> }[] {
+  return [
+    {
+      name: setup.ingestName,
+      template: "tako.ingest.toml",
+      vars: {
+        HIGHKEY_CLICKHOUSE_URL: clickhouse.url,
+        HIGHKEY_INGEST_CLICKHOUSE_PASSWORD: clickhouse.ingestPassword,
+        HIGHKEY_CHANGE_URL: `${setup.env.HIGHKEY_DASHBOARD_URL}/_highkey/changes`,
+      },
+    },
+    {
+      name: setup.name,
+      template: "tako.dashboard.toml",
+      vars: {
+        HIGHKEY_DATA_DIR: setup.directory,
+        HIGHKEY_PUBLIC_URL: setup.env.HIGHKEY_DASHBOARD_URL,
+        // Browser tests sign people up freely; the first account is made by tests/setup.ts.
+        HIGHKEY_SIGNUP: "open",
+        HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
+        HIGHKEY_CLICKHOUSE_URL: clickhouse.url,
+        HIGHKEY_CLICKHOUSE_PASSWORD: clickhouse.password,
+        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${setup.name}.tako,${setup.name}.test`,
+      },
+    },
+  ];
+}
+
 export function assertIsolatedE2E(env: Record<string, string | undefined>) {
   const run = env.HIGHKEY_E2E_RUN;
   if (!run || !/^[a-f0-9]{12}$/.test(run))

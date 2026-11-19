@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertIsolatedE2E, e2eConfig, e2eEnvironment } from "../scripts/e2e-config";
+import { assertIsolatedE2E, e2eApps, e2eConfig, e2eEnvironment } from "../scripts/e2e-config";
 
 const run = "0123456789ab";
 describe("browser test isolation", () => {
@@ -17,6 +17,30 @@ describe("browser test isolation", () => {
     ).toThrow();
     expect(() => assertIsolatedE2E(env)).not.toThrow();
     expect(() => e2eEnvironment("/highkey", "../app")).toThrow();
+  });
+  test("test_apps_sign_in_to_the_test_clickhouse_not_the_development_one", async () => {
+    // The ingest app reads HIGHKEY_INGEST_CLICKHOUSE_PASSWORD before HIGHKEY_CLICKHOUSE_PASSWORD,
+    // and the development config sets the former.
+    const setup = e2eEnvironment("/highkey", run);
+    const clickhouse = {
+      url: "http://127.0.0.1:18124",
+      password: "admin-e2e",
+      ingestPassword: "ingest-e2e",
+    };
+    for (const app of e2eApps(setup, clickhouse)) {
+      const config = Bun.TOML.parse(
+        e2eConfig(
+          await Bun.file(new URL(`../${app.template}`, import.meta.url)).text(),
+          app.name,
+          app.vars,
+        ),
+      ) as { vars: { development: Record<string, string> } };
+      const vars = config.vars.development;
+      expect(vars.HIGHKEY_CLICKHOUSE_URL).toBe(clickhouse.url);
+      if (app.template === "tako.ingest.toml")
+        expect(vars.HIGHKEY_INGEST_CLICKHOUSE_PASSWORD).toBe("ingest-e2e");
+      else expect(vars.HIGHKEY_CLICKHOUSE_PASSWORD).toBe("admin-e2e");
+    }
   });
   test("bun_trusts_the_local_ca_as_an_extra_certificate", async () => {
     // Bun rejects the dev certificate through SSL_CERT_FILE alone when stale CAs with the same
