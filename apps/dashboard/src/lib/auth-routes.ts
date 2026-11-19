@@ -19,3 +19,39 @@ export function isPublicPath(pathname: string): boolean {
 export function isAccountScreen(pathname: string): boolean {
   return isPublicPath(pathname) || SIGNED_IN.includes(pathname);
 }
+
+/**
+ * First path segments Highkey's own pages use. Organization addresses (`/<slug>/…`) never take
+ * them, or the page would hide the organization.
+ */
+export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
+  "events",
+  "logs",
+  "settings",
+  "explore",
+  "dashboards",
+  "projects",
+  "admin",
+  "account",
+  "api",
+  "mcp",
+  "assets",
+  "tracker",
+  "llms",
+  "health",
+  "favicon",
+  "well-known",
+  "highkey",
+  "sign-in",
+  "sign-up",
+  "sign-out",
+  "verify-email",
+  "forgot-password",
+  "reset-password",
+  "two-factor",
+  "join",
+  "select-organization",
+  "consent",
+  "new",
+  "organizations",
+]);

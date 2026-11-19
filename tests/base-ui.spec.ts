@@ -53,7 +53,7 @@ test("project select supports typeahead, keyboard selection, Escape and human-re
   ).toEqual([]);
   await expect(page.getByRole("link", { name: "Events", exact: true })).toHaveAttribute(
     "href",
-    `/projects/${zulu.slug}/events?source=all&days=7`,
+    `/owner/${zulu.slug}/events?source=all&days=7`,
   );
 });
 

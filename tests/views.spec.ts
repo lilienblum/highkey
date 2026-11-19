@@ -30,7 +30,7 @@ const run = Date.now();
 const planName = `Pro plan signups ${run}`;
 let project: Project;
 let planView: View;
-const eventsUrl = () => `/projects/${project.slug}/events`;
+const eventsUrl = () => `/owner/${project.slug}/events`;
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const eventViews = (page: Page) => sidebar(page).getByRole("list", { name: "Event views" });
 const viewParam = (page: Page) => new URL(page.url()).searchParams.get("view");
@@ -92,8 +92,8 @@ test("the old Explore paths redirect to Events and keep their search", async ({ 
       filterValue: "",
     }),
   );
-  await page.goto(`/projects/${project.slug}/explore?source=all&days=30&query=${query}`);
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/events\\?`));
+  await page.goto(`/owner/${project.slug}/explore?source=all&days=30&query=${query}`);
+  await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}/events\\?`));
   const params = new URL(page.url()).searchParams;
   expect(params.get("days")).toBe("30");
   expect(params.get("source")).toBe("all");
@@ -169,7 +169,7 @@ test("a view that no longer exists says so and offers a way back", async ({ page
 });
 
 test("New view opens the agent guide where you are, without navigating", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   const path = new URL(page.url()).pathname;
   await eventViews(page).getByRole("button", { name: "New view", exact: true }).click();
   const guide = page.getByRole("dialog", { name: "New event view" });

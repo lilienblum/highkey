@@ -50,6 +50,7 @@ import { useWorkspace } from "../app-shell";
 import { useDisplayPreferences } from "../display-preferences";
 import { GrowthLine, OverviewWidget, WidgetContent, WidgetValue } from "../overview-widgets";
 import { ChartLegend, chartSeries, colorVar, WidgetChart } from "./widget-chart";
+import { useOrganizationSlug } from "@/lib/workspace-route";
 
 type Props = {
   widget: Widget;
@@ -135,6 +136,7 @@ function useStable<T>(value: T): T {
 }
 
 function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange }: Props) {
+  const orgSlug = useOrganizationSlug();
   const { range, rangeScope, sourceId, refreshKey } = useWorkspace();
   const widget = useStable(given);
   const sources = useStable(product.sources);
@@ -182,8 +184,8 @@ function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange
       : undefined;
   const link = events ? (
     <Link
-      to="/projects/$projectSlug/events"
-      params={{ projectSlug: product.slug }}
+      to="/$orgSlug/$projectSlug/events"
+      params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
       search={events}
       className="widget-link"
     >
@@ -192,8 +194,8 @@ function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange
     </Link>
   ) : logs ? (
     <Link
-      to="/projects/$projectSlug/logs"
-      params={{ projectSlug: product.slug }}
+      to="/$orgSlug/$projectSlug/logs"
+      params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
       search={logs}
       className="widget-link"
     >

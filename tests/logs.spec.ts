@@ -55,7 +55,7 @@ test.beforeAll(async () => {
     );
 });
 test("log explorer filters, inspects, paginates and restores a shared query", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   expect(await page.locator(".log-row").count()).toBeLessThan(60);
   await expect(page.getByText("120 records", { exact: true })).toBeVisible();
@@ -100,7 +100,7 @@ test("log explorer filters, inspects, paginates and restores a shared query", as
   await expect(page.locator(".log-row")).toBeFocused();
 });
 test("following logs refreshes records while retaining an open inspector", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   expect(await page.locator(".log-row").count()).toBeLessThan(60);
   await page.locator(".log-row").first().click();
@@ -147,7 +147,7 @@ test("query following preserves rows on errors and leaves older snapshots paused
     if (fail) await route.fulfill({ status: 503, json: { error: "Temporarily unavailable" } });
     else await route.continue();
   });
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   const firstId = await page.locator(".log-row").first().getAttribute("data-log-id");
   const total = Number(
@@ -227,7 +227,7 @@ test("virtual logs load every older record on scroll with bounded rows and keybo
     if (request.url().endsWith(`/products/${project.id}/logs/query`))
       requests.push(request.postDataJSON());
   });
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of 1,200");
   const initiallyMounted = await page.locator(".log-row").count();
   expect(initiallyMounted).toBeGreaterThan(1);
@@ -292,7 +292,7 @@ test("older-page failures retain rows and stale requests cannot replace a new qu
       await route.fulfill({ status: 503, json: { error: "Older page busy" } });
     else await route.continue();
   });
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   const total = Number(
     (await page.locator(".logs-result-count").textContent())?.replace(/[^\d]/g, ""),
@@ -334,7 +334,7 @@ test("older-page failures retain rows and stale requests cannot replace a new qu
   }
 });
 test("log settings create scoped keys and store independent retention", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".page-header").getByText("Connect a source")).toHaveCount(0);
   await page.getByRole("link", { name: "Connect a source", exact: true }).click();
   await expect(page).toHaveURL(/settings.*#logs$/);
@@ -365,7 +365,7 @@ test("log settings create scoped keys and store independent retention", async ({
 });
 test("logs fit a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.locator(".log-row").first()).toBeVisible();
   await expect(page.locator(".log-row time").first()).toHaveCSS("font-size", "11px");
   expect((await page.locator(".log-row").first().boundingBox())?.height).toBeGreaterThanOrEqual(60);
@@ -393,7 +393,7 @@ test("failed queries can retry and context-only empty queries show matching feed
     if (fail) await route.fulfill({ status: 503, json: { error: "Logs temporarily unavailable" } });
     else await route.continue();
   });
-  await page.goto(`/projects/${project.slug}/logs`);
+  await page.goto(`/owner/${project.slug}/logs`);
   await expect(page.getByText("Logs unavailable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Couldn’t load logs" })).toBeVisible();
   await expect(page.getByText("The server is busy. Try again shortly.")).toBeVisible();
@@ -413,7 +413,7 @@ test("failed queries can retry and context-only empty queries show matching feed
 test("dragging across the log volume histogram narrows the query to those buckets", async ({
   page,
 }) => {
-  await page.goto(`/projects/${project.slug}/logs?logWindow=1h`);
+  await page.goto(`/owner/${project.slug}/logs?logWindow=1h`);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   const bars = await page.locator(".logs-volume-bars").boundingBox();
   if (!bars) throw new Error("Expected the volume histogram");
@@ -483,7 +483,7 @@ test("switching sources keeps the logs stream mounted and never flashes a skelet
     if (hold && route.request().postDataJSON().source_id) await gate;
     await route.continue().catch(() => {});
   });
-  await page.goto(`/projects/${steady.slug}/logs`);
+  await page.goto(`/owner/${steady.slug}/logs`);
   await expect(page.locator(".log-row").first()).toBeVisible();
   const sources = page.getByRole("navigation", { name: "Project sources" });
   await sources.getByRole("button", { name: names[0], exact: true }).click();

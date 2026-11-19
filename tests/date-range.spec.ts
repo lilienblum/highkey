@@ -23,7 +23,7 @@ async function post(path: string, body: unknown) {
 }
 async function open(page: Page) {
   await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
-  await page.goto(`/projects/${project.slug}?source=all&days=30`);
+  await page.goto(`/owner/${project.slug}?source=all&days=30`);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("4");
 }
 const dateMenu = (page: Page) => page.getByRole("menu", { name: "Date range", exact: true });
@@ -166,7 +166,7 @@ for (const width of [1440, 390]) {
 
 test("legacy snapshot links display a calendar range without a pin button", async ({ page }) => {
   await page.goto(
-    `/projects/${project.slug}?days=30&snapshot=${encodeURIComponent(new Date().toISOString())}`,
+    `/owner/${project.slug}?days=30&snapshot=${encodeURIComponent(new Date().toISOString())}`,
   );
   await expect(trigger(page)).toHaveAttribute("data-fixed", "true");
   await expect(page.getByRole("button", { name: "Pin dates" })).toHaveCount(0);
@@ -182,7 +182,7 @@ test("changing calendar dates preserves a drilldown's event and typed filter", a
     filter: { property: "amount", value: 20 },
   };
   await page.goto(
-    `/projects/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify(selection))}`,
+    `/owner/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify(selection))}`,
   );
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await trigger(page).click();
@@ -316,7 +316,7 @@ for (const size of [
     expect(nextBox?.x).toBeGreaterThanOrEqual((dateBox?.x ?? 0) + (dateBox?.width ?? 0));
     await expect(next).toBeDisabled();
     await page.goto(
-      `/projects/${project.slug}?from=2025-12-15T00%3A00%3A00.000Z&to=2026-01-20T00%3A00%3A00.000Z`,
+      `/owner/${project.slug}?from=2025-12-15T00%3A00%3A00.000Z&to=2026-01-20T00%3A00%3A00.000Z`,
     );
     await expect(trigger(page)).toContainText("2025");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

@@ -1,4 +1,4 @@
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { Skeleton } from "@/components/ui/skeleton";
 import { bucketLabels, partialBucketNote, type TimeBucket } from "@/lib/time-buckets";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
@@ -59,6 +59,7 @@ export function QueryDraftNotice({ onDiscard }: { onDiscard: () => void }) {
   );
 }
 export function NoEvents() {
+  const workspaceTarget = useWorkspaceTarget();
   const { projectSlug } = useParams({ strict: false });
   return (
     <Empty>
@@ -210,6 +211,7 @@ export function BreakdownRows({
   destination = "events",
   sources,
 }: BreakdownProps) {
+  const workspaceTarget = useWorkspaceTarget();
   const { projectSlug } = useParams({ strict: false });
   const max = Math.max(...groups.map((g) => g.value ?? 0), 1);
   return (

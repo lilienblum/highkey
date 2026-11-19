@@ -69,12 +69,12 @@ test("project pages render the catalog on the server without a workspace placeho
   page,
   request,
 }) => {
-  const html = await (await request.get(`/projects/${product.slug}`)).text();
+  const html = await (await request.get(`/owner/${product.slug}`)).text();
   expect(html).toContain(product.name);
   expect(html).toContain('aria-label="Main navigation"');
   expect(html).not.toContain('aria-label="Loading workspace"');
   expect(html).not.toContain("No projects yet");
-  await page.goto(`/projects/${product.slug}`);
+  await page.goto(`/owner/${product.slug}`);
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(product.name);
   await expect(page.getByRole("status", { name: "Loading workspace", exact: true })).toHaveCount(0);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("8");

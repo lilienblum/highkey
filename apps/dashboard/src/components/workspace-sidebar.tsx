@@ -1,4 +1,4 @@
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -36,6 +36,7 @@ import type { DashboardLink, Product } from "@/lib/api";
 import { clearedLogs } from "@/lib/logs";
 import { AgentGuideDialog, type GuideIntent } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
+import { OrganizationMenu } from "./organization-menu";
 import { CollapsedGroup, ViewList, useCollapsedRail, type ViewLinkRenderer } from "./saved-views";
 import { SourceIcon } from "./source-icon";
 
@@ -63,6 +64,7 @@ export function WorkspaceSidebar({
   navigationReady: boolean;
   onSourceChange: (id: string) => void;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { isMobile, setOpenMobile, open, state } = useSidebar();
   const sources = [{ id: "", name: "All sources", icon: null }, ...(product?.sources ?? [])];
   const dashboards = product?.dashboards ?? [];
@@ -143,7 +145,7 @@ export function WorkspaceSidebar({
             )}
           </div>
           <div className="workspace-project" title={product?.name}>
-            <span className="workspace-section-label">Project</span>
+            <OrganizationMenu />
             {picker}
           </div>
         </SidebarHeader>
@@ -407,6 +409,7 @@ function CollapsedOverview({
   activeDashboard?: string;
   onNew: () => void;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>

@@ -26,6 +26,7 @@ import { AnalyticsChart } from "./analytics-chart";
 import { ValueSelect } from "./value-select";
 import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
+import { useOrganizationSlug } from "@/lib/workspace-route";
 
 type ChartChoice = {
   id: string;
@@ -80,6 +81,7 @@ const dimensions = [
 ] as const;
 
 export function Overview() {
+  const orgSlug = useOrganizationSlug();
   const { invalidFilter } = useSearch({ strict: false });
   const { product, sourceId } = useWorkspace();
   if (invalidFilter)
@@ -90,8 +92,8 @@ export function Overview() {
           description="The link contains an invalid analytics filter."
         />
         <Link
-          to="/projects/$projectSlug"
-          params={{ projectSlug: product?.slug ?? "" }}
+          to="/$orgSlug/$projectSlug"
+          params={{ orgSlug: orgSlug ?? "", projectSlug: product?.slug ?? "" }}
           search={(previous) => ({ ...previous, filter: undefined })}
         >
           Clear filter
@@ -132,9 +134,10 @@ function OverviewActions() {
   );
 }
 function ProductOverview() {
+  const orgSlug = useOrganizationSlug();
   const { product, source, sourceId, range, refresh, refreshKey, now } = useWorkspace();
   const search = useSearch({ strict: false });
-  const navigate = useNavigate({ from: "/projects/$projectSlug/" });
+  const navigate = useNavigate({ from: "/$orgSlug/$projectSlug/" });
   const dimension = search.breakdown ?? "name";
   const chartMetric = search.metric ?? "count";
   const durationMetric = search.duration ?? "avg";
@@ -308,8 +311,8 @@ function ProductOverview() {
             {displayValue(selectedFilter.field, selectedFilter.value)} ×
           </Button>
           <Link
-            to="/projects/$projectSlug/events"
-            params={{ projectSlug: product.slug }}
+            to="/$orgSlug/$projectSlug/events"
+            params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
             search={{
               drilldown: {
                 ...range,

@@ -6,12 +6,13 @@ import {
   type DashboardDocument,
   type StoredDashboard,
 } from "@/lib/dashboards";
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useWorkspace } from "../app-shell";
 import { NameDialog } from "../name-dialog";
 
 /** Opens a dashboard that was just created, after the sidebar has learned about it. */
 export function useOpenDashboard() {
+  const workspaceTarget = useWorkspaceTarget();
   const navigate = useNavigate();
   const { product, reload } = useWorkspace();
   return async (stored: StoredDashboard) => {

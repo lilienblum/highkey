@@ -13,7 +13,7 @@ import {
 } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { getWorkspace } from "@/server/workspace";
-import { getViewer, type Viewer } from "@/server/viewer";
+import { activateOrganization, getViewer, type Viewer } from "@/server/viewer";
 import { isAccountScreen, isPublicPath } from "@/lib/auth-routes";
 import type { ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
@@ -33,6 +33,10 @@ function currentViewer(): Promise<Viewer | null> {
   });
   return browserViewer;
 }
+function rememberViewer(viewer: Viewer): Viewer {
+  if (typeof window !== "undefined") browserViewer = Promise.resolve(viewer);
+  return viewer;
+}
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   validateSearch: validateWorkspaceSearch,
   search: {
@@ -40,9 +44,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   },
   // Everyone signs in first; account screens (signing in, joining) are the only public pages.
   beforeLoad: async ({ location }) => {
-    const viewer = await currentViewer();
+    let viewer = await currentViewer();
     if (!viewer && !isPublicPath(location.pathname))
       throw redirect({ href: `/sign-in?redirect=${encodeURIComponent(location.href)}` });
+    // An address under /<organization>/ makes that organization the session's, before the
+    // workspace loads, so the API answers for it.
+    const first = location.pathname.split("/")[1];
+    const addressed = viewer?.organizations.find((org) => org.slug === first);
+    if (viewer && addressed && addressed.id !== viewer.activeOrganizationId) {
+      if (await activateOrganization({ data: addressed.id }))
+        viewer = rememberViewer({ ...viewer, activeOrganizationId: addressed.id });
+    }
     return { viewer };
   },
   // The project catalog renders on the server and is reused by client navigation; mutations

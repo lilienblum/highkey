@@ -29,7 +29,7 @@ import {
   queryToLogs,
   type LogViewDocument,
 } from "@/lib/views";
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { displayTimestamp } from "@/lib/display-time";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { useDisplayPreferences } from "./display-preferences";
@@ -87,6 +87,7 @@ const logViews: SavedViewPage<LogViewDocument> = {
   clear: (previous) => ({ ...previous, view: undefined, viewAt: undefined }),
 };
 function LogExplorer() {
+  const workspaceTarget = useWorkspaceTarget();
   const { product, sourceId, now: workspaceNow } = useWorkspace();
   const { timeZone } = useDisplayPreferences();
   const search = validateLogsSearch(useSearch({ strict: false }));

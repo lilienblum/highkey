@@ -97,7 +97,7 @@ const titles = checkoutDashboard.widgets.map((widget) => widget.title);
 
 let project: Project;
 let slug: string;
-const dashboardUrl = () => `/projects/${project.slug}/dashboards/${slug}`;
+const dashboardUrl = () => `/owner/${project.slug}/dashboards/${slug}`;
 const widget = (page: Page, id: string) => page.locator(`.dashboard-widget[data-widget="${id}"]`);
 
 test.beforeAll(async () => {
@@ -229,7 +229,7 @@ test("collapsed rail reaches dashboards from Overview by keyboard", async ({ pag
     localStorage.setItem("highkey:product", id);
     localStorage.setItem("highkey:sidebar", "collapsed");
   }, project.id);
-  await page.goto(`/projects/${project.slug}`);
+  await page.goto(`/owner/${project.slug}`);
   const overview = page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Overview", exact: true });
@@ -243,7 +243,7 @@ test("collapsed rail reaches dashboards from Overview by keyboard", async ({ pag
   await expect(link).toBeFocused();
   await page.screenshot({ path: test.info().outputPath("collapsed-menu.png") });
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/dashboards/${slug}`));
+  await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}/dashboards/${slug}`));
   await expect(page.getByRole("heading", { level: 1, name: "Checkout health" })).toBeVisible();
   await expect(menu).toBeHidden();
   await page.keyboard.press("Escape");
@@ -298,14 +298,14 @@ test("a 90-day range clamps logs widgets and says so", async ({ page }) => {
 });
 
 test("a missing dashboard shows a way back", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/dashboards/nope`);
+  await page.goto(`/owner/${project.slug}/dashboards/nope`);
   await expect(
     page.getByRole("heading", { level: 1, name: "This dashboard no longer exists" }),
   ).toBeVisible();
   const back = page.locator("#main-content").getByRole("link", { name: "Go to Overview" });
   await expect(back).toBeVisible();
   await back.click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
+  await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}(\\?|$)`));
   await expect(page.locator(".overview-dashboard")).toBeVisible();
 });
 
@@ -317,7 +317,7 @@ test("empty project renders dashes, not errors", async ({ page }) => {
   const created = await admin<{ slug: string }>(`/products/${empty.id}/dashboards`, {
     document: checkoutDashboard,
   });
-  await page.goto(`/projects/${empty.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${empty.slug}/dashboards/${created.slug}`);
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("—");
   await expect(widget(page, "conversion").locator(".widget-growth")).toContainText("—");
   await expect(widget(page, "error-rate")).toContainText("No values in this range");
@@ -401,7 +401,7 @@ test("widget runs wait for the viewport and run at most three at a time", async 
     inFlight--;
     await route.fulfill({ response });
   });
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   for (const stat of stats)
     await expect(widget(page, stat.id).locator(".widget-value")).toHaveText("15.0%");
   expect(peak).toBeLessThanOrEqual(3);
@@ -419,7 +419,7 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto(`/projects/${project.slug}`);
+  await page.goto(`/owner/${project.slug}`);
   const trigger = sidebar(page).getByRole("button", { name: "New dashboard" });
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "New dashboard" });
@@ -475,7 +475,7 @@ test("a copy button shows a cross when the clipboard refuses", async ({ page }) 
       value: { writeText: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) },
     });
   });
-  await page.goto(`/projects/${project.slug}`);
+  await page.goto(`/owner/${project.slug}`);
   await sidebar(page).getByRole("button", { name: "New dashboard" }).click();
   const dialog = page.getByRole("dialog", { name: "New dashboard" });
   const prompt = dialog.getByRole("button", { name: "Copy prompt" });
@@ -561,7 +561,7 @@ test("Duplicate asks for the copy's name", async ({ page }) => {
   await field.fill(name);
   await dialog.getByRole("button", { name: "Duplicate" }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/projects/${project.slug}/dashboards/checkout-ops-\\d+(\\?|$)`),
+    new RegExp(`/owner/${project.slug}/dashboards/checkout-ops-\\d+(\\?|$)`),
   );
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
   for (const title of titles)
@@ -581,7 +581,7 @@ test("an empty dashboard shows the guide inline", async ({ page }) => {
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
     document: { version: 1, name: "Scratch", widgets: [] },
   });
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   const main = page.locator("#main-content");
   await expect(main.getByRole("heading", { name: "No widgets yet" })).toBeVisible();
   for (const heading of ["Connect your agent", "Ask it", "Examples"])
@@ -591,7 +591,7 @@ test("an empty dashboard shows the guide inline", async ({ page }) => {
 });
 
 test("duplicate as dashboard from Overview", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}`);
+  await page.goto(`/owner/${project.slug}`);
   await page.getByRole("button", { name: "Overview actions" }).click();
   await page.getByRole("menuitem", { name: "Duplicate as dashboard" }).click();
   const dialog = page.getByRole("dialog", { name: "Duplicate Overview" });
@@ -625,7 +625,7 @@ test("delete asks first and returns to Overview", async ({ page }) => {
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
     document: { ...checkoutDashboard, name },
   });
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   // A unique name, so the sidebar check below can only pass once the link is gone.
   const link = sidebar(page).getByRole("link", { name, exact: true });
   await expect(link).toBeVisible();
@@ -641,7 +641,7 @@ test("delete asks first and returns to Overview", async ({ page }) => {
   await menu.click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete dashboard" }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}(\\?|$)`));
+  await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}(\\?|$)`));
   await expect(page.locator(".overview-dashboard")).toBeVisible();
   await expect(link).toHaveCount(0);
   // Going back finds it gone rather than showing the cached document.
@@ -671,7 +671,7 @@ test("revisions list origins and restore an earlier version", async ({ page }) =
     }),
   });
   expect(saved.ok, `save: ${saved.status}`).toBe(true);
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   await expect(page.getByRole("heading", { level: 1, name: `${original} edited` })).toBeVisible();
   const menu = page.getByRole("button", { name: "Dashboard actions" });
   await menu.click();
@@ -806,7 +806,7 @@ test("typed tables, a funnel and retention render, with shares as percentages", 
   const slug = (
     await admin<{ slug: string }>(`/products/${shop.id}/dashboards`, { document: tablesDashboard })
   ).slug;
-  await page.goto(`/projects/${shop.slug}/dashboards/${slug}`);
+  await page.goto(`/owner/${shop.slug}/dashboards/${slug}`);
 
   const table = widget(page, "by-name").getByRole("region", { name: "Events by name" });
   await expect(table).toBeVisible();
@@ -904,7 +904,7 @@ test("a stat shows growth against the previous period without asking for it", as
       ],
     },
   });
-  await page.goto(`/projects/${grown.slug}/dashboards/${created.slug}?days=7`);
+  await page.goto(`/owner/${grown.slug}/dashboards/${created.slug}?days=7`);
   await expect(widget(page, "signups").locator(".widget-value")).toHaveText("3");
   const signups = widget(page, "signups").locator(".widget-growth");
   await expect(signups).toContainText("+50% vs prior 7d");
@@ -936,7 +936,7 @@ test("without channels, a dashboard an agent creates or edits appears by polling
   await page.clock.install();
   // The runtime answer means the page has hydrated and its poll timer is running.
   const hydrated = page.waitForResponse("**/_highkey/runtime");
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   await hydrated;
   const heading = (name: string) => page.getByRole("heading", { level: 1, name });
   await expect(heading(original)).toBeVisible();
@@ -1046,7 +1046,7 @@ test("returning to a dashboard shows its last results while they refresh", async
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
     document: { ...checkoutDashboard, name },
   });
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
   await expect(widget(page, "plans")).toContainText("pro");
   await sidebar(page).getByRole("link", { name: "Overview", exact: true }).click();
@@ -1125,7 +1125,7 @@ test("Open in Events and Open in Logs carry every filter the widget reads", asyn
       ],
     },
   });
-  await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
+  await page.goto(`/owner/${project.slug}/dashboards/${created.slug}`);
   const search = async (id: string, name: string) => {
     const href = await widget(page, id).getByRole("link", { name }).getAttribute("href");
     return new URL(href ?? "", "https://highkey.test").searchParams;

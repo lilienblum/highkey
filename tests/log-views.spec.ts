@@ -29,7 +29,7 @@ const run = Date.now();
 const errorsName = `Checkout errors ${run}`;
 let project: Project;
 let errorsView: View;
-const logsUrl = () => `/projects/${project.slug}/logs`;
+const logsUrl = () => `/owner/${project.slug}/logs`;
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const logViews = (page: Page) => sidebar(page).getByRole("list", { name: "Log views" });
 const viewParam = (page: Page) => new URL(page.url()).searchParams.get("view");

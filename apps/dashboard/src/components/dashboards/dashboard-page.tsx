@@ -37,7 +37,7 @@ import { deleteDashboard, type DashboardDocument, type StoredDashboard } from "@
 import { AgentGuide, AgentGuideDialog } from "./agent-guide";
 import { RevisionsSheet } from "./revisions-sheet";
 import { DashboardNameDialog } from "./new-dashboard-dialog";
-import { dashboardRoute, workspaceTarget } from "@/lib/workspace-route";
+import { dashboardRoute, useWorkspaceTarget } from "@/lib/workspace-route";
 import { dashboardQueries, dashboardQuery } from "@/server/dashboards";
 import { NoProduct, PageHeader, useAnalyticsPending, useWorkspace } from "../app-shell";
 import { ErrorState } from "../shared";
@@ -188,6 +188,7 @@ function DashboardActions({
   refreshing: boolean;
   retry: () => void;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { reload } = useWorkspace();
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -359,6 +360,7 @@ function DashboardActions({
 }
 
 function MissingDashboard({ product }: { product: Product }) {
+  const workspaceTarget = useWorkspaceTarget();
   return (
     <>
       <PageHeader

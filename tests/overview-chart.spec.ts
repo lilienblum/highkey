@@ -296,7 +296,7 @@ test("dates automatically choose raw weekly and monthly aggregates and retain th
   await expect(page.getByRole("group", { name: "Chart interval" })).toHaveCount(0);
   const from = new Date(Date.now() - 365 * 86400000).toISOString();
   const to = new Date().toISOString();
-  const url = `/projects/${products.tool.slug}?source=all&metric=p95&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const url = `/owner/${products.tool.slug}?source=all&metric=p95&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
   const monthly = chartResponse(page, "p95", "month");
   await page.goto(url);
   const months = await result(monthly);
@@ -405,7 +405,7 @@ test("source discovery keeps the main chart and breakdown in their original posi
 test("dragging across the activity chart zooms the workspace to those buckets", async ({
   page,
 }) => {
-  await page.goto(`/projects/${products.website.slug}?source=all&days=7`);
+  await page.goto(`/owner/${products.website.slug}?source=all&days=7`);
   const dots = page.locator('.activity-widget circle[data-ts-key^="buckets:"]');
   await expect(dots).toHaveCount(7);
   const bucket = async (index: number) => {

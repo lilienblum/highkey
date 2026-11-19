@@ -163,7 +163,7 @@ for (const collapsed of [false, true]) {
     );
     await page.goto("/");
     // A bare URL canonicalizes to the project once the shell hydrates and reads the saved project.
-    await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}`));
+    await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}`));
     await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(
       project.name,
     );
@@ -189,7 +189,7 @@ for (const collapsed of [false, true]) {
 
 test("connect a source lives in the sidebar, not in page headers", async ({ page }) => {
   for (const route of ["/", "/events", "/logs"]) {
-    await page.goto(`/projects/${project.slug}${route === "/" ? "" : route}`);
+    await page.goto(`/owner/${project.slug}${route === "/" ? "" : route}`);
     const sources = page.locator(".workspace-sources");
     await expect(
       sources.getByRole("link", { name: "Connect a source", exact: true }),
@@ -206,7 +206,7 @@ test("connect a source stays reachable from the collapsed rail", async ({ page }
     localStorage.setItem("highkey:product", id);
     localStorage.setItem("highkey:sidebar", "collapsed");
   }, project.id);
-  await page.goto(`/projects/${project.slug}/events`);
+  await page.goto(`/owner/${project.slug}/events`);
   const link = page.getByRole("link", { name: "Connect a source", exact: true });
   // The rail is inert until preferences load, then the link is enabled.
   await expect(link).toBeEnabled();

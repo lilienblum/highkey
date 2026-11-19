@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OrgSlugRouteImport } from './routes/$orgSlug'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExploreRouteImport } from './routes/explore'
@@ -26,23 +27,30 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as OrgSlugIndexRouteImport } from './routes/$orgSlug.index'
+import { Route as OrgSlugProjectSlugRouteImport } from './routes/$orgSlug.$projectSlug'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known.$'
 import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
 import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as JoinInvitationIdRouteImport } from './routes/join.$invitationId'
-import { Route as ProjectsProjectSlugRouteImport } from './routes/projects.$projectSlug'
+import { Route as ProjectsSplatRouteImport } from './routes/projects.$'
+import { Route as OrgSlugProjectSlugIndexRouteImport } from './routes/$orgSlug.$projectSlug.index'
+import { Route as OrgSlugProjectSlugEventsRouteImport } from './routes/$orgSlug.$projectSlug.events'
+import { Route as OrgSlugProjectSlugExploreRouteImport } from './routes/$orgSlug.$projectSlug.explore'
+import { Route as OrgSlugProjectSlugLogsRouteImport } from './routes/$orgSlug.$projectSlug.logs'
+import { Route as OrgSlugProjectSlugSettingsRouteImport } from './routes/$orgSlug.$projectSlug.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
-import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.$projectSlug.index'
-import { Route as ProjectsProjectSlugEventsRouteImport } from './routes/projects.$projectSlug.events'
-import { Route as ProjectsProjectSlugExploreRouteImport } from './routes/projects.$projectSlug.explore'
-import { Route as ProjectsProjectSlugLogsRouteImport } from './routes/projects.$projectSlug.logs'
-import { Route as ProjectsProjectSlugSettingsRouteImport } from './routes/projects.$projectSlug.settings'
-import { Route as ProjectsProjectSlugDashboardsDashboardSlugRouteImport } from './routes/projects.$projectSlug.dashboards.$dashboardSlug'
+import { Route as OrgSlugProjectSlugDashboardsDashboardSlugRouteImport } from './routes/$orgSlug.$projectSlug.dashboards.$dashboardSlug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrgSlugRoute = OrgSlugRouteImport.update({
+  id: '/$orgSlug',
+  path: '/$orgSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConsentRoute = ConsentRouteImport.update({
@@ -125,6 +133,16 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrgSlugIndexRoute = OrgSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrgSlugRoute,
+} as any)
+const OrgSlugProjectSlugRoute = OrgSlugProjectSlugRouteImport.update({
+  id: '/$projectSlug',
+  path: '/$projectSlug',
+  getParentRoute: () => OrgSlugRoute,
+} as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
   id: '/.well-known/$',
   path: '/.well-known/$',
@@ -150,54 +168,54 @@ const JoinInvitationIdRoute = JoinInvitationIdRouteImport.update({
   path: '/join/$invitationId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProjectsProjectSlugRoute = ProjectsProjectSlugRouteImport.update({
-  id: '/projects/$projectSlug',
-  path: '/projects/$projectSlug',
+const ProjectsSplatRoute = ProjectsSplatRouteImport.update({
+  id: '/projects/$',
+  path: '/projects/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrgSlugProjectSlugIndexRoute = OrgSlugProjectSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrgSlugProjectSlugRoute,
+} as any)
+const OrgSlugProjectSlugEventsRoute =
+  OrgSlugProjectSlugEventsRouteImport.update({
+    id: '/events',
+    path: '/events',
+    getParentRoute: () => OrgSlugProjectSlugRoute,
+  } as any)
+const OrgSlugProjectSlugExploreRoute =
+  OrgSlugProjectSlugExploreRouteImport.update({
+    id: '/explore',
+    path: '/explore',
+    getParentRoute: () => OrgSlugProjectSlugRoute,
+  } as any)
+const OrgSlugProjectSlugLogsRoute = OrgSlugProjectSlugLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => OrgSlugProjectSlugRoute,
+} as any)
+const OrgSlugProjectSlugSettingsRoute =
+  OrgSlugProjectSlugSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => OrgSlugProjectSlugRoute,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProjectsProjectSlugIndexRoute =
-  ProjectsProjectSlugIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ProjectsProjectSlugRoute,
-  } as any)
-const ProjectsProjectSlugEventsRoute =
-  ProjectsProjectSlugEventsRouteImport.update({
-    id: '/events',
-    path: '/events',
-    getParentRoute: () => ProjectsProjectSlugRoute,
-  } as any)
-const ProjectsProjectSlugExploreRoute =
-  ProjectsProjectSlugExploreRouteImport.update({
-    id: '/explore',
-    path: '/explore',
-    getParentRoute: () => ProjectsProjectSlugRoute,
-  } as any)
-const ProjectsProjectSlugLogsRoute = ProjectsProjectSlugLogsRouteImport.update({
-  id: '/logs',
-  path: '/logs',
-  getParentRoute: () => ProjectsProjectSlugRoute,
-} as any)
-const ProjectsProjectSlugSettingsRoute =
-  ProjectsProjectSlugSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ProjectsProjectSlugRoute,
-  } as any)
-const ProjectsProjectSlugDashboardsDashboardSlugRoute =
-  ProjectsProjectSlugDashboardsDashboardSlugRouteImport.update({
+const OrgSlugProjectSlugDashboardsDashboardSlugRoute =
+  OrgSlugProjectSlugDashboardsDashboardSlugRouteImport.update({
     id: '/dashboards/$dashboardSlug',
     path: '/dashboards/$dashboardSlug',
-    getParentRoute: () => ProjectsProjectSlugRoute,
+    getParentRoute: () => OrgSlugProjectSlugRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$orgSlug': typeof OrgSlugRouteWithChildren
   '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
@@ -214,19 +232,21 @@ export interface FileRoutesByFullPath {
   '/tracker.js': typeof TrackerDotjsRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugRouteWithChildren
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
-  '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
+  '/projects/$': typeof ProjectsSplatRoute
+  '/$orgSlug/': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
+  '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
+  '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
+  '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
-  '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
-  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
-  '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
-  '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
-  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
+  '/$orgSlug/$projectSlug/': typeof OrgSlugProjectSlugIndexRoute
+  '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -251,17 +271,20 @@ export interface FileRoutesByTo {
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
+  '/projects/$': typeof ProjectsSplatRoute
+  '/$orgSlug': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
+  '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
+  '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
+  '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
-  '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
-  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
-  '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
-  '/projects/$projectSlug': typeof ProjectsProjectSlugIndexRoute
-  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
+  '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugIndexRoute
+  '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$orgSlug': typeof OrgSlugRouteWithChildren
   '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
@@ -278,24 +301,27 @@ export interface FileRoutesById {
   '/tracker.js': typeof TrackerDotjsRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugRouteWithChildren
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
-  '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
+  '/projects/$': typeof ProjectsSplatRoute
+  '/$orgSlug/': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
+  '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
+  '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
+  '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
-  '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
-  '/projects/$projectSlug/logs': typeof ProjectsProjectSlugLogsRoute
-  '/projects/$projectSlug/settings': typeof ProjectsProjectSlugSettingsRoute
-  '/projects/$projectSlug/': typeof ProjectsProjectSlugIndexRoute
-  '/projects/$projectSlug/dashboards/$dashboardSlug': typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
+  '/$orgSlug/$projectSlug/': typeof OrgSlugProjectSlugIndexRoute
+  '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$orgSlug'
     | '/consent'
     | '/events'
     | '/explore'
@@ -312,19 +338,21 @@ export interface FileRouteTypes {
     | '/tracker.js'
     | '/two-factor'
     | '/verify-email'
+    | '/$orgSlug/$projectSlug'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
     | '/join/$invitationId'
-    | '/projects/$projectSlug'
+    | '/projects/$'
+    | '/$orgSlug/'
+    | '/$orgSlug/$projectSlug/events'
+    | '/$orgSlug/$projectSlug/explore'
+    | '/$orgSlug/$projectSlug/logs'
+    | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
-    | '/projects/$projectSlug/events'
-    | '/projects/$projectSlug/explore'
-    | '/projects/$projectSlug/logs'
-    | '/projects/$projectSlug/settings'
-    | '/projects/$projectSlug/'
-    | '/projects/$projectSlug/dashboards/$dashboardSlug'
+    | '/$orgSlug/$projectSlug/'
+    | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -349,16 +377,19 @@ export interface FileRouteTypes {
     | '/_highkey/runtime'
     | '/api/$'
     | '/join/$invitationId'
+    | '/projects/$'
+    | '/$orgSlug'
+    | '/$orgSlug/$projectSlug/events'
+    | '/$orgSlug/$projectSlug/explore'
+    | '/$orgSlug/$projectSlug/logs'
+    | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
-    | '/projects/$projectSlug/events'
-    | '/projects/$projectSlug/explore'
-    | '/projects/$projectSlug/logs'
-    | '/projects/$projectSlug/settings'
-    | '/projects/$projectSlug'
-    | '/projects/$projectSlug/dashboards/$dashboardSlug'
+    | '/$orgSlug/$projectSlug'
+    | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   id:
     | '__root__'
     | '/'
+    | '/$orgSlug'
     | '/consent'
     | '/events'
     | '/explore'
@@ -375,23 +406,26 @@ export interface FileRouteTypes {
     | '/tracker.js'
     | '/two-factor'
     | '/verify-email'
+    | '/$orgSlug/$projectSlug'
     | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
     | '/join/$invitationId'
-    | '/projects/$projectSlug'
+    | '/projects/$'
+    | '/$orgSlug/'
+    | '/$orgSlug/$projectSlug/events'
+    | '/$orgSlug/$projectSlug/explore'
+    | '/$orgSlug/$projectSlug/logs'
+    | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
-    | '/projects/$projectSlug/events'
-    | '/projects/$projectSlug/explore'
-    | '/projects/$projectSlug/logs'
-    | '/projects/$projectSlug/settings'
-    | '/projects/$projectSlug/'
-    | '/projects/$projectSlug/dashboards/$dashboardSlug'
+    | '/$orgSlug/$projectSlug/'
+    | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  OrgSlugRoute: typeof OrgSlugRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   EventsRoute: typeof EventsRoute
   ExploreRoute: typeof ExploreRoute
@@ -413,7 +447,7 @@ export interface RootRouteChildren {
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
   JoinInvitationIdRoute: typeof JoinInvitationIdRoute
-  ProjectsProjectSlugRoute: typeof ProjectsProjectSlugRouteWithChildren
+  ProjectsSplatRoute: typeof ProjectsSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -424,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$orgSlug': {
+      id: '/$orgSlug'
+      path: '/$orgSlug'
+      fullPath: '/$orgSlug'
+      preLoaderRoute: typeof OrgSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/consent': {
@@ -538,6 +579,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$orgSlug/': {
+      id: '/$orgSlug/'
+      path: '/'
+      fullPath: '/$orgSlug/'
+      preLoaderRoute: typeof OrgSlugIndexRouteImport
+      parentRoute: typeof OrgSlugRoute
+    }
+    '/$orgSlug/$projectSlug': {
+      id: '/$orgSlug/$projectSlug'
+      path: '/$projectSlug'
+      fullPath: '/$orgSlug/$projectSlug'
+      preLoaderRoute: typeof OrgSlugProjectSlugRouteImport
+      parentRoute: typeof OrgSlugRoute
+    }
     '/.well-known/$': {
       id: '/.well-known/$'
       path: '/.well-known/$'
@@ -573,12 +628,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JoinInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/projects/$projectSlug': {
-      id: '/projects/$projectSlug'
-      path: '/projects/$projectSlug'
-      fullPath: '/projects/$projectSlug'
-      preLoaderRoute: typeof ProjectsProjectSlugRouteImport
+    '/projects/$': {
+      id: '/projects/$'
+      path: '/projects/$'
+      fullPath: '/projects/$'
+      preLoaderRoute: typeof ProjectsSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/$orgSlug/$projectSlug/': {
+      id: '/$orgSlug/$projectSlug/'
+      path: '/'
+      fullPath: '/$orgSlug/$projectSlug/'
+      preLoaderRoute: typeof OrgSlugProjectSlugIndexRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
+    '/$orgSlug/$projectSlug/events': {
+      id: '/$orgSlug/$projectSlug/events'
+      path: '/events'
+      fullPath: '/$orgSlug/$projectSlug/events'
+      preLoaderRoute: typeof OrgSlugProjectSlugEventsRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
+    '/$orgSlug/$projectSlug/explore': {
+      id: '/$orgSlug/$projectSlug/explore'
+      path: '/explore'
+      fullPath: '/$orgSlug/$projectSlug/explore'
+      preLoaderRoute: typeof OrgSlugProjectSlugExploreRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
+    '/$orgSlug/$projectSlug/logs': {
+      id: '/$orgSlug/$projectSlug/logs'
+      path: '/logs'
+      fullPath: '/$orgSlug/$projectSlug/logs'
+      preLoaderRoute: typeof OrgSlugProjectSlugLogsRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
+    '/$orgSlug/$projectSlug/settings': {
+      id: '/$orgSlug/$projectSlug/settings'
+      path: '/settings'
+      fullPath: '/$orgSlug/$projectSlug/settings'
+      preLoaderRoute: typeof OrgSlugProjectSlugSettingsRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -587,75 +677,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/projects/$projectSlug/': {
-      id: '/projects/$projectSlug/'
-      path: '/'
-      fullPath: '/projects/$projectSlug/'
-      preLoaderRoute: typeof ProjectsProjectSlugIndexRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
-    }
-    '/projects/$projectSlug/events': {
-      id: '/projects/$projectSlug/events'
-      path: '/events'
-      fullPath: '/projects/$projectSlug/events'
-      preLoaderRoute: typeof ProjectsProjectSlugEventsRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
-    }
-    '/projects/$projectSlug/explore': {
-      id: '/projects/$projectSlug/explore'
-      path: '/explore'
-      fullPath: '/projects/$projectSlug/explore'
-      preLoaderRoute: typeof ProjectsProjectSlugExploreRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
-    }
-    '/projects/$projectSlug/logs': {
-      id: '/projects/$projectSlug/logs'
-      path: '/logs'
-      fullPath: '/projects/$projectSlug/logs'
-      preLoaderRoute: typeof ProjectsProjectSlugLogsRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
-    }
-    '/projects/$projectSlug/settings': {
-      id: '/projects/$projectSlug/settings'
-      path: '/settings'
-      fullPath: '/projects/$projectSlug/settings'
-      preLoaderRoute: typeof ProjectsProjectSlugSettingsRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
-    }
-    '/projects/$projectSlug/dashboards/$dashboardSlug': {
-      id: '/projects/$projectSlug/dashboards/$dashboardSlug'
+    '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': {
+      id: '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
       path: '/dashboards/$dashboardSlug'
-      fullPath: '/projects/$projectSlug/dashboards/$dashboardSlug'
-      preLoaderRoute: typeof ProjectsProjectSlugDashboardsDashboardSlugRouteImport
-      parentRoute: typeof ProjectsProjectSlugRoute
+      fullPath: '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
+      preLoaderRoute: typeof OrgSlugProjectSlugDashboardsDashboardSlugRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
     }
   }
 }
 
-interface ProjectsProjectSlugRouteChildren {
-  ProjectsProjectSlugEventsRoute: typeof ProjectsProjectSlugEventsRoute
-  ProjectsProjectSlugExploreRoute: typeof ProjectsProjectSlugExploreRoute
-  ProjectsProjectSlugLogsRoute: typeof ProjectsProjectSlugLogsRoute
-  ProjectsProjectSlugSettingsRoute: typeof ProjectsProjectSlugSettingsRoute
-  ProjectsProjectSlugIndexRoute: typeof ProjectsProjectSlugIndexRoute
-  ProjectsProjectSlugDashboardsDashboardSlugRoute: typeof ProjectsProjectSlugDashboardsDashboardSlugRoute
+interface OrgSlugProjectSlugRouteChildren {
+  OrgSlugProjectSlugEventsRoute: typeof OrgSlugProjectSlugEventsRoute
+  OrgSlugProjectSlugExploreRoute: typeof OrgSlugProjectSlugExploreRoute
+  OrgSlugProjectSlugLogsRoute: typeof OrgSlugProjectSlugLogsRoute
+  OrgSlugProjectSlugSettingsRoute: typeof OrgSlugProjectSlugSettingsRoute
+  OrgSlugProjectSlugIndexRoute: typeof OrgSlugProjectSlugIndexRoute
+  OrgSlugProjectSlugDashboardsDashboardSlugRoute: typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 
-const ProjectsProjectSlugRouteChildren: ProjectsProjectSlugRouteChildren = {
-  ProjectsProjectSlugEventsRoute: ProjectsProjectSlugEventsRoute,
-  ProjectsProjectSlugExploreRoute: ProjectsProjectSlugExploreRoute,
-  ProjectsProjectSlugLogsRoute: ProjectsProjectSlugLogsRoute,
-  ProjectsProjectSlugSettingsRoute: ProjectsProjectSlugSettingsRoute,
-  ProjectsProjectSlugIndexRoute: ProjectsProjectSlugIndexRoute,
-  ProjectsProjectSlugDashboardsDashboardSlugRoute:
-    ProjectsProjectSlugDashboardsDashboardSlugRoute,
+const OrgSlugProjectSlugRouteChildren: OrgSlugProjectSlugRouteChildren = {
+  OrgSlugProjectSlugEventsRoute: OrgSlugProjectSlugEventsRoute,
+  OrgSlugProjectSlugExploreRoute: OrgSlugProjectSlugExploreRoute,
+  OrgSlugProjectSlugLogsRoute: OrgSlugProjectSlugLogsRoute,
+  OrgSlugProjectSlugSettingsRoute: OrgSlugProjectSlugSettingsRoute,
+  OrgSlugProjectSlugIndexRoute: OrgSlugProjectSlugIndexRoute,
+  OrgSlugProjectSlugDashboardsDashboardSlugRoute:
+    OrgSlugProjectSlugDashboardsDashboardSlugRoute,
 }
 
-const ProjectsProjectSlugRouteWithChildren =
-  ProjectsProjectSlugRoute._addFileChildren(ProjectsProjectSlugRouteChildren)
+const OrgSlugProjectSlugRouteWithChildren =
+  OrgSlugProjectSlugRoute._addFileChildren(OrgSlugProjectSlugRouteChildren)
+
+interface OrgSlugRouteChildren {
+  OrgSlugProjectSlugRoute: typeof OrgSlugProjectSlugRouteWithChildren
+  OrgSlugIndexRoute: typeof OrgSlugIndexRoute
+}
+
+const OrgSlugRouteChildren: OrgSlugRouteChildren = {
+  OrgSlugProjectSlugRoute: OrgSlugProjectSlugRouteWithChildren,
+  OrgSlugIndexRoute: OrgSlugIndexRoute,
+}
+
+const OrgSlugRouteWithChildren =
+  OrgSlugRoute._addFileChildren(OrgSlugRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  OrgSlugRoute: OrgSlugRouteWithChildren,
   ConsentRoute: ConsentRoute,
   EventsRoute: EventsRoute,
   ExploreRoute: ExploreRoute,
@@ -677,7 +746,7 @@ const rootRouteChildren: RootRouteChildren = {
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
   JoinInvitationIdRoute: JoinInvitationIdRoute,
-  ProjectsProjectSlugRoute: ProjectsProjectSlugRouteWithChildren,
+  ProjectsSplatRoute: ProjectsSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

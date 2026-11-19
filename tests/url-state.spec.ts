@@ -53,7 +53,7 @@ test("project URL wins over saved preferences and applies a portable calendar ra
   page,
   browser,
 }) => {
-  await page.goto(`/projects/${project.slug}?source=all&days=7`);
+  await page.goto(`/owner/${project.slug}?source=all&days=7`);
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(project.name);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
   await expect(page.getByRole("button", { name: "Choose date range" })).toContainText(
@@ -97,7 +97,7 @@ test("project URL wins over saved preferences and applies a portable calendar ra
     await fresh.close();
   }
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  expect(new URL(page.url()).pathname).toBe(`/projects/${project.slug}/settings`);
+  expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}/settings`);
   expect(params(page).has("project")).toBe(false);
   expect(params(page).get("from")).toBe(from);
   expect(params(page).get("to")).toBe(to);
@@ -112,7 +112,7 @@ test("project URL wins over saved preferences and applies a portable calendar ra
 });
 
 test("applied Explore queries and pages survive reload and browser history", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}/events?source=all&days=30`);
+  await page.goto(`/owner/${project.slug}/events?source=all&days=30`);
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   await select(page, "Measure", "Numeric average");
   await page.getByRole("button", { name: "Filter", exact: true }).click();
@@ -153,15 +153,15 @@ test("source links remain scoped and invalid selections never query a fallback p
     if (request.url().endsWith("/query")) queries++;
   });
   for (const link of [
-    `/projects/does-not-exist`,
-    `/projects/${project.slug}?source=missing-source`,
+    `/owner/does-not-exist`,
+    `/owner/${project.slug}?source=missing-source`,
     // A legacy ID only resolves within its own project.
-    `/projects/${project.slug}?source=${other.sources[0].id}`,
-    `/projects/${project.slug}?snapshot=yesterday`,
-    `/projects/${project.slug}?from=2026-01-01T00:00:00.000Z`,
-    `/projects/${project.slug}?from=2026-02-02T00:00:00.000Z&to=2026-02-01T00:00:00.000Z`,
-    `/projects/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify({ productId: other.id, from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" }))}`,
-    `/projects/${project.slug}/events?query=${encodeURIComponent(JSON.stringify({ measure: "sql" }))}`,
+    `/owner/${project.slug}?source=${other.sources[0].id}`,
+    `/owner/${project.slug}?snapshot=yesterday`,
+    `/owner/${project.slug}?from=2026-01-01T00:00:00.000Z`,
+    `/owner/${project.slug}?from=2026-02-02T00:00:00.000Z&to=2026-02-01T00:00:00.000Z`,
+    `/owner/${project.slug}/events?drilldown=${encodeURIComponent(JSON.stringify({ productId: other.id, from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" }))}`,
+    `/owner/${project.slug}/events?query=${encodeURIComponent(JSON.stringify({ measure: "sql" }))}`,
   ]) {
     await page.goto(link);
     await expect(
@@ -174,7 +174,7 @@ test("source links remain scoped and invalid selections never query a fallback p
     .or(page.getByRole("link", { name: "Clear selection", exact: true }))
     .click();
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeHidden();
-  await page.goto(`/projects/${project.slug}?source=${project.sources[0].slug}&days=7`);
+  await page.goto(`/owner/${project.slug}?source=${project.sources[0].slug}&days=7`);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
   await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 31 matching events")).toBeVisible();
@@ -188,9 +188,9 @@ test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
   });
   const source = await post(`/products/${legacy.id}/sources`, { name: "Web App" });
   expect(source.slug).toBe("web-app");
-  await page.goto(`/projects/${legacy.slug}/events?source=${source.id}&days=30`);
+  await page.goto(`/owner/${legacy.slug}/events?source=${source.id}&days=30`);
   await expect.poll(() => params(page).get("source")).toBe("web-app");
-  expect(new URL(page.url()).pathname).toBe(`/projects/${legacy.slug}/events`);
+  expect(new URL(page.url()).pathname).toBe(`/owner/${legacy.slug}/events`);
   expect(params(page).get("days")).toBe("30");
   await expect(
     page
@@ -208,7 +208,7 @@ test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
 });
 
 test("automatic refresh changes neither the current URL nor browser history", async ({ page }) => {
-  await page.goto(`/projects/${project.slug}?source=all&days=30`);
+  await page.goto(`/owner/${project.slug}?source=all&days=30`);
   await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
   const url = page.url();
   const history = await page.evaluate(() => window.history.length);
@@ -223,19 +223,19 @@ test("automatic refresh changes neither the current URL nor browser history", as
 test("project paths win over legacy query slugs and project switching updates the path", async ({
   page,
 }) => {
-  await page.goto(`/projects/${project.slug}?project=${other.slug}`);
+  await page.goto(`/owner/${project.slug}?project=${other.slug}`);
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(project.name);
   await expect.poll(() => params(page).has("project")).toBe(false);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
   await select(page, "Select project", other.name);
-  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${other.slug}`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/owner/${other.slug}`);
   await page.goBack();
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(project.name);
   await page.getByRole("link", { name: "Events", exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${project.slug}/events`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/owner/${project.slug}/events`);
   // The full-navigation fixture seeds the other project as the saved preference.
   await page.goto("/settings");
-  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${other.slug}/settings`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/owner/${other.slug}/settings`);
 });
 
 for (const [label, dates] of Object.entries<Record<string, string>>({
@@ -252,7 +252,7 @@ for (const [label, dates] of Object.entries<Record<string, string>>({
       breakdown: "property:command",
       duration: "p95",
     });
-    await page.goto(`/projects/${other.slug}?${search}`);
+    await page.goto(`/owner/${other.slug}?${search}`);
     await expect(page.getByRole("combobox", { name: "Chart metric" })).toContainText(
       "Average duration",
     );
@@ -318,7 +318,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
     page: "2",
     pageSize: "30",
   });
-  await page.goto(`/projects/${other.slug}/events?${search}`);
+  await page.goto(`/owner/${other.slug}/events?${search}`);
   await expect(page.getByRole("region", { name: "Overview selection" })).toBeVisible();
   await expect(page.getByLabel("Typed value")).toHaveValue("true");
   await page.getByLabel("Typed value").fill("false");
@@ -326,7 +326,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
   const request = page.waitForRequest((r) => r.url().endsWith(`/products/${project.id}/query`));
   await select(page, "Select project", project.name);
   await expect(page.getByText("across 31 matching events")).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe(`/projects/${project.slug}/events`);
+  expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}/events`);
   expect(Object.fromEntries(params(page))).toEqual({ source: "all", days: "7" });
   expect((await request).postDataJSON()).toMatchObject({
     measure: "count",

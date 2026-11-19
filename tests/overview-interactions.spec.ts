@@ -44,7 +44,7 @@ test("live identity widget, in-place filters, and independent external row links
   });
   expect(ingested.ok).toBe(true);
   await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
-  await page.goto(`/projects/${project.slug}?source=all&days=30`);
+  await page.goto(`/owner/${project.slug}?source=all&days=30`);
   await expect(page.locator(".live-metric .widget-value")).toHaveText("2");
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("5");
   await page.getByRole("combobox", { name: "Breakdown", exact: true }).click();
@@ -72,13 +72,13 @@ test("live identity widget, in-place filters, and independent external row links
   await filter.click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("4");
   await expect(page.locator(".live-metric .widget-value")).toHaveText("1");
-  expect(new URL(page.url()).pathname).toBe(`/projects/${project.slug}`);
+  expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}`);
   await page.reload();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("4");
   await page.getByRole("button", { name: "Remove filter", exact: true }).click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("5");
   await page.goto(
-    `/projects/${project.slug}?from=2020-01-01T00%3A00%3A00.000Z&to=2020-01-02T00%3A00%3A00.000Z`,
+    `/owner/${project.slug}?from=2020-01-01T00%3A00%3A00.000Z&to=2020-01-02T00%3A00%3A00.000Z`,
   );
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("0");
   await expect(page.locator(".live-metric .widget-value")).toHaveText("2");
@@ -120,7 +120,7 @@ test("Overview tiles and the activity headline show growth against the previous 
     { authorization: `Bearer ${key}` },
   );
   await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
-  await page.goto(`/projects/${project.slug}?source=all&days=7`);
+  await page.goto(`/owner/${project.slug}?source=all&days=7`);
   const tile = (label: string) => page.locator(".metric-widget", { hasText: label });
   await expect(tile("Events").locator(".widget-value")).toHaveText("4");
   await expect(tile("Events").locator(".widget-growth")).toContainText("+100% vs prior 7d");

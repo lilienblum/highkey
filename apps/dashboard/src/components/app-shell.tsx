@@ -3,7 +3,7 @@ import { validateExploreSearch } from "@/lib/explore-search";
 import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
-import { workspaceTarget, workspaceView } from "@/lib/workspace-route";
+import { useWorkspaceTarget, workspaceView } from "@/lib/workspace-route";
 import { dashboardQueries } from "@/server/dashboards";
 import { viewQueries } from "@/lib/views";
 import { ProjectIcon } from "./project-icon";
@@ -82,6 +82,7 @@ export function AppShell({
   initialProducts: Product[];
   serverNow: number;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [analyticsPending, setAnalyticsPending] = useState(false);
@@ -217,6 +218,7 @@ export function AppShell({
     search.source,
     search.days,
     navigate,
+    workspaceTarget,
   ]);
   const rangeIdentity = JSON.stringify([
     view,

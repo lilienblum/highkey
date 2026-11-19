@@ -63,7 +63,7 @@ import {
   type ViewKind,
   type ViewLink,
 } from "@/lib/views";
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { AgentGuideDialog } from "./dashboards/agent-guide";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { NameDialog } from "./name-dialog";
@@ -236,6 +236,7 @@ function useStoredView<D extends ViewDocument>(product: Product, kind: D["kind"]
 
 /** Applies a stored view version to the page in place, remembering what that showed. */
 function useShowView<D extends ViewDocument>(page: SavedViewPage<D>, product: Product) {
+  const workspaceTarget = useWorkspaceTarget();
   const navigate = useNavigate();
   return (slug: string, stored: StoredView<D>, patch = page.search(stored)) => {
     rememberApplied(
@@ -273,6 +274,7 @@ export function OpenSavedView<D extends ViewDocument>({
   /** The page's own placeholder while the view loads. */
   loading: ReactNode;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const view = useStoredView<D>(product, page.kind, slug);
   const show = useShowView(page, product);
   const [guiding, setGuiding] = useState(false);
@@ -362,6 +364,7 @@ export function SaveEventViewDialog({
   product: Product;
   spec: ExploreSpec;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { reload } = useWorkspace();
   const navigate = useNavigate();
   const query = specToQuery(spec);
@@ -447,6 +450,7 @@ export function SaveLogViewDialog({
   product: Product;
   search: LogsSearch;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { reload } = useWorkspace();
   const navigate = useNavigate();
   // A trace ID and a selected range narrow this page only; a view keeps its window instead.
@@ -530,6 +534,7 @@ export function ViewActions<D extends ViewDocument>({
   /** Leaves the deleted view's page, after the sidebar has dropped it. */
   onDeleted: () => void | Promise<void>;
 }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { reload } = useWorkspace();
   const client = useQueryClient();
   const navigate = useNavigate();

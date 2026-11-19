@@ -2,7 +2,7 @@ import { displayMinute } from "@/lib/display-time";
 import { displayGroups } from "@/lib/display-values";
 import { reportLink } from "@/lib/report-link";
 import { automaticBucket } from "@/lib/time-buckets";
-import { workspaceTarget } from "@/lib/workspace-route";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
 import {
@@ -37,6 +37,7 @@ import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared
 import { ExploreLoading } from "./loading";
 import { Spinner } from "@/components/ui/spinner";
 export function Explore() {
+  const workspaceTarget = useWorkspaceTarget();
   const { product, sourceId } = useWorkspace();
   const { drilldown, invalidDrilldown, invalidQuery, view, viewAt } = useSearch({ strict: false });
   if (
@@ -111,9 +112,10 @@ const eventViews: SavedViewPage<EventViewDocument> = {
   clear: () => ({}),
 };
 function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
+  const workspaceTarget = useWorkspaceTarget();
   const { product, source, sourceId, range, refresh, refreshKey } = useWorkspace();
   const search = useSearch({ strict: false });
-  const navigate = useNavigate({ from: "/projects/$projectSlug/events" });
+  const navigate = useNavigate({ from: "/$orgSlug/$projectSlug/events" });
   const applied: Spec = appliedSpec({ query: search.query, drilldown });
   const appliedKey = JSON.stringify(applied);
   const [draft, setDraft] = useState<Spec>(applied);

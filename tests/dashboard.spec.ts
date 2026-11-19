@@ -359,7 +359,7 @@ test("website breakdown links preserve product and dates across reload and histo
   const docs = page.getByRole("link", { name: "Filter by /docs", exact: true });
   await expect(docs.locator("..")).toContainText("50%");
   const clicked = new URL((await docs.getAttribute("href")) ?? "", dashboard);
-  expect(clicked.pathname).toBe(`/projects/${web.slug}`);
+  expect(clicked.pathname).toBe(`/owner/${web.slug}`);
   expect(JSON.parse(clicked.searchParams.get("filter") ?? "null")).toEqual({
     field: "property:path",
     value: "/docs",

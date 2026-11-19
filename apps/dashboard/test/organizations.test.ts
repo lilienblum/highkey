@@ -162,4 +162,29 @@ describe("organizations", () => {
     const { rows } = await ctx.db.execute("SELECT org_id FROM products WHERE id = ?", [before.id]);
     expect(rows[0]?.org_id).toBe(org?.id as string);
   });
+
+  test("an_organization_never_takes_a_page_address", async () => {
+    const auth = testAuth(ctx, { signup: "open" });
+    // A person named after a page gets the next free slug for their organization.
+    const [own] = await organizations(
+      auth,
+      (await signUp(auth, "e@example.com", "Events")).headers,
+    );
+    expect(own?.slug).toBe("events-2");
+    const owner = (await signUp(auth, "o@example.com", "Owner")).headers;
+    const create = (slug: string) =>
+      authRequest(auth, "/organization/create", { name: "Mine", slug }, owner);
+    for (const slug of ["settings", "sign-in", "projects", "api", "join"]) {
+      const refused = await create(slug);
+      expect({ slug, ok: refused.ok }).toEqual({ slug, ok: false });
+    }
+    expect((await create("acme")).ok).toBe(true);
+    const renamed = await authRequest(
+      auth,
+      "/organization/update",
+      { data: { slug: "consent" } },
+      owner,
+    );
+    expect(renamed.ok).toBe(false);
+  });
 });

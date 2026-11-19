@@ -2,19 +2,19 @@ import { expect, test } from "bun:test";
 import { workspaceTarget, workspaceView } from "../apps/dashboard/src/lib/workspace-route";
 
 test("views match whole path segments, so view names are also valid project slugs", () => {
-  expect(workspaceView("/projects/dashboards/events")).toBe("/events");
-  expect(workspaceView("/projects/dashboards/logs")).toBe("/logs");
-  expect(workspaceView("/projects/dashboards/settings")).toBe("/settings");
-  expect(workspaceView("/projects/dashboards")).toBe("/");
-  expect(workspaceView("/projects/dashboards/")).toBe("/");
-  expect(workspaceView("/projects/orbit/dashboards/x")).toBe("/dashboards");
-  expect(workspaceView("/projects/dashboards/dashboards/checkout")).toBe("/dashboards");
-  expect(workspaceView("/projects/events")).toBe("/");
-  expect(workspaceView("/projects/logs")).toBe("/");
-  expect(workspaceView("/projects/settings")).toBe("/");
-  expect(workspaceView("/projects/orbit/events")).toBe("/events");
-  expect(workspaceView("/projects/orbit/dashboards")).toBe("/");
-  expect(workspaceView("/projects/orbit/dashboards/x/y")).toBe("/");
+  expect(workspaceView("/acme/dashboards/events")).toBe("/events");
+  expect(workspaceView("/acme/dashboards/logs")).toBe("/logs");
+  expect(workspaceView("/acme/dashboards/settings")).toBe("/settings");
+  expect(workspaceView("/acme/dashboards")).toBe("/");
+  expect(workspaceView("/acme/dashboards/")).toBe("/");
+  expect(workspaceView("/acme/orbit/dashboards/x")).toBe("/dashboards");
+  expect(workspaceView("/acme/dashboards/dashboards/checkout")).toBe("/dashboards");
+  expect(workspaceView("/acme/events")).toBe("/");
+  expect(workspaceView("/acme/logs")).toBe("/");
+  expect(workspaceView("/acme/settings")).toBe("/");
+  expect(workspaceView("/acme/orbit/events")).toBe("/events");
+  expect(workspaceView("/acme/orbit/dashboards")).toBe("/");
+  expect(workspaceView("/acme/orbit/dashboards/x/y")).toBe("/");
 });
 
 test("bare paths keep the saved project's views", () => {
@@ -22,21 +22,24 @@ test("bare paths keep the saved project's views", () => {
   expect(workspaceView("/events")).toBe("/events");
   expect(workspaceView("/logs")).toBe("/logs");
   expect(workspaceView("/settings")).toBe("/settings");
+  expect(workspaceView("/acme")).toBe("/");
   expect(workspaceView("/dashboards/x")).toBe("/");
 });
 
-test("a dashboard target needs its slug and otherwise falls back to Overview", () => {
-  expect(workspaceTarget("/dashboards", "orbit", "checkout")).toEqual({
-    to: "/projects/$projectSlug/dashboards/$dashboardSlug",
-    params: { projectSlug: "orbit", dashboardSlug: "checkout" },
+test("project targets name the organization; a dashboard needs its slug", () => {
+  expect(workspaceTarget("acme", "/dashboards", "orbit", "checkout")).toEqual({
+    to: "/$orgSlug/$projectSlug/dashboards/$dashboardSlug",
+    params: { orgSlug: "acme", projectSlug: "orbit", dashboardSlug: "checkout" },
   });
-  expect(workspaceTarget("/dashboards", "orbit")).toEqual({
-    to: "/projects/$projectSlug",
-    params: { projectSlug: "orbit" },
+  expect(workspaceTarget("acme", "/dashboards", "orbit")).toEqual({
+    to: "/$orgSlug/$projectSlug",
+    params: { orgSlug: "acme", projectSlug: "orbit" },
   });
-  expect(workspaceTarget("/dashboards")).toEqual({ to: "/" });
-  expect(workspaceTarget("/logs", "orbit", "checkout")).toEqual({
-    to: "/projects/$projectSlug/logs",
-    params: { projectSlug: "orbit" },
+  expect(workspaceTarget("acme", "/dashboards")).toEqual({ to: "/" });
+  expect(workspaceTarget("acme", "/logs", "orbit", "checkout")).toEqual({
+    to: "/$orgSlug/$projectSlug/logs",
+    params: { orgSlug: "acme", projectSlug: "orbit" },
   });
+  // Without an organization (signed out, or none yet) there is no project page to go to.
+  expect(workspaceTarget(undefined, "/events", "orbit")).toEqual({ to: "/events" });
 });

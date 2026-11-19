@@ -16,6 +16,7 @@ import type { Db } from "../db/db";
 import { managementDb, takoDatabase } from "../db/open";
 import { adoptOrphanProjects } from "../db/products";
 import { projectSlug } from "../db/sources";
+import { RESERVED_SLUGS } from "../../lib/auth-routes";
 import { cimdFetch } from "./cimd-fetch";
 import { keyFrom } from "./keys";
 import { forgetOrganization, projectCount } from "./org-cleanup";
@@ -106,11 +107,12 @@ async function invited(adapter: Adapter, email: string): Promise<boolean> {
   return pending.some((i) => new Date(i.expiresAt).getTime() > Date.now());
 }
 
-/** A free organization slug from a name: `ada`, else `ada-2`, `ada-3`… */
+/** A free organization slug from a name: `ada`, else `ada-2`, `ada-3`… (never a page's address). */
 async function freeSlug(adapter: Adapter, name: string): Promise<string> {
   const base = projectSlug(name);
   for (let suffix = 1; ; suffix++) {
     const slug = suffix === 1 ? base : `${base}-${suffix}`;
+    if (RESERVED_SLUGS.has(slug)) continue;
     const taken = await adapter.findOne({
       model: "organization",
       where: [{ field: "slug", value: slug }],
@@ -309,6 +311,13 @@ export function createAuth(options: AuthOptions) {
           },
         },
         organizationHooks: {
+          // An organization's address is /<slug>/…; it may not hide one of Highkey's pages.
+          beforeCreateOrganization: async ({ organization: org }) => {
+            if (RESERVED_SLUGS.has(String(org.slug)))
+              throw new APIError("BAD_REQUEST", {
+                message: `“${org.slug}” is one of Highkey’s own addresses; choose another slug`,
+              });
+          },
           // An organization goes only once it has no projects (deleted ones count until wiped);
           // then its keys and agent connections go with it.
           beforeDeleteOrganization: async ({ organization: org }) => {
@@ -322,6 +331,10 @@ export function createAuth(options: AuthOptions) {
             if (options.db) await forgetOrganization(options.db, org.id);
           },
           beforeUpdateOrganization: async ({ organization: changes, user, member }) => {
+            if (changes.slug !== undefined && RESERVED_SLUGS.has(String(changes.slug)))
+              throw new APIError("BAD_REQUEST", {
+                message: `“${changes.slug}” is one of Highkey’s own addresses; choose another slug`,
+              });
             if (changes.requireTwoFactor === undefined) return;
             if (!String(member.role).split(",").includes("owner"))
               throw new APIError("FORBIDDEN", {

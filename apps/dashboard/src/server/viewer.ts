@@ -164,3 +164,51 @@ export const getAgentName = createServerFn({ method: "GET" })
     );
     return row?.name ?? null;
   });
+
+/**
+ * Makes `organizationId` the session's organization (the one its API requests act in), when the
+ * signed-in person belongs to it. Pages under `/<organization>/…` call this on load.
+ */
+export const activateOrganization = createServerFn({ method: "POST" })
+  .validator((organizationId: unknown) => {
+    if (typeof organizationId !== "string" || !ID.test(organizationId))
+      throw new Error("Not an organization");
+    return organizationId;
+  })
+  .handler(async ({ data: organizationId }): Promise<boolean> => {
+    const { ctx, request } = await context();
+    const auth = await ctx.auth();
+    const done = await auth.api
+      .setActiveOrganization({ body: { organizationId }, headers: request.headers })
+      .then(
+        () => true,
+        () => false,
+      );
+    return done;
+  });
+
+/**
+ * The organizations (of the signed-in person) holding a project with this slug, for old
+ * `/projects/<slug>` links.
+ */
+export const projectOrganizations = createServerFn({ method: "GET" })
+  .validator((slug: unknown) => {
+    if (typeof slug !== "string" || !/^[a-z0-9-]{1,80}$/.test(slug))
+      throw new Error("Not a project");
+    return slug;
+  })
+  .handler(async ({ data: slug }): Promise<string[]> => {
+    const { ctx, request } = await context();
+    const auth = await ctx.auth();
+    const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
+    if (!session) return [];
+    const { all } = await import("./db/db");
+    const rows = await all<{ slug: string }>(
+      ctx.db,
+      `SELECT o.slug FROM products p JOIN organization o ON o.id = p.org_id
+       JOIN member m ON m."organizationId" = o.id AND m."userId" = ?
+       WHERE p.slug = ? AND p.deleted_at IS NULL ORDER BY o.slug`,
+      [session.user.id, slug],
+    );
+    return rows.map((row) => row.slug);
+  });

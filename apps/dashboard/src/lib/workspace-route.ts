@@ -1,31 +1,64 @@
+import { useParams, useRouteContext } from "@tanstack/react-router";
+import { useCallback } from "react";
+
 export type WorkspaceView = "/" | "/events" | "/logs" | "/settings" | "/dashboards";
 const routes = {
-  "/": "/projects/$projectSlug",
-  "/events": "/projects/$projectSlug/events",
-  "/logs": "/projects/$projectSlug/logs",
-  "/settings": "/projects/$projectSlug/settings",
+  "/": "/$orgSlug/$projectSlug",
+  "/events": "/$orgSlug/$projectSlug/events",
+  "/logs": "/$orgSlug/$projectSlug/logs",
+  "/settings": "/$orgSlug/$projectSlug/settings",
 } as const;
-export const dashboardRoute = "/projects/$projectSlug/dashboards/$dashboardSlug";
+export const projectRoute = "/$orgSlug/$projectSlug";
+export const dashboardRoute = "/$orgSlug/$projectSlug/dashboards/$dashboardSlug";
+
 /**
- * The canonical route for a workspace view. A dashboard needs its slug; without one (or for
- * another project, which has its own dashboards) the view falls back to Overview.
+ * The canonical route for a workspace view: `/<organization>/<project>/…`. A dashboard needs its
+ * slug; without one (or for another project, which has its own dashboards) the view falls back to
+ * Overview. Without an organization or project the bare view (`/`, `/events`…) stands in.
  */
-export function workspaceTarget(view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) {
+export function workspaceTarget(
+  orgSlug: string | undefined,
+  view: WorkspaceView,
+  projectSlug?: string,
+  dashboardSlug?: string,
+) {
   if (view === "/dashboards") {
-    if (projectSlug && dashboardSlug)
-      return { to: dashboardRoute, params: { projectSlug, dashboardSlug } };
-    return workspaceTarget("/", projectSlug);
+    if (orgSlug && projectSlug && dashboardSlug)
+      return { to: dashboardRoute, params: { orgSlug, projectSlug, dashboardSlug } };
+    return workspaceTarget(orgSlug, "/", projectSlug);
   }
-  return projectSlug ? { to: routes[view], params: { projectSlug } } : { to: view };
+  return orgSlug && projectSlug
+    ? { to: routes[view], params: { orgSlug, projectSlug } }
+    : { to: view };
 }
+
+/** The organization the page shows: the one in its URL, else the session's. */
+export function useOrganizationSlug(): string | undefined {
+  const { orgSlug } = useParams({ strict: false }) as { orgSlug?: string };
+  const { viewer } = useRouteContext({ from: "__root__" });
+  return (
+    orgSlug ?? viewer?.organizations.find((org) => org.id === viewer.activeOrganizationId)?.slug
+  );
+}
+
+/** `workspaceTarget` for the organization the page shows. */
+export function useWorkspaceTarget() {
+  const orgSlug = useOrganizationSlug();
+  return useCallback(
+    (view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) =>
+      workspaceTarget(orgSlug, view, projectSlug, dashboardSlug),
+    [orgSlug],
+  );
+}
+
 /**
  * The view a path shows, matched by whole segments so a project slugged `dashboards`, `events`,
  * `logs` or `settings` still reads as its own Overview. Bare `/events`, `/logs` and `/settings`
  * are the browser-saved project's views; dashboards exist only under a project.
  */
 export function workspaceView(path: string): WorkspaceView {
-  const view = /^(?:\/projects\/[^/]+)?\/(events|logs|settings)\/?$/.exec(path)?.[1];
+  const view = /^(?:\/[^/]+\/[^/]+)?\/(events|logs|settings)\/?$/.exec(path)?.[1];
   if (view) return `/${view}` as WorkspaceView;
-  if (/^\/projects\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";
+  if (/^\/[^/]+\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";
   return "/";
 }
