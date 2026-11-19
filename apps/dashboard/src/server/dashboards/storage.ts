@@ -1,6 +1,6 @@
 // Dashboard documents and their revisions, in SQLite. Every write validates the document, runs
 // in one immediate transaction, bumps `revision` with a compare-and-set, and records a revision.
-import { requireProduct } from "../db/products";
+import { requireProductSync } from "../db/products";
 import { projectSlug } from "../db/sources";
 import { newId, now, type Store } from "../db/sqlite";
 import { conflict, invalid, limit, notFound } from "./errors";
@@ -66,7 +66,7 @@ function load(store: Store, id: string): Stored {
 }
 
 export function listDashboards(store: Store, product: string) {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   const rows = store.db
     .query(
       "SELECT id, slug, name, revision, updated_at, document FROM dashboards WHERE product_id = ? ORDER BY name COLLATE NOCASE, name, id",
@@ -86,7 +86,7 @@ export function listDashboards(store: Store, product: string) {
 }
 
 export function getDashboard(store: Store, product: string, key: string): Stored {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return load(store, resolve(store, product, key).id);
 }
 
@@ -103,7 +103,7 @@ export function createDashboard(
   origin: Origin,
 ): Stored {
   const json = validated(doc);
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return immediate(store, () => {
     const { n } = store.db
       .query("SELECT count(*) AS n FROM dashboards WHERE product_id = ?")
@@ -177,7 +177,7 @@ export function updateDashboard(
   origin: Origin,
 ): Stored {
   const json = validated(doc);
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return immediate(store, () => {
     const { id } = resolve(store, product, key);
     save(store, id, baseRevision, doc, json, origin);
@@ -192,7 +192,7 @@ export function revisionDocument(
   key: string,
   revision: number,
 ): Document {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   const { id } = resolve(store, product, key);
   const row = store.db
     .query("SELECT document FROM dashboard_revisions WHERE dashboard_id = ? AND revision = ?")
@@ -208,7 +208,7 @@ export function restoreDashboard(
   revision: number,
   origin: Origin,
 ): Stored {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return immediate(store, () => {
     const current = resolve(store, product, key);
     const row = store.db
@@ -222,7 +222,7 @@ export function restoreDashboard(
 }
 
 export function deleteDashboard(store: Store, product: string, key: string): void {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   immediate(store, () => {
     const { id } = resolve(store, product, key);
     store.db.query("DELETE FROM dashboard_revisions WHERE dashboard_id = ?").run(id);
@@ -231,7 +231,7 @@ export function deleteDashboard(store: Store, product: string, key: string): voi
 }
 
 export function listRevisions(store: Store, product: string, key: string) {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   const { id } = resolve(store, product, key);
   return store.db
     .query(

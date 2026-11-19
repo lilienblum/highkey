@@ -1,5 +1,5 @@
 // Projects, sources, keys, log keys and log settings, as one set of operations the HTTP routes
-// and the MCP tools both call. Each commits to SQLite, then mirrors what the ingest app reads
+// and the MCP tools both call. Each commits to the management database, then mirrors what the ingest app reads
 // (keys, retention, access) to ClickHouse, then tells open dashboards through the dashboards
 // signal, so every caller behaves the same.
 import type { ApiContext } from "./api/context";
@@ -32,14 +32,14 @@ async function withFavicon(ctx: ApiContext, project: Product): Promise<Product> 
   fetchingIcons++;
   try {
     const bytes = await fetchIcon(website);
-    return bytes ? cacheFavicon(ctx.store, project.id, website, bytes) : project;
+    return bytes ? await cacheFavicon(ctx.db, project.id, website, bytes) : project;
   } finally {
     fetchingIcons--;
   }
 }
 
 export async function createProject(ctx: ApiContext, input: ProductInput): Promise<Product> {
-  const project = saveProduct(ctx.store, null, input);
+  const project = await saveProduct(ctx.db, null, input);
   await afterCommit(async () => {
     await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
     await mirrorProject(ctx, project.id);
@@ -53,10 +53,10 @@ export async function updateProject(
   id: string,
   input: ProductInput,
 ): Promise<Product> {
-  const before = product(ctx.store, id).retention_days;
-  const project = ctx.store.transaction(() => {
-    const saved = saveProduct(ctx.store, id, input);
-    if (saved.retention_days !== before) retentionChanged(ctx, saved.id, "events");
+  const before = (await product(ctx.db, id)).retention_days;
+  const project = await ctx.db.transaction(async (tx) => {
+    const saved = await saveProduct(tx, id, input);
+    if (saved.retention_days !== before) await retentionChanged(tx, ctx.now(), saved.id, "events");
     return saved;
   });
   if (project.retention_days !== before) await applyRetentionChanges(ctx, project.id);
@@ -64,19 +64,23 @@ export async function updateProject(
   return withFavicon(ctx, project);
 }
 
-export function createSource(ctx: ApiContext, id: string, input: SourceInput): Source {
-  const source = saveSource(ctx.store, id, null, input);
+export async function createSource(
+  ctx: ApiContext,
+  id: string,
+  input: SourceInput,
+): Promise<Source> {
+  const source = await saveSource(ctx.db, id, null, input);
   ctx.changes.notify(id, "dashboards");
   return source;
 }
 
-export function updateSource(
+export async function updateSource(
   ctx: ApiContext,
   id: string,
   sourceId: string,
   input: SourceInput,
-): Source {
-  const source = saveSource(ctx.store, id, sourceId, input);
+): Promise<Source> {
+  const source = await saveSource(ctx.db, id, sourceId, input);
   ctx.changes.notify(id, "dashboards");
   return source;
 }
@@ -88,7 +92,7 @@ export async function createEventKey(
   sourceId: string | null | undefined,
   origins: readonly string[],
 ) {
-  const key = createKey(ctx.store, id, label, sourceId, origins);
+  const key = await createKey(ctx.db, id, label, sourceId, origins);
   // The ingest app authorizes from the registry, so the key works once it is mirrored.
   await afterCommit(() => mirrorKey(ctx, id, key.id));
   ctx.changes.notify(id, "dashboards");
@@ -102,14 +106,14 @@ export async function setKeyOrigins(
   keyId: string,
   origins: readonly string[],
 ): Promise<string[]> {
-  const normalized = updateKeyOrigins(ctx.store, id, keyId, origins);
+  const normalized = await updateKeyOrigins(ctx.db, id, keyId, origins);
   await afterCommit(() => mirrorKey(ctx, id, keyId));
   ctx.changes.notify(id, "dashboards");
   return normalized;
 }
 
 export async function revokeEventKey(ctx: ApiContext, id: string, keyId: string): Promise<void> {
-  revokeKey(ctx.store, id, keyId);
+  await revokeKey(ctx.db, id, keyId);
   await afterCommit(() => mirrorKey(ctx, id, keyId));
   ctx.changes.notify(id, "dashboards");
 }
@@ -125,9 +129,9 @@ export async function connectSource(
   label: string | null | undefined,
   origins: readonly string[],
 ) {
-  const { source, key } = ctx.store.transaction(() => {
-    const source = saveSource(ctx.store, id, null, input);
-    const key = createKey(ctx.store, id, label ?? input.name.trim(), source.id, origins);
+  const { source, key } = await ctx.db.transaction(async (tx) => {
+    const source = await saveSource(tx, id, null, input);
+    const key = await createKey(tx, id, label ?? input.name.trim(), source.id, origins);
     return { source, key };
   });
   await afterCommit(() => mirrorKey(ctx, id, key.id));
@@ -136,9 +140,9 @@ export async function connectSource(
 }
 
 export async function updateLogSettings(ctx: ApiContext, id: string, days: number) {
-  const retention = ctx.store.transaction(() => {
-    const saved = setLogRetention(ctx.store, id, days);
-    retentionChanged(ctx, id, "logs");
+  const retention = await ctx.db.transaction(async (tx) => {
+    const saved = await setLogRetention(tx, id, days);
+    await retentionChanged(tx, ctx.now(), id, "logs");
     return saved;
   });
   await applyRetentionChanges(ctx, id);
@@ -151,13 +155,13 @@ export async function createProjectLogKey(
   label: string,
   sourceId?: string | null,
 ) {
-  const key = createLogKey(ctx.store, id, label, sourceId);
+  const key = await createLogKey(ctx.db, id, label, sourceId);
   await afterCommit(() => mirrorKey(ctx, id, key.id));
   return key;
 }
 
 export async function revokeProjectLogKey(ctx: ApiContext, id: string, keyId: string) {
-  revokeLogKey(ctx.store, id, keyId);
+  await revokeLogKey(ctx.db, id, keyId);
   await afterCommit(() => mirrorKey(ctx, id, keyId));
 }
 

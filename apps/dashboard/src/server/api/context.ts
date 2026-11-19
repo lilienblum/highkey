@@ -1,5 +1,7 @@
 // What every API handler works with: the SQLite store, ClickHouse as admin and as each
 // project's reader, and the live-update bus.
+import { openBunDb } from "../db/bun-db";
+import type { Db } from "../db/db";
 import { tako } from "tako.sh";
 import { Readers } from "../clickhouse/access";
 import { ClickHouse } from "../clickhouse/client";
@@ -15,6 +17,11 @@ export interface ChangeBus {
 
 export interface ApiContext {
   store: Store;
+  /**
+   * The management database, asynchronously. During this change it is a second connection to the
+   * same file as `store`, which the next steps remove.
+   */
+  db: Db;
   admin: ClickHouse;
   readers: Readers;
   /** Derives each project's ClickHouse reader password. */
@@ -52,6 +59,7 @@ export function apiContext(): ApiContext {
   const readerSecret = secret("HIGHKEY_READER_SECRET") ?? password;
   singleton = {
     store: Store.open(`${dataDir}/state.sqlite`),
+    db: openBunDb(`${dataDir}/state.sqlite`),
     admin: new ClickHouse({
       url,
       user: process.env.HIGHKEY_CLICKHOUSE_USER ?? "highkey_admin",

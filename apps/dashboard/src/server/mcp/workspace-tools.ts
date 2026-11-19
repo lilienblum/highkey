@@ -35,8 +35,8 @@ export const workspaceTools: Record<string, Tool> = {
       retention_days: a.retention_days ?? 365,
     }),
   update_project: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
-    const current = productRow(ctx.store, id);
+    const id = await projectId(ctx, a.project);
+    const current = await productRow(ctx.db, id);
     // No website argument keeps the current one; "" removes it.
     return updateProject(ctx, id, {
       name: a.name ?? current.name,
@@ -45,11 +45,11 @@ export const workspaceTools: Record<string, Tool> = {
     });
   },
   create_source: async (ctx, a) =>
-    createSource(ctx, projectId(ctx, a.project), { name: a.name, icon: a.icon ?? null }),
+    createSource(ctx, await projectId(ctx, a.project), { name: a.name, icon: a.icon ?? null }),
   update_source: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
-    const source = sourceId(ctx, id, a.source);
-    const current = getSource(ctx.store, id, source);
+    const id = await projectId(ctx, a.project);
+    const source = await sourceId(ctx, id, a.source);
+    const current = await getSource(ctx.db, id, source);
     return updateSource(ctx, id, source, {
       name: a.name ?? current.name,
       icon: a.icon ?? current.icon,
@@ -62,7 +62,7 @@ export const workspaceTools: Record<string, Tool> = {
         `\`${a.integration}\` is not an integration`,
         `Use one of: ${INTEGRATIONS.join(", ")}, or omit it for all`,
       );
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     const { source, key } = await connectSource(
       ctx,
       id,
@@ -86,33 +86,33 @@ export const workspaceTools: Record<string, Tool> = {
       },
     };
   },
-  list_keys: async (ctx, a) => listKeys(ctx.store, projectId(ctx, a.project)),
+  list_keys: async (ctx, a) => listKeys(ctx.db, await projectId(ctx, a.project)),
   create_key: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
-    const source = a.source != null ? sourceId(ctx, id, a.source) : null;
+    const id = await projectId(ctx, a.project);
+    const source = a.source != null ? await sourceId(ctx, id, a.source) : null;
     return createEventKey(ctx, id, a.label, source, a.allowed_origins ?? []);
   },
   update_key_origins: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     const allowed = await orMissing("Key", "Call list_keys for the ids of the active keys", () =>
       setKeyOrigins(ctx, id, a.key, a.allowed_origins),
     );
     return { id: a.key, allowed_origins: allowed };
   },
   revoke_key: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     if (a.confirm !== a.key) throw confirmMismatch("revoke", "key", "id", a.key);
     await orMissing("Key", "Call list_keys for the key ids", () => revokeEventKey(ctx, id, a.key));
     return { id: a.key, revoked: true };
   },
-  list_log_keys: async (ctx, a) => listLogKeys(ctx.store, projectId(ctx, a.project)),
+  list_log_keys: async (ctx, a) => listLogKeys(ctx.db, await projectId(ctx, a.project)),
   create_log_key: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
-    const source = a.source != null ? sourceId(ctx, id, a.source) : null;
+    const id = await projectId(ctx, a.project);
+    const source = a.source != null ? await sourceId(ctx, id, a.source) : null;
     return createProjectLogKey(ctx, id, a.label, source);
   },
   revoke_log_key: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     if (a.confirm !== a.key) throw confirmMismatch("revoke", "log key", "id", a.key);
     await orMissing("Key", "Call list_log_keys for the key ids", () =>
       revokeProjectLogKey(ctx, id, a.key),
@@ -120,8 +120,8 @@ export const workspaceTools: Record<string, Tool> = {
     return { id: a.key, revoked: true };
   },
   update_log_settings: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
-    if (a.retention_days == null) return { retention_days: logRetention(ctx.store, id) };
+    const id = await projectId(ctx, a.project);
+    if (a.retention_days == null) return { retention_days: await logRetention(ctx.db, id) };
     return updateLogSettings(ctx, id, a.retention_days);
   },
 };

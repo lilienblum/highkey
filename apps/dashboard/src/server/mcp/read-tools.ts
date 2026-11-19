@@ -81,7 +81,7 @@ function trim(run: Run): Run {
 
 /** The newest rows of one events or logs list over the default range, at most `limit`. */
 async function sample(ctx: ApiContext, project: string, query: Args, limit?: number | null) {
-  const id = projectId(ctx, project);
+  const id = await projectId(ctx, project);
   const view = query.signal === "logs" ? "logs" : "events";
   const run = await runWidget(ctx, id, {
     widget: { id: "sample", title: "Sample", view: { type: view }, queries: { rows: query } },
@@ -96,15 +96,15 @@ const defined = (entries: [string, unknown][]) =>
 
 export const readTools: Record<string, Tool> = {
   list_projects: async (ctx) =>
-    products(ctx.store).map((p) => ({
+    (await products(ctx.db)).map((p) => ({
       id: p.id,
       slug: p.slug,
       name: p.name,
       retention_days: p.retention_days,
     })),
-  describe_project: async (ctx, a) => catalog(ctx, projectId(ctx, a.project)),
+  describe_project: async (ctx, a) => catalog(ctx, await projectId(ctx, a.project)),
   run_widget: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     const window = range(a.from, a.to);
     return trim(await runWidget(ctx, id, { widget: a.widget, ...window, source_id: a.source_id }));
   },
@@ -124,15 +124,19 @@ export const readTools: Record<string, Tool> = {
       },
       a.limit,
     ),
-  list_dashboards: async (ctx, a) => listDashboards(ctx.store, projectId(ctx, a.project)),
-  get_dashboard: async (ctx, a) => getDashboard(ctx.store, projectId(ctx, a.project), a.dashboard),
+  list_dashboards: async (ctx, a) => listDashboards(ctx.store, await projectId(ctx, a.project)),
+  get_dashboard: async (ctx, a) =>
+    getDashboard(ctx.store, await projectId(ctx, a.project), a.dashboard),
   list_revisions: async (ctx, a) =>
-    listRevisions(ctx.store, projectId(ctx, a.project), a.dashboard),
-  validate_dashboard: async (ctx, a) => validateFor(ctx, projectId(ctx, a.project), a.document),
-  list_views: async (ctx, a) => listViews(ctx.store, projectId(ctx, a.project), a.kind ?? null),
-  get_view: async (ctx, a) => getView(ctx.store, projectId(ctx, a.project), a.view, a.kind ?? null),
-  list_sources: async (ctx, a) => listSources(ctx.store, projectId(ctx, a.project)),
+    listRevisions(ctx.store, await projectId(ctx, a.project), a.dashboard),
+  validate_dashboard: async (ctx, a) =>
+    validateFor(ctx, await projectId(ctx, a.project), a.document),
+  list_views: async (ctx, a) =>
+    listViews(ctx.store, await projectId(ctx, a.project), a.kind ?? null),
+  get_view: async (ctx, a) =>
+    getView(ctx.store, await projectId(ctx, a.project), a.view, a.kind ?? null),
+  list_sources: async (ctx, a) => listSources(ctx.db, await projectId(ctx, a.project)),
   get_log_settings: async (ctx, a) => ({
-    retention_days: logRetention(ctx.store, projectId(ctx, a.project)),
+    retention_days: await logRetention(ctx.db, await projectId(ctx, a.project)),
   }),
 };

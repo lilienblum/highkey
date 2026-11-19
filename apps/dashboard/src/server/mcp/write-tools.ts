@@ -17,7 +17,7 @@ const summary = (saved: Awaited<ReturnType<typeof createFor>>) => ({
 
 export const writeTools: Record<string, Tool> = {
   save_dashboard: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     if (a.dashboard == null) {
       if (a.base_revision != null)
         throw badArgument(
@@ -36,9 +36,9 @@ export const writeTools: Record<string, Tool> = {
     return summary(await updateFor(ctx, id, a.dashboard, a.base_revision, a.document, "mcp"));
   },
   restore_revision: async (ctx, a) =>
-    summary(await restoreFor(ctx, projectId(ctx, a.project), a.dashboard, a.revision, "mcp")),
+    summary(await restoreFor(ctx, await projectId(ctx, a.project), a.dashboard, a.revision, "mcp")),
   delete_dashboard: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     const stored = getDashboard(ctx.store, id, a.dashboard);
     if (a.confirm !== stored.slug)
       throw confirmMismatch("delete", "dashboard", "slug", stored.slug);
@@ -46,13 +46,13 @@ export const writeTools: Record<string, Tool> = {
     return { deleted: stored.slug };
   },
   save_view: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     return a.view == null
       ? createView(ctx, id, a.document)
       : replaceFor(ctx, id, a.view, a.document);
   },
   delete_view: async (ctx, a) => {
-    const id = projectId(ctx, a.project);
+    const id = await projectId(ctx, a.project);
     const stored = getView(ctx.store, id, a.view, a.kind ?? null);
     if (a.confirm !== stored.slug) throw confirmMismatch("delete", "view", "slug", stored.slug);
     deleteFor(ctx, id, stored.id, null);

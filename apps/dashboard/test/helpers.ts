@@ -1,5 +1,6 @@
 // Shared helpers for dashboard server tests: a fresh SQLite store per context, the shared test
 // ClickHouse, and direct inserts of events and logs.
+import { openBunDb } from "../src/server/db/bun-db";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,10 +34,12 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
   const admin = await testAdmin();
   const dir = mkdtempSync(join(tmpdir(), "highkey-dashboard-test-"));
   const store = Store.open(join(dir, "state.sqlite"));
+  const db = openBunDb(join(dir, "state.sqlite"));
   const secret = "dashboard-test-secret";
   const signals: { product: string; signal: Signal }[] = [];
   return {
     store,
+    db,
     admin,
     readers: new Readers({ url: server.url, secret }),
     secret,
@@ -48,6 +51,7 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
     now: () => new Date(),
     signals,
     cleanup() {
+      void db.close();
       store.close();
       rmSync(dir, { recursive: true, force: true });
     },

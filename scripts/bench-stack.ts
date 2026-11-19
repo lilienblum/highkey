@@ -1,5 +1,6 @@
 // The stack the benchmarks measure: a ClickHouse of its own (4 GB, tmpfs), the release ingest
 // binary, and the dashboard's API served by Bun as in production. Nothing outside it is touched.
+import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,6 +48,7 @@ export async function startStack(name: string, port: number, ingestPort: number)
   const directory = mkdtempSync(join(tmpdir(), "highkey-bench-"));
   const ctx: ApiContext = {
     store: Store.open(join(directory, "state.sqlite")),
+    db: openBunDb(join(directory, "state.sqlite")),
     admin,
     readers: new Readers({ url, secret: server.password }),
     secret: server.password,

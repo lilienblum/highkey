@@ -1,7 +1,8 @@
 // A project's sources. Every project starts with one whose id is the project's own.
 import { ApiError, bad, missing, sourceMissing } from "../api/errors";
+import { changes, type Db, one, all } from "./db";
 import { requireProduct } from "./products";
-import { newId, now, type Store } from "./sqlite";
+import { newId, now } from "./sqlite";
 
 export interface Source {
   icon: string | null;
@@ -51,24 +52,28 @@ function suffixed(base: string, suffix: number): string {
 
 const COLUMNS = "id, product_id, name, icon, created_at, slug";
 
-export function listSources(store: Store, productId: string): Source[] {
-  return store.db
-    .query(`SELECT ${COLUMNS} FROM sources WHERE product_id = ? ORDER BY created_at, id`)
-    .all(productId) as Source[];
+export function listSources(db: Db, productId: string): Promise<Source[]> {
+  return all<Source>(
+    db,
+    `SELECT ${COLUMNS} FROM sources WHERE product_id = ? ORDER BY created_at, id`,
+    [productId],
+  );
 }
 
-export function getSource(store: Store, productId: string, id: string): Source {
-  const source = store.db
-    .query(`SELECT ${COLUMNS} FROM sources WHERE product_id = ? AND id = ?`)
-    .get(productId, id) as Source | null;
+export async function getSource(db: Db, productId: string, id: string): Promise<Source> {
+  const source = await one<Source>(
+    db,
+    `SELECT ${COLUMNS} FROM sources WHERE product_id = ? AND id = ?`,
+    [productId, id],
+  );
   if (!source) throw missing();
   return source;
 }
 
 /** A source the project has, for a read query filtered by one. */
-export function requireSource(store: Store, productId: string, id: string): void {
+export async function requireSource(db: Db, productId: string, id: string): Promise<void> {
   try {
-    getSource(store, productId, id);
+    await getSource(db, productId, id);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) throw sourceMissing();
     throw error;
@@ -76,12 +81,12 @@ export function requireSource(store: Store, productId: string, id: string): void
 }
 
 /** A source of the project by id, or else by slug. */
-export function resolveSource(store: Store, productId: string, key: string): Source {
-  const source = store.db
-    .query(
-      `SELECT ${COLUMNS} FROM sources WHERE product_id = ?1 AND (id = ?2 OR slug = ?2) ORDER BY id = ?2 DESC`,
-    )
-    .get(productId, key) as Source | null;
+export async function resolveSource(db: Db, productId: string, key: string): Promise<Source> {
+  const source = await one<Source>(
+    db,
+    `SELECT ${COLUMNS} FROM sources WHERE product_id = ?1 AND (id = ?2 OR slug = ?2) ORDER BY id = ?2 DESC`,
+    [productId, key],
+  );
   if (!source) throw missing();
   return source;
 }
@@ -122,26 +127,27 @@ function duplicateName(error: unknown): never {
   throw error;
 }
 
-export function saveSource(
-  store: Store,
+export async function saveSource(
+  db: Db,
   productId: string,
   id: string | null,
   input: SourceInput,
-): Source {
+): Promise<Source> {
   validateSource(input);
-  requireProduct(store, productId);
+  await requireProduct(db, productId);
   const name = input.name.trim();
   if (id) {
-    getSource(store, productId, id);
+    await getSource(db, productId, id);
     // Renames keep the slug, so workspace links stay valid.
     try {
-      store.db
-        .query("UPDATE sources SET name = ?3, icon = ?4 WHERE product_id = ?1 AND id = ?2")
-        .run(productId, id, name, input.icon ?? null);
+      await db.execute(
+        "UPDATE sources SET name = ?3, icon = ?4 WHERE product_id = ?1 AND id = ?2",
+        [productId, id, name, input.icon ?? null],
+      );
     } catch (error) {
       duplicateName(error);
     }
-    return getSource(store, productId, id);
+    return getSource(db, productId, id);
   }
   const sourceId = newId();
   const base = sourceSlug(name);
@@ -150,11 +156,11 @@ export function saveSource(
     if (slug !== ALL_SOURCES) {
       let inserted: number;
       try {
-        inserted = store.db
-          .query(
-            "INSERT INTO sources(id, product_id, name, icon, created_at, slug) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, slug) DO NOTHING",
-          )
-          .run(sourceId, productId, name, input.icon ?? null, now(), slug).changes;
+        inserted = await changes(
+          db,
+          "INSERT INTO sources(id, product_id, name, icon, created_at, slug) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, slug) DO NOTHING",
+          [sourceId, productId, name, input.icon ?? null, now(), slug],
+        );
       } catch (error) {
         duplicateName(error);
       }
@@ -162,5 +168,5 @@ export function saveSource(
     }
     slug = suffixed(base, suffix);
   }
-  return getSource(store, productId, sourceId);
+  return getSource(db, productId, sourceId);
 }

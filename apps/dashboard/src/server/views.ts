@@ -22,7 +22,7 @@ import {
   serialize,
   textLength,
 } from "./dashboards/validate";
-import { requireProduct, resolveProduct } from "./db/products";
+import { requireProductSync, resolveProduct } from "./db/products";
 import { projectSlug } from "./db/sources";
 import { newId, now, type Store } from "./db/sqlite";
 import { EVENTS_PAGE_OPS, MEASURES } from "./queries/events";
@@ -214,7 +214,7 @@ function load(store: Store, id: string): StoredView {
 }
 
 export function listViews(store: Store, product: string, kind: ViewKind | null) {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   const rows = store.db
     .query(
       "SELECT id, slug, name, kind, updated_at, document FROM views WHERE product_id = ?1 AND (?2 IS NULL OR kind = ?2) ORDER BY name COLLATE NOCASE, name, id",
@@ -283,7 +283,7 @@ function resolve(
 }
 
 export function getView(store: Store, product: string, key: string, kind: ViewKind | null) {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return load(store, resolve(store, product, key, kind).id);
 }
 
@@ -298,7 +298,7 @@ function immediate<T>(store: Store, work: () => T): T {
 
 export function createView(store: Store, product: string, doc: ViewDocument): StoredView {
   const text = validated(doc);
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return immediate(store, () => {
     const { n } = store.db
       .query("SELECT count(*) AS n FROM views WHERE product_id = ?")
@@ -337,7 +337,7 @@ export function replaceView(
   kindWritten: boolean,
 ): StoredView {
   const text = validated(doc);
-  requireProduct(store, product);
+  requireProductSync(store, product);
   return immediate(store, () => {
     const found = resolve(
       store,
@@ -365,7 +365,7 @@ export function replaceView(
 }
 
 export function deleteView(store: Store, product: string, key: string, kind: ViewKind | null) {
-  requireProduct(store, product);
+  requireProductSync(store, product);
   immediate(store, () => {
     const { id } = resolve(store, product, key, kind);
     store.db.query("DELETE FROM views WHERE id = ?").run(id);
@@ -418,11 +418,11 @@ export function registerViews(): void {
   const read = "/api/read/products/:project/views";
   route("GET", read, async (request, ctx, { project }) => {
     const kind = kindOf(request);
-    return json(listViews(ctx.store, resolveProduct(ctx.store, project as string).id, kind));
+    return json(listViews(ctx.store, (await resolveProduct(ctx.db, project as string)).id, kind));
   });
   route("GET", `${read}/:key`, async (request, ctx, { project, key }) => {
     const kind = kindOf(request);
-    const product = resolveProduct(ctx.store, project as string).id;
+    const product = (await resolveProduct(ctx.db, project as string)).id;
     return json(getView(ctx.store, product, key as string, kind));
   });
   const write = "/api/products/:id/views";

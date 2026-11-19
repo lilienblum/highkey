@@ -384,10 +384,10 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
     throw bad("bucket must be auto, hour, day, week or month");
   const timeoutMs = widget.timeout_ms ?? Limits.DEFAULT_TIMEOUT_MS;
   const deadline = started + timeoutMs;
-  const product = resolveProduct(ctx.store, project).id;
+  const product = (await resolveProduct(ctx.db, project)).id;
   if (request.source_id) {
     try {
-      getSource(ctx.store, product, request.source_id);
+      await getSource(ctx.db, product, request.source_id);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) throw unknownSource();
       throw error;

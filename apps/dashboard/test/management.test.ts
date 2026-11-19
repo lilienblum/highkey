@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { cacheFavicon } from "../src/server/db/products";
+import { listSources } from "../src/server/db/sources";
+import { connectSource } from "../src/server/operations";
 import { normalizeWebsite, publicAddress } from "../src/server/website";
 import { call, project, type TestContext, testContext } from "./helpers";
 
@@ -166,10 +168,10 @@ describe("management API", () => {
     const bytes = new Uint8Array(
       readFileSync(new URL("../../../tests/fixtures/favicon.png", import.meta.url)),
     );
-    const cached = cacheFavicon(ctx.store, id, "http://127.0.0.1", bytes);
+    const cached = await cacheFavicon(ctx.db, id, "http://127.0.0.1", bytes);
     expect(cached.favicon_version).toBeString();
     // A late fetch from an old site cannot replace the current icon.
-    const stale = cacheFavicon(ctx.store, id, "https://different.example", new Uint8Array([1]));
+    const stale = await cacheFavicon(ctx.db, id, "https://different.example", new Uint8Array([1]));
     expect(stale.favicon_version).toBe(cached.favicon_version);
     const icon = await call(ctx, "GET", `/api/products/${id}/favicon`);
     expect(icon.status).toBe(200);
@@ -185,6 +187,15 @@ describe("management API", () => {
       website_url: "http://127.0.0.2",
     });
     expect(moved.json.favicon_version).toBeNull();
+  });
+
+  test("connect_source_is_atomic", async () => {
+    const { id } = await project(ctx, "Atomic source");
+    await expect(
+      connectSource(ctx, id, { name: "Broken site" }, "web", ["not an origin"]),
+    ).rejects.toThrow();
+    // The source was written before the key failed; the transaction takes it back.
+    expect((await listSources(ctx.db, id)).map((s) => s.name)).not.toContain("Broken site");
   });
 
   test("website addresses never keep credentials, queries or private targets", () => {

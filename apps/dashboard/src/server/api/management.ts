@@ -28,8 +28,8 @@ const SOURCE = { name: "string", icon: "string?" } as const;
 export function registerManagement(): void {
   route("POST", "/api/cleanup", async (_r, ctx) => json(await cleanup(ctx)));
 
-  route("GET", "/api/products", async (_r, ctx) => json(products(ctx.store)));
-  route("GET", "/api/read/products", async (_r, ctx) => json(products(ctx.store)));
+  route("GET", "/api/products", async (_r, ctx) => json(await products(ctx.db)));
+  route("GET", "/api/read/products", async (_r, ctx) => json(await products(ctx.db)));
 
   route("POST", "/api/products", async (request, ctx) =>
     json(await createProject(ctx, fields(await readJson(request), PRODUCT))),
@@ -40,7 +40,7 @@ export function registerManagement(): void {
   );
 
   route("GET", "/api/products/:id/favicon", async (_r, ctx, { id }) => {
-    const bytes = favicon(ctx.store, id as string);
+    const bytes = await favicon(ctx.db, id as string);
     const kind = bytes && contentType(bytes);
     if (!bytes || !kind) throw missing();
     return new Response(new Blob([new Uint8Array(bytes)]), {
@@ -49,17 +49,17 @@ export function registerManagement(): void {
   });
 
   route("GET", "/api/products/:id/sources", async (_r, ctx, { id }) => {
-    requireProduct(ctx.store, id as string);
-    return json(listSources(ctx.store, id as string));
+    await requireProduct(ctx.db, id as string);
+    return json(await listSources(ctx.db, id as string));
   });
 
   route("POST", "/api/products/:id/sources", async (request, ctx, { id }) =>
-    json(createSource(ctx, id as string, fields(await readJson(request), SOURCE))),
+    json(await createSource(ctx, id as string, fields(await readJson(request), SOURCE))),
   );
 
   route("PATCH", "/api/products/:id/sources/:source", async (request, ctx, params) =>
     json(
-      updateSource(
+      await updateSource(
         ctx,
         params.id as string,
         params.source as string,
@@ -69,7 +69,7 @@ export function registerManagement(): void {
   );
 
   route("GET", "/api/products/:id/keys", async (_r, ctx, { id }) =>
-    json(listKeys(ctx.store, id as string)),
+    json(await listKeys(ctx.db, id as string)),
   );
 
   route("POST", "/api/products/:id/keys", async (request, ctx, { id }) => {
@@ -95,7 +95,7 @@ export function registerManagement(): void {
   });
 
   route("GET", "/api/products/:id/logs/settings", async (_r, ctx, { id }) =>
-    json({ retention_days: logRetention(ctx.store, id as string) }),
+    json({ retention_days: await logRetention(ctx.db, id as string) }),
   );
 
   route("PATCH", "/api/products/:id/logs/settings", async (request, ctx, { id }) => {
@@ -104,7 +104,7 @@ export function registerManagement(): void {
   });
 
   route("GET", "/api/products/:id/logs/keys", async (_r, ctx, { id }) =>
-    json(listLogKeys(ctx.store, id as string)),
+    json(await listLogKeys(ctx.db, id as string)),
   );
 
   route("POST", "/api/products/:id/logs/keys", async (request, ctx, { id }) => {

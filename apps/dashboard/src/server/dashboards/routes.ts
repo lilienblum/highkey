@@ -122,7 +122,7 @@ export async function removeFor(ctx: ApiContext, product: string, key: string) {
 }
 
 export async function validateFor(ctx: ApiContext, project: string, value: unknown) {
-  const product = resolveProduct(ctx.store, project).id;
+  const product = (await resolveProduct(ctx.db, project)).id;
   const parsed = parseDocument(value);
   let report: Report;
   if (parsed.ok) {
@@ -148,17 +148,21 @@ export function registerDashboards(): void {
   const read = "/api/read/products/:project/dashboards";
   route("GET", "/api/read/schemas/dashboard.v1.json", async () => json(schema));
   route("GET", read, async (_r, ctx, { project }) =>
-    json(listDashboards(ctx.store, resolveProduct(ctx.store, project as string).id)),
+    json(listDashboards(ctx.store, (await resolveProduct(ctx.db, project as string)).id)),
   );
   route("POST", `${read}/validate`, async (request, ctx, { project }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
     return json(await validateFor(ctx, project as string, value));
   });
   route("GET", `${read}/:key`, async (_r, ctx, { project, key }) =>
-    json(getDashboard(ctx.store, resolveProduct(ctx.store, project as string).id, key as string)),
+    json(
+      getDashboard(ctx.store, (await resolveProduct(ctx.db, project as string)).id, key as string),
+    ),
   );
   route("GET", `${read}/:key/revisions`, async (_r, ctx, { project, key }) =>
-    json(listRevisions(ctx.store, resolveProduct(ctx.store, project as string).id, key as string)),
+    json(
+      listRevisions(ctx.store, (await resolveProduct(ctx.db, project as string)).id, key as string),
+    ),
   );
   const write = "/api/products/:id/dashboards";
   route("POST", write, async (request, ctx, { id }) => {

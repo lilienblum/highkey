@@ -8,6 +8,7 @@
 // every tenth batch is sent again, as a client retry. Phase 2 repeats it while eight readers loop
 // over the Overview widgets and an unbounded count over all history. It fails if any ingest
 // request fails, if the phase 2 p99 is more than twice phase 1's, or if it reaches 250 ms.
+import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,6 +71,7 @@ try {
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: LOAD_SERVER.password });
   const ctx: ApiContext = {
     store: Store.open(join(directory, "state.sqlite")),
+    db: openBunDb(join(directory, "state.sqlite")),
     admin,
     readers: new Readers({ url, secret: LOAD_SERVER.password }),
     secret: LOAD_SERVER.password,

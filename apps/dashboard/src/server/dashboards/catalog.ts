@@ -96,9 +96,9 @@ export async function unknownEvents(
 }
 
 export async function catalog(ctx: ApiContext, project: string) {
-  const product = resolveProduct(ctx.store, project);
-  const sources = listSources(ctx.store, product.id);
-  const logsDays = logRetention(ctx.store, product.id);
+  const product = await resolveProduct(ctx.db, project);
+  const sources = await listSources(ctx.db, product.id);
+  const logsDays = await logRetention(ctx.db, product.id);
   const now = Date.now();
   return readAs(ctx, product.id, async (reader) => {
     const cutoff = now - product.retention_days * DAY;

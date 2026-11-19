@@ -1,9 +1,10 @@
-// The ingest app reads keys from highkey.ingest_keys. SQLite stays the source of truth: every key,
+// The ingest app reads keys from highkey.ingest_keys. The management database stays the source of truth: every key,
 // source or retention change is mirrored after it commits, and `reconcile` rewrites the whole
 // registry every minute, recreates whatever project access ClickHouse is missing (all of it at
 // startup), and applies retention changes that have not reached the stored rows yet.
 import type { ApiContext } from "./api/context";
 import { ensureProjectAccess, id32, provisionedProjects } from "./clickhouse/access";
+import { all, type Db } from "./db/db";
 import { logRetention } from "./db/keys";
 import { productRow, products } from "./db/products";
 
@@ -17,21 +18,21 @@ interface KeyRow {
 
 const stamp = () => new Date().toISOString().replace("T", " ").replace("Z", "");
 
-function rows(ctx: ApiContext, productId: string, keyId?: string) {
-  const eventRetention = productRow(ctx.store, productId).retention_days;
-  const logDays = logRetention(ctx.store, productId);
+async function rows(ctx: ApiContext, productId: string, keyId?: string) {
+  const eventRetention = (await productRow(ctx.db, productId)).retention_days;
+  const logDays = await logRetention(ctx.db, productId);
   const where = keyId ? "product_id = ? AND id = ?" : "product_id = ?";
   const args = keyId ? [productId, keyId] : [productId];
-  const events = ctx.store.db
-    .query(
-      `SELECT hash, product_id, source_id, allowed_origins, revoked FROM ingestion_keys WHERE ${where}`,
-    )
-    .all(...args) as KeyRow[];
-  const logs = ctx.store.db
-    .query(
-      `SELECT hash, product_id, source_id, '[]' AS allowed_origins, revoked FROM log_keys WHERE ${where}`,
-    )
-    .all(...args) as KeyRow[];
+  const events = await all<KeyRow>(
+    ctx.db,
+    `SELECT hash, product_id, source_id, allowed_origins, revoked FROM ingestion_keys WHERE ${where}`,
+    args,
+  );
+  const logs = await all<KeyRow>(
+    ctx.db,
+    `SELECT hash, product_id, source_id, '[]' AS allowed_origins, revoked FROM log_keys WHERE ${where}`,
+    args,
+  );
   const updated_at = stamp();
   return [
     ...events.map((row) => ({ ...row, kind: "events", retention_days: eventRetention })),
@@ -50,12 +51,12 @@ function rows(ctx: ApiContext, productId: string, keyId?: string) {
 
 /** Mirrors one key (either kind). */
 export async function mirrorKey(ctx: ApiContext, productId: string, keyId: string): Promise<void> {
-  await ctx.admin.insert("highkey.ingest_keys", rows(ctx, productId, keyId));
+  await ctx.admin.insert("highkey.ingest_keys", await rows(ctx, productId, keyId));
 }
 
 /** Mirrors every key of a project, with its current retention. */
 export async function mirrorProject(ctx: ApiContext, productId: string): Promise<number> {
-  const found = rows(ctx, productId);
+  const found = await rows(ctx, productId);
   await ctx.admin.insert("highkey.ingest_keys", found);
   return found.length;
 }
@@ -95,12 +96,16 @@ const TABLES = { events: "highkey.events", logs: "highkey.logs" } as const;
  * Records that a project's stored rows must follow its new retention. Call it in the transaction
  * that changes the retention, so the change cannot be lost if ClickHouse is unreachable.
  */
-export function retentionChanged(ctx: ApiContext, productId: string, signal: Signal): void {
-  ctx.store.db
-    .query(
-      "INSERT INTO retention_changes(product_id, signal, due_ms, final) VALUES (?, ?, ?, 0) ON CONFLICT(product_id, signal) DO UPDATE SET due_ms = excluded.due_ms, final = 0",
-    )
-    .run(productId, signal, ctx.now().getTime());
+export async function retentionChanged(
+  db: Db,
+  now: Date,
+  productId: string,
+  signal: Signal,
+): Promise<void> {
+  await db.execute(
+    "INSERT INTO retention_changes(product_id, signal, due_ms, final) VALUES (?, ?, ?, 0) ON CONFLICT(product_id, signal) DO UPDATE SET due_ms = excluded.due_ms, final = 0",
+    [productId, signal, now.getTime()],
+  );
 }
 
 /**
@@ -111,33 +116,34 @@ export function retentionChanged(ctx: ApiContext, productId: string, signal: Sig
  * reconcile. Returns how many failed.
  */
 export async function applyRetentionChanges(ctx: ApiContext, productId?: string): Promise<number> {
-  const due = ctx.store.db
-    .query(
-      `SELECT product_id, signal, due_ms, final FROM retention_changes WHERE due_ms <= ?${productId ? " AND product_id = ?" : ""}`,
-    )
-    .all(...[ctx.now().getTime(), ...(productId ? [productId] : [])]) as {
+  const due = await all<{
     product_id: string;
     signal: Signal;
     due_ms: number;
     final: number;
-  }[];
+  }>(
+    ctx.db,
+    `SELECT product_id, signal, due_ms, final FROM retention_changes WHERE due_ms <= ?${productId ? " AND product_id = ?" : ""}`,
+    [ctx.now().getTime(), ...(productId ? [productId] : [])],
+  );
   let failed = 0;
   for (const change of due) {
     try {
       await mirrorProject(ctx, change.product_id);
       const days =
         change.signal === "events"
-          ? productRow(ctx.store, change.product_id).retention_days
-          : logRetention(ctx.store, change.product_id);
+          ? (await productRow(ctx.db, change.product_id)).retention_days
+          : await logRetention(ctx.db, change.product_id);
       await applyRetention(ctx, change.product_id, TABLES[change.signal], days);
       // Only if no newer change arrived meanwhile; a newer one starts over.
       const same = "WHERE product_id = ? AND signal = ? AND due_ms = ? AND final = ?";
-      const args = [change.product_id, change.signal, change.due_ms, change.final] as const;
-      if (change.final) ctx.store.db.query(`DELETE FROM retention_changes ${same}`).run(...args);
+      const args = [change.product_id, change.signal, change.due_ms, change.final];
+      if (change.final) await ctx.db.execute(`DELETE FROM retention_changes ${same}`, args);
       else
-        ctx.store.db
-          .query(`UPDATE retention_changes SET final = 1, due_ms = ? ${same}`)
-          .run(ctx.now().getTime() + KEY_CACHE_MS + 1_000, ...args);
+        await ctx.db.execute(`UPDATE retention_changes SET final = 1, due_ms = ? ${same}`, [
+          ctx.now().getTime() + KEY_CACHE_MS + 1_000,
+          ...args,
+        ]);
     } catch (error) {
       failed++;
       console.warn(
@@ -158,10 +164,10 @@ export async function reconcile(
   ctx: ApiContext,
   options: { full?: boolean } = {},
 ): Promise<{ projects: number; keys: number; failed: number }> {
-  const all = products(ctx.store);
+  const projects = await products(ctx.db);
   const ready = options.full ? new Set<string>() : await provisionedProjects(ctx.admin);
   let failed = 0;
-  for (const project of all) {
+  for (const project of projects) {
     if (ready.has(id32(project.id))) continue;
     try {
       await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
@@ -173,11 +179,11 @@ export async function reconcile(
       );
     }
   }
-  const keys = all.flatMap((project) => rows(ctx, project.id));
+  const keys = (await Promise.all(projects.map((project) => rows(ctx, project.id)))).flat();
   for (let start = 0; start < keys.length; start += MIRROR_CHUNK)
     await ctx.admin.insert("highkey.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
   failed += await applyRetentionChanges(ctx);
-  return { projects: all.length, keys: keys.length, failed };
+  return { projects: projects.length, keys: keys.length, failed };
 }
 
 /** Deletes expired rows now, rather than at the next TTL merge. */

@@ -11,15 +11,15 @@ import { readAs } from "./read";
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
     route("POST", `${prefix}/query`, async (request, ctx, { project }) => {
-      const product = resolveProduct(ctx.store, project as string);
+      const product = await resolveProduct(ctx.db, project as string);
       const query = parseEventsQuery(await readJson(request));
-      if (query.source_id) requireSource(ctx.store, product.id, query.source_id);
+      if (query.source_id) await requireSource(ctx.db, product.id, query.source_id);
       return json(await readAs(ctx, product.id, (reader) => runEventsQuery(reader, query)));
     });
     route("POST", `${prefix}/logs/query`, async (request, ctx, { project }) => {
-      const product = resolveProduct(ctx.store, project as string);
+      const product = await resolveProduct(ctx.db, project as string);
       const query = parseLogsQuery(await readJson(request));
-      if (query.source_id) requireSource(ctx.store, product.id, query.source_id);
+      if (query.source_id) await requireSource(ctx.db, product.id, query.source_id);
       return json(await readAs(ctx, product.id, (reader) => runLogsQuery(reader, query)));
     });
   }

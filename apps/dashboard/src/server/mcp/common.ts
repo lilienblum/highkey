@@ -105,23 +105,23 @@ export async function orMissing<T>(what: string, hint: string, work: () => Promi
 }
 
 /** The id of the project named by id or slug. A miss names the nearest slugs. */
-export function projectId(ctx: ApiContext, key: string): string {
+export async function projectId(ctx: ApiContext, key: string): Promise<string> {
   try {
-    return resolveProduct(ctx.store, key).id;
+    return (await resolveProduct(ctx.db, key)).id;
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error;
-    const slugs = products(ctx.store).map((p) => p.slug);
+    const slugs = (await products(ctx.db)).map((p) => p.slug);
     throw notFound("Project", missingHint(key, slugs, "projects"));
   }
 }
 
 /** The id of a project's source named by id or slug. A miss names the nearest slugs. */
-export function sourceId(ctx: ApiContext, project: string, key: string): string {
+export async function sourceId(ctx: ApiContext, project: string, key: string): Promise<string> {
   try {
-    return resolveSource(ctx.store, project, key).id;
+    return (await resolveSource(ctx.db, project, key)).id;
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error;
-    const slugs = listSources(ctx.store, project).map((s) => s.slug);
+    const slugs = (await listSources(ctx.db, project)).map((s) => s.slug);
     throw notFound("Source", missingHint(key, slugs, "sources"));
   }
 }

@@ -31,3 +31,18 @@ export interface Db {
 
 /** The management database cannot be reached or refused the work for now; retrying may succeed. */
 export class StorageUnavailable extends Error {}
+
+/** Every row of a query. */
+export async function all<T>(db: Db, sql: string, args: Value[] = []): Promise<T[]> {
+  return (await db.execute(sql, args)).rows as T[];
+}
+
+/** The first row of a query, or null. */
+export async function one<T>(db: Db, sql: string, args: Value[] = []): Promise<T | null> {
+  return ((await db.execute(sql, args)).rows[0] as T | undefined) ?? null;
+}
+
+/** Runs a write and returns how many rows it changed. */
+export async function changes(db: Db, sql: string, args: Value[] = []): Promise<number> {
+  return (await db.execute(sql, args)).rowsAffected;
+}
