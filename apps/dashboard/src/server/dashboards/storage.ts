@@ -1,8 +1,9 @@
-// Dashboard documents and their revisions, in SQLite. Every write validates the document, runs
-// in one immediate transaction, bumps `revision` with a compare-and-set, and records a revision.
-import { requireProductSync } from "../db/products";
+// Dashboard documents and their revisions, in the management database. Every write validates the
+// document, runs in one write transaction, bumps `revision` with a compare-and-set, and records a revision.
+import { all, changes, type Db, one } from "../db/db";
+import { requireProduct } from "../db/products";
 import { projectSlug } from "../db/sources";
-import { newId, now, type Store } from "../db/sqlite";
+import { newId, now } from "../db/sqlite";
 import { conflict, invalid, limit, notFound } from "./errors";
 import type { Document } from "./spec";
 import { missingHint } from "./suggest";
@@ -29,11 +30,13 @@ const revisionNotFound = () =>
     "Only the newest revisions are kept; list the dashboard's revisions for the numbers that exist",
   );
 
-function unknown(store: Store, product: string, key: string) {
+async function unknown(db: Db, product: string, key: string) {
   const slugs = (
-    store.db
-      .query("SELECT slug FROM dashboards WHERE product_id = ? ORDER BY slug")
-      .all(product) as { slug: string }[]
+    await all<{ slug: string }>(
+      db,
+      "SELECT slug FROM dashboards WHERE product_id = ? ORDER BY slug",
+      [product],
+    )
   ).map((r) => r.slug);
   return notFound("Dashboard", missingHint(key, slugs, "dashboards"));
 }
@@ -44,50 +47,52 @@ function validated(doc: Document): string {
   return serializeDocument(doc);
 }
 
-function immediate<T>(store: Store, work: () => T): T {
-  return store.db.transaction(work).immediate();
-}
-
-function resolve(store: Store, product: string, key: string): { id: string; revision: number } {
-  const row = store.db
-    .query(
-      "SELECT id, revision FROM dashboards WHERE product_id = ?1 AND (id = ?2 OR slug = ?2) ORDER BY id = ?2 DESC LIMIT 1",
-    )
-    .get(product, key) as { id: string; revision: number } | null;
-  if (!row) throw unknown(store, product, key);
+async function resolve(
+  db: Db,
+  product: string,
+  key: string,
+): Promise<{ id: string; revision: number }> {
+  const row = await one<{ id: string; revision: number }>(
+    db,
+    "SELECT id, revision FROM dashboards WHERE product_id = ?1 AND (id = ?2 OR slug = ?2) ORDER BY id = ?2 DESC LIMIT 1",
+    [product, key],
+  );
+  if (!row) throw await unknown(db, product, key);
   return row;
 }
 
-function load(store: Store, id: string): Stored {
-  const row = store.db
-    .query("SELECT id, slug, revision, updated_at, document FROM dashboards WHERE id = ?")
-    .get(id) as Omit<Stored, "document"> & { document: string };
+async function load(db: Db, id: string): Promise<Stored> {
+  const row = (await one<Omit<Stored, "document"> & { document: string }>(
+    db,
+    "SELECT id, slug, revision, updated_at, document FROM dashboards WHERE id = ?",
+    [id],
+  )) as Omit<Stored, "document"> & { document: string };
   return { ...row, document: JSON.parse(row.document) };
 }
 
-export function listDashboards(store: Store, product: string) {
-  requireProductSync(store, product);
-  const rows = store.db
-    .query(
-      "SELECT id, slug, name, revision, updated_at, document FROM dashboards WHERE product_id = ? ORDER BY name COLLATE NOCASE, name, id",
-    )
-    .all(product) as {
+export async function listDashboards(db: Db, product: string) {
+  await requireProduct(db, product);
+  const rows = await all<{
     id: string;
     slug: string;
     name: string;
     revision: number;
     updated_at: string;
     document: string;
-  }[];
+  }>(
+    db,
+    "SELECT id, slug, name, revision, updated_at, document FROM dashboards WHERE product_id = ? ORDER BY name COLLATE NOCASE, name, id",
+    [product],
+  );
   return rows.map(({ document, ...row }) => {
     const doc = JSON.parse(document) as Document;
     return { ...row, description: doc.description ?? null, widgets: doc.widgets.length };
   });
 }
 
-export function getDashboard(store: Store, product: string, key: string): Stored {
-  requireProductSync(store, product);
-  return load(store, resolve(store, product, key).id);
+export async function getDashboard(db: Db, product: string, key: string): Promise<Stored> {
+  await requireProduct(db, product);
+  return load(db, (await resolve(db, product, key)).id);
 }
 
 const RESERVED_SLUGS = ["validate"];
@@ -96,19 +101,21 @@ function dashboardSlug(name: string): string {
   return /[A-Za-z0-9]/.test(name) ? projectSlug(name) : "dashboard";
 }
 
-export function createDashboard(
-  store: Store,
+export async function createDashboard(
+  db: Db,
   product: string,
   doc: Document,
   origin: Origin,
-): Stored {
+): Promise<Stored> {
   const json = validated(doc);
-  requireProductSync(store, product);
-  return immediate(store, () => {
-    const { n } = store.db
-      .query("SELECT count(*) AS n FROM dashboards WHERE product_id = ?")
-      .get(product) as { n: number };
-    if (n >= Limits.MAX_DASHBOARDS_PER_PROJECT)
+  await requireProduct(db, product);
+  return db.transaction(async (tx) => {
+    const counted = await one<{ n: number }>(
+      tx,
+      "SELECT count(*) AS n FROM dashboards WHERE product_id = ?",
+      [product],
+    );
+    if (Number(counted?.n ?? 0) >= Limits.MAX_DASHBOARDS_PER_PROJECT)
       throw limit(`A project holds at most ${Limits.MAX_DASHBOARDS_PER_PROJECT} dashboards`);
     const id = newId();
     const at = now();
@@ -118,128 +125,128 @@ export function createDashboard(
       // A reserved slug counts as taken: GET …/dashboards/validate must never reach a dashboard.
       const inserted = RESERVED_SLUGS.includes(slug)
         ? 0
-        : store.db
-            .query(
-              "INSERT INTO dashboards(id, product_id, slug, name, document, revision, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?6) ON CONFLICT(product_id, slug) DO NOTHING",
-            )
-            .run(id, product, slug, doc.name, json, at).changes;
+        : await changes(
+            tx,
+            "INSERT INTO dashboards(id, product_id, slug, name, document, revision, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?6) ON CONFLICT(product_id, slug) DO NOTHING",
+            [id, product, slug, doc.name, json, at],
+          );
       if (inserted === 1) break;
       slug = `${base}-${suffix}`;
     }
-    store.db
-      .query(
-        "INSERT INTO dashboard_revisions(dashboard_id, revision, document, origin, created_at) VALUES (?1, 1, ?2, ?3, ?4)",
-      )
-      .run(id, json, origin, at);
-    return load(store, id);
+    await tx.execute(
+      "INSERT INTO dashboard_revisions(dashboard_id, revision, document, origin, created_at) VALUES (?1, 1, ?2, ?3, ?4)",
+      [id, json, origin, at],
+    );
+    return load(tx, id);
   });
 }
 
-function save(
-  store: Store,
+async function save(
+  tx: Db,
   id: string,
   expected: number,
   doc: Document,
   json: string,
   origin: Origin,
-): void {
+): Promise<void> {
   const at = now();
-  const changed = store.db
-    .query(
-      "UPDATE dashboards SET name = ?1, document = ?2, revision = revision + 1, updated_at = ?3 WHERE id = ?4 AND revision = ?5",
-    )
-    .run(doc.name, json, at, id, expected).changes;
+  // A compare-and-set on `revision`: of two saves on one base revision, only the first changes it.
+  const changed = await changes(
+    tx,
+    "UPDATE dashboards SET name = ?1, document = ?2, revision = revision + 1, updated_at = ?3 WHERE id = ?4 AND revision = ?5",
+    [doc.name, json, at, id, expected],
+  );
   if (changed === 0) {
-    const { revision } = store.db.query("SELECT revision FROM dashboards WHERE id = ?").get(id) as {
-      revision: number;
-    };
-    throw conflict(revision);
+    const row = await one<{ revision: number }>(
+      tx,
+      "SELECT revision FROM dashboards WHERE id = ?",
+      [id],
+    );
+    throw conflict(Number(row?.revision));
   }
-  store.db
-    .query(
-      "INSERT INTO dashboard_revisions(dashboard_id, revision, document, origin, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-    )
-    .run(id, expected + 1, json, origin, at);
+  await tx.execute(
+    "INSERT INTO dashboard_revisions(dashboard_id, revision, document, origin, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    [id, expected + 1, json, origin, at],
+  );
   // Keep the newest 50 revisions plus the newest revision of each origin.
-  store.db
-    .query(
-      "DELETE FROM dashboard_revisions WHERE dashboard_id = ?1 AND revision NOT IN (SELECT revision FROM dashboard_revisions WHERE dashboard_id = ?1 ORDER BY revision DESC LIMIT ?2) AND revision NOT IN (SELECT max(revision) FROM dashboard_revisions WHERE dashboard_id = ?1 GROUP BY origin)",
-    )
-    .run(id, Limits.MAX_REVISIONS);
+  await tx.execute(
+    "DELETE FROM dashboard_revisions WHERE dashboard_id = ?1 AND revision NOT IN (SELECT revision FROM dashboard_revisions WHERE dashboard_id = ?1 ORDER BY revision DESC LIMIT ?2) AND revision NOT IN (SELECT max(revision) FROM dashboard_revisions WHERE dashboard_id = ?1 GROUP BY origin)",
+    [id, Limits.MAX_REVISIONS],
+  );
 }
 
-export function updateDashboard(
-  store: Store,
+export async function updateDashboard(
+  db: Db,
   product: string,
   key: string,
   baseRevision: number,
   doc: Document,
   origin: Origin,
-): Stored {
+): Promise<Stored> {
   const json = validated(doc);
-  requireProductSync(store, product);
-  return immediate(store, () => {
-    const { id } = resolve(store, product, key);
-    save(store, id, baseRevision, doc, json, origin);
-    return load(store, id);
+  await requireProduct(db, product);
+  return db.transaction(async (tx) => {
+    const { id } = await resolve(tx, product, key);
+    await save(tx, id, baseRevision, doc, json, origin);
+    return load(tx, id);
   });
 }
 
 /** The document of one revision, as `restore` would write it. */
-export function revisionDocument(
-  store: Store,
+export async function revisionDocument(
+  db: Db,
   product: string,
   key: string,
   revision: number,
-): Document {
-  requireProductSync(store, product);
-  const { id } = resolve(store, product, key);
-  const row = store.db
-    .query("SELECT document FROM dashboard_revisions WHERE dashboard_id = ? AND revision = ?")
-    .get(id, revision) as { document: string } | null;
+): Promise<Document> {
+  await requireProduct(db, product);
+  const { id } = await resolve(db, product, key);
+  const row = await one<{ document: string }>(
+    db,
+    "SELECT document FROM dashboard_revisions WHERE dashboard_id = ? AND revision = ?",
+    [id, revision],
+  );
   if (!row) throw revisionNotFound();
   return JSON.parse(row.document);
 }
 
-export function restoreDashboard(
-  store: Store,
+export async function restoreDashboard(
+  db: Db,
   product: string,
   key: string,
   revision: number,
   origin: Origin,
-): Stored {
-  requireProductSync(store, product);
-  return immediate(store, () => {
-    const current = resolve(store, product, key);
-    const row = store.db
-      .query("SELECT document FROM dashboard_revisions WHERE dashboard_id = ? AND revision = ?")
-      .get(current.id, revision) as { document: string } | null;
+): Promise<Stored> {
+  await requireProduct(db, product);
+  return db.transaction(async (tx) => {
+    const current = await resolve(tx, product, key);
+    const row = await one<{ document: string }>(
+      tx,
+      "SELECT document FROM dashboard_revisions WHERE dashboard_id = ? AND revision = ?",
+      [current.id, revision],
+    );
     if (!row) throw revisionNotFound();
     const doc = JSON.parse(row.document) as Document;
-    save(store, current.id, current.revision, doc, validated(doc), origin);
-    return load(store, current.id);
+    await save(tx, current.id, current.revision, doc, validated(doc), origin);
+    return load(tx, current.id);
   });
 }
 
-export function deleteDashboard(store: Store, product: string, key: string): void {
-  requireProductSync(store, product);
-  immediate(store, () => {
-    const { id } = resolve(store, product, key);
-    store.db.query("DELETE FROM dashboard_revisions WHERE dashboard_id = ?").run(id);
-    store.db.query("DELETE FROM dashboards WHERE id = ?").run(id);
+export async function deleteDashboard(db: Db, product: string, key: string): Promise<void> {
+  await requireProduct(db, product);
+  await db.transaction(async (tx) => {
+    const { id } = await resolve(tx, product, key);
+    await tx.execute("DELETE FROM dashboard_revisions WHERE dashboard_id = ?", [id]);
+    await tx.execute("DELETE FROM dashboards WHERE id = ?", [id]);
   });
 }
 
-export function listRevisions(store: Store, product: string, key: string) {
-  requireProductSync(store, product);
-  const { id } = resolve(store, product, key);
-  return store.db
-    .query(
-      "SELECT revision, origin, created_at FROM dashboard_revisions WHERE dashboard_id = ? ORDER BY revision DESC",
-    )
-    .all(id) as {
-    revision: number;
-    origin: Origin;
-    created_at: string;
-  }[];
+export async function listRevisions(db: Db, product: string, key: string) {
+  await requireProduct(db, product);
+  const { id } = await resolve(db, product, key);
+  return all<{ revision: number; origin: Origin; created_at: string }>(
+    db,
+    "SELECT revision, origin, created_at FROM dashboard_revisions WHERE dashboard_id = ? ORDER BY revision DESC",
+    [id],
+  );
 }

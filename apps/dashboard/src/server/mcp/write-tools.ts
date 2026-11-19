@@ -39,7 +39,7 @@ export const writeTools: Record<string, Tool> = {
     summary(await restoreFor(ctx, await projectId(ctx, a.project), a.dashboard, a.revision, "mcp")),
   delete_dashboard: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
-    const stored = getDashboard(ctx.store, id, a.dashboard);
+    const stored = await getDashboard(ctx.db, id, a.dashboard);
     if (a.confirm !== stored.slug)
       throw confirmMismatch("delete", "dashboard", "slug", stored.slug);
     await removeFor(ctx, id, stored.id);
@@ -53,9 +53,9 @@ export const writeTools: Record<string, Tool> = {
   },
   delete_view: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
-    const stored = getView(ctx.store, id, a.view, a.kind ?? null);
+    const stored = await getView(ctx.db, id, a.view, a.kind ?? null);
     if (a.confirm !== stored.slug) throw confirmMismatch("delete", "view", "slug", stored.slug);
-    deleteFor(ctx, id, stored.id, null);
+    await deleteFor(ctx, id, stored.id, null);
     return { deleted: stored.slug };
   },
 };

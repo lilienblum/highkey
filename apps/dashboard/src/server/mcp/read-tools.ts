@@ -124,17 +124,16 @@ export const readTools: Record<string, Tool> = {
       },
       a.limit,
     ),
-  list_dashboards: async (ctx, a) => listDashboards(ctx.store, await projectId(ctx, a.project)),
+  list_dashboards: async (ctx, a) => listDashboards(ctx.db, await projectId(ctx, a.project)),
   get_dashboard: async (ctx, a) =>
-    getDashboard(ctx.store, await projectId(ctx, a.project), a.dashboard),
+    getDashboard(ctx.db, await projectId(ctx, a.project), a.dashboard),
   list_revisions: async (ctx, a) =>
-    listRevisions(ctx.store, await projectId(ctx, a.project), a.dashboard),
+    listRevisions(ctx.db, await projectId(ctx, a.project), a.dashboard),
   validate_dashboard: async (ctx, a) =>
     validateFor(ctx, await projectId(ctx, a.project), a.document),
-  list_views: async (ctx, a) =>
-    listViews(ctx.store, await projectId(ctx, a.project), a.kind ?? null),
+  list_views: async (ctx, a) => listViews(ctx.db, await projectId(ctx, a.project), a.kind ?? null),
   get_view: async (ctx, a) =>
-    getView(ctx.store, await projectId(ctx, a.project), a.view, a.kind ?? null),
+    getView(ctx.db, await projectId(ctx, a.project), a.view, a.kind ?? null),
   list_sources: async (ctx, a) => listSources(ctx.db, await projectId(ctx, a.project)),
   get_log_settings: async (ctx, a) => ({
     retention_days: await logRetention(ctx.db, await projectId(ctx, a.project)),

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { WriteLimit } from "../src/server/dashboards/limit";
+import type { Document } from "../src/server/dashboards/spec";
+import { listRevisions, updateDashboard } from "../src/server/dashboards/storage";
 import { call, project, type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -105,6 +107,21 @@ describe("dashboard storage", () => {
     });
     const current = (await read("/api/read/products/shop/dashboards/board")).json;
     expect(current).toMatchObject({ revision: 2, document: { name: "Board" } });
+  });
+
+  test("concurrent_saves_with_one_base_revision_conflict", async () => {
+    const shop = await project(ctx, "Shop");
+    await create(shop.id, "Board");
+    // Two agents save on the same base revision at once: one wins, the other is told it is stale.
+    const results = await Promise.allSettled([
+      updateDashboard(ctx.db, shop.id, "board", 1, document("First") as Document, "mcp"),
+      updateDashboard(ctx.db, shop.id, "board", 1, document("Second") as Document, "mcp"),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(rejected.reason.body.code).toBe("revision_conflict");
+    const revisions = await listRevisions(ctx.db, shop.id, "board");
+    expect(revisions.map((r) => r.revision)).toEqual([2, 1]);
   });
 
   test("missing_projects_and_sources_are_named_on_dashboard_paths", async () => {

@@ -76,7 +76,7 @@ export async function createFor(ctx: ApiContext, product: string, value: unknown
   throttle(ctx, product);
   const doc = document(value);
   const checks = await beforeSave(ctx, product, doc, null);
-  const stored = createDashboard(ctx.store, product, doc, origin);
+  const stored = await createDashboard(ctx.db, product, doc, origin);
   ctx.changes.notify(product, "dashboards");
   return saved(stored, checks);
 }
@@ -91,10 +91,10 @@ export async function updateFor(
 ) {
   throttle(ctx, product);
   const doc = document(value);
-  const current = getDashboard(ctx.store, product, key);
+  const current = await getDashboard(ctx.db, product, key);
   if (current.revision !== baseRevision) throw conflict(current.revision);
   const checks = await beforeSave(ctx, product, doc, current.document);
-  const stored = updateDashboard(ctx.store, product, key, baseRevision, doc, origin);
+  const stored = await updateDashboard(ctx.db, product, key, baseRevision, doc, origin);
   ctx.changes.notify(product, "dashboards");
   return saved(stored, checks);
 }
@@ -107,17 +107,17 @@ export async function restoreFor(
   origin: Origin,
 ) {
   throttle(ctx, product);
-  const doc = revisionDocument(ctx.store, product, key, revision);
-  const current = getDashboard(ctx.store, product, key);
+  const doc = await revisionDocument(ctx.db, product, key, revision);
+  const current = await getDashboard(ctx.db, product, key);
   const checks = await beforeSave(ctx, product, doc, current.document);
-  const stored = restoreDashboard(ctx.store, product, key, revision, origin);
+  const stored = await restoreDashboard(ctx.db, product, key, revision, origin);
   ctx.changes.notify(product, "dashboards");
   return saved(stored, checks);
 }
 
 export async function removeFor(ctx: ApiContext, product: string, key: string) {
   throttle(ctx, product);
-  deleteDashboard(ctx.store, product, key);
+  await deleteDashboard(ctx.db, product, key);
   ctx.changes.notify(product, "dashboards");
 }
 
@@ -148,7 +148,7 @@ export function registerDashboards(): void {
   const read = "/api/read/products/:project/dashboards";
   route("GET", "/api/read/schemas/dashboard.v1.json", async () => json(schema));
   route("GET", read, async (_r, ctx, { project }) =>
-    json(listDashboards(ctx.store, (await resolveProduct(ctx.db, project as string)).id)),
+    json(await listDashboards(ctx.db, (await resolveProduct(ctx.db, project as string)).id)),
   );
   route("POST", `${read}/validate`, async (request, ctx, { project }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
@@ -156,12 +156,20 @@ export function registerDashboards(): void {
   });
   route("GET", `${read}/:key`, async (_r, ctx, { project, key }) =>
     json(
-      getDashboard(ctx.store, (await resolveProduct(ctx.db, project as string)).id, key as string),
+      await getDashboard(
+        ctx.db,
+        (await resolveProduct(ctx.db, project as string)).id,
+        key as string,
+      ),
     ),
   );
   route("GET", `${read}/:key/revisions`, async (_r, ctx, { project, key }) =>
     json(
-      listRevisions(ctx.store, (await resolveProduct(ctx.db, project as string)).id, key as string),
+      await listRevisions(
+        ctx.db,
+        (await resolveProduct(ctx.db, project as string)).id,
+        key as string,
+      ),
     ),
   );
   const write = "/api/products/:id/dashboards";

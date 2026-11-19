@@ -22,9 +22,10 @@ import {
   serialize,
   textLength,
 } from "./dashboards/validate";
-import { requireProductSync, resolveProduct } from "./db/products";
+import { all, changes, type Db, one } from "./db/db";
+import { requireProduct, resolveProduct } from "./db/products";
 import { projectSlug } from "./db/sources";
-import { newId, now, type Store } from "./db/sqlite";
+import { newId, now } from "./db/sqlite";
 import { EVENTS_PAGE_OPS, MEASURES } from "./queries/events";
 
 /** Views per project, across both kinds. */
@@ -206,27 +207,29 @@ function fromStored(text: string): ViewDocument {
   return parsed.value;
 }
 
-function load(store: Store, id: string): StoredView {
-  const row = store.db
-    .query("SELECT id, slug, kind, created_at, updated_at, document FROM views WHERE id = ?")
-    .get(id) as Omit<StoredView, "document"> & { document: string };
+async function load(db: Db, id: string): Promise<StoredView> {
+  const row = (await one<Omit<StoredView, "document"> & { document: string }>(
+    db,
+    "SELECT id, slug, kind, created_at, updated_at, document FROM views WHERE id = ?",
+    [id],
+  )) as Omit<StoredView, "document"> & { document: string };
   return { ...row, document: fromStored(row.document) };
 }
 
-export function listViews(store: Store, product: string, kind: ViewKind | null) {
-  requireProductSync(store, product);
-  const rows = store.db
-    .query(
-      "SELECT id, slug, name, kind, updated_at, document FROM views WHERE product_id = ?1 AND (?2 IS NULL OR kind = ?2) ORDER BY name COLLATE NOCASE, name, id",
-    )
-    .all(product, kind) as {
+export async function listViews(db: Db, product: string, kind: ViewKind | null) {
+  await requireProduct(db, product);
+  const rows = await all<{
     id: string;
     slug: string;
     name: string;
     kind: ViewKind;
     updated_at: string;
     document: string;
-  }[];
+  }>(
+    db,
+    "SELECT id, slug, name, kind, updated_at, document FROM views WHERE product_id = ?1 AND (?2 IS NULL OR kind = ?2) ORDER BY name COLLATE NOCASE, name, id",
+    [product, kind],
+  );
   return rows.map(({ document, ...row }) => ({
     id: row.id,
     slug: row.slug,
@@ -238,8 +241,8 @@ export function listViews(store: Store, product: string, kind: ViewKind | null) 
 }
 
 /** The not-found error for a view that exists under no kind, with the nearest slugs. */
-function unknown(store: Store, product: string, key: string, kind: ViewKind | null) {
-  const slugs = listViews(store, product, kind).map((v) => v.slug);
+async function unknown(db: Db, product: string, key: string, kind: ViewKind | null) {
+  const slugs = (await listViews(db, product, kind)).map((v) => v.slug);
   return notFound("View", missingHint(key, slugs, "views"));
 }
 
@@ -252,20 +255,24 @@ const ambiguous = (key: string, hint: string) =>
  * A project's view by id or slug. An id is always exact. A slug shared by both kinds needs
  * `kind`; without it the lookup is ambiguous and says so.
  */
-function resolve(
-  store: Store,
+async function resolve(
+  db: Db,
   product: string,
   key: string,
   kind: ViewKind | null,
   hint = "Pass ?kind=events or ?kind=logs (the `kind` argument over MCP)",
-): { id: string; kind: ViewKind } {
-  const exact = store.db
-    .query("SELECT id, kind FROM views WHERE product_id = ?1 AND id = ?2")
-    .get(product, key) as { id: string; kind: ViewKind } | null;
+): Promise<{ id: string; kind: ViewKind }> {
+  const exact = await one<{ id: string; kind: ViewKind }>(
+    db,
+    "SELECT id, kind FROM views WHERE product_id = ?1 AND id = ?2",
+    [product, key],
+  );
   if (exact) return exact;
-  const shared = store.db
-    .query("SELECT id, kind FROM views WHERE product_id = ?1 AND slug = ?2 ORDER BY kind")
-    .all(product, key) as { id: string; kind: ViewKind }[];
+  const shared = await all<{ id: string; kind: ViewKind }>(
+    db,
+    "SELECT id, kind FROM views WHERE product_id = ?1 AND slug = ?2 ORDER BY kind",
+    [product, key],
+  );
   if (kind) {
     const found = shared.find((v) => v.kind === kind);
     if (found) return found;
@@ -275,16 +282,16 @@ function resolve(
         "View",
         `\`${key}\` exists as a ${other.kind} view; use kind \`${other.kind}\``,
       );
-    throw unknown(store, product, key, kind);
+    throw await unknown(db, product, key, kind);
   }
   if (shared.length === 1) return shared[0] as { id: string; kind: ViewKind };
-  if (shared.length === 0) throw unknown(store, product, key, null);
+  if (shared.length === 0) throw await unknown(db, product, key, null);
   throw ambiguous(key, hint);
 }
 
-export function getView(store: Store, product: string, key: string, kind: ViewKind | null) {
-  requireProductSync(store, product);
-  return load(store, resolve(store, product, key, kind).id);
+export async function getView(db: Db, product: string, key: string, kind: ViewKind | null) {
+  await requireProduct(db, product);
+  return load(db, (await resolve(db, product, key, kind)).id);
 }
 
 /** A slug for a view name, by the project rule. Only a name that rule empties becomes `view`. */
@@ -292,18 +299,16 @@ function viewSlug(name: string): string {
   return /[A-Za-z0-9]/.test(name) ? projectSlug(name) : "view";
 }
 
-function immediate<T>(store: Store, work: () => T): T {
-  return store.db.transaction(work).immediate();
-}
-
-export function createView(store: Store, product: string, doc: ViewDocument): StoredView {
+export async function createView(db: Db, product: string, doc: ViewDocument): Promise<StoredView> {
   const text = validated(doc);
-  requireProductSync(store, product);
-  return immediate(store, () => {
-    const { n } = store.db
-      .query("SELECT count(*) AS n FROM views WHERE product_id = ?")
-      .get(product) as { n: number };
-    if (n >= MAX_VIEWS_PER_PROJECT)
+  await requireProduct(db, product);
+  return db.transaction(async (tx) => {
+    const counted = await one<{ n: number }>(
+      tx,
+      "SELECT count(*) AS n FROM views WHERE product_id = ?",
+      [product],
+    );
+    if (Number(counted?.n ?? 0) >= MAX_VIEWS_PER_PROJECT)
       throw limit(`A project holds at most ${MAX_VIEWS_PER_PROJECT} views`);
     const id = newId();
     const at = now();
@@ -313,15 +318,15 @@ export function createView(store: Store, product: string, doc: ViewDocument): St
       // The unique index arbitrates the slug per kind; a reserved slug counts as taken.
       const inserted = RESERVED_SLUGS.includes(slug)
         ? 0
-        : store.db
-            .query(
-              "INSERT INTO views(id, product_id, kind, slug, name, document, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7) ON CONFLICT(product_id, kind, slug) DO NOTHING",
-            )
-            .run(id, product, doc.kind, slug, doc.name, text, at).changes;
+        : await changes(
+            tx,
+            "INSERT INTO views(id, product_id, kind, slug, name, document, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7) ON CONFLICT(product_id, kind, slug) DO NOTHING",
+            [id, product, doc.kind, slug, doc.name, text, at],
+          );
       if (inserted === 1) break;
       slug = `${base}-${suffix}`;
     }
-    return load(store, id);
+    return load(tx, id);
   });
 }
 
@@ -329,18 +334,18 @@ export function createView(store: Store, product: string, doc: ViewDocument): St
  * Replaces the whole document of a view, which keeps its kind and slug. `kindWritten` says
  * whether the document named its kind: a slug shared by both kinds is unambiguous only then.
  */
-export function replaceView(
-  store: Store,
+export async function replaceView(
+  db: Db,
   product: string,
   key: string,
   doc: ViewDocument,
   kindWritten: boolean,
-): StoredView {
+): Promise<StoredView> {
   const text = validated(doc);
-  requireProductSync(store, product);
-  return immediate(store, () => {
-    const found = resolve(
-      store,
+  await requireProduct(db, product);
+  return db.transaction(async (tx) => {
+    const found = await resolve(
+      tx,
       product,
       key,
       kindWritten ? doc.kind : null,
@@ -357,18 +362,26 @@ export function replaceView(
         `\`${key}\` exists as a ${found.kind} view; write \`"kind": "${found.kind}"\` in the document`,
       );
     }
-    store.db
-      .query("UPDATE views SET name = ?1, document = ?2, updated_at = ?3 WHERE id = ?4")
-      .run(doc.name, text, now(), found.id);
-    return load(store, found.id);
+    await tx.execute("UPDATE views SET name = ?1, document = ?2, updated_at = ?3 WHERE id = ?4", [
+      doc.name,
+      text,
+      now(),
+      found.id,
+    ]);
+    return load(tx, found.id);
   });
 }
 
-export function deleteView(store: Store, product: string, key: string, kind: ViewKind | null) {
-  requireProductSync(store, product);
-  immediate(store, () => {
-    const { id } = resolve(store, product, key, kind);
-    store.db.query("DELETE FROM views WHERE id = ?").run(id);
+export async function deleteView(
+  db: Db,
+  product: string,
+  key: string,
+  kind: ViewKind | null,
+): Promise<void> {
+  await requireProduct(db, product);
+  await db.transaction(async (tx) => {
+    const { id } = await resolve(tx, product, key, kind);
+    await tx.execute("DELETE FROM views WHERE id = ?", [id]);
   });
 }
 
@@ -388,27 +401,36 @@ function document(value: unknown): ViewDocument {
 }
 
 /** Creates a view in project `product` (an id). */
-export function createFor(ctx: ApiContext, product: string, value: unknown): StoredView {
+export async function createFor(
+  ctx: ApiContext,
+  product: string,
+  value: unknown,
+): Promise<StoredView> {
   throttle(ctx, product);
-  const stored = createView(ctx.store, product, document(value));
+  const stored = await createView(ctx.db, product, document(value));
   ctx.changes.notify(product, "dashboards");
   return stored;
 }
 
 /** Replaces the view `key` of project `product` (an id) with `value`. */
-export function replaceFor(ctx: ApiContext, product: string, key: string, value: unknown) {
+export async function replaceFor(ctx: ApiContext, product: string, key: string, value: unknown) {
   throttle(ctx, product);
   const kindWritten =
     typeof value === "object" && value !== null && "kind" in (value as Record<string, unknown>);
-  const stored = replaceView(ctx.store, product, key, document(value), kindWritten);
+  const stored = await replaceView(ctx.db, product, key, document(value), kindWritten);
   ctx.changes.notify(product, "dashboards");
   return stored;
 }
 
 /** Deletes the view `key` of project `product` (an id). */
-export function deleteFor(ctx: ApiContext, product: string, key: string, kind: ViewKind | null) {
+export async function deleteFor(
+  ctx: ApiContext,
+  product: string,
+  key: string,
+  kind: ViewKind | null,
+) {
   throttle(ctx, product);
-  deleteView(ctx.store, product, key, kind);
+  await deleteView(ctx.db, product, key, kind);
   ctx.changes.notify(product, "dashboards");
 }
 
@@ -418,25 +440,27 @@ export function registerViews(): void {
   const read = "/api/read/products/:project/views";
   route("GET", read, async (request, ctx, { project }) => {
     const kind = kindOf(request);
-    return json(listViews(ctx.store, (await resolveProduct(ctx.db, project as string)).id, kind));
+    return json(
+      await listViews(ctx.db, (await resolveProduct(ctx.db, project as string)).id, kind),
+    );
   });
   route("GET", `${read}/:key`, async (request, ctx, { project, key }) => {
     const kind = kindOf(request);
     const product = (await resolveProduct(ctx.db, project as string)).id;
-    return json(getView(ctx.store, product, key as string, kind));
+    return json(await getView(ctx.db, product, key as string, kind));
   });
   const write = "/api/products/:id/views";
   route("POST", write, async (request, ctx, { id }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
-    return json(createFor(ctx, id as string, value));
+    return json(await createFor(ctx, id as string, value));
   });
   route("PUT", `${write}/:key`, async (request, ctx, { id, key }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
-    return json(replaceFor(ctx, id as string, key as string, value));
+    return json(await replaceFor(ctx, id as string, key as string, value));
   });
   route("DELETE", `${write}/:key`, async (request, ctx, { id, key }) => {
     const kind = kindOf(request);
-    deleteFor(ctx, id as string, key as string, kind);
+    await deleteFor(ctx, id as string, key as string, kind);
     return noContent();
   });
 }

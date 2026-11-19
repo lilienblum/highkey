@@ -4,7 +4,7 @@ import { bad, projectMissing } from "../api/errors";
 import { normalizeWebsite } from "../website";
 import { all, changes, type Db, one } from "./db";
 import { listSources, projectSlug, type Source } from "./sources";
-import { now, newId, type Store } from "./sqlite";
+import { now, newId } from "./sqlite";
 
 export interface Link {
   id: string;
@@ -71,14 +71,6 @@ export async function products(db: Db): Promise<Product[]> {
 export async function requireProduct(db: Db, id: string): Promise<void> {
   if (!(await one(db, "SELECT 1 AS found FROM products WHERE id = ?", [id])))
     throw projectMissing();
-}
-
-/**
- * The synchronous check for the dashboard and view stores, which move to the async database in
- * the next step of this change; remove it with them.
- */
-export function requireProductSync(store: Store, id: string): void {
-  if (!store.db.query("SELECT 1 FROM products WHERE id = ?").get(id)) throw projectMissing();
 }
 
 /** A project by id, or else by slug. */
