@@ -7,7 +7,11 @@ export const TEST_ORIGIN = "http://highkey.test";
 
 export function testAuth(
   ctx: TestContext,
-  options: { signup?: "open" | "invite"; mailer?: ReturnType<typeof memoryMailer> | null } = {},
+  options: {
+    signup?: "open" | "invite";
+    mailer?: ReturnType<typeof memoryMailer> | null;
+    keyRateLimit?: { timeWindow: number; maxRequests: number };
+  } = {},
 ): Auth {
   return createAuth({
     database: { bun: (ctx.db as BunDb).raw },
@@ -16,6 +20,7 @@ export function testAuth(
     secret: "highkey-test-secret-at-least-32-characters",
     mailer: options.mailer === undefined ? null : options.mailer,
     signup: options.signup ?? "open",
+    keyRateLimit: options.keyRateLimit,
   });
 }
 

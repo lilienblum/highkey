@@ -2,10 +2,14 @@
 export {};
 
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3000";
+// A write API key of an owner or admin (Settings → API keys).
+const apiKey = process.env.HIGHKEY_API_KEY;
+if (!apiKey)
+  throw new Error("Set HIGHKEY_API_KEY to a write API key of an organization owner or admin");
 async function request(path: string, body: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await response.text());

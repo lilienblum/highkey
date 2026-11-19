@@ -1,9 +1,13 @@
 import { Highkey, type Event } from "../sdk/typescript/client";
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3000";
+// A write API key of an owner or admin (Settings → API keys).
+const apiKey = process.env.HIGHKEY_API_KEY;
+if (!apiKey)
+  throw new Error("Set HIGHKEY_API_KEY to a write API key of an organization owner or admin");
 async function admin<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) throw new Error(await response.text());

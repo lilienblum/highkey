@@ -2,6 +2,7 @@
 // else (the Tako database under Tako through libSQL, or the bun:sqlite file without it).
 // Its tables come from migrations/, generated with apps/dashboard/scripts/auth-schema.ts.
 import type { Database } from "bun:sqlite";
+import { apiKey } from "@better-auth/api-key";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth, getCurrentAdapter } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -13,6 +14,7 @@ import type { Db } from "../db/db";
 import { managementDb, takoDatabase } from "../db/open";
 import { adoptOrphanProjects } from "../db/products";
 import { projectSlug } from "../db/sources";
+import { keyFrom } from "./keys";
 import { ac, roles } from "./roles";
 
 /** Sends the account emails: verification, password reset, invitations. */
@@ -31,6 +33,9 @@ export function memoryMailer(): Mailer & { sent: { to: string; subject: string; 
   };
 }
 
+/** How many requests an API key may make, per window; tests pass a smaller one. */
+export const KEY_RATE_LIMIT = { timeWindow: 60_000, maxRequests: 1_000 };
+
 export interface AuthOptions {
   database: { bun: Database } | { libsql: { url: string; authToken: string } };
   /** Highkey's own tables, for the first account to adopt existing projects. */
@@ -40,6 +45,7 @@ export interface AuthOptions {
   secret: string | undefined;
   mailer: Mailer | null;
   signup: "open" | "invite";
+  keyRateLimit?: { timeWindow: number; maxRequests: number };
 }
 
 /** An invitation is pending for `email` and not yet expired. */
@@ -110,6 +116,15 @@ export function createAuth(options: AuthOptions) {
     trustedOrigins: [new URL(options.publicUrl).origin],
     database,
     emailAndPassword: { enabled: true, minPasswordLength: 10 },
+    // API keys are made, listed and revoked only through Highkey's /api/keys, which scope them to
+    // an organization; the plugin's own endpoints stay closed.
+    disabledPaths: [
+      "/api-key/create",
+      "/api-key/get",
+      "/api-key/list",
+      "/api-key/update",
+      "/api-key/delete",
+    ],
     databaseHooks: {
       user: {
         create: {
@@ -164,6 +179,15 @@ export function createAuth(options: AuthOptions) {
         roles,
         creatorRole: "owner",
         invitationExpiresIn: 7 * 24 * 60 * 60,
+      }),
+      // Keys belong to the person who made them; the organization and access are their metadata.
+      apiKey({
+        references: "user",
+        enableMetadata: true,
+        defaultPrefix: "hk_",
+        apiKeyHeaders: "x-api-key",
+        customAPIKeyGetter: (ctx) => (ctx.headers ? keyFrom(ctx.headers) : null),
+        rateLimit: { enabled: true, ...(options.keyRateLimit ?? KEY_RATE_LIMIT) },
       }),
       // The server admin (users with role "admin"), above every organization.
       admin({ adminRoles: ["admin"] }),

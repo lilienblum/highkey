@@ -1,10 +1,11 @@
 // Who is asking: every /api request resolves to an actor in one organization, with the role it
 // holds there right now (read from `member` on each request, so a removal or demotion counts at
-// once). Sessions come from Better Auth's cookie; API keys and agent tokens are added later.
+// once). Sessions come from Better Auth's cookie, API keys from `Authorization` or `X-Api-Key`.
 import type { ApiContext } from "../api/context";
 import { ApiError } from "../api/errors";
 import { one } from "../db/db";
-import { isRole, type Role } from "./roles";
+import { keyFrom, keyMetadata } from "./keys";
+import { isRole, maxAccess, type Role } from "./roles";
 
 export interface Actor {
   userId: string;
@@ -41,7 +42,45 @@ export function requireActor(ctx: ApiContext): Actor {
   return ctx.actor;
 }
 
+/**
+ * The actor behind an API key: its maker, in the key's organization, with the key's access capped
+ * by the role the maker holds there now. Keys never act as the server admin.
+ */
+async function keyActor(ctx: ApiContext, key: string): Promise<Actor> {
+  const auth = await ctx.auth();
+  const result = await auth.api.verifyApiKey({ body: { key } });
+  if (result.error?.code === "RATE_LIMITED")
+    throw new ApiError(
+      429,
+      "This API key made too many requests; wait a minute and try again",
+      { "retry-after": "60" },
+      "rate_limited",
+    );
+  const meta = result.valid ? keyMetadata(result.key?.metadata) : null;
+  const userId = result.key?.referenceId;
+  if (!meta || !userId)
+    throw new ApiError(401, "This API key is not valid or has expired", {}, "unauthenticated");
+  const role = await memberRole(ctx, meta.orgId, userId);
+  if (!role)
+    throw new ApiError(
+      403,
+      "This key's owner is no longer a member of its organization",
+      {},
+      "not_a_member",
+    );
+  return {
+    userId,
+    orgId: meta.orgId,
+    role,
+    access: meta.access === "write" ? maxAccess(role) : "read",
+    via: "key",
+    serverAdmin: false,
+  };
+}
+
 export async function resolveActor(ctx: ApiContext, request: Request): Promise<Actor> {
+  const key = keyFrom(request.headers);
+  if (key) return keyActor(ctx, key);
   const auth = await ctx.auth();
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) throw new ApiError(401, "Sign in to use Highkey", {}, "unauthenticated");

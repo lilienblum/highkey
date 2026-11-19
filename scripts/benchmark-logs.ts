@@ -50,7 +50,6 @@ async function request<T>(path: string, body: unknown, key?: string): Promise<T>
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-highkey-admin": "1",
       ...(key ? { authorization: `Bearer ${key}` } : {}),
     },
     body: JSON.stringify(body),

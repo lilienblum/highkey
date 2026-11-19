@@ -42,7 +42,9 @@ async function ensureRoutes(): Promise<void> {
   const { registerDashboards } = await import("../dashboards/routes");
   const { registerViews } = await import("../views");
   const { registerMcp } = await import("../mcp/server");
+  const { registerApiKeys } = await import("../auth/key-routes");
   registerManagement();
+  registerApiKeys();
   registerQueries();
   registerDashboards();
   registerViews();
@@ -139,7 +141,15 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
         throw new ApiError(403, "Cross-site requests cannot change Highkey", {}, "cross_site");
       const allowed =
         candidate.need === "server-admin" ? actor.serverAdmin : can(actor.role, candidate.need);
-      if (!allowed) throw new ApiError(403, "Your role does not allow this", {}, "forbidden");
+      // A read-only credential (a read key, or any key of a viewer) only reaches read routes.
+      const changes = candidate.need === "server-admin" || !("read" in candidate.need);
+      if (!allowed || (changes && actor.access === "read"))
+        throw new ApiError(
+          403,
+          "Your role or this credential does not allow this",
+          {},
+          "forbidden",
+        );
       for (const name of ["id", "project"])
         if (params[name] !== undefined)
           params[name] = (await resolveProduct(ctx.db, params[name] as string, actor.orgId)).id;

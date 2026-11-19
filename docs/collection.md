@@ -112,7 +112,7 @@ The example sends only when `HIGHKEY_TELEMETRY=1`, an endpoint, and a key are co
 
 The example runs its command first, then sends one event with the SDK's `send`, through `Highkey::with_options` and the configured deadline. The SDK refuses redirects, retries once with the original ID and timestamp, honors Retry-After within the remaining deadline (a 5xx's longer delay is shortened to half of what remains), and gives up when the deadline expires. The example ignores the send's result, so analytics failure never changes the CLI result or delays exit beyond that deadline.
 
-To exercise the actual Rust example and verify its stored types locally, run `bun scripts/verify-cli.ts` while Highkey is running at `HIGHKEY_API_URL` (default `http://127.0.0.1:3000`, as under `bun run dev:standalone`). It creates a small **Rust CLI example** project visible in the dashboard.
+To exercise the actual Rust example and verify its stored types locally, run `bun scripts/verify-cli.ts` while Highkey is running at `HIGHKEY_API_URL` (default `http://127.0.0.1:3000`, as under `bun run dev:standalone`), with `HIGHKEY_API_KEY` set to a write API key of an organization owner or admin. It creates a small **Rust CLI example** project visible in the dashboard.
 
 ## Mobile / HTTP collectors
 

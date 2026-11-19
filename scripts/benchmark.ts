@@ -28,7 +28,7 @@ const percentile = (values: number[], p: number) => {
 async function request(path: string, body?: unknown) {
   const r = await fetch(`${stack.dashboard}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15000),
   });

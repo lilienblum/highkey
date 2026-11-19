@@ -48,3 +48,13 @@ export function isRole(value: string): value is Role {
 export function can(role: Role, permission: Permission): boolean {
   return roles[role].authorize(permission as never).success;
 }
+
+/** The most a credential acting for `role` may do: a viewer only reads. */
+export function maxAccess(role: Role): "read" | "write" {
+  return role === "viewer" ? "read" : "write";
+}
+
+/** Owners and admins oversee every key and agent connection in their organization. */
+export function oversees(role: Role): boolean {
+  return role === "owner" || role === "admin";
+}

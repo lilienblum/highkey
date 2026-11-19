@@ -1,6 +1,6 @@
 // CORS for /api/read: loopback origins, exact configured origins, or any origin when the list
-// holds `*`. The `null` origin is never allowed and credentials are never enabled. Other paths
-// send no CORS headers at all.
+// holds `*`. The `null` origin is never allowed and credentials (cookies) are never enabled: a
+// page reads with an API key in `Authorization` or `X-Api-Key`. Other paths send no CORS headers.
 
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
 
@@ -11,7 +11,7 @@ export function allowedOrigin(origin: string | null, extra: string[]): string | 
   return null;
 }
 
-const ALLOW_HEADERS = "content-type,cf-access-client-id,cf-access-client-secret";
+const ALLOW_HEADERS = "content-type,authorization,x-api-key";
 const ALLOW_METHODS = "GET,POST,OPTIONS";
 
 export function preflight(request: Request, extra: string[]): Response {

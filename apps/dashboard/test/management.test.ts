@@ -248,7 +248,9 @@ describe("read CORS", () => {
       const methods = headers.get("access-control-allow-methods") ?? "";
       expect(methods).toContain("GET");
       expect(methods).toContain("POST");
-      expect(headers.get("access-control-allow-headers")).toContain("cf-access-client-secret");
+      const allowed = headers.get("access-control-allow-headers")?.split(",") ?? [];
+      expect(allowed).toEqual(expect.arrayContaining(["authorization", "x-api-key"]));
+      expect(allowed).not.toContain("cf-access-client-secret");
     }
     for (const origin of [
       "https://evil.example",
