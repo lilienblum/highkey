@@ -5,7 +5,7 @@ use axum::{
     http::Request,
 };
 use common::{Kind, admin_query, clickhouse, config, post, seed_key};
-use piko_ingest::{router, start};
+use highkey_ingest::{router, start};
 use prost::Message;
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -27,7 +27,7 @@ async fn project(retention: u16) -> (String, String) {
 
 async fn stored(product: &str) -> Vec<Value> {
     admin_query(&format!(
-        "SELECT log_id, level, message, service, environment, trace_id, span_id, request_id, attributes, toUnixTimestamp64Milli(timestamp) AS ms, toUnixTimestamp(expires_at) AS expires_s FROM piko.logs FINAL WHERE product_id = '{product}' ORDER BY log_id"
+        "SELECT log_id, level, message, service, environment, trace_id, span_id, request_id, attributes, toUnixTimestamp64Milli(timestamp) AS ms, toUnixTimestamp(expires_at) AS expires_s FROM highkey.logs FINAL WHERE product_id = '{product}' ORDER BY log_id"
     ))
     .await
 }
@@ -124,7 +124,7 @@ async fn validation_is_atomic_and_search_preserves_scalar_types() {
 
 #[tokio::test]
 async fn otlp_json_protobuf_gzip_and_limits_follow_the_same_storage_contract() {
-    use piko_ingest::logs::otlp::{
+    use highkey_ingest::logs::otlp::{
         AnyValue, ExportRequest, Record, ResourceLogs, ScopeLogs, ValueKind,
     };
     let app = app().await;
@@ -201,7 +201,8 @@ fn otlp_records_without_uid_get_time_ordered_ids() {
     let record =
         json!({"timeUnixNano":"1767225600000000000","body":{"stringValue":"Same instant"}});
     let payload = json!({"resourceLogs":[{"scopeLogs":[{"logRecords":[record, record]}]}]});
-    let logs = piko_ingest::logs::otlp::decode(&headers, payload.to_string().as_bytes()).unwrap();
+    let logs =
+        highkey_ingest::logs::otlp::decode(&headers, payload.to_string().as_bytes()).unwrap();
     assert_eq!(logs.len(), 2);
     assert_eq!(logs[0].timestamp, logs[1].timestamp);
     for log in &logs {
@@ -220,7 +221,7 @@ fn otlp_records_without_uid_get_time_ordered_ids() {
 fn json_logs_without_id_get_time_ordered_ids() {
     let log = json!({"timestamp":"2026-01-01T00:00:00Z","service":"api","message":"Same instant"});
     let logs =
-        serde_json::from_value::<piko_ingest::logs::model::Payload>(json!({"logs":[log, log]}))
+        serde_json::from_value::<highkey_ingest::logs::model::Payload>(json!({"logs":[log, log]}))
             .unwrap()
             .records();
     assert_eq!(logs.len(), 2);
@@ -263,7 +264,7 @@ async fn date_like_string_attributes_stay_strings() {
     let (status, ack) = ingest(&app, &key, dated).await;
     assert_eq!(status, 200, "{ack}");
     let rows = admin_query(&format!(
-        "SELECT dynamicType(attributes.deadline) AS a, dynamicType(attributes.at) AS b, toString(attributes.at) AS at FROM piko.logs WHERE product_id = '{id}'"
+        "SELECT dynamicType(attributes.deadline) AS a, dynamicType(attributes.at) AS b, toString(attributes.at) AS at FROM highkey.logs WHERE product_id = '{id}'"
     ))
     .await;
     assert_eq!(rows[0]["a"], "String");

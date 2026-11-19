@@ -26,11 +26,11 @@ Seed: 1c47a4fc, assigned candidate 5. Build the field-station label system, with
 
 Challengers evaluated on audience identification and product clarity:
 - Developer console: high identification / high clarity, but preserves too much of the rejected app-kit world; field station gives the same precision with a distinct daytime identity.
-- Botanical folio: medium identification / low clarity; the illustrated lifecycle staging invents relationships Piko does not model.
+- Botanical folio: medium identification / low clarity; the illustrated lifecycle staging invents relationships Highkey does not model.
 - Type specimen: medium identification / low clarity; gigantic glyph manipulation displaces analytics rather than explaining it.
   The map, mixtape, and mascot catalog remain outside the hand: their distinctive controls require actions or authored product content absent from this tool.
 
-Staging: registered shared measurements, from the folio's common-scale principle, with a plot and categorical breakdown on one field; individual events follow directly below. The finite tile editor, floor directory, and annotation light-table imply editing or spatial navigation that Piko does not provide.
+Staging: registered shared measurements, from the folio's common-scale principle, with a plot and categorical breakdown on one field; individual events follow directly below. The finite tile editor, floor directory, and annotation light-table imply editing or spatial navigation that Highkey does not provide.
 
 Color strategy: restrained. Stone neutrals and pine for action/data; a pale citron navigation region anchors the workspace. In daylit development work the light theme stays crisp; Auto and dark respect evening use without adding glow or neon.
 
@@ -48,4 +48,4 @@ Approved by delegated choice: .impeccable/mocks/explore-a.png. The query-above-r
 | One humanist typeface, readable supporting text       | Self-hosted Public Sans variable font                               |
 | Flat active navigation and pine focus/action states   | Shared theme tokens and component styles                            |
 
-Accepted adaptations: keep the true three-stroke Piko logo; omit the mock's account avatar because there is no built-in account system; preserve the truthful single-series chart (no invented multi-series comparison); show actual identity kinds rather than the mock's incorrectly anonymous IDs. Keep the existing line chart for numeric/duration series and missing values. No browser fingerprint, full URL, extra tracking, fabricated dates, or generated UI text enters production. No raster assets are required in the application.
+Accepted adaptations: keep the true three-stroke Highkey logo; omit the mock's account avatar because there is no built-in account system; preserve the truthful single-series chart (no invented multi-series comparison); show actual identity kinds rather than the mock's incorrectly anonymous IDs. Keep the existing line chart for numeric/duration series and missing values. No browser fingerprint, full URL, extra tracking, fabricated dates, or generated UI text enters production. No raster assets are required in the application.

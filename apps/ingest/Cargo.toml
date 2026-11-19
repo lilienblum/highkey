@@ -1,11 +1,11 @@
 [package]
-name = "piko-ingest"
+name = "highkey-ingest"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
 [[bin]]
-name = "piko-ingest"
+name = "highkey-ingest"
 path = "src/main.rs"
 
 [dependencies]
@@ -27,7 +27,7 @@ flate2 = "1"
 base64 = "0.22"
 
 [dev-dependencies]
-piko-sdk = { path = "../../sdk/rust" }
+highkey-sdk = { path = "../../sdk/rust" }
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"

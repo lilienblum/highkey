@@ -37,14 +37,14 @@ export async function startStack(name: string, port: number, ingestPort: number)
     name,
     port,
     tmpfs: true,
-    password: "piko-bench",
-    ingestPassword: "piko-ingest-bench",
+    password: "highkey-bench",
+    ingestPassword: "highkey-ingest-bench",
     memory: process.env.BENCH_CLICKHOUSE_MEMORY ?? "4g",
   };
   await stopClickHouse(name);
   const { url } = await startClickHouse(server);
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: server.password });
-  const directory = mkdtempSync(join(tmpdir(), "piko-bench-"));
+  const directory = mkdtempSync(join(tmpdir(), "highkey-bench-"));
   const ctx: ApiContext = {
     store: Store.open(join(directory, "state.sqlite")),
     admin,
@@ -57,21 +57,21 @@ export async function startStack(name: string, port: number, ingestPort: number)
     now: () => new Date(),
   };
   const http = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (r) => handleApi(r, ctx) });
-  const build = Bun.spawn(["cargo", "build", "--locked", "--release", "-p", "piko-ingest"], {
+  const build = Bun.spawn(["cargo", "build", "--locked", "--release", "-p", "highkey-ingest"], {
     cwd: root,
     stdout: "inherit",
     stderr: "inherit",
   });
-  if ((await build.exited) !== 0) throw new Error("cargo build -p piko-ingest failed");
-  const ingest = Bun.spawn([`${root}target/release/piko-ingest`], {
+  if ((await build.exited) !== 0) throw new Error("cargo build -p highkey-ingest failed");
+  const ingest = Bun.spawn([`${root}target/release/highkey-ingest`], {
     cwd: root,
     env: {
       PATH: process.env.PATH ?? "",
-      PIKO_BIND: `127.0.0.1:${ingestPort}`,
-      PIKO_CLICKHOUSE_URL: url,
-      PIKO_CLICKHOUSE_USER: "piko_ingest",
-      PIKO_CLICKHOUSE_PASSWORD: server.ingestPassword,
-      PIKO_QUEUE_CAPACITY: process.env.PIKO_QUEUE_CAPACITY ?? "64",
+      HIGHKEY_BIND: `127.0.0.1:${ingestPort}`,
+      HIGHKEY_CLICKHOUSE_URL: url,
+      HIGHKEY_CLICKHOUSE_USER: "highkey_ingest",
+      HIGHKEY_CLICKHOUSE_PASSWORD: server.ingestPassword,
+      HIGHKEY_QUEUE_CAPACITY: process.env.HIGHKEY_QUEUE_CAPACITY ?? "64",
     },
     stdout: "ignore",
     stderr: "inherit",

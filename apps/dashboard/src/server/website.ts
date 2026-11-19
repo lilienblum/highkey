@@ -98,7 +98,7 @@ function download(
       url,
       {
         timeout: 2_000,
-        headers: { "user-agent": "Piko favicon fetcher" },
+        headers: { "user-agent": "Highkey favicon fetcher" },
         // Connect only to the address that passed the public check.
         lookup: ((_host, options, callback) => {
           if (typeof options === "object" && options !== null && options.all)

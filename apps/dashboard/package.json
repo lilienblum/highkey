@@ -1,5 +1,5 @@
 {
-  "name": "@piko/dashboard",
+  "name": "@highkey/dashboard",
   "private": true,
   "type": "module",
   "scripts": {

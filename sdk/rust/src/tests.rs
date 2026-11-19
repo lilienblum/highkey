@@ -40,7 +40,7 @@ impl Mock {
 }
 impl Transport for Mock {
     async fn post(&self, request: Request<'_>) -> Result<Response, Error> {
-        assert_eq!(request.url, "https://piko.example/prefix/api/ingest");
+        assert_eq!(request.url, "https://highkey.example/prefix/api/ingest");
         assert_eq!(request.key, "pk_test");
         assert!(!request.remaining().is_zero());
         self.bodies.lock().unwrap().push(request.body.into());
@@ -61,8 +61,8 @@ fn response(status: u16, body: &str) -> Result<Response, Error> {
         retry_after: None,
     })
 }
-fn client(mock: Mock) -> Piko<Mock> {
-    Piko::with_transport("https://piko.example/prefix///", "pk_test", mock).unwrap()
+fn client(mock: Mock) -> Highkey<Mock> {
+    Highkey::with_transport("https://highkey.example/prefix///", "pk_test", mock).unwrap()
 }
 fn event() -> Event {
     Event::new("command_run", "cli")
@@ -232,8 +232,8 @@ fn total_deadline_includes_transport_and_backoff() {
             panic!("must not retry after deadline");
         }
     }
-    let client = Piko::with_transport_options(
-        "https://piko.example",
+    let client = Highkey::with_transport_options(
+        "https://highkey.example",
         "pk_test",
         Slow,
         Options {
@@ -257,9 +257,9 @@ fn invalid_configuration_and_oversized_batches_fail_locally() {
         "https://example/#fragment",
         "https://example/\r\n",
     ] {
-        assert!(Piko::with_transport(endpoint, "key", Mock::default()).is_err());
+        assert!(Highkey::with_transport(endpoint, "key", Mock::default()).is_err());
     }
-    assert!(Piko::with_transport("https://example", "\r\n", Mock::default()).is_err());
+    assert!(Highkey::with_transport("https://example", "\r\n", Mock::default()).is_err());
     let mut big = event();
     for n in 0..32 {
         big.properties

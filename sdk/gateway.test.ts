@@ -22,13 +22,13 @@ async function withUpstream(
       return respond(request);
     },
   });
-  const previous = process.env.PIKO_INGEST_URL;
-  process.env.PIKO_INGEST_URL = upstream.url.toString();
+  const previous = process.env.HIGHKEY_INGEST_URL;
+  process.env.HIGHKEY_INGEST_URL = upstream.url.toString();
   try {
     await run(received);
   } finally {
-    if (previous === undefined) delete process.env.PIKO_INGEST_URL;
-    else process.env.PIKO_INGEST_URL = previous;
+    if (previous === undefined) delete process.env.HIGHKEY_INGEST_URL;
+    else process.env.HIGHKEY_INGEST_URL = previous;
     upstream.stop(true);
   }
 }
@@ -52,7 +52,7 @@ test("gateway forwards ingestion with its key and strips browser identity and co
             accept: "application/json",
             "content-type": "application/json",
             authorization: "Bearer public-ingestion-key",
-            "x-piko-admin": "1",
+            "x-highkey-admin": "1",
             origin: "https://site.example",
             cookie: "session=browser-session",
             referer: "https://site.example/account?token=private",
@@ -81,7 +81,7 @@ test("gateway forwards ingestion with its key and strips browser identity and co
       for (const name of [
         "cookie",
         "referer",
-        "x-piko-admin",
+        "x-highkey-admin",
         "x-forwarded-for",
         "cf-connecting-ip",
         "cf-access-authenticated-user-email",
@@ -131,8 +131,8 @@ test("gateway forwards the tracker from the ingest app", async () => {
 });
 
 test("an unreachable ingest app is a retryable 503 with ingest CORS", async () => {
-  const previous = process.env.PIKO_INGEST_URL;
-  process.env.PIKO_INGEST_URL = "http://127.0.0.1:9";
+  const previous = process.env.HIGHKEY_INGEST_URL;
+  process.env.HIGHKEY_INGEST_URL = "http://127.0.0.1:9";
   try {
     const response = await proxyIngest(
       new Request("https://dashboard.example/api/ingest", { method: "POST", body: "{}" }),
@@ -141,8 +141,8 @@ test("an unreachable ingest app is a retryable 503 with ingest CORS", async () =
     expect(response.headers.get("retry-after")).toBe("1");
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
   } finally {
-    if (previous === undefined) delete process.env.PIKO_INGEST_URL;
-    else process.env.PIKO_INGEST_URL = previous;
+    if (previous === undefined) delete process.env.HIGHKEY_INGEST_URL;
+    else process.env.HIGHKEY_INGEST_URL = previous;
   }
 });
 

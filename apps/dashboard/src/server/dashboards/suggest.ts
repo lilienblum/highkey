@@ -37,7 +37,7 @@ export function missingHint(name: string, candidates: string[], plural: string):
   if (close) return `did you mean \`${close}\`?`;
   if (candidates.length === 0)
     return plural === "projects"
-      ? "There are no projects yet; create one in Piko's Settings or with create_project"
+      ? "There are no projects yet; create one in Highkey's Settings or with create_project"
       : `This project has no ${plural} yet`;
   const more = candidates.length - LISTED;
   return `Existing ${plural}: ${candidates.slice(0, LISTED).join(", ")}${more > 0 ? ` and ${more} more` : ""}`;

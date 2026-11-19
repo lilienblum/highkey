@@ -23,7 +23,7 @@ let migrated: Promise<unknown> | undefined;
 export async function testAdmin(): Promise<ClickHouse> {
   const server = await testClickHouse();
   const admin = new ClickHouse({ url: server.url, user: server.user, password: server.password });
-  migrated ??= migrate(admin, { ingestPassword: "piko-ingest-test" });
+  migrated ??= migrate(admin, { ingestPassword: "highkey-ingest-test" });
   await migrated;
   return admin;
 }
@@ -31,7 +31,7 @@ export async function testAdmin(): Promise<ClickHouse> {
 export async function testContext(options: { corsOrigins?: string[] } = {}): Promise<TestContext> {
   const server = await testClickHouse();
   const admin = await testAdmin();
-  const dir = mkdtempSync(join(tmpdir(), "piko-dashboard-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "highkey-dashboard-test-"));
   const store = Store.open(join(dir, "state.sqlite"));
   const secret = "dashboard-test-secret";
   const signals: { product: string; signal: Signal }[] = [];
@@ -44,7 +44,7 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
     changes: { notify: (product, signal) => void signals.push({ product, signal }) },
     // Tests write freely; the rate-limit test installs the real limit.
     writeLimit: new WriteLimit(1_000_000),
-    gates: gatesFromEnv({ PIKO_QUERY_CONCURRENCY: "4" }),
+    gates: gatesFromEnv({ HIGHKEY_QUERY_CONCURRENCY: "4" }),
     now: () => new Date(),
     signals,
     cleanup() {
@@ -71,11 +71,11 @@ export async function call(
 ): Promise<Reply> {
   const init: RequestInit = {
     method,
-    headers: { "content-type": "application/json", "x-piko-admin": "1", ...headers },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1", ...headers },
   };
   if (body !== undefined && method !== "GET" && method !== "HEAD")
     init.body = typeof body === "string" ? body : JSON.stringify(body);
-  const response = await handleApi(new Request(`http://piko.test${path}`, init), ctx);
+  const response = await handleApi(new Request(`http://highkey.test${path}`, init), ctx);
   const bytes = new Uint8Array(await response.arrayBuffer());
   let json: unknown = null;
   try {
@@ -109,7 +109,7 @@ export async function seedEvents(productId: string, rows: EventRow[]): Promise<v
   const admin = await testAdmin();
   const now = new Date();
   await admin.insert(
-    "piko.events",
+    "highkey.events",
     rows.map((row) => ({
       product_id: productId,
       source_id: row.source_id ?? productId,
@@ -146,7 +146,7 @@ export async function seedLogs(productId: string, rows: LogRow[]): Promise<void>
   const admin = await testAdmin();
   const now = new Date();
   await admin.insert(
-    "piko.logs",
+    "highkey.logs",
     rows.map((row) => ({
       product_id: productId,
       source_id: row.source_id ?? productId,

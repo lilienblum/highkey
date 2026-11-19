@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const api = process.env.PIKO_API_URL;
+const api = process.env.HIGHKEY_API_URL;
 let alpha: { id: string; name: string };
 let zulu: { id: string; name: string; slug: string };
 
@@ -8,7 +8,7 @@ test.beforeAll(async () => {
   const create = async (name: string) => {
     const response = await fetch(`${api}/api/products`, {
       method: "POST",
-      headers: { "x-piko-admin": "1", "content-type": "application/json" },
+      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
       body: JSON.stringify({ name, retention_days: 30 }),
     });
     expect(response.ok).toBe(true);
@@ -19,7 +19,7 @@ test.beforeAll(async () => {
 });
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), alpha.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), alpha.id);
 });
 
 test("project select supports typeahead, keyboard selection, Escape and human-readable labels", async ({

@@ -1,4 +1,4 @@
-//! Piko's ingest app: it receives events and logs, checks their keys against the registry in
+//! Highkey's ingest app: it receives events and logs, checks their keys against the registry in
 //! ClickHouse, and acknowledges each request only after ClickHouse has stored it. It keeps no
 //! state of its own.
 pub mod changes;
@@ -52,7 +52,7 @@ pub struct AppState {
 pub async fn start(config: Config) -> anyhow::Result<AppState> {
     anyhow::ensure!(
         (1..=1024).contains(&config.queue_capacity),
-        "PIKO_QUEUE_CAPACITY must be 1–1024"
+        "HIGHKEY_QUEUE_CAPACITY must be 1–1024"
     );
     let clickhouse = ClickHouse::new(&config.clickhouse)?;
     let deadline = tokio::time::Instant::now() + STARTUP_WAIT;

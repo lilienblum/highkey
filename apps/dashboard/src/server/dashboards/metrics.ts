@@ -64,7 +64,7 @@ export const missingIsZero = (measure: string) => COUNTING.includes(measure);
  * Stands for the start of the period a new or returning actor is judged against: the range's
  * start for a total or a group, and each row's bucket for a time series.
  */
-const PERIOD_START = "__piko_period_start__";
+const PERIOD_START = "__highkey_period_start__";
 const atWindow = (measure: string) => measure.replaceAll(PERIOD_START, RANGE_FROM);
 const atBucket = (measure: string, time: string) =>
   measure.replaceAll(PERIOD_START, `bucket(${time})`);

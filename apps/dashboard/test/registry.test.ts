@@ -33,7 +33,7 @@ async function registry(productId: string) {
       allowed_origins: string[];
       source_id: string;
     }>(
-      "SELECT kind, revoked, retention_days, allowed_origins, toString(source_id) AS source_id FROM piko.ingest_keys WHERE product_id = {p:UUID} ORDER BY kind, updated_at",
+      "SELECT kind, revoked, retention_days, allowed_origins, toString(source_id) AS source_id FROM highkey.ingest_keys WHERE product_id = {p:UUID} ORDER BY kind, updated_at",
       { params: { p: productId } },
     )
   ).data;
@@ -42,7 +42,7 @@ async function registry(productId: string) {
 async function expiry(productId: string) {
   return (
     await admin.query<{ event_id: string; days: number }>(
-      "SELECT event_id, dateDiff('day', toDateTime(event_time), expires_at) AS days FROM piko.events FINAL WHERE product_id = {p:UUID} ORDER BY event_id",
+      "SELECT event_id, dateDiff('day', toDateTime(event_time), expires_at) AS days FROM highkey.events FINAL WHERE product_id = {p:UUID} ORDER BY event_id",
       { params: { p: productId } },
     )
   ).data;
@@ -51,15 +51,19 @@ async function expiry(productId: string) {
 async function logExpiry(productId: string) {
   return (
     await admin.query<{ log_id: string; days: number }>(
-      "SELECT log_id, dateDiff('day', toDateTime(timestamp), expires_at) AS days FROM piko.logs FINAL WHERE product_id = {p:UUID} ORDER BY log_id",
+      "SELECT log_id, dateDiff('day', toDateTime(timestamp), expires_at) AS days FROM highkey.logs FINAL WHERE product_id = {p:UUID} ORDER BY log_id",
       { params: { p: productId } },
     )
   ).data;
 }
 
 /** Gives rows the expiry `days` after their time, as the ingest app stamps them. */
-async function stampExpiry(table: "piko.events" | "piko.logs", productId: string, days: number) {
-  const time = table === "piko.events" ? "event_time" : "timestamp";
+async function stampExpiry(
+  table: "highkey.events" | "highkey.logs",
+  productId: string,
+  days: number,
+) {
+  const time = table === "highkey.events" ? "event_time" : "timestamp";
   await admin.command(
     `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {p:UUID} SETTINGS mutations_sync = 2`,
     { params: { p: productId, days } },
@@ -67,7 +71,7 @@ async function stampExpiry(table: "piko.events" | "piko.logs", productId: string
 }
 
 const unreachable = () =>
-  new ClickHouse({ url: "http://127.0.0.1:1", user: "piko_admin", password: "x" });
+  new ClickHouse({ url: "http://127.0.0.1:1", user: "highkey_admin", password: "x" });
 
 /** Swaps ctx.admin for one that records (and may refuse) every command, until restored. */
 function recordCommands(refuse?: (sql: string) => boolean) {
@@ -144,10 +148,10 @@ describe("registry and access", () => {
       call(ctx, "PATCH", `/api/products/${id}`, { name: "Retention", retention_days: days });
     // Shortening keeps every row still inside the new retention.
     expect((await patch(50)).status).toBe(200);
-    await admin.command("OPTIMIZE TABLE piko.events FINAL");
+    await admin.command("OPTIMIZE TABLE highkey.events FINAL");
     expect((await expiry(id)).map((row) => row.days)).toEqual([50, 50]);
     expect((await patch(90)).status).toBe(200);
-    await admin.command("OPTIMIZE TABLE piko.events FINAL");
+    await admin.command("OPTIMIZE TABLE highkey.events FINAL");
     expect(await expiry(id)).toEqual([
       { event_id: "forty", days: 90 },
       { event_id: "twenty", days: 90 },
@@ -155,14 +159,14 @@ describe("registry and access", () => {
     expect((await registry(id))[0]?.retention_days).toBe(90);
     // Only rows past the retention go.
     expect((await patch(30)).status).toBe(200);
-    await admin.command("OPTIMIZE TABLE piko.events FINAL");
+    await admin.command("OPTIMIZE TABLE highkey.events FINAL");
     expect(await expiry(id)).toEqual([{ event_id: "twenty", days: 30 }]);
     expect((await registry(id))[0]?.retention_days).toBe(30);
   }, 60_000);
 
   test("provisioning_after_an_outage_is_repaired_by_reconcile", async () => {
     const working = ctx.admin;
-    ctx.admin = new ClickHouse({ url: "http://127.0.0.1:1", user: "piko_admin", password: "x" });
+    ctx.admin = new ClickHouse({ url: "http://127.0.0.1:1", user: "highkey_admin", password: "x" });
     let id: string;
     try {
       const created = await call(ctx, "POST", "/api/products", {
@@ -198,7 +202,7 @@ describe("registry and access", () => {
     const { id } = await project(ctx, "Cleanup", 30);
     await seedEvents(id, [{ event_id: "fresh" }, { event_id: "expired" }]);
     await admin.command(
-      "ALTER TABLE piko.events UPDATE expires_at = now() - INTERVAL 1 DAY WHERE product_id = {p:UUID} AND event_id = 'expired' SETTINGS mutations_sync = 2",
+      "ALTER TABLE highkey.events UPDATE expires_at = now() - INTERVAL 1 DAY WHERE product_id = {p:UUID} AND event_id = 'expired' SETTINGS mutations_sync = 2",
       { params: { p: id } },
     );
     const result = await call(ctx, "POST", "/api/cleanup", {});
@@ -224,7 +228,7 @@ describe("registry and access", () => {
     const { id } = await project(ctx, "Outage retention", 30);
     await call(ctx, "POST", `/api/products/${id}/keys`, { label: "web" });
     await seedEvents(id, [{ event_id: "old", time: new Date(Date.now() - 25 * 86_400_000) }]);
-    await stampExpiry("piko.events", id, 30);
+    await stampExpiry("highkey.events", id, 30);
     const working = ctx.admin;
     ctx.admin = unreachable();
     try {
@@ -245,7 +249,7 @@ describe("registry and access", () => {
   test("a_log_retention_change_during_an_outage_is_applied_by_reconcile", async () => {
     const { id } = await project(ctx, "Outage log retention", 30);
     await seedLogs(id, [{ log_id: "old", time: new Date(Date.now() - 5 * 86_400_000) }]);
-    await stampExpiry("piko.logs", id, 7);
+    await stampExpiry("highkey.logs", id, 7);
     const working = ctx.admin;
     ctx.admin = unreachable();
     try {
@@ -271,7 +275,7 @@ describe("registry and access", () => {
     // The ingest app caches a key with its retention for 5 s, so a row it stores just after the
     // change still expires at 30 days.
     await seedEvents(id, [{ event_id: "late" }]);
-    await stampExpiry("piko.events", id, 30);
+    await stampExpiry("highkey.events", id, 30);
     const now = ctx.now;
     ctx.now = () => new Date(Date.now() + 10_000);
     try {

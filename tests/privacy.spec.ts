@@ -16,7 +16,7 @@ declare global {
   }
 }
 
-const dashboard = process.env.PIKO_DASHBOARD_URL ?? "http://127.0.0.1:3000";
+const dashboard = process.env.HIGHKEY_DASHBOARD_URL ?? "http://127.0.0.1:3000";
 let source: string;
 test.beforeAll(async () => {
   const response = await fetch(`${dashboard}/tracker.js`);

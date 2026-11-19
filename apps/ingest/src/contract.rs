@@ -69,7 +69,7 @@ pub async fn check(ch: &ClickHouse) -> Result<(), ContractError> {
     }
     let contract = ch
         .select_json::<Contract>(
-            "SELECT max(version) AS version FROM piko.ingest_contract",
+            "SELECT max(version) AS version FROM highkey.ingest_contract",
             &[],
         )
         .await

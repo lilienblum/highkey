@@ -3,9 +3,9 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "piko",
+      "name": "highkey",
       "dependencies": {
-        "tako.sh": "0.0.0-9ae824f",
+        "tako.sh": "^0.0.0-a848f55",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.0",
@@ -22,7 +22,7 @@
       },
     },
     "apps/dashboard": {
-      "name": "@piko/dashboard",
+      "name": "@highkey/dashboard",
       "dependencies": {
         "@base-ui/react": "^1.9.0",
         "@fontsource-variable/geist": "^5.3.0",
@@ -46,7 +46,7 @@
       },
     },
     "sdk/typescript": {
-      "name": "@piko/sdk",
+      "name": "@highkey/sdk",
       "version": "0.1.0",
     },
   },
@@ -153,9 +153,9 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.156.0", "", {}, "sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw=="],
 
-    "@piko/dashboard": ["@piko/dashboard@workspace:apps/dashboard"],
+    "@highkey/dashboard": ["@highkey/dashboard@workspace:apps/dashboard"],
 
-    "@piko/sdk": ["@piko/sdk@workspace:sdk/typescript"],
+    "@highkey/sdk": ["@highkey/sdk@workspace:sdk/typescript"],
 
     "@playwright/test": ["@playwright/test@1.64.1", "", { "dependencies": { "playwright": "1.64.1" }, "bin": { "playwright": "cli.js" } }, "sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg=="],
 
@@ -497,7 +497,7 @@
 
     "tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
 
-    "tako.sh": ["tako.sh@0.0.0-9ae824f", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1", "@sinclair/typebox": "^0.34.52" }, "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "tako-worker": "dist/entrypoints/bun-worker.mjs", "tako-sh-gen-store-types": "dist/gen-store-types.mjs", "tako-sh-gen-channel-types": "dist/gen-channel-types.mjs" } }, "sha512-wiLrFg9Z6gyTLhftaJZ3IB99t/cU2j43WSKAAtSz/lsKqOMqEZBa5g69D/ffnbYh1KtVzAIWDpmXWB3HDHhN5g=="],
+    "tako.sh": ["tako.sh@0.0.0-a848f55", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1", "@sinclair/typebox": "^0.34.52", "typescript": "^6.0.3" }, "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "tako.sh": "dist/cli.mjs", "tako-worker": "dist/entrypoints/bun-worker.mjs", "tako-sh-gen-store-types": "dist/gen-store-types.mjs", "tako-sh-gen-channel-types": "dist/gen-channel-types.mjs", "tako-sh-gen-network-types": "dist/gen-network-types.mjs" } }, "sha512-zspKnzDeipIgpv0N5nkHTYoePZZRdyxNpeJs5MXCiMGDi4uFluVsx0cyda15+R4HlQfAFRCvHoYO6GOiMjdEcA=="],
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
@@ -550,6 +550,8 @@
     "d3-sankey/d3-array": ["d3-array@2.12.1", "", { "dependencies": { "internmap": "^1.0.0" } }, "sha512-B0ErZK/66mHtEsR1TkPEEkwdy+WDesimkM5gpZr5Dsg54BiTA5RXtYW5qTLIAcekaS9xfZrzBLF/OAkB3Qn1YQ=="],
 
     "d3-sankey/d3-shape": ["d3-shape@1.3.7", "", { "dependencies": { "d3-path": "1" } }, "sha512-EUkvKjqPFUAZyOlhY5gzCxCeI0Aep04LwIRpsZ/mLFelJiUfnK56jo5JMDSE7yyP2kLSb6LtF+S5chMk7uqPqw=="],
+
+    "tako.sh/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "@tailwindcss/node/lightningcss/lightningcss-android-arm64": ["lightningcss-android-arm64@1.32.0", "", { "os": "android", "cpu": "arm64" }, "sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg=="],
 

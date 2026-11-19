@@ -1,10 +1,10 @@
-# Piko
+# Highkey
 
 Privacy-first, self-hosted product analytics and application logs for websites, CLIs, and developer tools. MIT licensed.
 
-Piko runs two independent applications on a self-hosted ClickHouse server:
+Highkey runs two independent applications on a self-hosted ClickHouse server:
 
-- **`apps/ingest`** — Rust/Axum/Tokio, package `piko-ingest`. It only receives events and logs (`/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`) and serves the browser tracker at `/tracker.js`. It checks each key against ClickHouse's key registry, writes to ClickHouse, and acknowledges only after ClickHouse has stored the rows. It holds no state of its own and knows nothing about the dashboard.
+- **`apps/ingest`** — Rust/Axum/Tokio, package `highkey-ingest`. It only receives events and logs (`/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`) and serves the browser tracker at `/tracker.js`. It checks each key against ClickHouse's key registry, writes to ClickHouse, and acknowledges only after ClickHouse has stored the rows. It holds no state of its own and knows nothing about the dashboard.
 - **`apps/dashboard`** — React/TypeScript with **TanStack Start**, Vite, shadcn/ui on Base UI, [TanStack Charts](https://tanstack.com/charts/latest), and TanStack Table. Runs on **Bun** and serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. It keeps that management state in SQLite (`state.sqlite`), owns the ClickHouse schema (`clickhouse/migrations`), and mirrors keys and retention into ClickHouse. Authentication is handled by Cloudflare Access, outside the app.
 - **ClickHouse** — one node, never public. It stores events and logs with TTL retention. Each project reads its data as its own ClickHouse user, through views that hold only its rows.
 
@@ -25,18 +25,18 @@ Requires [Tako](https://tako.sh/) `0.0.0-9ae824f` or a later release with epheme
 
 ```sh
 git clone git@github.com:lilienblum/piko.git
-cd piko
+cd highkey
 bun install --frozen-lockfile
 bun dev
 ```
 
-Open **https://piko.test**. The ingest app runs at **https://piko-ingest.test**. `bun dev` starts a local ClickHouse in Docker (`bun scripts/clickhouse.ts dev-up`: port 8123 on 127.0.0.1, data in the `piko-dev-clickhouse` volume) and migrates it, builds the browser tracker, then starts both apps through Tako (`tako.ingest.toml` and `tako.dashboard.toml`). It also creates a shared development notification secret if absent, encrypted by Tako under the ignored `.tako/` directory. There is no application login. `bun run dev:stop` stops the two apps; ClickHouse keeps running until `bun scripts/clickhouse.ts dev-down`.
+Open **https://highkey.test**. The ingest app runs at **https://highkey-ingest.test**. `bun dev` starts a local ClickHouse in Docker (`bun scripts/clickhouse.ts dev-up`: port 8123 on 127.0.0.1, data in the `highkey-dev-clickhouse` volume) and migrates it, builds the browser tracker, then starts both apps through Tako (`tako.ingest.toml` and `tako.dashboard.toml`). It also creates a shared development notification secret if absent, encrypted by Tako under the ignored `.tako/` directory. There is no application login. `bun run dev:stop` stops the two apps; ClickHouse keeps running until `bun scripts/clickhouse.ts dev-down`.
 
 ```sh
-SSL_CERT_FILE=.tako/dev-ca.pem PIKO_API_URL=https://piko.test bun seed
+SSL_CERT_FILE=.tako/dev-ca.pem HIGHKEY_API_URL=https://highkey.test bun seed
 ```
 
-This creates one **Orbit** project with **Website**, **iOS app**, and **CLI** sources, with 30 days of sample page views, signups, mobile screens/subscriptions, commands, and configuration events. Earlier demo projects remain untouched. `bun seed` targets `http://127.0.0.1:3000` when `PIKO_API_URL` is unset. Overview and Events update automatically through ephemeral Tako channels after events are stored. Returning to the tab or reconnecting catches up; a 30-second check covers missed hints and standalone mode. Draft queries, the selected page, and open event inspection stay intact. Stable event IDs keep a rerun over the same UTC dates from adding events: within 24 hours the repeats count as duplicates, and later copies are removed by background merges. Each run creates a fresh sample ingestion key. Sample data is opt-in and never loaded in production automatically.
+This creates one **Orbit** project with **Website**, **iOS app**, and **CLI** sources, with 30 days of sample page views, signups, mobile screens/subscriptions, commands, and configuration events. Earlier demo projects remain untouched. `bun seed` targets `http://127.0.0.1:3000` when `HIGHKEY_API_URL` is unset. Overview and Events update automatically through ephemeral Tako channels after events are stored. Returning to the tab or reconnecting catches up; a 30-second check covers missed hints and standalone mode. Draft queries, the selected page, and open event inspection stay intact. Stable event IDs keep a rerun over the same UTC dates from adding events: within 24 hours the repeats count as duplicates, and later copies are removed by background merges. Each run creates a fresh sample ingestion key. Sample data is opt-in and never loaded in production automatically.
 
 `bun run dev:standalone` runs the same stack without Tako: the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, refreshing by polling.
 
@@ -44,41 +44,41 @@ See [Tako setup, deployment, and realtime delivery](docs/tako.md). Development u
 
 ## Deployment
 
-Piko deploys as two native Tako apps, `tako.ingest.toml` and `tako.dashboard.toml`, on a ClickHouse server you install on the host with Piko's settings files. See [Tako setup and deployment](docs/tako.md) for installing ClickHouse, deploying, updating and backing up. The two apps take separate production hostnames, so the ingest paths never pass through the dashboard, and they share a notification secret for immediate ephemeral channel hints (with polling recovery); ephemeral channels require one Tako server without a shared Postgres credential.
+Highkey deploys as two native Tako apps, `tako.ingest.toml` and `tako.dashboard.toml`, on a ClickHouse server you install on the host with Highkey's settings files. See [Tako setup and deployment](docs/tako.md) for installing ClickHouse, deploying, updating and backing up. The two apps take separate production hostnames, so the ingest paths never pass through the dashboard, and they share a notification secret for immediate ephemeral channel hints (with polling recovery); ephemeral channels require one Tako server without a shared Postgres credential.
 
-There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Piko does not validate Access JWTs or provide fallback authentication.
+There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Highkey does not validate Access JWTs or provide fallback authentication.
 
-Without Tako, build with `bun run build` and `cargo build --locked --release -p piko-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/piko-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
+Without Tako, build with `bun run build` and `cargo build --locked --release -p highkey-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/highkey-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
 
-The dashboard keeps `state.sqlite` (with its WAL files) in `PIKO_DATA_DIR`: `$TAKO_DATA_DIR` under native Tako (locally `.tako/data/app`), and `./data` by default. Run exactly one dashboard process per data directory, on durable local storage, never a network filesystem. Events and logs live in ClickHouse. Back up both: ClickHouse with `BACKUP DATABASE piko`, and `state.sqlite` with `VACUUM INTO`; see [backups and restore](docs/tako.md#backups-and-restore). Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
+The dashboard keeps `state.sqlite` (with its WAL files) in `HIGHKEY_DATA_DIR`: `$TAKO_DATA_DIR` under native Tako (locally `.tako/data/app`), and `./data` by default. Run exactly one dashboard process per data directory, on durable local storage, never a network filesystem. Events and logs live in ClickHouse. Back up both: ClickHouse with `BACKUP DATABASE highkey`, and `state.sqlite` with `VACUUM INTO`; see [backups and restore](docs/tako.md#backups-and-restore). Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
 
 Ingest app settings:
 
-| Setting                           | Default                    | Purpose                                                                                     |
-| --------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
-| `PIKO_CLICKHOUSE_URL`             | `http://127.0.0.1:8123`    | ClickHouse's HTTP interface                                                                 |
-| `PIKO_CLICKHOUSE_USER`            | `piko_ingest`              | The user `bun run migrate` creates for the ingest app                                       |
-| `PIKO_INGEST_CLICKHOUSE_PASSWORD` | empty                      | That user's password (a Tako secret under native Tako); `PIKO_CLICKHOUSE_PASSWORD` if unset |
-| `PIKO_BIND`                       | `127.0.0.1:3001`           | Standalone listener; Tako owns its listener                                                 |
-| `PIKO_QUEUE_CAPACITY`             | `64` (1–1024)              | Bounded event upload slots and write queue                                                  |
-| `PIKO_TRACKER_PATH`               | unset (`/tracker.js` 404s) | The built tracker bundle, `sdk/typescript/dist/tracker.js`                                  |
-| `PIKO_CHANGE_URL`                 | unset outside Tako configs | Optional post-commit notification endpoint, `/_piko/changes`                                |
-| `PIKO_CHANGE_TOKEN`               | Tako secret                | Shared ingest-to-dashboard credential; never sent to browsers                               |
+| Setting                              | Default                    | Purpose                                                                                        |
+| ------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `HIGHKEY_CLICKHOUSE_URL`             | `http://127.0.0.1:8123`    | ClickHouse's HTTP interface                                                                    |
+| `HIGHKEY_CLICKHOUSE_USER`            | `highkey_ingest`           | The user `bun run migrate` creates for the ingest app                                          |
+| `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` | empty                      | That user's password (a Tako secret under native Tako); `HIGHKEY_CLICKHOUSE_PASSWORD` if unset |
+| `HIGHKEY_BIND`                       | `127.0.0.1:3001`           | Standalone listener; Tako owns its listener                                                    |
+| `HIGHKEY_QUEUE_CAPACITY`             | `64` (1–1024)              | Bounded event upload slots and write queue                                                     |
+| `HIGHKEY_TRACKER_PATH`               | unset (`/tracker.js` 404s) | The built tracker bundle, `sdk/typescript/dist/tracker.js`                                     |
+| `HIGHKEY_CHANGE_URL`                 | unset outside Tako configs | Optional post-commit notification endpoint, `/_highkey/changes`                                |
+| `HIGHKEY_CHANGE_TOKEN`               | Tako secret                | Shared ingest-to-dashboard credential; never sent to browsers                                  |
 
 Dashboard settings:
 
-| Setting                           | Default                   | Purpose                                                                                        |
-| --------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| `PIKO_CLICKHOUSE_URL`             | `http://127.0.0.1:8123`   | ClickHouse's HTTP interface                                                                    |
-| `PIKO_CLICKHOUSE_USER`            | `piko_admin`              | Admin user for migrations, access control and the key registry                                 |
-| `PIKO_CLICKHOUSE_PASSWORD`        | empty                     | The admin password                                                                             |
-| `PIKO_READER_SECRET`              | the admin password        | Derives each project's ClickHouse reader password                                              |
-| `PIKO_INGEST_CLICKHOUSE_PASSWORD` | none                      | `bun run migrate` only: the password it gives `piko_ingest`                                    |
-| `PIKO_INGEST_URL`                 | `http://127.0.0.1:3001`   | Where the dashboard forwards the ingest paths and `/tracker.js`                                |
-| `PIKO_DATA_DIR`                   | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite`                                                                    |
-| `PIKO_QUERY_CONCURRENCY`          | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
-| `PIKO_CORS_ORIGINS`               | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
-| `HOST`, `PORT`                    | `127.0.0.1`, `3000`       | Standalone Bun dashboard listener                                                              |
+| Setting                              | Default                   | Purpose                                                                                        |
+| ------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `HIGHKEY_CLICKHOUSE_URL`             | `http://127.0.0.1:8123`   | ClickHouse's HTTP interface                                                                    |
+| `HIGHKEY_CLICKHOUSE_USER`            | `highkey_admin`           | Admin user for migrations, access control and the key registry                                 |
+| `HIGHKEY_CLICKHOUSE_PASSWORD`        | empty                     | The admin password                                                                             |
+| `HIGHKEY_READER_SECRET`              | the admin password        | Derives each project's ClickHouse reader password                                              |
+| `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` | none                      | `bun run migrate` only: the password it gives `highkey_ingest`                                 |
+| `HIGHKEY_INGEST_URL`                 | `http://127.0.0.1:3001`   | Where the dashboard forwards the ingest paths and `/tracker.js`                                |
+| `HIGHKEY_DATA_DIR`                   | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite`                                                                    |
+| `HIGHKEY_QUERY_CONCURRENCY`          | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
+| `HIGHKEY_CORS_ORIGINS`               | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
+| `HOST`, `PORT`                       | `127.0.0.1`, `3000`       | Standalone Bun dashboard listener                                                              |
 
 ## Use it
 
@@ -87,7 +87,7 @@ Dashboard settings:
 3. **Events:** select an event, measure, grouping, and optional typed property filter. Counts, distinct actors, numeric sum/average/min/max, and p50/p95 run in ClickHouse. Charts, grouping, filtering, and event pagination are server-side. Click an event for its original typed envelope.
 4. **Logs:** search messages, filter by severity, service, and context, inspect structured records, and follow live logs. Services send structured JSON or OTLP/HTTP with separate `pl_` log keys created in Settings → Logs. Logs live in ClickHouse apart from events, with an independent seven-day default retention. See [application logs](docs/logs.md).
 
-There is no built-in login, admin token, password, or admin session cookie. Management mutations use an `X-Piko-Admin: 1` request marker to prevent cross-site form submissions; it is not a secret or authorization mechanism. Cloudflare Access is the authentication boundary.
+There is no built-in login, admin token, password, or admin session cookie. Management mutations use an `X-Highkey-Admin: 1` request marker to prevent cross-site form submissions; it is not a secret or authorization mechanism. Cloudflare Access is the authentication boundary.
 
 Click an Overview breakdown row to filter the dashboard in place; **View matching events** opens the filtered event stream. Page and referrer rows offer a separate external-link action on hover or keyboard focus. See [the dashboard guide](docs/dashboard.md) for drilldowns, typed filters, and date behavior.
 
@@ -98,7 +98,7 @@ Project, source, range, chart choices, applied Events queries, and Logs filters 
 Dashboards are JSON documents that the dashboard app stores, written over MCP by the AI agent you already use (Claude Code, Codex or anything that speaks MCP). Each widget runs typed event and log queries, funnels and retention, combined with formulas; documents hold no SQL. Every save is validated and timed, and revisions let you undo. Dashboards appear under Overview in the sidebar, and named queries can be saved as views under Events and Logs.
 
 ```sh
-claude mcp add --transport http piko http://127.0.0.1:3000/mcp
+claude mcp add --transport http highkey http://127.0.0.1:3000/mcp
 ```
 
 Remote setups, the Codex config, the document reference, worked examples and the read-only `/api/read` surface for your own local pages are in [custom dashboards, views and MCP](docs/dashboards.md). Give an agent only the read-only token if it should not change anything; see [access](docs/access.md#mcp-and-read-only-access) and [privacy](docs/privacy.md#ai-agents-and-mcp). Errors and endpoints are in the [API reference](docs/api.md#dashboards-views-and-mcp).
@@ -107,8 +107,8 @@ See [API and data semantics](docs/api.md), [collection examples and identity](do
 
 ### SDKs
 
-- [JavaScript / TypeScript — `@piko/sdk`](sdk/typescript/README.md): zero runtime dependencies, ESM and TypeScript declarations, explicit sends and a privacy-aware browser tracker.
-- [Rust — `piko-sdk`](sdk/rust/README.md): standalone async collection using reqwest/rustls, Tokio, serde/serde_json, uuid, and chrono. It does not pull in Piko's apps or databases. Its examples include a CLI that reports each command (`cargo run -p piko-sdk --example cli -- build`).
+- [JavaScript / TypeScript — `@highkey/sdk`](sdk/typescript/README.md): zero runtime dependencies, ESM and TypeScript declarations, explicit sends and a privacy-aware browser tracker.
+- [Rust — `highkey-sdk`](sdk/rust/README.md): standalone async collection using reqwest/rustls, Tokio, serde/serde_json, uuid, and chrono. It does not pull in Highkey's apps or databases. Its examples include a CLI that reports each command (`cargo run -p highkey-sdk --example cli -- build`).
 
 Both support typed properties, batches, stable event IDs across bounded retries, and persistence acknowledgments. Packages are available from this checkout; they have not been published to registries. The linked guides cover local installation and examples. The HTTP paths still use `/products` for existing integrations.
 
@@ -116,7 +116,7 @@ Both support typed properties, batches, stable event IDs across bounded retries,
 
 Collection starts without visitor, session, or installation identifiers. The browser tracker honors DNT/GPC, leaves campaign capture off until explicitly configured, and offers pre-send filtering plus an opt-out that discards queued data. The CLI example requires an explicit opt-in. New projects created in Settings start with one-year retention (365 days). Retention is configurable per project in Settings; existing projects keep their configured value.
 
-Piko does not derive analytics identity from IP addresses or user-agent information. Paths, custom properties, and optional persistent IDs are still data you choose to collect; they are not automatically anonymized. ClickHouse is the isolation boundary between projects, so keep it upgraded. Read [the privacy model and collection controls](docs/privacy.md) before integrating private application routes.
+Highkey does not derive analytics identity from IP addresses or user-agent information. Paths, custom properties, and optional persistent IDs are still data you choose to collect; they are not automatically anonymized. ClickHouse is the isolation boundary between projects, so keep it upgraded. Read [the privacy model and collection controls](docs/privacy.md) before integrating private application routes.
 
 ## Checks
 
@@ -132,9 +132,9 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-Use `bun run fmt`: bare `bun fmt` runs Bun's built-in formatter and reformats unrelated files. Likewise `bun run test` runs the SDK, script and dashboard server tests, while bare `bun test` scans only `sdk/` (the test root in `bunfig.toml`). The dashboard and Rust tests run against a disposable ClickHouse in Docker (`piko-test-clickhouse`, in memory, on 127.0.0.1:18123); they start it themselves if it is not running, `bun scripts/clickhouse.ts test-up` starts it ahead of time, and `test-down` removes it. `cargo test` needs Bun and Docker for the same reason.
+Use `bun run fmt`: bare `bun fmt` runs Bun's built-in formatter and reformats unrelated files. Likewise `bun run test` runs the SDK, script and dashboard server tests, while bare `bun test` scans only `sdk/` (the test root in `bunfig.toml`). The dashboard and Rust tests run against a disposable ClickHouse in Docker (`highkey-test-clickhouse`, in memory, on 127.0.0.1:18123); they start it themselves if it is not running, `bun scripts/clickhouse.ts test-up` starts it ahead of time, and `test-down` removes it. `cargo test` needs Bun and Docker for the same reason.
 
-`bun run test:e2e` starts a dedicated ClickHouse (on 127.0.0.1:18124) and two dedicated Tako apps at `https://piko-e2e.test` and `https://piko-e2e-ingest.test`, runs real Chromium tests, then stops those apps and deletes their temporary data. Initialize local TLS and the notification secret once with `bun dev`; the preview need not be running during tests. No seed is needed. To run a subset, use `bun run test:e2e tests/analytics-chart.spec.ts`.
+`bun run test:e2e` starts a dedicated ClickHouse (on 127.0.0.1:18124) and two dedicated Tako apps at `https://highkey-e2e.test` and `https://highkey-e2e-ingest.test`, runs real Chromium tests, then stops those apps and deletes their temporary data. Initialize local TLS and the notification secret once with `bun dev`; the preview need not be running during tests. No seed is needed. To run a subset, use `bun run test:e2e tests/analytics-chart.spec.ts`.
 
 Every run gets fresh storage under `.tako/e2e/<run-id>/`. Test URLs are set by the runner, existing URL overrides cannot point it at the preview, and direct Playwright runs are rejected. A preflight requires an empty test database before any fixtures are created. Test failure, Ctrl-C, and SIGTERM all run teardown. A lock prevents simultaneous runs from sharing the test hosts. If a process is force-killed, follow the [test recovery instructions](docs/tako.md#browser-tests); its data remains separate from the preview. If Chromium is absent, install it with `bun node_modules/@playwright/test/cli.js install chromium`.
 
@@ -154,13 +154,13 @@ See [the verification record](docs/verification.md) for measured checks and thei
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.
 - Pagination is bounded offset pagination, ordered by time and event ID. Different pages may shift when new events arrive. Top breakdowns are limited to 12 groups, event-name discovery to 100 names, filters to 8, pages to 10,001, and page size to 100.
 - Delivery from browsers/CLIs is best effort with bounded retries. A flush confirms attempted delivery, not guaranteed delivery. Deduplication is exact for 24 hours and eventual after that; see [deduplication](docs/api.md#deduplication) for the two cases where a duplicate can last.
-- No session replay, alerts, or distributed storage. Custom dashboards are written by an agent or by script, not dragged together in the UI, and their queries are Piko's typed entities, including funnels and retention, with no SQL.
+- No session replay, alerts, or distributed storage. Custom dashboards are written by an agent or by script, not dragged together in the UI, and their queries are Highkey's typed entities, including funnels and retention, with no SQL.
 
-[Liwan](https://github.com/explodingcamera/liwan) informed Piko's early embedded-storage design. Piko has its own implementation and product model, with equal support for websites and tools.
+[Liwan](https://github.com/explodingcamera/liwan) informed Highkey's early embedded-storage design. Highkey has its own implementation and product model, with equal support for websites and tools.
 
 ### Dashboard appearance
 
-Piko uses one fixed [Kanagawa Wave palette](https://github.com/rebelot/kanagawa.nvim): sumi-ink surfaces, warm text, orange actions, and yellow/violet/aqua chart accents. There is no theme selector. The same appearance is rendered before JavaScript loads, regardless of system settings or old saved theme preferences.
+Highkey uses one fixed [Kanagawa Wave palette](https://github.com/rebelot/kanagawa.nvim): sumi-ink surfaces, warm text, orange actions, and yellow/violet/aqua chart accents. There is no theme selector. The same appearance is rendered before JavaScript loads, regardless of system settings or old saved theme preferences.
 
 The compact workspace sidebar holds the project selector, page navigation, and a visible source list. Select All sources for the combined view or a named source to filter the project. The date control sits below the report heading within the content layout. Settings omits report-only controls. Overview and Events update automatically while preserving the current layout and query drafts; Logs follows new records every five seconds while Follow is on. The sidebar collapses to icons on desktop and opens as a drawer on mobile, where project selection remains in the compact report controls.
 
@@ -170,10 +170,10 @@ The visual system pairs Kanagawa colors with locally served Geist, Geist Mono, a
 
 Loading regions use the official [Skullet](https://skullet.lochie.me/) package: measured text placeholders and shared skeleton boxes for charts, tables, and keys. The navigation and report controls stay mounted; existing results remain visible during refresh. Reduced motion disables skeleton animation.
 
-Charts use [TanStack Charts](https://tanstack.com/charts/latest) with Piko’s theme and UTC labels. Mouse, touch, and arrow keys inspect values; missing numeric values remain gaps. See the [chart integration notes](docs/charts.md).
+Charts use [TanStack Charts](https://tanstack.com/charts/latest) with Highkey’s theme and UTC labels. Mouse, touch, and arrow keys inspect values; missing numeric values remain gaps. See the [chart integration notes](docs/charts.md).
 
 Website ingestion keys can optionally restrict allowed origins in Settings, including `https://*.example.com` subdomains. Add the apex separately; schemes and ports match exactly. Restricted keys reject missing or unmatched Origin headers before writing events. Keep separate unrestricted keys for CLI/mobile/server clients. These checks reduce browser misuse, but public keys and forgeable non-browser headers cannot authenticate a sender. See [origin policy details](docs/api.md#optional-browser-origin-restrictions).
 
-Projects can optionally have a website address. Piko fetches its favicon on the server, caches it locally, and uses it in the project selector. No external icon service receives dashboard requests. Standard raster favicon paths are supported; unavailable or unsupported images fall back to the project icon. Website metadata and ingestion restrictions are separate, so adding a website never breaks CLI or mobile collection.
+Projects can optionally have a website address. Highkey fetches its favicon on the server, caches it locally, and uses it in the project selector. No external icon service receives dashboard requests. Standard raster favicon paths are supported; unavailable or unsupported images fall back to the project icon. Website metadata and ingestion restrictions are separate, so adding a website never breaks CLI or mobile collection.
 
 The date menu groups working periods and shows their keyboard shortcuts: **D** today, **E** yesterday, **H** last 24 hours, **W/F/N** last 7/30/90 days, **M/P** month to date/last month, **Y/L** year to date/last 12 months, and **C** custom range. **[** and **]** navigate applicable previous/next periods. These shortcuts work in Overview and Events, ignore typing and other open overlays, and can be disabled in **Settings → Display → Date keyboard shortcuts**. Arrow keys, Enter, Tab, and Escape continue to work with shortcuts disabled.

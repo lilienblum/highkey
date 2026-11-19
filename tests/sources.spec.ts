@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 async function select(page: Page, name: string, value: string) {
   if (name === "Select source") {
     if (!(await page.getByRole("navigation", { name: "Project sources" }).isVisible()))
@@ -32,7 +32,7 @@ test("one project combines website and mobile sources with scoped keys, queries,
 }) => {
   test.setTimeout(60_000);
   // New views must see committed events even without a live-update connection.
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const name = `Connected project ${Date.now()}`;
@@ -160,7 +160,7 @@ test("source creation retries a failed catalog refresh without creating the sour
 }) => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: JSON.stringify({
       name: `Source retry ${Date.now()}`,
 
@@ -219,13 +219,13 @@ test("automatic and pinned source icons survive renames without changing analyti
   test.setTimeout(60_000);
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: JSON.stringify({ name: `Icons ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);
   const project = await response.json();
   expect(project).not.toHaveProperty("kind");
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.goto("/settings");
   await select(page, "Select project", project.name);
   await page.getByRole("button", { name: "Add source", exact: true }).click();

@@ -1,4 +1,4 @@
-import { Piko, type Event, type Options, type Properties } from "./client.js";
+import { Highkey, type Event, type Options, type Properties } from "./client.js";
 const campaignParams = [
   "utm_source",
   "utm_medium",
@@ -19,7 +19,7 @@ export type BrowserOptions = Options & {
 };
 /** No identity or campaign values by default. The host application owns consent. */
 export function startBrowserTracker(options: BrowserOptions) {
-  const namespace = `piko:${new URL(options.endpoint, location.href).origin}:${options.identityScope ?? options.key}`;
+  const namespace = `highkey:${new URL(options.endpoint, location.href).origin}:${options.identityScope ?? options.key}`;
   const capacity = options.capacity ?? 100;
   const campaignKeys = campaignParams.filter((key) => options.campaigns?.includes(key));
   const queue: Event[] = [];
@@ -176,7 +176,7 @@ export function startBrowserTracker(options: BrowserOptions) {
   }
   if (!Number.isSafeInteger(capacity) || capacity <= 0)
     throw new Error("capacity must be a positive finite integer");
-  const client = new Piko({
+  const client = new Highkey({
     ...options,
     keepalive: true,
     signal: options.signal ? AbortSignal.any([options.signal, delivery.signal]) : delivery.signal,

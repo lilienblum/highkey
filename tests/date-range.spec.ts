@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Product } from "../apps/dashboard/src/lib/api";
 
-const api = process.env.PIKO_API_URL;
+const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("Use the isolated E2E runner");
 const day = 86400000;
 const today = new Date().toISOString().slice(0, 10);
@@ -14,14 +14,14 @@ let project: Product;
 async function post(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);
   return response.json();
 }
 async function open(page: Page) {
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.goto(`/projects/${project.slug}?source=all&days=30`);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("4");
 }
@@ -325,7 +325,7 @@ for (const size of [
     await expect(options.getByRole("menuitemradio")).toHaveCount(11);
     await expect(menu).toHaveCSS("opacity", "1");
     await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
-    await page.screenshot({ path: `/tmp/piko-date-menu-${size.width}x${size.height}.png` });
+    await page.screenshot({ path: `/tmp/highkey-date-menu-${size.width}x${size.height}.png` });
     await page.keyboard.press("Escape");
     await expect(trigger(page)).toBeFocused();
     expect((await trigger(page).boundingBox())?.y).toBe(before?.y);

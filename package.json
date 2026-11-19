@@ -1,5 +1,5 @@
 {
-  "name": "piko",
+  "name": "highkey",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -42,6 +42,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "tako.sh": "0.0.0-9ae824f"
+    "tako.sh": "^0.0.0-a848f55"
   }
 }

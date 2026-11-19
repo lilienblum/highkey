@@ -3,7 +3,7 @@ import { ClickHouse, ClickHouseError } from "../src/server/clickhouse/client";
 import { CONTRACT_VERSION, migrate } from "../src/server/clickhouse/migrate";
 import { testClickHouse } from "./clickhouse";
 
-const ingestPassword = "piko-ingest-test";
+const ingestPassword = "highkey-ingest-test";
 let admin: ClickHouse;
 let url: string;
 
@@ -16,7 +16,7 @@ beforeAll(async () => {
 
 async function columns(table: string) {
   const result = await admin.query<{ name: string; type: string }>(
-    "SELECT name, type FROM system.columns WHERE database = 'piko' AND table = {table:String} ORDER BY position",
+    "SELECT name, type FROM system.columns WHERE database = 'highkey' AND table = {table:String} ORDER BY position",
     { params: { table } },
   );
   return result.data.map((row) => `${row.name} ${row.type}`);
@@ -74,7 +74,7 @@ describe("ClickHouse migrations", () => {
 
   test("the contract version is recorded", async () => {
     const result = await admin.query<{ version: number }>(
-      "SELECT max(version) AS version FROM piko.ingest_contract",
+      "SELECT max(version) AS version FROM highkey.ingest_contract",
     );
     expect(result.data[0]?.version).toBe(CONTRACT_VERSION);
   });
@@ -89,27 +89,27 @@ describe("ClickHouse migrations", () => {
           },
         )
       ).data[0]?.value;
-    const ingest = new ClickHouse({ url, user: "piko_ingest", password: ingestPassword });
-    expect(await setting(ingest, "workload")).toBe("piko_ingest");
+    const ingest = new ClickHouse({ url, user: "highkey_ingest", password: ingestPassword });
+    expect(await setting(ingest, "workload")).toBe("highkey_ingest");
     expect(await setting(ingest, "async_insert_busy_timeout_max_ms")).toBe("50");
     const workloads = await admin.query<{ name: string; parent: string }>(
-      "SELECT name, parent FROM system.workloads WHERE name LIKE 'piko%' ORDER BY name",
+      "SELECT name, parent FROM system.workloads WHERE name LIKE 'highkey%' ORDER BY name",
     );
     expect(workloads.data).toEqual([
-      { name: "piko", parent: "" },
-      { name: "piko_ingest", parent: "piko" },
-      { name: "piko_readers", parent: "piko" },
+      { name: "highkey", parent: "" },
+      { name: "highkey_ingest", parent: "highkey" },
+      { name: "highkey_readers", parent: "highkey" },
     ]);
     const profile = await admin.query<{ value: string }>(
-      "SELECT value FROM system.settings_profile_elements WHERE profile_name = 'piko_reader' AND setting_name = 'workload'",
+      "SELECT value FROM system.settings_profile_elements WHERE profile_name = 'highkey_reader' AND setting_name = 'workload'",
     );
-    expect(profile.data).toEqual([{ value: "piko_readers" }]);
+    expect(profile.data).toEqual([{ value: "highkey_readers" }]);
   });
 
-  test("piko_ingest can write and read events but nothing else", async () => {
-    const ingest = new ClickHouse({ url, user: "piko_ingest", password: ingestPassword });
+  test("highkey_ingest can write and read events but nothing else", async () => {
+    const ingest = new ClickHouse({ url, user: "highkey_ingest", password: ingestPassword });
     const product = crypto.randomUUID();
-    await ingest.insert("piko.events", [
+    await ingest.insert("highkey.events", [
       {
         product_id: product,
         source_id: product,
@@ -123,15 +123,17 @@ describe("ClickHouse migrations", () => {
       },
     ]);
     const read = await ingest.query<{ count: string }>(
-      "SELECT count() AS count FROM piko.events WHERE product_id = {product:UUID}",
+      "SELECT count() AS count FROM highkey.events WHERE product_id = {product:UUID}",
       { params: { product } },
     );
     expect(Number(read.data[0]?.count)).toBe(1);
-    await ingest.query("SELECT hash FROM piko.ingest_keys LIMIT 1");
-    expect(await code(() => ingest.command("DROP TABLE piko.events"))).toBe(497);
+    await ingest.query("SELECT hash FROM highkey.ingest_keys LIMIT 1");
+    expect(await code(() => ingest.command("DROP TABLE highkey.events"))).toBe(497);
     expect(
       await code(() =>
-        ingest.insert("piko.ingest_keys", [{ hash: "x", product_id: product, source_id: product }]),
+        ingest.insert("highkey.ingest_keys", [
+          { hash: "x", product_id: product, source_id: product },
+        ]),
       ),
     ).toBe(497);
     expect(await code(() => ingest.query("SELECT name FROM system.users"))).toBe(497);
@@ -148,15 +150,15 @@ describe("ClickHouse migrations", () => {
       properties: {},
       expires_at: "2027-11-15 10:00:00",
     };
-    await admin.insert("piko.events", [
+    await admin.insert("highkey.events", [
       { ...row, source: "first", received_at: "2026-11-15 10:00:01.000" },
     ]);
-    await admin.insert("piko.events", [
+    await admin.insert("highkey.events", [
       { ...row, source: "second", received_at: "2026-11-15 10:05:00.000" },
     ]);
-    await admin.command("OPTIMIZE TABLE piko.events FINAL");
+    await admin.command("OPTIMIZE TABLE highkey.events FINAL");
     const result = await admin.query<{ source: string; received_at: string }>(
-      "SELECT source, received_at FROM piko.events WHERE product_id = {product:UUID}",
+      "SELECT source, received_at FROM highkey.events WHERE product_id = {product:UUID}",
       { params: { product } },
     );
     expect(result.data).toEqual([{ source: "first", received_at: "2026-11-15 10:00:01.000" }]);

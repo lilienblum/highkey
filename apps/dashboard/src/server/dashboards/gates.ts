@@ -36,9 +36,9 @@ export interface Gates {
   logs: Semaphore;
 }
 
-/** `PIKO_QUERY_CONCURRENCY` (1–16, default 4): dashboards may use all but one event slot. */
+/** `HIGHKEY_QUERY_CONCURRENCY` (1–16, default 4): dashboards may use all but one event slot. */
 export function gatesFromEnv(env: Record<string, string | undefined> = process.env): Gates {
-  const n = Number(env.PIKO_QUERY_CONCURRENCY ?? 4);
+  const n = Number(env.HIGHKEY_QUERY_CONCURRENCY ?? 4);
   const slots = Number.isInteger(n) && n >= 1 && n <= 16 ? n : 4;
   return { events: new Semaphore(Math.max(1, slots - 1)), logs: new Semaphore(1) };
 }

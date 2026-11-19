@@ -1,13 +1,13 @@
 [package]
-name = "piko-sdk"
+name = "highkey-sdk"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
-description = "Piko event collection for Rust with secure HTTPS and bounded retries"
+description = "Highkey event collection for Rust with secure HTTPS and bounded retries"
 license = "MIT"
 repository = "https://github.com/lilienblum/piko"
 readme = "README.md"
-keywords = ["analytics", "telemetry", "piko"]
+keywords = ["analytics", "telemetry", "highkey"]
 categories = ["api-bindings"]
 include = ["src/**", "examples/**", "README.md", "LICENSE"]
 

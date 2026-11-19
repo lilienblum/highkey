@@ -6,12 +6,12 @@ primary_target: "src/components/dashboards/dashboard-page.tsx"
 related_targets: ["src/components/dashboards/widget.tsx", "src/components/dashboards/widget-chart.tsx", "src/components/dashboards/agent-guide.tsx", "src/components/dashboards/revisions-sheet.tsx", "src/components/dashboards/new-dashboard-dialog.tsx", "src/components/dashboards/dashboards.css", "src/lib/dashboards.ts", "src/lib/growth.ts", "src/routes/projects.$projectSlug.dashboards.$dashboardSlug.tsx", "src/components/workspace-sidebar.tsx"]
 ---
 
-# Piko Dashboards
+# Highkey Dashboards
 
 Scope: viewing custom dashboards, their widget cards, revisions, and the agent guide that replaces an editor. Mode: Operate within the existing Kanagawa Wave world.
 Audience: developers who ask an AI agent for a dashboard and then read it every day.
 Task: open a dashboard from Overview, scan its widgets against the shared project, source and date range, see how each compares with the previous period, and hand changes to an agent.
-Authority: the user chose agent-first editing. Dashboards are API-owned `piko.dashboard/v1` documents written over MCP, so the page is for reading. There is no manual edit mode, no drag-to-arrange and no Add widget. Preserve the incumbent palette, Geist, Hugeicons and shadcn Base UI; no new visual-world selection applies.
+Authority: the user chose agent-first editing. Dashboards are API-owned `highkey.dashboard/v1` documents written over MCP, so the page is for reading. There is no manual edit mode, no drag-to-arrange and no Add widget. Preserve the incumbent palette, Geist, Hugeicons and shadcn Base UI; no new visual-world selection applies.
 
 ## Direction contract
 

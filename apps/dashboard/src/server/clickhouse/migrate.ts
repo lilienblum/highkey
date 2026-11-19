@@ -1,4 +1,4 @@
-// Applies clickhouse/migrations/*.sql in name order and records each in piko.schema_migrations.
+// Applies clickhouse/migrations/*.sql in name order and records each in highkey.schema_migrations.
 //
 // Migrations are expand-then-contract: a migration may add tables, columns with defaults,
 // indexes and views at any time. Removing or renaming anything the ingest app writes or reads
@@ -37,12 +37,12 @@ function literal(value: string): string {
 
 async function ensureIngestUser(admin: ClickHouse, password: string): Promise<void> {
   const identified = `IDENTIFIED WITH sha256_password BY ${literal(password)}`;
-  await admin.command(`CREATE USER IF NOT EXISTS piko_ingest ${identified}`);
-  await admin.command(`ALTER USER piko_ingest ${identified} SETTINGS PROFILE 'piko_ingest'`);
-  await admin.command("GRANT INSERT, SELECT ON piko.events TO piko_ingest");
-  await admin.command("GRANT INSERT, SELECT ON piko.logs TO piko_ingest");
-  await admin.command("GRANT SELECT ON piko.ingest_keys TO piko_ingest");
-  await admin.command("GRANT SELECT ON piko.ingest_contract TO piko_ingest");
+  await admin.command(`CREATE USER IF NOT EXISTS highkey_ingest ${identified}`);
+  await admin.command(`ALTER USER highkey_ingest ${identified} SETTINGS PROFILE 'highkey_ingest'`);
+  await admin.command("GRANT INSERT, SELECT ON highkey.events TO highkey_ingest");
+  await admin.command("GRANT INSERT, SELECT ON highkey.logs TO highkey_ingest");
+  await admin.command("GRANT SELECT ON highkey.ingest_keys TO highkey_ingest");
+  await admin.command("GRANT SELECT ON highkey.ingest_contract TO highkey_ingest");
 }
 
 export async function migrate(
@@ -51,12 +51,12 @@ export async function migrate(
 ): Promise<{ applied: string[] }> {
   if (!options.ingestPassword) throw new Error("The ingest app's ClickHouse password is empty");
   const dir = options.migrationsDir ?? defaultDir;
-  await admin.command("CREATE DATABASE IF NOT EXISTS piko");
+  await admin.command("CREATE DATABASE IF NOT EXISTS highkey");
   await admin.command(
-    "CREATE TABLE IF NOT EXISTS piko.schema_migrations (name String, applied_at DateTime64(3, 'UTC')) ENGINE = MergeTree ORDER BY name",
+    "CREATE TABLE IF NOT EXISTS highkey.schema_migrations (name String, applied_at DateTime64(3, 'UTC')) ENGINE = MergeTree ORDER BY name",
   );
   const done = new Set(
-    (await admin.query<{ name: string }>("SELECT name FROM piko.schema_migrations")).data.map(
+    (await admin.query<{ name: string }>("SELECT name FROM highkey.schema_migrations")).data.map(
       (row) => row.name,
     ),
   );
@@ -67,7 +67,7 @@ export async function migrate(
     if (done.has(file)) continue;
     for (const statement of statements(readFileSync(join(dir, file), "utf8")))
       await admin.command(statement);
-    await admin.insert("piko.schema_migrations", [
+    await admin.insert("highkey.schema_migrations", [
       { name: file, applied_at: new Date().toISOString().replace("T", " ").replace("Z", "") },
     ]);
     applied.push(file);

@@ -9,7 +9,7 @@ export class DashboardError extends Error {
     readonly status: number,
     readonly body: Record<string, unknown>,
     readonly retryAfter: number | null = null,
-    /** A timeout spent waiting for a query slot, which is Piko's load rather than the widget's cost. */
+    /** A timeout spent waiting for a query slot, which is Highkey's load rather than the widget's cost. */
     readonly queued = false,
   ) {
     super(String(body.error));
@@ -64,7 +64,7 @@ export const busyBench = (report: Report) =>
   new DashboardError(
     503,
     {
-      error: "Piko was busy running other queries",
+      error: "Highkey was busy running other queries",
       code: "busy",
       errors: report.errors,
       warnings: report.warnings,
@@ -103,7 +103,7 @@ export function parts(
       return {
         status: 503,
         body: {
-          error: "Piko is busy; retry shortly",
+          error: "Highkey is busy; retry shortly",
           code: "busy",
           errors: [{ path: "", message: "Every query slot is in use", hint: "Retry after 1 s" }],
         },

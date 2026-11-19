@@ -17,19 +17,19 @@ const templates: { name: string; template: string; vars: Record<string, string> 
     name: setup.ingestName,
     template: "tako.ingest.toml",
     vars: {
-      PIKO_CLICKHOUSE_URL: clickhouseUrl,
-      PIKO_CLICKHOUSE_PASSWORD: E2E_SERVER.ingestPassword,
-      PIKO_CHANGE_URL: `${setup.env.PIKO_DASHBOARD_URL}/_piko/changes`,
+      HIGHKEY_CLICKHOUSE_URL: clickhouseUrl,
+      HIGHKEY_CLICKHOUSE_PASSWORD: E2E_SERVER.ingestPassword,
+      HIGHKEY_CHANGE_URL: `${setup.env.HIGHKEY_DASHBOARD_URL}/_highkey/changes`,
     },
   },
   {
     name: setup.name,
     template: "tako.dashboard.toml",
     vars: {
-      PIKO_DATA_DIR: setup.directory,
-      PIKO_INGEST_URL: setup.env.PIKO_INGEST_URL,
-      PIKO_CLICKHOUSE_URL: clickhouseUrl,
-      PIKO_CLICKHOUSE_PASSWORD: E2E_SERVER.password,
+      HIGHKEY_DATA_DIR: setup.directory,
+      HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
+      HIGHKEY_CLICKHOUSE_URL: clickhouseUrl,
+      HIGHKEY_CLICKHOUSE_PASSWORD: E2E_SERVER.password,
       __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${setup.name}.tako,${setup.name}.test`,
     },
   },
@@ -81,7 +81,7 @@ await mkdir(`${root}.tako/e2e`, { recursive: true });
 const lock = `${root}.tako/e2e/runner.lock`;
 await mkdir(lock).catch(() => {
   throw new Error(
-    `E2E runner is locked. If a previous run was force-killed, stop its piko-e2e apps and remove ${lock}.`,
+    `E2E runner is locked. If a previous run was force-killed, stop its highkey-e2e apps and remove ${lock}.`,
   );
 });
 let previous: Awaited<ReturnType<typeof runningApps>> = [];
@@ -90,7 +90,9 @@ const attempted: typeof configs = [];
 try {
   previous = await runningApps();
   if (previous.some((app) => [setup.name, setup.ingestName].includes(app.name)))
-    throw new Error("A previous piko-e2e app is still running; stop it before another test run.");
+    throw new Error(
+      "A previous highkey-e2e app is still running; stop it before another test run.",
+    );
   await mkdir(setup.directory, { recursive: true });
   // A fresh, empty ClickHouse for this run, migrated before either app starts.
   await stopClickHouse(E2E_SERVER.name);
@@ -110,7 +112,7 @@ try {
   // registrations it dropped, including the ingest app started just before the dashboard.
   await restoreApps([...previous.map((app) => app.config), ...configs.map((app) => app.path)]);
   if (interrupted) throw new Error("E2E startup interrupted");
-  console.log(`Disposable E2E workspace: ${setup.env.PIKO_DASHBOARD_URL}`);
+  console.log(`Disposable E2E workspace: ${setup.env.HIGHKEY_DASHBOARD_URL}`);
   exitCode = await command(
     ["bun", "node_modules/@playwright/test/cli.js", "test", ...process.argv.slice(2)],
     { ...process.env, ...setup.env },

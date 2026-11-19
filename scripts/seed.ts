@@ -1,9 +1,9 @@
-import { Piko, type Event } from "../sdk/typescript/client";
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3000";
+import { Highkey, type Event } from "../sdk/typescript/client";
+const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3000";
 async function admin<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) throw new Error(await response.text());
@@ -28,7 +28,7 @@ for (const [name, kind] of [
     label: "Sample data generator",
     source_id: source.id,
   });
-  const client = new Piko({ endpoint, key, timeoutMs: 10000, retries: 2 });
+  const client = new Highkey({ endpoint, key, timeoutMs: 10000, retries: 2 });
   let events: Event[] = [];
   let total = 0;
   for (let day = 29; day >= 0; day--) {

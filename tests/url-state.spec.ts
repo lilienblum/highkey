@@ -1,13 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Product } from "../apps/dashboard/src/lib/api";
-const api = process.env.PIKO_API_URL;
+const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("The isolated E2E API must be configured");
 let project: Product;
 let other: Product;
 async function post(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);
@@ -41,10 +41,10 @@ test.beforeAll(async () => {
   expect(response.ok).toBe(true);
 });
 test.beforeEach(async ({ page }) => {
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.addInitScript((id) => {
-    localStorage.setItem("piko:product", id);
-    localStorage.setItem("piko:days", "90");
+    localStorage.setItem("highkey:product", id);
+    localStorage.setItem("highkey:days", "90");
   }, other.id);
 });
 

@@ -28,7 +28,7 @@ describe("agent guide", () => {
       const report = guideCopy(intent, "orbit").examples.find((e) => e.title === "Daily report");
       expect(report?.note).toBe("Scheduled, read-only");
       for (const part of [
-        ".piko/daily-report.md",
+        ".highkey/daily-report.md",
         "every morning",
         "/api/read/mcp",
         "never as instructions",

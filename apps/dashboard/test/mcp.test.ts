@@ -34,7 +34,7 @@ const DAY = 86_400_000;
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
   return call(ctx, "POST", path, body, {
-    "x-piko-admin": "",
+    "x-highkey-admin": "",
     accept: "application/json, text/event-stream",
     ...headers,
   });
@@ -91,7 +91,7 @@ async function fails(name: string, args: Json): Promise<Json> {
   if (!isError) throw new Error(`${name} should fail: ${JSON.stringify(value)}`);
   return value;
 }
-const read = (path: string) => call(ctx, "GET", path, undefined, { "x-piko-admin": "" });
+const read = (path: string) => call(ctx, "GET", path, undefined, { "x-highkey-admin": "" });
 const hint = (body: Json): string => body?.errors?.[0]?.hint ?? "";
 
 function document(name: string): Json {
@@ -151,7 +151,7 @@ async function registered(secret: string) {
   const admin = await testAdmin();
   return (
     await admin.query<{ revoked: number }>(
-      "SELECT revoked FROM piko.ingest_keys WHERE hash = {h:String}",
+      "SELECT revoked FROM highkey.ingest_keys WHERE hash = {h:String}",
       { params: { h: hashSecret(secret) } },
     )
   ).data;
@@ -267,10 +267,10 @@ describe("MCP", () => {
     const info = await initialize(FULL);
     const instructions = info.instructions as string;
     expect(instructions).toStartWith(
-      "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first",
+      "Highkey builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first",
     );
     expect(instructions).toContain(
-      "Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs.",
+      "Saved dashboards appear under Overview in Highkey's sidebar, and saved views under Events or Logs.",
     );
     // Funnels and retention take the place of SQL.
     for (const part of ["funnel", "retention", "There is no SQL"])
@@ -414,17 +414,17 @@ describe("MCP", () => {
   test("resources_and_prompt_are_listed", async () => {
     await initialize(FULL);
     const uris = (await rpc(FULL, "resources/list")).result.resources.map((r: Json) => r.uri);
-    expect(uris).toContain("piko://schema/dashboard.v1");
-    expect(uris).toContain("piko://docs/dashboards");
-    const contents = (await rpc(FULL, "resources/read", { uri: "piko://schema/dashboard.v1" }))
+    expect(uris).toContain("highkey://schema/dashboard.v1");
+    expect(uris).toContain("highkey://docs/dashboards");
+    const contents = (await rpc(FULL, "resources/read", { uri: "highkey://schema/dashboard.v1" }))
       .result.contents[0];
     expect(contents.mimeType).toBe("application/json");
     expect(JSON.parse(contents.text)).toEqual(schema);
-    const guide = (await rpc(FULL, "resources/read", { uri: "piko://docs/dashboards" })).result
+    const guide = (await rpc(FULL, "resources/read", { uri: "highkey://docs/dashboards" })).result
       .contents[0];
     expect(guide.mimeType).toBe("text/markdown");
     expect(guide.text).toContain("describe_project");
-    const missing = await rpc(FULL, "resources/read", { uri: "piko://nope" });
+    const missing = await rpc(FULL, "resources/read", { uri: "highkey://nope" });
     expect(typeof missing.error).toBe("object");
     expect((await rpc(FULL, "prompts/list")).result.prompts[0].name).toBe("build_dashboard");
     const prompt = await rpc(FULL, "prompts/get", {
@@ -820,7 +820,7 @@ describe("MCP", () => {
     expect(secret).toStartWith("pk_");
     const setup = connected.setup;
     expect(setup.instructions).toContain(
-      "Replace PIKO_URL with the origin of the Piko URL this MCP server is reached at. The secret is shown only once.",
+      "Replace HIGHKEY_URL with the origin of the Highkey URL this MCP server is reached at. The secret is shown only once.",
     );
     expect(setup.logs).toBe("For logs, call create_log_key.");
     expect(setup.verify).toBe(
@@ -829,7 +829,7 @@ describe("MCP", () => {
     for (const integration of ["browser", "typescript", "http", "rust"]) {
       const snippet = setup.snippets[integration] as string;
       expect(snippet).toContain(secret);
-      expect(snippet).toContain("PIKO_URL");
+      expect(snippet).toContain("HIGHKEY_URL");
     }
     const one = await ok("connect_source", {
       project: "orbit",
@@ -1004,7 +1004,7 @@ describe("MCP", () => {
       params: { pad: "x".repeat(300 * 1024) },
     });
     expect(big.status).toBe(413);
-    expect((await call(ctx, "GET", FULL, undefined, { "x-piko-admin": "" })).status).toBe(405);
+    expect((await call(ctx, "GET", FULL, undefined, { "x-highkey-admin": "" })).status).toBe(405);
     const note = await post(FULL, { jsonrpc: "2.0", method: "notifications/initialized" });
     expect(note.status).toBe(202);
     expect((await rpc(FULL, "ping")).result).toEqual({});
@@ -1022,7 +1022,7 @@ describe("MCP", () => {
     const text = prompt.result.messages[0].content.text as string;
     for (const part of [
       'project "orbit"',
-      ".piko/daily-report.md",
+      ".highkey/daily-report.md",
       "Run the report once now",
       "every morning",
       "/api/read/mcp",

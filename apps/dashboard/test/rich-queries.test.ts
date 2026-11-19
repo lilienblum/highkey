@@ -22,7 +22,7 @@ const run = (widget: unknown, days = 7) =>
     "POST",
     "/api/read/products/shop/widgets/run",
     { widget, ...window(days) },
-    { "x-piko-admin": "" },
+    { "x-highkey-admin": "" },
   );
 
 const stat = (query: unknown) => ({
@@ -70,7 +70,7 @@ describe("richer typed queries", () => {
       "POST",
       "/api/read/products/shop/dashboards/validate",
       { document: { version: 1, name: "Lines", widgets: [seven] } },
-      { "x-piko-admin": "" },
+      { "x-highkey-admin": "" },
     );
     expect(validated.json.errors.map((e: { path: string }) => e.path)).toContain(
       "/widgets/0/queries",

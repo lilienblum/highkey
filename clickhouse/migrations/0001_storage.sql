@@ -1,8 +1,8 @@
--- Piko's ClickHouse storage: events, logs, the ingest key registry and the reader profile.
+-- Highkey's ClickHouse storage: events, logs, the ingest key registry and the reader profile.
 -- Every statement is safe to repeat. A statement ends at a line ending with ";".
 
 -- The ingest app writes these columns by name; add columns only with defaults.
-CREATE TABLE IF NOT EXISTS piko.events
+CREATE TABLE IF NOT EXISTS highkey.events
 (
     product_id UUID,
     source_id UUID,
@@ -27,7 +27,7 @@ ORDER BY (product_id, toDate(event_time), name, event_id)
 TTL expires_at DELETE
 SETTINGS fsync_after_insert = 1;
 
-CREATE TABLE IF NOT EXISTS piko.logs
+CREATE TABLE IF NOT EXISTS highkey.logs
 (
     product_id UUID,
     source_id UUID,
@@ -55,7 +55,7 @@ TTL expires_at DELETE
 SETTINGS fsync_after_insert = 1;
 
 -- The dashboard mirrors keys here from SQLite; the ingest app only reads it.
-CREATE TABLE IF NOT EXISTS piko.ingest_keys
+CREATE TABLE IF NOT EXISTS highkey.ingest_keys
 (
     hash String,
     kind Enum8('events' = 1, 'logs' = 2),
@@ -69,21 +69,21 @@ CREATE TABLE IF NOT EXISTS piko.ingest_keys
 ENGINE = EmbeddedRocksDB
 PRIMARY KEY hash;
 
-CREATE TABLE IF NOT EXISTS piko.ingest_contract (version UInt32) ENGINE = MergeTree ORDER BY version;
+CREATE TABLE IF NOT EXISTS highkey.ingest_contract (version UInt32) ENGINE = MergeTree ORDER BY version;
 
-INSERT INTO piko.ingest_contract
-SELECT 1 FROM system.one WHERE (SELECT count() FROM piko.ingest_contract WHERE version = 1) = 0;
+INSERT INTO highkey.ingest_contract
+SELECT 1 FROM system.one WHERE (SELECT count() FROM highkey.ingest_contract WHERE version = 1) = 0;
 
 -- The definer of every project's views. It cannot log in.
-CREATE USER IF NOT EXISTS piko_definer IDENTIFIED WITH no_password HOST NONE;
+CREATE USER IF NOT EXISTS highkey_definer IDENTIFIED WITH no_password HOST NONE;
 
-GRANT SELECT ON piko.events TO piko_definer;
+GRANT SELECT ON highkey.events TO highkey_definer;
 
-GRANT SELECT ON piko.logs TO piko_definer;
+GRANT SELECT ON highkey.logs TO highkey_definer;
 
 -- Every project reader uses this profile. Readers can change only the run's scope and lower
 -- their own time limit.
-CREATE SETTINGS PROFILE OR REPLACE piko_reader SETTINGS
+CREATE SETTINGS PROFILE OR REPLACE highkey_reader SETTINGS
     readonly = 1,
     max_execution_time = 10 MIN 1 MAX 10 CHANGEABLE_IN_READONLY,
     max_memory_usage = 1073741824 MAX 1073741824,
@@ -94,15 +94,15 @@ CREATE SETTINGS PROFILE OR REPLACE piko_reader SETTINGS
     allow_ddl = 0 CONST,
     allow_introspection_functions = 0 CONST,
     max_concurrent_queries_for_user = 4 MAX 4,
-    SQL_piko_from = 0 CHANGEABLE_IN_READONLY,
-    SQL_piko_to = 0 CHANGEABLE_IN_READONLY,
-    SQL_piko_source = '' CHANGEABLE_IN_READONLY,
-    SQL_piko_bucket = 'day' CHANGEABLE_IN_READONLY;
+    SQL_highkey_from = 0 CHANGEABLE_IN_READONLY,
+    SQL_highkey_to = 0 CHANGEABLE_IN_READONLY,
+    SQL_highkey_source = '' CHANGEABLE_IN_READONLY,
+    SQL_highkey_bucket = 'day' CHANGEABLE_IN_READONLY;
 
--- The start of the run's bucket (SQL_piko_bucket) containing a time. Weeks start on Monday.
+-- The start of the run's bucket (SQL_highkey_bucket) containing a time. Weeks start on Monday.
 CREATE FUNCTION IF NOT EXISTS bucket AS (t) -> multiIf(
-    getSettingOrDefault('SQL_piko_bucket', 'day') = 'hour', toDateTime64(toStartOfHour(toDateTime64(t, 3, 'UTC')), 3, 'UTC'),
-    getSettingOrDefault('SQL_piko_bucket', 'day') = 'week', toDateTime64(toStartOfWeek(toDateTime64(t, 3, 'UTC'), 1), 3, 'UTC'),
-    getSettingOrDefault('SQL_piko_bucket', 'day') = 'month', toDateTime64(toStartOfMonth(toDateTime64(t, 3, 'UTC')), 3, 'UTC'),
+    getSettingOrDefault('SQL_highkey_bucket', 'day') = 'hour', toDateTime64(toStartOfHour(toDateTime64(t, 3, 'UTC')), 3, 'UTC'),
+    getSettingOrDefault('SQL_highkey_bucket', 'day') = 'week', toDateTime64(toStartOfWeek(toDateTime64(t, 3, 'UTC'), 1), 3, 'UTC'),
+    getSettingOrDefault('SQL_highkey_bucket', 'day') = 'month', toDateTime64(toStartOfMonth(toDateTime64(t, 3, 'UTC')), 3, 'UTC'),
     toDateTime64(toStartOfDay(toDateTime64(t, 3, 'UTC')), 3, 'UTC')
 );

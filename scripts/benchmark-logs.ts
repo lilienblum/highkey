@@ -16,7 +16,7 @@ const port = setting("BENCH_PORT", 3198, 65535);
 // Fail before starting anything if another service owns the requested ingest port.
 const reservation = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response(null) });
 await reservation.stop(true);
-const stack = await startStack("piko-bench-logs-clickhouse", 18127, port);
+const stack = await startStack("highkey-bench-logs-clickhouse", 18127, port);
 const now = Date.now();
 const range = {
   from: new Date(now - 7 * 86_400_000).toISOString(),
@@ -50,7 +50,7 @@ async function request<T>(path: string, body: unknown, key?: string): Promise<T>
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-piko-admin": "1",
+      "x-highkey-admin": "1",
       ...(key ? { authorization: `Bearer ${key}` } : {}),
     },
     body: JSON.stringify(body),
@@ -183,7 +183,7 @@ try {
       architecture: process.arch,
     },
     runtime: {
-      binary: "target/release/piko-ingest",
+      binary: "target/release/highkey-ingest",
       bun: Bun.version,
       profile: "release",
       clickhouse_image: stack.clickhouse.image,

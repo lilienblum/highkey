@@ -1,13 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const endpoint = process.env.PIKO_API_URL;
+const endpoint = process.env.HIGHKEY_API_URL;
 if (!endpoint) throw new Error("Run dashboard browser tests through bun test:e2e.");
 
 type Project = { id: string; slug: string; name: string };
 async function admin<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   expect(response.ok, `${path}: ${response.status}`).toBe(true);
@@ -170,7 +170,7 @@ test("dashboards appear under Overview in the server-rendered sidebar and render
   page,
 }) => {
   const errors = collectErrors(page);
-  const runtime = page.waitForResponse((response) => response.url().endsWith("/_piko/runtime"));
+  const runtime = page.waitForResponse((response) => response.url().endsWith("/_highkey/runtime"));
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -225,8 +225,8 @@ test("dashboards appear under Overview in the server-rendered sidebar and render
 
 test("collapsed rail reaches dashboards from Overview by keyboard", async ({ page }) => {
   await page.addInitScript((id) => {
-    localStorage.setItem("piko:product", id);
-    localStorage.setItem("piko:sidebar", "collapsed");
+    localStorage.setItem("highkey:product", id);
+    localStorage.setItem("highkey:sidebar", "collapsed");
   }, project.id);
   await page.goto(`/projects/${project.slug}`);
   const overview = page
@@ -439,18 +439,18 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   await expect(dialog.getByRole("status").filter({ hasText: "Copied" })).toHaveCount(1);
   await expect(claude).toHaveAttribute("data-state", "idle", { timeout: 5_000 });
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    `claude mcp add --transport http piko ${new URL(page.url()).origin}/mcp`,
+    `claude mcp add --transport http highkey ${new URL(page.url()).origin}/mcp`,
   );
   await agents.getByRole("tab", { name: "Codex" }).click();
   await expect(dialog.getByRole("button", { name: "Copy Claude Code command" })).toBeHidden();
   await dialog.getByRole("button", { name: "Copy Codex config" }).click();
   const codex = await page.evaluate(() => navigator.clipboard.readText());
-  expect(codex).toContain("[mcp_servers.piko]");
+  expect(codex).toContain("[mcp_servers.highkey]");
   expect(codex).toContain(`url = "${new URL(page.url()).origin}/mcp"`);
   await expect(dialog.getByRole("link", { name: "See the docs" })).toBeVisible();
   await dialog.getByRole("button", { name: "Copy prompt" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    `In Piko project "${project.slug}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`,
+    `In Highkey project "${project.slug}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`,
   );
   for (const example of [
     "Checkout error rate",
@@ -502,7 +502,7 @@ test("/mcp on the dashboard host is the API's MCP server and still refuses brows
   };
   const agent = await page.request.post("/mcp", { headers, data: initialize });
   expect(agent.status()).toBe(200);
-  expect((await agent.json()).result.serverInfo.name).toBe("piko");
+  expect((await agent.json()).result.serverInfo.name).toBe("highkey");
   const tools = await page.request.post("/mcp", {
     headers,
     data: { jsonrpc: "2.0", id: 2, method: "tools/list" },
@@ -530,7 +530,7 @@ test("Edit opens the agent guide with the dashboard slug and revision", async ({
   const prompt = await page.evaluate(() => navigator.clipboard.readText());
   expect(prompt).toMatch(
     new RegExp(
-      `^In Piko project "${project.slug}", update dashboard "${slug}" \\(revision (\\d+)\\): … \\. Read it with get_dashboard, preview changes with run_widget, and save with base_revision \\1\\.$`,
+      `^In Highkey project "${project.slug}", update dashboard "${slug}" \\(revision (\\d+)\\): … \\. Read it with get_dashboard, preview changes with run_widget, and save with base_revision \\1\\.$`,
     ),
   );
   await page.keyboard.press("Escape");
@@ -660,7 +660,7 @@ test("revisions list origins and restore an earlier version", async ({ page }) =
   });
   const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify({
       base_revision: 1,
       document: { ...checkoutDashboard, name: `${original} edited` },
@@ -928,10 +928,10 @@ test("without channels, a dashboard an agent creates or edits appears by polling
   const created = await admin<{ slug: string }>(`/products/${project.id}/dashboards`, {
     document: { ...checkoutDashboard, name: original },
   });
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.clock.install();
   // The runtime answer means the page has hydrated and its poll timer is running.
-  const hydrated = page.waitForResponse("**/_piko/runtime");
+  const hydrated = page.waitForResponse("**/_highkey/runtime");
   await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
   await hydrated;
   const heading = (name: string) => page.getByRole("heading", { level: 1, name });
@@ -943,7 +943,7 @@ test("without channels, a dashboard an agent creates or edits appears by polling
   const renamed = `${original} edited`;
   const saved = await fetch(`${endpoint}/api/products/${project.id}/dashboards/${created.slug}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify({ base_revision: 1, document: { ...checkoutDashboard, name: renamed } }),
   });
   expect(saved.ok, `save: ${saved.status}`).toBe(true);
@@ -954,9 +954,9 @@ test("without channels, a dashboard an agent creates or edits appears by polling
 });
 
 test("a failed document refresh keeps the dashboard and says so quietly", async ({ page }) => {
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.clock.install();
-  const hydrated = page.waitForResponse("**/_piko/runtime");
+  const hydrated = page.waitForResponse("**/_highkey/runtime");
   await page.goto(dashboardUrl());
   await hydrated;
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
@@ -982,9 +982,9 @@ test("a failed document refresh keeps the dashboard and says so quietly", async 
 
 /** Opens the dashboard in poll mode and fails the next poll's document read, so the note shows. */
 async function openStale(page: Page) {
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.clock.install();
-  const hydrated = page.waitForResponse("**/_piko/runtime");
+  const hydrated = page.waitForResponse("**/_highkey/runtime");
   await page.goto(dashboardUrl());
   await hydrated;
   await expect(widget(page, "conversion").locator(".widget-value")).toHaveText("15.0%");
@@ -1124,7 +1124,7 @@ test("Open in Events and Open in Logs carry every filter the widget reads", asyn
   await page.goto(`/projects/${project.slug}/dashboards/${created.slug}`);
   const search = async (id: string, name: string) => {
     const href = await widget(page, id).getByRole("link", { name }).getAttribute("href");
-    return new URL(href ?? "", "https://piko.test").searchParams;
+    return new URL(href ?? "", "https://highkey.test").searchParams;
   };
   const events = await search("pro-checkouts", "Open in Events");
   expect(JSON.parse(events.get("query") ?? "null")).toMatchObject({

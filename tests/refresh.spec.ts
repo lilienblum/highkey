@@ -1,11 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const api = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 let product: { id: string; name: string };
 async function admin(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);
@@ -46,8 +46,8 @@ test.beforeAll(async () => {
   expect(response.ok).toBe(true);
 });
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), product.id);
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), product.id);
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
 });
 
 test("automatic Overview update retains cards and chart without layout movement", async ({

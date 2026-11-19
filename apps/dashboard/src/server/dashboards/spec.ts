@@ -1,4 +1,4 @@
-// The `piko.dashboard/v1` document, as parsed (schema defaults filled in).
+// The `highkey.dashboard/v1` document, as parsed (schema defaults filled in).
 
 export type ViewKind =
   | "stat"

@@ -103,7 +103,7 @@ pub struct Ack {
 }
 
 impl crate::writer::Row for Event {
-    const TABLE: &'static str = "piko.events";
+    const TABLE: &'static str = "highkey.events";
     const ID_COLUMN: &'static str = "event_id";
     const COLUMNS: &'static [&'static str] = &[
         "product_id",

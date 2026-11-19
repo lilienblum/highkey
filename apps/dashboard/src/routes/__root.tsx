@@ -33,7 +33,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#1f1f28" },
-      { title: "Piko · Product analytics" },
+      { title: "Highkey · Product analytics" },
       { name: "description", content: "A clear view of how your products are used." },
     ],
     links: [
@@ -77,7 +77,7 @@ function WorkspaceError() {
   const router = useRouter();
   return (
     <main className="workspace-error">
-      <img src="/favicon.svg?v=7" width="40" height="40" alt="Piko" />
+      <img src="/favicon.svg?v=7" width="40" height="40" alt="Highkey" />
       <h1>Couldn’t open your workspace</h1>
       <p>Check that the API is running, then try again. Your projects and data haven’t changed.</p>
       <Button onClick={() => void router.invalidate()}>Try again</Button>
@@ -97,7 +97,7 @@ function Shell({ children }: { children: ReactNode }) {
           // biome-ignore lint/security/noDangerouslySetInnerHtml: static build-time design provenance; no dynamic or user content.
           dangerouslySetInnerHTML={{
             __html: `<!--
-THESIS: Piko is a compact measurement tool with a graphic identity; evidence remains the main content.
+THESIS: Highkey is a compact measurement tool with a graphic identity; evidence remains the main content.
 OWN-WORLD: One Kanagawa Wave palette: sumi-ink surfaces, warm Fuji text, Surimi Orange actions, Carp Yellow measurements, violet/aqua categories, and green outcomes. Geist, softly squared controls, inset fields, single-frame segments, and the upright three-bar mark.
 STORY: Choose project, source and dates; follow an event trend; inspect the evidence; manage collection. Identity stays optional.
 FIRST VIEWPORT: Keep the project/source rail and report controls. Overview uses six square analytical widgets; Events keeps its query, chart, breakdown and event stream; Logs keeps its query bar and volume above a virtualized log stream.

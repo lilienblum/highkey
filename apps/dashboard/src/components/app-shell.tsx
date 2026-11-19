@@ -110,9 +110,9 @@ export function AppShell({
   const requestedProject = projectSlug ?? search.project;
   const days = search.days ?? (requestedProject ? 7 : savedDays);
   useEffect(() => {
-    setSidebarOpen(readPreference("piko:sidebar") !== "collapsed");
-    setSelected(readPreference("piko:product") ?? "");
-    const saved = Number(readPreference("piko:days"));
+    setSidebarOpen(readPreference("highkey:sidebar") !== "collapsed");
+    setSelected(readPreference("highkey:product") ?? "");
+    const saved = Number(readPreference("highkey:days"));
     if ([7, 30, 90].includes(saved)) setSavedDays(saved as 7 | 30 | 90);
     setPreferencesReady(true);
   }, []);
@@ -123,7 +123,7 @@ export function AppShell({
       Object.fromEntries(
         initialProducts.map((product) => [
           product.id,
-          readPreference(`piko:source:${product.id}`) ?? "",
+          readPreference(`highkey:source:${product.id}`) ?? "",
         ]),
       ),
     );
@@ -151,7 +151,7 @@ export function AppShell({
     setProducts(result);
     if (select) {
       setSelected(select);
-      savePreference("piko:product", select);
+      savePreference("highkey:product", select);
       const project = result.find((p) => p.id === select);
       if (project) await selectProject(project);
     }
@@ -181,9 +181,9 @@ export function AppShell({
     !!product && !projectSlug && !selectionError && !(drilldown && missingSource);
   useEffect(() => {
     if (!preferencesReady || !product || selectionError || (drilldown && missingSource)) return;
-    savePreference("piko:product", product.id);
-    savePreference("piko:days", String(days));
-    savePreference(`piko:source:${product.id}`, sourceId ?? "");
+    savePreference("highkey:product", product.id);
+    savePreference("highkey:days", String(days));
+    savePreference(`highkey:source:${product.id}`, sourceId ?? "");
     if (
       projectSlug !== product.slug ||
       search.project !== undefined ||
@@ -330,7 +330,7 @@ export function AppShell({
         open={sidebarOpen}
         onOpenChange={(open) => {
           setSidebarOpen(open);
-          savePreference("piko:sidebar", open ? "expanded" : "collapsed");
+          savePreference("highkey:sidebar", open ? "expanded" : "collapsed");
         }}
         style={{ "--sidebar-width": "15rem", "--sidebar-width-icon": "3.5rem" } as CSSProperties}
         // Server-rendered pages are visible before hydration; until then they ignore input, so an

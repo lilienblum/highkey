@@ -1,12 +1,12 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 
-const apiUrl = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const apiUrl = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 let product: { id: string; name: string; slug: string };
 let other: { id: string; name: string };
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${apiUrl}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
@@ -60,7 +60,7 @@ test.beforeAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((id) => {
-    localStorage.setItem("piko:product", id);
+    localStorage.setItem("highkey:product", id);
   }, product.id);
 });
 

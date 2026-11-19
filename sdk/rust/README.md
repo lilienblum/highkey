@@ -1,6 +1,6 @@
-# Piko Rust SDK
+# Highkey Rust SDK
 
-`piko-sdk` is a standalone ingestion SDK for Rust applications and CLIs. It has no dependency on the Piko API server, DuckDB, or SQLite. It uses established crates: **reqwest with rustls**, **Tokio**, **serde/serde_json**, **uuid**, and **chrono**. HTTPS certificate verification uses the system trust store; redirects are refused.
+`highkey-sdk` is a standalone ingestion SDK for Rust applications and CLIs. It has no dependency on the Highkey API server, DuckDB, or SQLite. It uses established crates: **reqwest with rustls**, **Tokio**, **serde/serde_json**, **uuid**, and **chrono**. HTTPS certificate verification uses the system trust store; redirects are refused.
 
 ## Install from this checkout
 
@@ -8,24 +8,24 @@ The crate is not published to a registry yet. Use Rust 1.89+ (tested with 1.95),
 
 ```toml
 [dependencies]
-piko-sdk = { path = "../piko/sdk/rust" }
+highkey-sdk = { path = "../highkey/sdk/rust" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"] }
 ```
 
 ## Send events
 
 ```rust
-use piko_sdk::{Event, Piko};
+use highkey_sdk::{Event, Highkey};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let piko = Piko::new("https://piko.example.com", "pk_YOUR_SOURCE_KEY")?;
+    let highkey = Highkey::new("https://highkey.example.com", "pk_YOUR_SOURCE_KEY")?;
     let event = Event::new("command_run", "cli")
         .property("command", "build")
         .property("success", true)
         .property("duration_ms", 42_u64);
 
-    let ack = piko.send(&event).await?;
+    let ack = highkey.send(&event).await?;
     println!("Accepted: {}, duplicates: {}", ack.accepted, ack.duplicates);
     Ok(())
 }
@@ -42,11 +42,11 @@ Your application owns collection preferences and error handling. Send only after
 ## Delivery controls
 
 ```rust
-use piko_sdk::{Options, Piko};
+use highkey_sdk::{Options, Highkey};
 use std::time::Duration;
 
-let piko = Piko::with_options(
-    "https://piko.example.com",
+let highkey = Highkey::with_options(
+    "https://highkey.example.com",
     "pk_YOUR_SOURCE_KEY",
     Options { timeout: Duration::from_secs(2), retries: 1 },
 )?;
@@ -56,13 +56,13 @@ The default total deadline is 800 ms with one retry. It covers requests, respons
 
 `Error` distinguishes configuration/validation errors, HTTP status errors, network failures, invalid acknowledgments, oversized responses, and deadlines. Keys and event bodies are not included in the client's debug output. Never log transport requests or private properties.
 
-To reuse an application's HTTP stack, implement `Transport` and call `Piko::with_transport` or `Piko::with_transport_options`. Follow its documented deadline, certificate verification, redirect, and credential contract. The built-in transport is the recommended default.
+To reuse an application's HTTP stack, implement `Transport` and call `Highkey::with_transport` or `Highkey::with_transport_options`. Follow its documented deadline, certificate verification, redirect, and credential contract. The built-in transport is the recommended default.
 
 From the repository root, a runnable opt-in example is available:
 
 ```sh
-PIKO_TELEMETRY=1 PIKO_ENDPOINT=http://127.0.0.1:3001 \
-PIKO_INGESTION_KEY=pk_YOUR_KEY cargo run -p piko-sdk --example collect
+HIGHKEY_TELEMETRY=1 HIGHKEY_ENDPOINT=http://127.0.0.1:3001 \
+HIGHKEY_INGESTION_KEY=pk_YOUR_KEY cargo run -p highkey-sdk --example collect
 ```
 
-Build and test the standalone crate with `cargo test -p piko-sdk`. Run `cargo package -p piko-sdk` to create a local crate archive; this does not publish it.
+Build and test the standalone crate with `cargo test -p highkey-sdk`. Run `cargo package -p highkey-sdk` to create a local crate archive; this does not publish it.

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-const endpoint = process.env.PIKO_API_URL;
+const endpoint = process.env.HIGHKEY_API_URL;
 test("optional website persists, suggests the browser origin, and can be cleared", async ({
   page,
 }) => {
@@ -26,16 +26,16 @@ test("optional website persists, suggests the browser origin, and can be cleared
   await expect(page.getByLabel("Website", { exact: true })).toHaveValue("");
 });
 
-test("project icons load only from Piko and failed images fall back without shifting the picker", async ({
+test("project icons load only from Highkey and failed images fall back without shifting the picker", async ({
   page,
 }) => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify({ name: `Cached icon ${Date.now()}`, retention_days: 30 }),
   });
   const project = await response.json();
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), project.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), project.id);
   // The real download/cache boundary is covered by Rust tests. The first catalog renders on the
   // server; the refresh after each Settings save comes from the browser, so it carries the fixture.
   let iconVersion = "cached-test-icon";

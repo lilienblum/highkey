@@ -1,19 +1,19 @@
-// /llms.txt and /llms-full.txt: what an agent needs to work with this Piko, in the llms.txt
+// /llms.txt and /llms-full.txt: what an agent needs to work with this Highkey, in the llms.txt
 // format (https://llmstxt.org). The full text adds the dashboards guide the MCP server offers as
 // a resource, for agents that read the web before they connect.
 import guide from "./dashboards/guide.md";
 import { UNTRUSTED } from "./mcp/resources";
 
 export function llmsText(origin: string): string {
-  return `# Piko
+  return `# Highkey
 
-> Privacy-first, self-hosted product analytics and application logs. Agents work with Piko over MCP: they read a project's events and logs, and build dashboards and saved views from typed queries (events, logs, funnel and retention; there is no SQL).
+> Privacy-first, self-hosted product analytics and application logs. Agents work with Highkey over MCP: they read a project's events and logs, and build dashboards and saved views from typed queries (events, logs, funnel and retention; there is no SQL).
 
 ## Connect
 
 - Full MCP server, for dashboards, views and workspace settings: ${origin}/mcp
 - Read-only MCP server, for reports, scheduled runs and anything else that only reads: ${origin}/api/read/mcp
-- Claude Code: \`claude mcp add --transport http piko ${origin}/mcp\`
+- Claude Code: \`claude mcp add --transport http highkey ${origin}/mcp\`
 
 ## Rules for agents
 
@@ -25,7 +25,7 @@ export function llmsText(origin: string): string {
 
 ## Docs
 
-- [Dashboards guide](${origin}/llms-full.txt): queries, series, formulas, views, limits and examples, also the MCP resource piko://docs/dashboards
+- [Dashboards guide](${origin}/llms-full.txt): queries, series, formulas, views, limits and examples, also the MCP resource highkey://docs/dashboards
 `;
 }
 

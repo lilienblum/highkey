@@ -3,10 +3,10 @@ import { expect, test } from "@playwright/test";
 test("Settings defaults to one year without changing existing retention or collection defaults", async ({
   page,
 }) => {
-  const api = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+  const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
   const response = await fetch(`${api}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify({
       name: `Privacy settings ${Date.now()}`,
 
@@ -15,7 +15,7 @@ test("Settings defaults to one year without changing existing retention or colle
   });
   expect(response.ok).toBe(true);
   const existing = await response.json();
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), existing.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), existing.id);
   await page.goto("/settings");
   await expect(page.getByLabel("Retention (days)", { exact: true })).toHaveValue("90");
   await expect(page.locator('[data-slot="sidebar-footer"]')).not.toContainText("retention");
@@ -44,9 +44,9 @@ test("Settings defaults to one year without changing existing retention or colle
     .locator(".integration-card")
     .screenshot({ path: test.info().outputPath("privacy-settings.png") });
   await page.getByRole("tab", { name: "Rust CLI", exact: true }).click();
-  await expect(snippet).toContainText("PIKO_TELEMETRY=1");
+  await expect(snippet).toContainText("HIGHKEY_TELEMETRY=1");
   await expect(snippet).toContainText("DO_NOT_TRACK=1");
-  await expect(snippet).not.toContainText("PIKO_INSTALLATION_ID");
+  await expect(snippet).not.toContainText("HIGHKEY_INSTALLATION_ID");
   await page.getByRole("combobox", { name: "Select project", exact: true }).click();
   await page.getByRole("option", { name: existing.name, exact: true }).click();
   await expect(page.getByLabel("Retention (days)", { exact: true })).toHaveValue("90");

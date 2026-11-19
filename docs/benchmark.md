@@ -13,7 +13,7 @@ bun run test:load
 BENCH_SECONDS=60 BENCH_PRELOAD=100000 BENCH_OUTPUT=docs/my-benchmark.json bun benchmark
 ```
 
-Each script builds the release ingest app (`cargo build --locked --release -p piko-ingest`), starts a ClickHouse container of its own (tmpfs, capped at 4 GiB; `BENCH_CLICKHOUSE_MEMORY` changes the cap) on a loopback port, serves the dashboard's API from Bun on another, and removes everything afterward. No running workspace is touched. They need Docker and `ps`. Run them after builds and other load finishes, for comparable results.
+Each script builds the release ingest app (`cargo build --locked --release -p highkey-ingest`), starts a ClickHouse container of its own (tmpfs, capped at 4 GiB; `BENCH_CLICKHOUSE_MEMORY` changes the cap) on a loopback port, serves the dashboard's API from Bun on another, and removes everything afterward. No running workspace is touched. They need Docker and `ps`. Run them after builds and other load finishes, for comparable results.
 
 ## Hardware
 
@@ -43,7 +43,7 @@ Each script builds the release ingest app (`cargo build --locked --release -p pi
 
 The script counts both projects through Explore afterward and fails unless the total equals the preload plus the acknowledged new events, so the 8,800 retried IDs did not inflate stored counts.
 
-**Reading the ingestion numbers.** An ingestion request is acknowledged only after ClickHouse commits it. The ingest app sends asynchronous inserts that ClickHouse flushes within 10–50 ms (the `piko_ingest` settings profile), and the request waits for that flush. Four closed-loop workers therefore cap this run near 4 × 100 events per ~65 ms ≈ 6,000 events per second: the figure measures the commit wait, not ClickHouse's capacity. More concurrent clients, or larger batches, raise throughput without raising latency much, because requests that arrive together share a flush.
+**Reading the ingestion numbers.** An ingestion request is acknowledged only after ClickHouse commits it. The ingest app sends asynchronous inserts that ClickHouse flushes within 10–50 ms (the `highkey_ingest` settings profile), and the request waits for that flush. Four closed-loop workers therefore cap this run near 4 × 100 events per ~65 ms ≈ 6,000 events per second: the figure measures the commit wait, not ClickHouse's capacity. More concurrent clients, or larger batches, raise throughput without raising latency much, because requests that arrive together share a flush.
 
 ## Logs: ingestion while log searches run
 
@@ -80,8 +80,8 @@ Two runs on the hardware above:
 
 Both passed with no failed ingestion request. Three things keep the readers from slowing ingestion:
 
-- **ClickHouse workloads.** The ingest app's queries and inserts run in the `piko_ingest` workload, which gets released CPU slots first; every project reader runs in `piko_readers`, which may use at most half the cores (`clickhouse/migrations/0002_ingest_priority.sql`).
-- **Reader limits.** The `piko_reader` profile caps each query at 2 threads, 1 GiB, 10 s and 4 concurrent queries per project.
+- **ClickHouse workloads.** The ingest app's queries and inserts run in the `highkey_ingest` workload, which gets released CPU slots first; every project reader runs in `highkey_readers`, which may use at most half the cores (`clickhouse/migrations/0002_ingest_priority.sql`).
+- **Reader limits.** The `highkey_reader` profile caps each query at 2 threads, 1 GiB, 10 s and 4 concurrent queries per project.
 - **The dashboard's gates.** Widget runs wait at in-process concurrency gates and never take the last query slot.
 
 Under that load, about half of the readers' runs were refused: by the dashboard's per-project limit ("Too many queries for this project") or ClickHouse's 4 concurrent queries per project. That is the intended trade: one project's dashboards cannot take the server from ingestion or from other projects. Without the workloads and the 10–50 ms flush, the first run measured 210 ms p99 alone and 486 ms p99 under load, and failed.
@@ -92,4 +92,4 @@ These are short runs on one laptop with ClickHouse on tmpfs in Docker's VM, so d
 
 ## Earlier measurements
 
-Before November 2026 Piko stored each project's events in its own DuckDB file, inside one Rust API. Those runs (1 November 2026: 15,142 events/sec with 23.5 / 28.3 / 35.0 ms ingestion; 13 November 2026 for logs) acknowledged a commit to a local file, not to a separate database, and are not comparable with the figures above. The raw results of the last DuckDB runs remain in [benchmark-sources-results.json](benchmark-sources-results.json) (events, 1 November) and [benchmark-logs-before-results.json](benchmark-logs-before-results.json) (logs); older files are in the repository's history.
+Before November 2026 Highkey stored each project's events in its own DuckDB file, inside one Rust API. Those runs (1 November 2026: 15,142 events/sec with 23.5 / 28.3 / 35.0 ms ingestion; 13 November 2026 for logs) acknowledged a commit to a local file, not to a separate database, and are not comparable with the figures above. The raw results of the last DuckDB runs remain in [benchmark-sources-results.json](benchmark-sources-results.json) (events, 1 November) and [benchmark-logs-before-results.json](benchmark-logs-before-results.json) (logs); older files are in the repository's history.

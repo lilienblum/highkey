@@ -6,7 +6,7 @@ primary_target: "src/components/logs.tsx"
 related_targets: ["src/components/log-stream.tsx", "src/lib/use-log-feed.ts", "src/lib/log-buffer.ts", "src/components/log-settings.tsx", "src/components/app-shell.tsx", "src/components/workspace-sidebar.tsx", "src/lib/logs.ts", "src/logs.css", "src/routes/logs.tsx", "src/routes/projects.$projectSlug.logs.tsx"]
 ---
 
-# Piko Logs
+# Highkey Logs
 
 Scope: project log exploration, structured inspection, and log connection settings. Mode: Operate within the existing Kanagawa Wave world.
 Audience: developers investigating service behavior. Task: choose project/source, search and filter logs, find a request, inspect typed context, and connect services.

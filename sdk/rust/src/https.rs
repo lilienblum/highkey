@@ -1,4 +1,4 @@
-use crate::{Error, Options, Piko, Request, Response, Transport};
+use crate::{Error, Highkey, Options, Request, Response, Transport};
 use std::time::Duration;
 
 /// Certificate-verifying HTTPS using reqwest/rustls and the system trust store.
@@ -18,7 +18,7 @@ impl HttpsTransport {
     }
 }
 
-impl Piko<HttpsTransport> {
+impl Highkey<HttpsTransport> {
     pub fn new(endpoint: impl Into<String>, key: impl Into<String>) -> Result<Self, Error> {
         Self::with_options(endpoint, key, Options::default())
     }

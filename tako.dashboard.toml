@@ -1,4 +1,4 @@
-name = "piko"
+name = "highkey"
 runtime = "bun"
 package_manager = "bun"
 preset = "tanstack-start"
@@ -14,12 +14,12 @@ run = "bun run build"
 include = ["apps/dashboard/dist/**", "apps/dashboard/src/channels/**", "apps/dashboard/src/lib/change-envelope.ts", "apps/dashboard/package.json", "package.json", "bun.lock"]
 
 [envs.development]
-route = "piko.test"
+route = "highkey.test"
 
 [vars.development]
 SSL_CERT_FILE = ".tako/dev-ca.pem"
 # Trust only the linked Tako CA: stale same-named CAs in the system keychain break verification.
 NODE_USE_SYSTEM_CA = "0"
-PIKO_INGEST_URL = "https://piko-ingest.test"
-PIKO_CLICKHOUSE_URL = "http://127.0.0.1:8123"
-PIKO_CLICKHOUSE_PASSWORD = "piko-dev"
+HIGHKEY_INGEST_URL = "https://highkey-ingest.test"
+HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
+HIGHKEY_CLICKHOUSE_PASSWORD = "highkey-dev"

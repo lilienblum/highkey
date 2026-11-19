@@ -1,6 +1,6 @@
 mod common;
 use common::{Kind, clickhouse, config, hash, post, seed_key, write_key};
-use piko_ingest::{router, start};
+use highkey_ingest::{router, start};
 use serde_json::{Value, json};
 use std::time::Duration;
 

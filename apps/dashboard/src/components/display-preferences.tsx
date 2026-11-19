@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { readPreference, savePreference } from "@/lib/preferences";
 import { validTimeZone } from "@/lib/display-time";
 
-const key = "piko:timezone";
-const shortcutsKey = "piko:date-shortcuts";
+const key = "highkey:timezone";
+const shortcutsKey = "highkey:date-shortcuts";
 const DisplayPreferences = createContext({
   timeZone: "UTC",
   setTimeZone: (_: string) => {},

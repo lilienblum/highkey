@@ -1,14 +1,14 @@
 # Custom dashboards, saved views and MCP
 
-Piko dashboards are JSON documents that the API owns. A dashboard is a list of widgets; each widget runs typed queries over a project's events and logs, including funnels and retention, combines them with formulas, and picks a view. Saved views are named queries for the Events and Logs pages.
+Highkey dashboards are JSON documents that the API owns. A dashboard is a list of widgets; each widget runs typed queries over a project's events and logs, including funnels and retention, combines them with formulas, and picks a view. Saved views are named queries for the Events and Logs pages.
 
-Nobody drags widgets around in Piko. You describe what you want to your AI agent, and it builds the document over [MCP](#ask-your-ai). Piko validates every save, times every widget before it saves, keeps revisions, and answers mistakes with JSON paths and hints. The page shows the result: dashboards appear under Overview in the sidebar, views under Events and Logs. See [the dashboard guide](dashboard.md#dashboards) for the UI.
+Nobody drags widgets around in Highkey. You describe what you want to your AI agent, and it builds the document over [MCP](#ask-your-ai). Highkey validates every save, times every widget before it saves, keeps revisions, and answers mistakes with JSON paths and hints. The page shows the result: dashboards appear under Overview in the sidebar, views under Events and Logs. See [the dashboard guide](dashboard.md#dashboards) for the UI.
 
-The same document works over plain HTTP ([API reference](api.md#dashboards-views-and-mcp)), so scripts and your own pages can use it too. The JSON Schema is served at `/api/read/schemas/dashboard.v1.json` and over MCP as `piko://schema/dashboard.v1`. `apps/api/src/dashboards/guide.md` is what agents read as `piko://docs/dashboards`; it follows this page.
+The same document works over plain HTTP ([API reference](api.md#dashboards-views-and-mcp)), so scripts and your own pages can use it too. The JSON Schema is served at `/api/read/schemas/dashboard.v1.json` and over MCP as `highkey://schema/dashboard.v1`. `apps/api/src/dashboards/guide.md` is what agents read as `highkey://docs/dashboards`; it follows this page.
 
 ## Ask your AI
 
-Piko serves an MCP server (streamable HTTP) in the API. It has two paths:
+Highkey serves an MCP server (streamable HTTP) in the API. It has two paths:
 
 | Path            | Tools                                                                                       | Use it with                 |
 | --------------- | ------------------------------------------------------------------------------------------- | --------------------------- |
@@ -17,20 +17,20 @@ Piko serves an MCP server (streamable HTTP) in the API. It has two paths:
 
 `/mcp` is served by the dashboard and forwards to the API's own `/api/mcp`. Use `/api/mcp` only when an agent reaches the API directly, without the dashboard in front. The read-only server stays at `/api/read/mcp` so Access can scope a read token to `/api/read/*`.
 
-Piko has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev` or standalone) there is no Access and the agent needs no headers.
+Highkey has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev` or standalone) there is no Access and the agent needs no headers.
 
 ### Claude Code
 
 Locally, through the dashboard:
 
 ```sh
-claude mcp add --transport http piko http://127.0.0.1:3000/mcp
+claude mcp add --transport http highkey http://127.0.0.1:3000/mcp
 ```
 
 Against a deployment behind Access, add the service token's two headers:
 
 ```sh
-claude mcp add --transport http piko https://piko.example.com/mcp \
+claude mcp add --transport http highkey https://highkey.example.com/mcp \
   --header "CF-Access-Client-Id: <client id>.access" \
   --header "CF-Access-Client-Secret: <client secret>"
 ```
@@ -42,18 +42,18 @@ Claude Code does not expand environment variables inside a remote server's URL o
 Add a server to `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.piko]
-url = "https://piko.example.com/mcp"
+[mcp_servers.highkey]
+url = "https://highkey.example.com/mcp"
 http_headers = { "CF-Access-Client-Id" = "<client id>.access", "CF-Access-Client-Secret" = "<client secret>" }
 ```
 
 To keep the secret out of the file, use `env_http_headers`, which maps a header name to the name of an environment variable:
 
 ```toml
-[mcp_servers.piko]
-url = "https://piko.example.com/mcp"
+[mcp_servers.highkey]
+url = "https://highkey.example.com/mcp"
 http_headers = { "CF-Access-Client-Id" = "<client id>.access" }
-env_http_headers = { "CF-Access-Client-Secret" = "PIKO_ACCESS_CLIENT_SECRET" }
+env_http_headers = { "CF-Access-Client-Secret" = "HIGHKEY_ACCESS_CLIENT_SECRET" }
 ```
 
 Locally, `url = "http://127.0.0.1:3000/mcp"` is enough.
@@ -81,9 +81,9 @@ Every tool takes `project` as an id or slug. Start with `describe_project`.
 
 `delete_dashboard`, `delete_view`, `revoke_key` and `revoke_log_key` need a `confirm` argument equal to the slug (dashboard, view) or id (keys). A mismatch changes nothing and returns `confirm_mismatch`.
 
-The server also offers the resources `piko://schema/dashboard.v1` and `piko://docs/dashboards`, and two prompts. `build_dashboard` walks an agent through describe, run, validate and save. `daily_report` has it save a report's instructions to `.piko/daily-report.md` in your repository, run the report once, and schedule it every morning against the read-only server, `/api/read/mcp`. The dashboard also serves `/llms.txt` (both MCP addresses and these rules) and `/llms-full.txt` (with this guide) for agents that read the web before they connect.
+The server also offers the resources `highkey://schema/dashboard.v1` and `highkey://docs/dashboards`, and two prompts. `build_dashboard` walks an agent through describe, run, validate and save. `daily_report` has it save a report's instructions to `.highkey/daily-report.md` in your repository, run the report once, and schedule it every morning against the read-only server, `/api/read/mcp`. The dashboard also serves `/llms.txt` (both MCP addresses and these rules) and `/llms-full.txt` (with this guide) for agents that read the web before they connect.
 
-Everything Piko collects (event names, properties, paths, page titles, log messages and attributes) comes from your visitors and applications, so it can carry text written to steer an agent. The server tells agents to treat it as data, never as instructions; give agents that only report the read-only server, so such text cannot change anything.
+Everything Highkey collects (event names, properties, paths, page titles, log messages and attributes) comes from your visitors and applications, so it can carry text written to steer an agent. The server tells agents to treat it as data, never as instructions; give agents that only report the read-only server, so such text cannot change anything.
 
 A good request names the project and the outcome: "In project orbit, create a dashboard Checkout health with the checkout error rate and p95 latency by service." The agent should preview each widget with `run_widget`, validate, then save. A save is refused if the document is invalid or a widget is too slow, with a JSON path and a hint, so the agent can fix it and try again.
 
@@ -125,7 +125,7 @@ What the agent can see and change is a trust decision: read [privacy](privacy.md
 
 **Retention**: `{"signal": "retention", "start": {"event": "signup"}, "return": {"event": "page_view"}}`. See [funnels and retention](#funnels-and-retention).
 
-There is no SQL: every query is one of these four, so a document stays valid whatever the storage engine, Piko can bound what each query costs, and every widget can be read and edited as structured data. Self-hosters who want ad-hoc SQL can point their own tools at their ClickHouse.
+There is no SQL: every query is one of these four, so a document stays valid whatever the storage engine, Highkey can bound what each query costs, and every widget can be read and edited as structured data. Self-hosters who want ad-hoc SQL can point their own tools at their ClickHouse.
 
 ### Formulas
 
@@ -184,7 +184,7 @@ A chart has only three accent hues. When a series reuses a hue that an earlier s
 
 The grid has 12 columns. `size` is `{"w": 6, "h": 2}` with `w` of 3, 4, 6, 8 or 12 and `h` of 1, 2 or 3. Defaults: stat 3x1, line, area, bar and ranking 6x2, text 4x1, events, logs and table 12x3. On medium screens widths 3 and 4 become 6 and 8 becomes 12; on narrow screens every widget is full width. Widgets keep document order.
 
-A widget's `range` is `24h` or `30d` (one to three digits, then `h` or `d`); without one it follows the date range chosen in Piko. `timeout_ms` is 1,000-10,000 (default 5,000).
+A widget's `range` is `24h` or `30d` (one to three digits, then `h` or `d`); without one it follows the date range chosen in Highkey. `timeout_ms` is 1,000-10,000 (default 5,000).
 
 ## Limits
 
@@ -230,7 +230,7 @@ A view is a named query for the Events page (`"kind": "events"`, the default) or
 
 An events view:
 
-```json piko-view
+```json highkey-view
 {
   "version": 1,
   "name": "Pro signups by plan",
@@ -245,7 +245,7 @@ An events view:
 
 A logs view:
 
-```json piko-view
+```json highkey-view
 {
   "version": 1,
   "kind": "logs",
@@ -266,7 +266,7 @@ Each block below is checked against the schema and the validation rules by the d
 
 Error logs divided by checkout requests, from two signals in one formula. The widget looks at the last 24 hours and goes red above 5%.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Checkout health",
@@ -299,7 +299,7 @@ Error logs divided by checkout requests, from two signals in one formula. The wi
 
 One logs query grouped by service gives one line per service (up to 6; the fourth to sixth are dithered). Durations compare with the previous period as "lower is better" by default.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Latency",
@@ -326,7 +326,7 @@ One logs query grouped by service gives one line per service (up to 6; the fourt
 
 A stat of signups per visit as a percent. It is red under 2%, yellow from 2%, green from 5%, with a sparkline and a comparison with the previous period.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Conversion",
@@ -359,7 +359,7 @@ A stat of signups per visit as a percent. It is red under 2%, yellow from 2%, gr
 
 Do people who sign up come back? Each row is a week's signups; each column is the share of them that viewed a page in each later week. The range holds a cohort's own week and the 8 after it, so the oldest cohort in the table has every period filled in.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Retention",
@@ -386,7 +386,7 @@ Do people who sign up come back? Each row is a week's signups; each column is th
 
 A table of typed queries has a row per group and a column per query; this one lists the busiest events in the range with how many actors sent each:
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Events by name",
@@ -408,7 +408,7 @@ A table of typed queries has a row per group and a column per query; this one li
 
 The ranking draws the funnel's steps as bars. The table repeats it for pro-plan visitors, counting each session as its own attempt, with the conversion from the first step and from the step before.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Checkout funnel",
@@ -452,7 +452,7 @@ The ranking draws the funnel's steps as bars. The table repeats it for pro-plan 
 
 The stat counts the people active in the range who were first seen before it. The chart splits each bucket's actors into new and returning, so the stacked bars add up to all actors. The ranking counts first-time buyers on the pro and team plans: `new_actors` follows the query's `event` and `filters`, so a person counts in the bucket of their first purchase, not their first visit.
 
-```json piko-dashboard
+```json highkey-dashboard
 {
   "version": 1,
   "name": "Audience",
@@ -499,14 +499,14 @@ The stat counts the people active in the range who were first seen before it. Th
 Because the read paths are plain HTTP, you can write your own page against a project (a wallboard, a status page, a README badge generator) and keep it wherever you like. Under `/api/read/*` every request is non-mutating whatever its method, so a read-only token can be scoped to that prefix. These paths answer cross-origin requests from an allowlist:
 
 - **Loopback origins are allowed by default**: `http://localhost`, `http://127.0.0.1` and `http://[::1]` (HTTP or HTTPS) with any port.
-- **Other origins are added with `PIKO_CORS_ORIGINS`**, a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path), for example `PIKO_CORS_ORIGINS=https://wall.example.com,http://192.168.1.20:8080`. Set it on the dashboard; under native Tako, in `[vars.production]` of `tako.dashboard.toml`.
+- **Other origins are added with `HIGHKEY_CORS_ORIGINS`**, a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path), for example `HIGHKEY_CORS_ORIGINS=https://wall.example.com,http://192.168.1.20:8080`. Set it on the dashboard; under native Tako, in `[vars.production]` of `tako.dashboard.toml`.
 - **`null` is never allowed.** A page opened from disk (`file://`) has the `null` origin, so serve it instead: `python3 -m http.server 8000` or `bunx serve` in its folder, then open `http://localhost:8000`.
-- A literal `*` in `PIKO_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point, and with Access in front the origin you list is the only page that should read your data.
+- A literal `*` in `HIGHKEY_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point, and with Access in front the origin you list is the only page that should read your data.
 - Credentials are never enabled, no write path sends CORS headers at all, and the only request headers allowed are `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
 
-Against a deployment behind Access, a browser's CORS preflight carries no credentials and Access answers it with 403. In the Access application that covers `/api/read/*`, turn on **Bypass options requests to origin** (under Cross-Origin Resource Sharing settings) so Piko answers the preflight, and send the read-only service token's two headers on the real request. Anything in a page's source is readable by whoever opens it, so only put a read-only token in a page you serve to yourself.
+Against a deployment behind Access, a browser's CORS preflight carries no credentials and Access answers it with 403. In the Access application that covers `/api/read/*`, turn on **Bypass options requests to origin** (under Cross-Origin Resource Sharing settings) so Highkey answers the preflight, and send the read-only service token's two headers on the real request. Anything in a page's source is readable by whoever opens it, so only put a read-only token in a page you serve to yourself.
 
-This page asks one widget for its result and prints the numbers. Locally it works as is; edit `piko` and the `headers` for a deployment.
+This page asks one widget for its result and prints the numbers. Locally it works as is; edit `highkey` and the `headers` for a deployment.
 
 ```html
 <!doctype html>
@@ -516,7 +516,7 @@ This page asks one widget for its result and prints the numbers. Locally it work
 <p id="value"></p>
 <p id="change"></p>
 <script type="module">
-  const piko = "http://127.0.0.1:3000"; // or https://piko.example.com
+  const highkey = "http://127.0.0.1:3000"; // or https://highkey.example.com
   const project = "orbit"; // a project slug or id
   const headers = { "Content-Type": "application/json" };
   // Deployed behind Access, add the read-only token here:
@@ -532,7 +532,7 @@ This page asks one widget for its result and prints the numbers. Locally it work
     queries: { signups: { signal: "events", event: "signup" } },
   };
 
-  const response = await fetch(`${piko}/api/read/products/${project}/widgets/run`, {
+  const response = await fetch(`${highkey}/api/read/products/${project}/widgets/run`, {
     method: "POST",
     headers,
     body: JSON.stringify({ widget, from: from.toISOString(), to: to.toISOString() }),

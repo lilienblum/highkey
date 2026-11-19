@@ -23,7 +23,7 @@ const run = (key: string, widget: unknown, days = 7) =>
     "POST",
     `/api/read/products/${key}/widgets/run`,
     { widget, ...window(days) },
-    { "x-piko-admin": "" },
+    { "x-highkey-admin": "" },
   );
 
 const step = (event: string) => ({ event });
@@ -220,7 +220,7 @@ describe("no SQL in dashboards", () => {
       "POST",
       "/api/read/products/shop/dashboards/validate",
       { document: { version: 1, name: "SQL", widgets: [widget] } },
-      { "x-piko-admin": "" },
+      { "x-highkey-admin": "" },
     );
     expect(reply.status).toBe(200);
     expect(reply.json.valid).toBe(false);
@@ -323,13 +323,13 @@ describe("benchmarks before saving", () => {
     expect(reply.json.code).toBe("busy");
     expect(reply.json.errors[0]).toEqual({
       path: "/widgets/0",
-      message: "Piko was busy running other queries",
+      message: "Highkey was busy running other queries",
       hint: "Retry the save in a few seconds",
     });
     expect(reply.headers.get("retry-after")).not.toBeNull();
     held?.();
     const list = await call(ctx, "GET", "/api/read/products/shop/dashboards", undefined, {
-      "x-piko-admin": "",
+      "x-highkey-admin": "",
     });
     expect(list.json).toEqual([]);
     const again = await call(ctx, "POST", path(shop.id), {

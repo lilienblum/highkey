@@ -5,8 +5,8 @@ use axum::{
     routing::post,
 };
 use common::{Kind, admin_query, clickhouse, config, seed_key};
-use piko_ingest::{router, start};
-use piko_sdk::{Ack, Error, Event, Options, Piko};
+use highkey_ingest::{router, start};
+use highkey_sdk::{Ack, Error, Event, Highkey, Options};
 use std::{
     sync::{
         Arc,
@@ -30,7 +30,7 @@ async fn sdk_events_commit_deduplicate_and_keep_typed_properties() {
     let (endpoint, task) = serve(router(state)).await;
     let product = uuid::Uuid::new_v4().to_string();
     let key = seed_key(Kind::Events, &product, &product, &[], 30, false).await;
-    let client = Piko::with_options(
+    let client = Highkey::with_options(
         &endpoint,
         &key,
         Options {
@@ -61,7 +61,7 @@ async fn sdk_events_commit_deduplicate_and_keep_typed_properties() {
         }
     );
     let rows = admin_query(&format!(
-        "SELECT name, properties, actor_id FROM piko.events WHERE product_id = '{product}' ORDER BY name"
+        "SELECT name, properties, actor_id FROM highkey.events WHERE product_id = '{product}' ORDER BY name"
     ))
     .await;
     assert_eq!(rows.len(), 2);
@@ -99,7 +99,7 @@ async fn sdk_transport_refuses_redirects_and_omits_browser_credentials() {
         }),
     ))
     .await;
-    let client = Piko::new(endpoint, "pk_test").unwrap();
+    let client = Highkey::new(endpoint, "pk_test").unwrap();
     assert!(matches!(
         client.send(&Event::new("test", "sdk")).await,
         Err(Error::Http { status: 307, .. })
@@ -119,7 +119,7 @@ async fn sdk_transport_bounds_hung_response_and_response_size() {
         }),
     ))
     .await;
-    let client = Piko::with_options(
+    let client = Highkey::with_options(
         endpoint,
         "pk_test",
         Options {
@@ -137,7 +137,7 @@ async fn sdk_transport_bounds_hung_response_and_response_size() {
     task.abort();
     let (endpoint, task) =
         serve(Router::new().route("/api/ingest", post(|| async { "x".repeat(20_000) }))).await;
-    let client = Piko::new(endpoint, "pk_test").unwrap();
+    let client = Highkey::new(endpoint, "pk_test").unwrap();
     assert!(matches!(
         client.send(&Event::new("test", "sdk")).await,
         Err(Error::ResponseTooLarge)

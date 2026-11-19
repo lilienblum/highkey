@@ -1,5 +1,5 @@
 export default async function setup() {
-  const response = await fetch(`${process.env.PIKO_API_URL}/api/products`, {
+  const response = await fetch(`${process.env.HIGHKEY_API_URL}/api/products`, {
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error(`E2E dashboard API preflight failed (${response.status})`);

@@ -1,11 +1,11 @@
-use piko_ingest::{Config, changes::ChangeDelivery, router, start};
+use highkey_ingest::{Config, changes::ChangeDelivery, router, start};
 use std::env;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "piko_ingest=info".into()),
+                .unwrap_or_else(|_| "highkey_ingest=info".into()),
         )
         .init();
     let managed = ["TAKO_DATA_DIR", "TAKO_BUILD", "TAKO_BOOTSTRAP_DATA"]
@@ -31,19 +31,19 @@ fn secret(managed: bool, name: &str) -> Option<String> {
 }
 
 async fn run(managed: bool) -> anyhow::Result<()> {
-    let delivery = env::var("PIKO_CHANGE_URL")
+    let delivery = env::var("HIGHKEY_CHANGE_URL")
         .ok()
         .map(|url| {
             ChangeDelivery::new(
                 &url,
-                secret(managed, "PIKO_CHANGE_TOKEN").unwrap_or_default(),
+                secret(managed, "HIGHKEY_CHANGE_TOKEN").unwrap_or_default(),
             )
         })
         .transpose()?;
     let mut config = Config::from_env()?;
     if managed {
         config.clickhouse.password =
-            piko_ingest::config::ingest_password(|name| secret(managed, name));
+            highkey_ingest::config::ingest_password(|name| secret(managed, name));
     }
     let state = start(config).await?;
     let notifications = delivery
@@ -52,10 +52,10 @@ async fn run(managed: bool) -> anyhow::Result<()> {
     let listener = if managed {
         tako::listener().await?
     } else {
-        let address = env::var("PIKO_BIND").unwrap_or_else(|_| "127.0.0.1:3001".into());
+        let address = env::var("HIGHKEY_BIND").unwrap_or_else(|_| "127.0.0.1:3001".into());
         tokio::net::TcpListener::bind(&address).await?
     };
-    tracing::info!(address = %listener.local_addr()?, managed, "Piko ingest is ready");
+    tracing::info!(address = %listener.local_addr()?, managed, "Highkey ingest is ready");
     let app = router(state.clone());
     let app = if managed {
         tako::axum::router(app)

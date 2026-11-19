@@ -1,11 +1,11 @@
 import { displayTimestamp } from "../apps/dashboard/src/lib/display-time";
 import { expect, test, type Page } from "@playwright/test";
-const apiUrl = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
-const dashboard = process.env.PIKO_DASHBOARD_URL ?? "http://127.0.0.1:3000";
+const apiUrl = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
+const dashboard = process.env.HIGHKEY_DASHBOARD_URL ?? "http://127.0.0.1:3000";
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${apiUrl}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
@@ -184,7 +184,7 @@ test("create product, edit retention, create and revoke a key", async ({ page })
   await page.getByRole("tab", { name: "Rust CLI" }).click();
   await expect(page.getByRole("tabpanel")).toContainText("cargo run");
   await page.getByRole("tab", { name: "TypeScript" }).click();
-  await expect(page.getByRole("tabpanel")).toContainText("await piko.send");
+  await expect(page.getByRole("tabpanel")).toContainText("await highkey.send");
   await page.getByRole("link", { name: "Overview", exact: true }).click();
   await expect(page.locator(".overview-widget")).toHaveCount(5);
   for (const widget of await page.locator(".overview-widget").all())
@@ -302,7 +302,7 @@ test("sidebar collapses, persists and keeps navigation keyboard accessible", asy
 test("one theme ignores legacy preferences and operating-system changes", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.addInitScript(() => localStorage.setItem("piko:theme", "light"));
+  await page.addInitScript(() => localStorage.setItem("highkey:theme", "light"));
   await page.emulateMedia({ colorScheme: "light" });
   await openWorkspace(page);
   await expect(page.locator("html")).toHaveClass("dark");
@@ -323,7 +323,7 @@ test("one theme ignores legacy preferences and operating-system changes", async 
 });
 
 test("the single theme is present before application JavaScript loads", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("piko:theme", "light"));
+  await page.addInitScript(() => localStorage.setItem("highkey:theme", "light"));
   await page.emulateMedia({ colorScheme: "light" });
   await page.route("**/*", (route) =>
     route.request().resourceType() === "script" ? route.abort() : route.continue(),
@@ -378,7 +378,7 @@ test("website breakdown links preserve product and dates across reload and histo
   ).toHaveAttribute("data-fixed", "true");
   await expect(page.getByLabel("Typed value")).toHaveValue('"/docs"');
   await page.screenshot({ path: test.info().outputPath("website-drilldown.png"), fullPage: true });
-  await page.evaluate((id) => localStorage.setItem("piko:product", id), tool.id);
+  await page.evaluate((id) => localStorage.setItem("highkey:product", id), tool.id);
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Select project" })).toContainText(web.name);
   await expect(page.getByText("across 16 matching events")).toBeVisible();
@@ -592,7 +592,7 @@ test("only validated Explore search can change the workspace context", async ({ 
   });
   await page.goto(`/events?drilldown=${malformed}`);
   await expect(page.getByRole("heading", { name: "This selection is unavailable" })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("piko:product"))).toBe(web.id);
+  expect(await page.evaluate(() => localStorage.getItem("highkey:product"))).toBe(web.id);
   expect(queries).toEqual([]);
   await page.getByRole("link", { name: "Clear selection", exact: true }).click();
   await expect(page.getByText("across 32 matching events")).toBeVisible();

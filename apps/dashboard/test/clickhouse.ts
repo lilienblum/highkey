@@ -1,5 +1,5 @@
 // The ClickHouse server for dashboard tests: `bun scripts/clickhouse.ts test-up`, started once
-// per test process. PIKO_TEST_CLICKHOUSE_URL points tests at another server instead.
+// per test process. HIGHKEY_TEST_CLICKHOUSE_URL points tests at another server instead.
 import { ADMIN_USER, TEST_SERVER } from "../../../scripts/clickhouse";
 
 export interface TestClickHouse {
@@ -11,8 +11,8 @@ export interface TestClickHouse {
 let started: Promise<TestClickHouse> | undefined;
 
 async function start(): Promise<TestClickHouse> {
-  const password = process.env.PIKO_TEST_CLICKHOUSE_PASSWORD ?? TEST_SERVER.password;
-  const configured = process.env.PIKO_TEST_CLICKHOUSE_URL;
+  const password = process.env.HIGHKEY_TEST_CLICKHOUSE_PASSWORD ?? TEST_SERVER.password;
+  const configured = process.env.HIGHKEY_TEST_CLICKHOUSE_URL;
   if (configured) return { url: configured, user: ADMIN_USER, password };
   const root = new URL("../../..", import.meta.url).pathname;
   const child = Bun.spawn(["bun", "scripts/clickhouse.ts", "test-up"], {

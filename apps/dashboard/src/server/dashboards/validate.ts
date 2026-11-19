@@ -1,4 +1,4 @@
-// Parsing and rule checks for `piko.dashboard/v1` documents. `parse*` reports the first shape
+// Parsing and rule checks for `highkey.dashboard/v1` documents. `parse*` reports the first shape
 // error (unknown fields, bad enum values) with its JSON Pointer path; `check*` reports every
 // rule violation it finds. Ported from the Rust API's dashboards/validate.rs.
 import { validKey } from "../queries/properties";

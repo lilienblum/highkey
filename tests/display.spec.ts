@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-const api = process.env.PIKO_API_URL;
+const api = process.env.HIGHKEY_API_URL;
 test("event timezone persists across reload, changes event inspection, and leaves raw timestamps intact", async ({
   page,
 }) => {
   const admin = async (path: string, body: unknown) => {
     const response = await fetch(`${api}/api${path}`, {
       method: "POST",
-      headers: { "x-piko-admin": "1", "content-type": "application/json" },
+      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
       body: JSON.stringify(body),
     });
     expect(response.ok).toBe(true);
@@ -33,7 +33,7 @@ test("event timezone persists across reload, changes event inspection, and leave
     }),
   });
   expect(response.ok).toBe(true);
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), project.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), project.id);
   await page.goto("/settings");
   await expect(page.locator(".topbar, .live-status, .sidebar-footer, .page-footer")).toHaveCount(0);
   await expect(page.getByRole("menu", { name: "Date range", exact: true })).toHaveCount(0);

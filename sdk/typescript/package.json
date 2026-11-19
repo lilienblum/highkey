@@ -1,7 +1,7 @@
 {
-  "name": "@piko/sdk",
+  "name": "@highkey/sdk",
   "version": "0.1.0",
-  "description": "Dependency-free Piko event collection for JavaScript, TypeScript, and browsers",
+  "description": "Dependency-free Highkey event collection for JavaScript, TypeScript, and browsers",
   "type": "module",
   "license": "MIT",
   "repository": {

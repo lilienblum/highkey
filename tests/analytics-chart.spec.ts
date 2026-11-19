@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { QueryResult } from "../apps/dashboard/src/lib/api";
 
-const api = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 let productId: string;
 const first = Date.UTC(2026, 9, 31, 23);
 const values = [10, null, 0, -20, -10, 5];
@@ -30,15 +30,15 @@ test.use({ timezoneId: "America/Los_Angeles", hasTouch: true });
 test.beforeAll(async () => {
   const response = await fetch(`${api}/api/products`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify({ name: `TanStack rendering ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);
   productId = (await response.json()).id;
 });
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), productId);
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), productId);
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   // Deliberately exercise edge-case numeric query results without changing stored analytics.
   await page.route("**/api/products/*/query", (route) => route.fulfill({ json: fixture }));
 });

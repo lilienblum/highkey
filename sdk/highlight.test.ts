@@ -8,19 +8,19 @@ const samples: [CodeLanguage, string][] = [
   ],
   [
     "html",
-    `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "https://piko.test/tracker.js";\n  const tracker = startBrowserTracker({ key: "pk_1", identity: "none" });\n  tracker.track("signup", { plan: "pro", seats: 3 });\n</script>`,
+    `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "https://highkey.test/tracker.js";\n  const tracker = startBrowserTracker({ key: "pk_1", identity: "none" });\n  tracker.track("signup", { plan: "pro", seats: 3 });\n</script>`,
   ],
   [
     "js",
-    `import { Piko } from "./client";\n// comment\nawait piko.send({ name: "build", properties: { duration_ms: 142, success: true } });`,
+    `import { Highkey } from "./client";\n// comment\nawait highkey.send({ name: "build", properties: { duration_ms: 142, success: true } });`,
   ],
   [
     "shell",
-    `curl --fail-with-body "$URL/api/logs/ingest" \\\n  -H "Authorization: Bearer $PIKO_LOG_KEY" \\\n  --data '{"logs":[{"level":"info","status":200}]}'\n# note\nPIKO_TELEMETRY=1 cargo run -p piko`,
+    `curl --fail-with-body "$URL/api/logs/ingest" \\\n  -H "Authorization: Bearer $HIGHKEY_LOG_KEY" \\\n  --data '{"logs":[{"level":"info","status":200}]}'\n# note\nHIGHKEY_TELEMETRY=1 cargo run -p highkey`,
   ],
   [
     "http",
-    `POST https://piko.test/api/ingest\nAuthorization: Bearer pk\nContent-Type: application/json\n\n{"name":"screen_view","subscribed":false}`,
+    `POST https://highkey.test/api/ingest\nAuthorization: Bearer pk\nContent-Type: application/json\n\n{"name":"screen_view","subscribed":false}`,
   ],
 ];
 
@@ -46,7 +46,7 @@ test("tokens take the expected syntax roles", () => {
     "3": "number",
     false: "constant",
   });
-  const shell = kinds("shell", `curl -H "A: b" --data '{"level":"info"}' # done\nPIKO_KEY=1`);
+  const shell = kinds("shell", `curl -H "A: b" --data '{"level":"info"}' # done\nHIGHKEY_KEY=1`);
   expect(shell).toMatchObject({
     curl: "function",
     "-H": "flag",
@@ -54,9 +54,9 @@ test("tokens take the expected syntax roles", () => {
     '"level"': "property",
     '"info"': "string",
     "# done": "comment",
-    PIKO_KEY: "variable",
+    HIGHKEY_KEY: "variable",
   });
-  expect(kinds("js", "await piko.send({ name: 1 });")).toMatchObject({
+  expect(kinds("js", "await highkey.send({ name: 1 });")).toMatchObject({
     await: "keyword",
     send: "function",
     name: "property",

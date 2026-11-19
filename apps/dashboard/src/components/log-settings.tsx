@@ -277,13 +277,13 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
         <details className="log-setup-guide">
           <summary>Log setup guide</summary>
           <p>
-            Set <code>PIKO_LOG_KEY</code> to a log key from this section. Keep it on your server.
+            Set <code>HIGHKEY_LOG_KEY</code> to a log key from this section. Keep it on your server.
           </p>
           <h3>Send JSON</h3>
           <pre>
             <code>
               {highlight(
-                `curl --fail-with-body "${origin}/api/logs/ingest" \\\n  -H "Authorization: Bearer $PIKO_LOG_KEY" \\\n  -H "Content-Type: application/json" \\\n  --data '{"service":"api","level":"info","message":"Server started"}'`,
+                `curl --fail-with-body "${origin}/api/logs/ingest" \\\n  -H "Authorization: Bearer $HIGHKEY_LOG_KEY" \\\n  -H "Content-Type: application/json" \\\n  --data '{"service":"api","level":"info","message":"Server started"}'`,
                 "shell",
               )}
             </code>
@@ -295,7 +295,7 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
               {highlight(
                 `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${origin}/api/logs/v1/logs
 OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
-OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer $PIKO_LOG_KEY"
+OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer $HIGHKEY_LOG_KEY"
 OTEL_SERVICE_NAME=api`,
                 "shell",
               )}

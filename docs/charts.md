@@ -8,7 +8,7 @@ Overview and Events use **TanStack Charts 1.1.0** (`@tanstack/charts/react`). Th
 - The library handles responsive sizing, SSR, pointer/touch focus, keyboard navigation, tooltips, and accessible value announcements. Left/Right, Home/End, and Escape inspect or dismiss values. Invisible bucket targets make null values keyboard-accessible without drawing them as zero; the tooltip reports “No numeric value.”
 - Escape also clears ordinary focus through TanStack's interaction controller because 1.1.0 only dismisses pinned tooltips itself.
 - Existing CSS reserves the plot height before measurement. Refresh keeps the mounted chart and previous results. SVG and tooltip animations are disabled. Touch gestures can scroll the page across the plot.
-- Chart colors and tooltips use Piko's fixed Kanagawa theme tokens. No separate chart palette, chart registry, or vendored chart runtime is needed.
+- Chart colors and tooltips use Highkey's fixed Kanagawa theme tokens. No separate chart palette, chart registry, or vendored chart runtime is needed.
 
 Install with `bun install --frozen-lockfile`. Run the focused browser checks with:
 

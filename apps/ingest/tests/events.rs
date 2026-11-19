@@ -4,7 +4,7 @@ use common::{
     ADMIN_PASSWORD, CutProxy, INGEST_PASSWORD, Kind, admin_query, clickhouse, config, get, post,
     seed_key,
 };
-use piko_ingest::{AppState, changes::Signal, router, start};
+use highkey_ingest::{AppState, changes::Signal, router, start};
 use serde_json::{Value, json};
 use std::time::Duration;
 
@@ -36,7 +36,7 @@ async fn project(retention: u16) -> (String, String) {
 
 async fn stored(product: &str) -> Vec<Value> {
     admin_query(&format!(
-        "SELECT event_id, name, source, toString(source_id) AS source_id, actor_id, identity_kind, session_id, properties, toUnixTimestamp64Milli(event_time) AS event_ms, toUnixTimestamp(expires_at) AS expires_s FROM piko.events FINAL WHERE product_id = '{product}' ORDER BY event_id"
+        "SELECT event_id, name, source, toString(source_id) AS source_id, actor_id, identity_kind, session_id, properties, toUnixTimestamp64Milli(event_time) AS event_ms, toUnixTimestamp(expires_at) AS expires_s FROM highkey.events FINAL WHERE product_id = '{product}' ORDER BY event_id"
     ))
     .await
 }
@@ -235,7 +235,7 @@ async fn committed_changes_are_visible_scoped_and_skip_duplicate_retries() {
 
 #[tokio::test]
 async fn unavailable_change_sink_does_not_change_ingestion_acknowledgments() {
-    use piko_ingest::changes::ChangeDelivery;
+    use highkey_ingest::changes::ChangeDelivery;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (tx, mut rx) = tokio::sync::mpsc::channel(4);
@@ -342,7 +342,7 @@ async fn a_duplicate_older_than_the_window_is_stored_and_a_merge_keeps_the_first
     let time = chrono::Utc::now() - chrono::Duration::hours(25);
     let at = time.format("%Y-%m-%d %H:%M:%S%.3f");
     admin_query(&format!(
-        "INSERT INTO piko.events (product_id, source_id, event_id, name, source, event_time, received_at, properties, expires_at) VALUES ('{id}', '{id}', 'late', 'command_run', 'cli', '{at}', '{at}', '{{\"v\":1}}', now() + INTERVAL 30 DAY)"
+        "INSERT INTO highkey.events (product_id, source_id, event_id, name, source, event_time, received_at, properties, expires_at) VALUES ('{id}', '{id}', 'late', 'command_run', 'cli', '{at}', '{at}', '{{\"v\":1}}', now() + INTERVAL 30 DAY)"
     ))
     .await;
     let mut late = event("late", json!(2));
@@ -352,7 +352,7 @@ async fn a_duplicate_older_than_the_window_is_stored_and_a_merge_keeps_the_first
         ingest(&app, &key, late).await.json(),
         json!({"accepted": 1, "duplicates": 0})
     );
-    admin_query("OPTIMIZE TABLE piko.events FINAL").await;
+    admin_query("OPTIMIZE TABLE highkey.events FINAL").await;
     let rows = stored(&id).await;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["properties"]["v"], 1);
@@ -389,11 +389,11 @@ async fn acknowledged_events_survive_an_ingest_crash() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.local_addr().unwrap().port()
     };
-    let child = std::process::Command::new(env!("CARGO_BIN_EXE_piko-ingest"))
-        .env("PIKO_CLICKHOUSE_URL", &clickhouse().url)
-        .env("PIKO_CLICKHOUSE_USER", "piko_ingest")
-        .env("PIKO_CLICKHOUSE_PASSWORD", INGEST_PASSWORD)
-        .env("PIKO_BIND", format!("127.0.0.1:{port}"))
+    let child = std::process::Command::new(env!("CARGO_BIN_EXE_highkey-ingest"))
+        .env("HIGHKEY_CLICKHOUSE_URL", &clickhouse().url)
+        .env("HIGHKEY_CLICKHOUSE_USER", "highkey_ingest")
+        .env("HIGHKEY_CLICKHOUSE_PASSWORD", INGEST_PASSWORD)
+        .env("HIGHKEY_BIND", format!("127.0.0.1:{port}"))
         .env_remove("TAKO_DATA_DIR")
         .env_remove("TAKO_BUILD")
         .env_remove("TAKO_BOOTSTRAP_DATA")
@@ -454,7 +454,7 @@ async fn a_burst_of_small_requests_coalesces_into_few_parts() {
         assert_eq!(status.unwrap(), 200);
     }
     let parts = admin_query(&format!(
-        "SELECT uniqExact(_part) AS parts, count() AS rows FROM piko.events WHERE product_id = '{id}'"
+        "SELECT uniqExact(_part) AS parts, count() AS rows FROM highkey.events WHERE product_id = '{id}'"
     ))
     .await;
     assert_eq!(parts[0]["rows"], 2000);
@@ -488,7 +488,7 @@ async fn date_like_string_properties_stay_strings() {
     });
     assert_eq!(ingest(&app, &key, dated).await.status, 200);
     let rows = admin_query(&format!(
-        "SELECT dynamicType(properties.trial_ends_at) AS a, dynamicType(properties.published_at) AS b, dynamicType(properties.seen_at) AS c, toString(properties.published_at) AS published FROM piko.events WHERE product_id = '{id}'"
+        "SELECT dynamicType(properties.trial_ends_at) AS a, dynamicType(properties.published_at) AS b, dynamicType(properties.seen_at) AS c, toString(properties.published_at) AS published FROM highkey.events WHERE product_id = '{id}'"
     ))
     .await;
     assert_eq!(rows[0]["a"], "String");
@@ -499,7 +499,7 @@ async fn date_like_string_properties_stay_strings() {
 
 #[tokio::test]
 async fn the_dedup_lookup_handles_a_full_batch_of_long_ids() {
-    use piko_ingest::{clickhouse::ClickHouse, dedup};
+    use highkey_ingest::{clickhouse::ClickHouse, dedup};
     let (app, _) = app().await;
     let (id, key) = project(30).await;
     // A batch can hold 100 requests of 100 events, with ids of up to 64 characters; '/' is
@@ -515,7 +515,7 @@ async fn the_dedup_lookup_handles_a_full_batch_of_long_ids() {
     let ch = ClickHouse::new(&config(&clickhouse().url).clickhouse).unwrap();
     let found = dedup::existing(
         &ch,
-        "piko.events",
+        "highkey.events",
         "event_id",
         id.parse().unwrap(),
         &ids,

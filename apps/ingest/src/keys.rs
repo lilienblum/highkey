@@ -1,4 +1,4 @@
-//! Ingestion keys come from `piko.ingest_keys`, which the dashboard mirrors from its own
+//! Ingestion keys come from `highkey.ingest_keys`, which the dashboard mirrors from its own
 //! store. Lookups are cached briefly: a found key for five seconds, a missing one for one, so
 //! a revoked key stops working within five seconds and a new key works within one.
 use crate::{
@@ -81,7 +81,7 @@ impl Keys {
         let rows = self
             .clickhouse
             .select_json::<Row>(
-                "SELECT kind, product_id, source_id, allowed_origins, retention_days, revoked FROM piko.ingest_keys WHERE hash = {hash:String}",
+                "SELECT kind, product_id, source_id, allowed_origins, retention_days, revoked FROM highkey.ingest_keys WHERE hash = {hash:String}",
                 &[("hash", hash.to_string())],
             )
             .await?;

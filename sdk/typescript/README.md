@@ -1,6 +1,6 @@
-# Piko JavaScript SDK
+# Highkey JavaScript SDK
 
-`@piko/sdk` collects events from JavaScript and TypeScript with **zero runtime dependencies**. It ships ESM JavaScript and TypeScript declarations, plus an optional browser tracker at `@piko/sdk/browser`. It uses native `fetch`, Web Crypto, and AbortSignal APIs: use Bun 1.4+, Node.js 22+, or a current browser. Browser collection requires a secure context (HTTPS or localhost).
+`@highkey/sdk` collects events from JavaScript and TypeScript with **zero runtime dependencies**. It ships ESM JavaScript and TypeScript declarations, plus an optional browser tracker at `@highkey/sdk/browser`. It uses native `fetch`, Web Crypto, and AbortSignal APIs: use Bun 1.4+, Node.js 22+, or a current browser. Browser collection requires a secure context (HTTPS or localhost).
 
 ## Install from this checkout
 
@@ -12,7 +12,7 @@ bun run build:sdk
 cd sdk/typescript
 bun pm pack --destination /tmp
 # In your application, install the tarball printed by the command:
-bun add /tmp/piko-sdk-0.1.0.tgz
+bun add /tmp/highkey-sdk-0.1.0.tgz
 ```
 
 The tarball includes compiled JavaScript, declarations, the README, and the MIT license; consumers do not need TypeScript or Bun to run it.
@@ -20,17 +20,17 @@ The tarball includes compiled JavaScript, declarations, the README, and the MIT 
 ## Send events
 
 ```js
-import { Piko, DeliveryError } from "@piko/sdk";
+import { Highkey, DeliveryError } from "@highkey/sdk";
 
-const piko = new Piko({
-  endpoint: "https://piko.example.com",
+const highkey = new Highkey({
+  endpoint: "https://highkey.example.com",
   key: "pk_YOUR_SOURCE_KEY",
   timeoutMs: 800,
   retries: 1,
 });
 
 try {
-  const ack = await piko.send({
+  const ack = await highkey.send({
     name: "purchase",
     source: "server",
     properties: { amount: 29.5, paid: true, currency: "USD" },
@@ -51,11 +51,11 @@ Successful sends return `{ accepted, duplicates }` after the API commits. Invali
 ## Browser collection
 
 ```js
-import { startBrowserTracker } from "@piko/sdk/browser";
+import { startBrowserTracker } from "@highkey/sdk/browser";
 
 // Start only after your application's collection preference allows it.
 const tracker = startBrowserTracker({
-  endpoint: "https://piko.example.com",
+  endpoint: "https://highkey.example.com",
   key: "pk_YOUR_WEBSITE_SOURCE_KEY",
   identity: "none",
   collectReferrer: false,
@@ -65,6 +65,6 @@ tracker.track("signup", { plan: "pro", trial: true });
 tracker.optOut();
 ```
 
-The tracker honors DNT/GPC, collects no identity or campaign parameters by default, and has a bounded queue. It tracks the initial page and SPA history navigation. Configure `sanitizePath` and `beforeSend` to exclude sensitive data. `optOut()` discards queued data and aborts delivery; `shutdown()` attempts to drain within one deadline. `flush()` attempts one batch and is best effort. The generic `Piko` client sends explicit calls and does not manage consent.
+The tracker honors DNT/GPC, collects no identity or campaign parameters by default, and has a bounded queue. It tracks the initial page and SPA history navigation. Configure `sanitizePath` and `beforeSend` to exclude sensitive data. `optOut()` discards queued data and aborts delivery; `shutdown()` attempts to drain within one deadline. `flush()` attempts one batch and is best effort. The generic `Highkey` client sends explicit calls and does not manage consent.
 
-See [the collection guide](https://github.com/lilienblum/piko/blob/main/docs/collection.md) for identity, lifecycle, privacy controls, and the hosted `/tracker.js` option.
+See [the collection guide](https://github.com/lilienblum/piko/blob/v0/docs/collection.md) for identity, lifecycle, privacy controls, and the hosted `/tracker.js` option.

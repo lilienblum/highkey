@@ -1,14 +1,14 @@
-//! Event collection for Piko with secure HTTPS by default.
+//! Event collection for Highkey with secure HTTPS by default.
 //!
 //! Uses reqwest/rustls on your Tokio runtime, with serde_json, UUIDs and chrono
 //! for the wire format. Creates no background tasks or identity storage. Applications
 //! with an existing HTTP stack can supply their own [`Transport`].
 //!
 //! ```no_run
-//! use piko_sdk::{Event, Piko};
+//! use highkey_sdk::{Event, Highkey};
 //!
-//! # async fn collect() -> Result<(), piko_sdk::Error> {
-//! let client = Piko::new("https://piko.example.com", "pk_YOUR_SOURCE_KEY")?;
+//! # async fn collect() -> Result<(), highkey_sdk::Error> {
+//! let client = Highkey::new("https://highkey.example.com", "pk_YOUR_SOURCE_KEY")?;
 //! let event = Event::new("command_run", "cli")
 //!     .property("success", true)
 //!     .property("duration_ms", 42_u64);
@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Counts acknowledged by Piko after commit, including previously stored IDs.
+/// Counts acknowledged by Highkey after commit, including previously stored IDs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub struct Ack {
     pub accepted: usize,
@@ -50,11 +50,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidOptions(message) | Self::InvalidEvent(message) => f.write_str(message),
-            Self::Transport(message) => write!(f, "Piko transport: {message}"),
-            Self::Http { status, body } => write!(f, "Piko HTTP {status}: {body}"),
+            Self::Transport(message) => write!(f, "Highkey transport: {message}"),
+            Self::Http { status, body } => write!(f, "Highkey HTTP {status}: {body}"),
             Self::InvalidAck => f.write_str("Invalid ingestion acknowledgment"),
-            Self::ResponseTooLarge => f.write_str("Piko response exceeds 16 KiB"),
-            Self::Timeout => f.write_str("Piko delivery deadline reached"),
+            Self::ResponseTooLarge => f.write_str("Highkey response exceeds 16 KiB"),
+            Self::Timeout => f.write_str("Highkey delivery deadline reached"),
         }
     }
 }
@@ -118,14 +118,14 @@ impl Default for Options {
 /// Reusable ingestion client. Sends are explicit and await a durable acknowledgment.
 /// The application owns consent and whether analytics errors affect its operation.
 #[derive(Clone)]
-pub struct Piko<T = HttpsTransport> {
+pub struct Highkey<T = HttpsTransport> {
     url: String,
     key: String,
     transport: T,
     options: Options,
 }
 
-impl<T: Transport> Piko<T> {
+impl<T: Transport> Highkey<T> {
     pub fn with_transport(
         endpoint: impl Into<String>,
         key: impl Into<String>,

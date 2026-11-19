@@ -52,7 +52,7 @@ export function AnalyticsChart({
   const from = range?.from;
   const to = range?.to;
   // Area fills use an ordered-dither screen tone instead of translucency; ids must be URL-safe.
-  const toneId = `piko-tone-${useId().replace(/[^\w-]/g, "")}`;
+  const toneId = `highkey-tone-${useId().replace(/[^\w-]/g, "")}`;
   const definition = useMemo(() => {
     const markers =
       (!compact && Boolean(unit)) || series.filter((point) => point.value !== null).length === 1;

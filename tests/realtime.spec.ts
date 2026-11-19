@@ -2,14 +2,17 @@ import { expect, test, type Page } from "@playwright/test";
 import { Channel, type ChannelMessage } from "tako.sh/client";
 import type { ChangeEnvelope } from "../apps/dashboard/src/lib/change-envelope";
 
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
-test.skip(process.env.PIKO_REALTIME !== "1", "Requires the two live Tako apps (PIKO_REALTIME=1)");
+const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
+test.skip(
+  process.env.HIGHKEY_REALTIME !== "1",
+  "Requires the two live Tako apps (HIGHKEY_REALTIME=1)",
+);
 
 type Fixture = { id: string; name: string; key: string };
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
@@ -56,7 +59,7 @@ async function ingest(product: Fixture, kind: "website" | "tool", count = 1) {
   );
 }
 async function open(page: Page, product: Fixture, path = "/") {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), product.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), product.id);
   const connected = page.waitForResponse(
     (response) => response.url().includes("/_tako/channels/") && response.ok(),
   );
@@ -150,7 +153,7 @@ test("reconnect catches up committed data after an interrupted SSE stream", asyn
     await gate;
     await route.continue();
   });
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), web.id);
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), web.id);
   await page.goto("/");
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("1");
   await expect.poll(() => connections, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
@@ -164,13 +167,13 @@ test("reconnect catches up committed data after an interrupted SSE stream", asyn
 test("public ingestion keys cannot publish channel refresh notifications", async ({ request }) => {
   const web = await fixture("website", 1);
   for (const authorization of [undefined, `Bearer ${web.key}`]) {
-    const response = await request.post("/_piko/changes", {
+    const response = await request.post("/_highkey/changes", {
       headers: authorization ? { authorization } : {},
       data: { version: 2, changes: [{ product: web.id, signals: ["events"] }] },
     });
     expect(response.status()).toBe(401);
   }
-  const response = await request.get("/_piko/runtime");
+  const response = await request.get("/_highkey/runtime");
   expect(await response.json()).toEqual({ live: true });
 });
 
@@ -260,7 +263,7 @@ test("Explore catches up changes between its initial query and first live connec
     await expect
       .poll(() => observer.messages.some((message) => hinted(message.data, tool.id)))
       .toBe(true);
-    await page.addInitScript((id) => localStorage.setItem("piko:product", id), tool.id);
+    await page.addInitScript((id) => localStorage.setItem("highkey:product", id), tool.id);
     await page.goto("/events");
     await expect(page.getByText("across 1 matching events")).toBeVisible();
     const before = observer.messages.length;
@@ -279,7 +282,7 @@ test("Explore catches up changes between its initial query and first live connec
 test("a transient runtime capability error retries and enables live updates", async ({ page }) => {
   const web = await fixture("website", 1);
   let attempts = 0;
-  await page.route("**/_piko/runtime", async (route) => {
+  await page.route("**/_highkey/runtime", async (route) => {
     attempts++;
     if (attempts === 1) await route.fulfill({ status: 503, body: "Temporary outage" });
     else await route.continue();
@@ -297,8 +300,8 @@ for (const path of ["/", "/events"]) {
     page,
   }) => {
     const web = await fixture("website", 1);
-    await page.addInitScript((id) => localStorage.setItem("piko:product", id), web.id);
-    await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+    await page.addInitScript((id) => localStorage.setItem("highkey:product", id), web.id);
+    await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
     await page.clock.install();
     await page.goto(path);
     const content = page
@@ -333,8 +336,8 @@ for (const path of ["/", "/events"]) {
 
 test("an online event catches up without a channel or a click", async ({ page }) => {
   const tool = await fixture("tool", 1);
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), tool.id);
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.addInitScript((id) => localStorage.setItem("highkey:product", id), tool.id);
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.goto("/events");
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   await ingest(tool, "tool", 2);

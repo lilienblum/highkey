@@ -23,16 +23,16 @@ import { createEventKey, createProject } from "../apps/dashboard/src/server/oper
 import { ADMIN_USER, type ServerOptions, startClickHouse, stopClickHouse } from "./clickhouse";
 
 const LOAD_SERVER: ServerOptions = {
-  name: "piko-load-clickhouse",
+  name: "highkey-load-clickhouse",
   port: 18125,
   tmpfs: true,
-  password: "piko-load",
-  ingestPassword: "piko-ingest-load",
+  password: "highkey-load",
+  ingestPassword: "highkey-ingest-load",
   memory: "4g",
 };
 const INGEST_PORT = 18301;
-const PHASE_MS = Number(process.env.PIKO_LOAD_PHASE_MS ?? 30_000);
-const PRELOAD = Number(process.env.PIKO_LOAD_PRELOAD ?? 10_000_000);
+const PHASE_MS = Number(process.env.HIGHKEY_LOAD_PHASE_MS ?? 30_000);
+const PRELOAD = Number(process.env.HIGHKEY_LOAD_PRELOAD ?? 10_000_000);
 const DAY = 86_400_000;
 const root = new URL("..", import.meta.url).pathname;
 
@@ -61,7 +61,7 @@ async function run(command: string[], env: Record<string, string> = {}) {
   if ((await child.exited) !== 0) throw new Error(`${command.join(" ")} failed`);
 }
 
-const directory = mkdtempSync(join(tmpdir(), "piko-load-"));
+const directory = mkdtempSync(join(tmpdir(), "highkey-load-"));
 let ingest: ReturnType<typeof Bun.spawn> | undefined;
 let failed = false;
 try {
@@ -90,7 +90,7 @@ try {
   const now = Date.now();
   const started = performance.now();
   await admin.command(
-    `INSERT INTO piko.events (product_id, source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties, expires_at) SELECT {p:UUID}, {p:UUID}, concat('preload-', toString(number)), ['page_view', 'signup', 'checkout_request'][number % 3 + 1], 'web', fromUnixTimestamp64Milli(toInt64({now:Int64} - (number * 7919) % {span:Int64}), 'UTC') AS at, at, concat('actor-', toString(number % 50000)), 'visitor', NULL, CAST('{"plan":"pro","path":"/"}' AS JSON), toDateTime({expires:Int64}, 'UTC') FROM numbers({rows:UInt64})`,
+    `INSERT INTO highkey.events (product_id, source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties, expires_at) SELECT {p:UUID}, {p:UUID}, concat('preload-', toString(number)), ['page_view', 'signup', 'checkout_request'][number % 3 + 1], 'web', fromUnixTimestamp64Milli(toInt64({now:Int64} - (number * 7919) % {span:Int64}), 'UTC') AS at, at, concat('actor-', toString(number % 50000)), 'visitor', NULL, CAST('{"plan":"pro","path":"/"}' AS JSON), toDateTime({expires:Int64}, 'UTC') FROM numbers({rows:UInt64})`,
     {
       params: {
         p: busy.id,
@@ -104,15 +104,15 @@ try {
   );
   console.log(`Preloaded in ${((performance.now() - started) / 1000).toFixed(1)} s`);
 
-  await run(["cargo", "build", "--locked", "--release", "-p", "piko-ingest"]);
-  ingest = Bun.spawn([`${root}target/release/piko-ingest`], {
+  await run(["cargo", "build", "--locked", "--release", "-p", "highkey-ingest"]);
+  ingest = Bun.spawn([`${root}target/release/highkey-ingest`], {
     cwd: root,
     env: {
       PATH: process.env.PATH ?? "",
-      PIKO_BIND: `127.0.0.1:${INGEST_PORT}`,
-      PIKO_CLICKHOUSE_URL: url,
-      PIKO_CLICKHOUSE_USER: "piko_ingest",
-      PIKO_CLICKHOUSE_PASSWORD: LOAD_SERVER.ingestPassword,
+      HIGHKEY_BIND: `127.0.0.1:${INGEST_PORT}`,
+      HIGHKEY_CLICKHOUSE_URL: url,
+      HIGHKEY_CLICKHOUSE_USER: "highkey_ingest",
+      HIGHKEY_CLICKHOUSE_PASSWORD: LOAD_SERVER.ingestPassword,
     },
     stdout: "inherit",
     stderr: "inherit",

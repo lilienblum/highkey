@@ -8,7 +8,7 @@
     "architecture": "arm64"
   },
   "runtime": {
-    "binary": "target/release/piko-ingest",
+    "binary": "target/release/highkey-ingest",
     "bun": "1.4.4",
     "profile": "release",
     "clickhouse_image": "clickhouse/clickhouse-server:26.8.37.168",

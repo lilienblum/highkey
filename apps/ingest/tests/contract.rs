@@ -1,6 +1,6 @@
 mod common;
 use common::{clickhouse, config, get, stub_clickhouse};
-use piko_ingest::{contract::ContractError, router, start};
+use highkey_ingest::{contract::ContractError, router, start};
 
 #[tokio::test]
 async fn refuses_a_clickhouse_older_than_the_minimum() {
@@ -54,12 +54,12 @@ async fn starts_against_the_test_clickhouse_and_reports_health() {
 async fn serves_the_tracker_with_its_headers() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("tracker.js");
-    std::fs::write(&path, "export const piko = 1;\n").unwrap();
+    std::fs::write(&path, "export const highkey = 1;\n").unwrap();
     let mut settings = config(&clickhouse().url);
     settings.tracker_path = Some(path);
     let reply = get(&router(start(settings).await.unwrap()), "/tracker.js").await;
     assert_eq!(reply.status, 200);
-    assert_eq!(reply.text(), "export const piko = 1;\n");
+    assert_eq!(reply.text(), "export const highkey = 1;\n");
     for (name, value) in [
         ("content-type", "application/javascript; charset=utf-8"),
         ("access-control-allow-origin", "*"),

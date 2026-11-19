@@ -8,12 +8,12 @@ async function expectSourcesFit(page: Page) {
     .toBe(0);
 }
 
-const endpoint = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 let project: { id: string; name: string; slug: string };
 test.beforeAll(async () => {
   const response = await fetch(`${endpoint}/api/products`, {
     method: "POST",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: JSON.stringify({ name: `SSR ${Date.now()}`, retention_days: 30 }),
   });
   expect(response.ok).toBe(true);
@@ -21,7 +21,7 @@ test.beforeAll(async () => {
   for (let index = 1; index <= 6; index++) {
     const source = await fetch(`${endpoint}/api/products/${project.id}/sources`, {
       method: "POST",
-      headers: { "x-piko-admin": "1", "content-type": "application/json" },
+      headers: { "x-highkey-admin": "1", "content-type": "application/json" },
       body: JSON.stringify({ name: `Fixture source ${index}` }),
     });
     expect(source.ok).toBe(true);
@@ -41,8 +41,8 @@ for (const route of ["/", "/events", "/settings"]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.addInitScript(
         ({ id, collapsed }) => {
-          localStorage.setItem("piko:product", id);
-          localStorage.setItem("piko:sidebar", collapsed ? "collapsed" : "expanded");
+          localStorage.setItem("highkey:product", id);
+          localStorage.setItem("highkey:sidebar", collapsed ? "collapsed" : "expanded");
         },
         { id: project.id, collapsed },
       );
@@ -53,7 +53,9 @@ for (const route of ["/", "/events", "/settings"]) {
         if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)"))
           errors.push(message.text());
       });
-      const runtime = page.waitForResponse((response) => response.url().endsWith("/_piko/runtime"));
+      const runtime = page.waitForResponse((response) =>
+        response.url().endsWith("/_highkey/runtime"),
+      );
       let release = () => {};
       const gate = new Promise<void>((resolve) => {
         release = resolve;
@@ -153,8 +155,8 @@ for (const collapsed of [false, true]) {
     await page.setViewportSize({ width: 1024, height: collapsed ? 360 : 400 });
     await page.addInitScript(
       ({ id, collapsed }) => {
-        localStorage.setItem("piko:product", id);
-        localStorage.setItem("piko:sidebar", collapsed ? "collapsed" : "expanded");
+        localStorage.setItem("highkey:product", id);
+        localStorage.setItem("highkey:sidebar", collapsed ? "collapsed" : "expanded");
       },
       { id: project.id, collapsed },
     );
@@ -200,8 +202,8 @@ test("connect a source lives in the sidebar, not in page headers", async ({ page
 });
 test("connect a source stays reachable from the collapsed rail", async ({ page }) => {
   await page.addInitScript((id) => {
-    localStorage.setItem("piko:product", id);
-    localStorage.setItem("piko:sidebar", "collapsed");
+    localStorage.setItem("highkey:product", id);
+    localStorage.setItem("highkey:sidebar", "collapsed");
   }, project.id);
   await page.goto(`/projects/${project.slug}/events`);
   const link = page.getByRole("link", { name: "Connect a source", exact: true });

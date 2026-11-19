@@ -1,11 +1,11 @@
-// `bun run migrate`: applies Piko's ClickHouse migrations. Run it from the release you deploy,
+// `bun run migrate`: applies Highkey's ClickHouse migrations. Run it from the release you deploy,
 // before the ingest app and the dashboard start.
 import { adminClient } from "./client";
 import { migrate } from "./migrate";
 
 try {
   const { applied } = await migrate(adminClient(), {
-    ingestPassword: process.env.PIKO_INGEST_CLICKHOUSE_PASSWORD ?? "",
+    ingestPassword: process.env.HIGHKEY_INGEST_CLICKHOUSE_PASSWORD ?? "",
   });
   console.log(applied.length ? `Applied ${applied.join(", ")}` : "ClickHouse schema is current");
 } catch (error) {

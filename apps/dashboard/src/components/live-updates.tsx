@@ -27,7 +27,7 @@ export function LiveUpdates(props: Props) {
     let attempts = 0;
     const load = async () => {
       try {
-        const response = await fetch("/_piko/runtime", {
+        const response = await fetch("/_highkey/runtime", {
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]),
         });
         if (!response.ok) throw new Error("Runtime configuration unavailable");

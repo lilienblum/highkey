@@ -1,6 +1,6 @@
 # Application logs
 
-Application logs are stored in ClickHouse's `piko.logs` table, separate from analytics events in `piko.events`. Each project reads only its own rows, through its own ClickHouse user and views. Logs have their own keys, endpoints, queries and retention. The dashboard's SQLite store holds log key hashes and retention settings.
+Application logs are stored in ClickHouse's `highkey.logs` table, separate from analytics events in `highkey.events`. Each project reads only its own rows, through its own ClickHouse user and views. Logs have their own keys, endpoints, queries and retention. The dashboard's SQLite store holds log key hashes and retention settings.
 
 ## Connect a service
 
@@ -9,8 +9,8 @@ Open **Settings → Logs**, select a source, and create a log ingestion key. The
 Send structured JSON to `/api/logs/ingest`. The ingest app serves it; when the edge sends everything to the dashboard, the dashboard forwards it unchanged.
 
 ```sh
-curl --fail-with-body https://piko.example.com/api/logs/ingest \
-  -H "Authorization: Bearer $PIKO_LOG_KEY" \
+curl --fail-with-body https://highkey.example.com/api/logs/ingest \
+  -H "Authorization: Bearer $HIGHKEY_LOG_KEY" \
   -H 'Content-Type: application/json' \
   --data '{"logs":[{
     "log_id":"checkout-42",
@@ -45,17 +45,17 @@ Attributes preserve strings, numbers, booleans, null, objects, and arrays. Nesti
 Use an **OTLP/HTTP** logs exporter or collector with these settings:
 
 ```sh
-OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://piko.example.com/api/logs/v1/logs
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://highkey.example.com/api/logs/v1/logs
 OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
-OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer $PIKO_LOG_KEY"
+OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer $HIGHKEY_LOG_KEY"
 OTEL_SERVICE_NAME=checkout-api
 ```
 
-The endpoint accepts OTLP JSON (`application/json`) or Protobuf (`application/x-protobuf`), with optional gzip compression. Exporter-specific configuration may differ. Set its maximum batch size to 100 or fewer records and keep both encoded and decompressed request bodies within 256 KiB. Piko rejects invalid batches atomically. Retriable overload responses, including ClickHouse being unavailable, use HTTP 503 and `Retry-After`.
+The endpoint accepts OTLP JSON (`application/json`) or Protobuf (`application/x-protobuf`), with optional gzip compression. Exporter-specific configuration may differ. Set its maximum batch size to 100 or fewer records and keep both encoded and decompressed request bodies within 256 KiB. Highkey rejects invalid batches atomically. Retriable overload responses, including ClickHouse being unavailable, use HTTP 503 and `Retry-After`.
 
 Resource and record attributes are retained, with record attributes taking precedence. `service.name` supplies the service (falling back to `unknown_service`); `deployment.environment.name` or `deployment.environment` supplies the environment. Severity numbers map to six levels. Trace/span context is preserved. Structured bodies are rendered as JSON text. Timestamp falls back to observed time, then receipt time. A `log.record.uid` string supplies the deduplication ID; otherwise each export receives a generated ID, so exporter retries may create duplicates. OTLP/gRPC is not supported.
 
-Log endpoints are intended for services and collectors. Browser CORS ingestion is only provided for the analytics endpoint. Review application data before sending it: Piko does not automatically redact credentials, personal data, or message content.
+Log endpoints are intended for services and collectors. Browser CORS ingestion is only provided for the analytics endpoint. Review application data before sending it: Highkey does not automatically redact credentials, personal data, or message content.
 
 ## Explore logs
 
@@ -69,7 +69,7 @@ The volume chart shows matching records and errors over the selected window; dra
 
 ## Management API
 
-The dashboard serves these paths. Management requests stay behind Cloudflare Access. Mutations also require the `X-Piko-Admin: 1` CSRF marker.
+The dashboard serves these paths. Management requests stay behind Cloudflare Access. Mutations also require the `X-Highkey-Admin: 1` CSRF marker.
 
 | Method      | Path                                 | Body/result                                                        |
 | ----------- | ------------------------------------ | ------------------------------------------------------------------ |
@@ -105,14 +105,14 @@ Log queries run as the project's ClickHouse user, under the same per-project lim
 The ingest app is one binary that needs only ClickHouse. Build it and point it at a migrated server:
 
 ```sh
-cargo build --locked --release -p piko-ingest
-PIKO_CLICKHOUSE_URL=http://127.0.0.1:8123 \
-PIKO_INGEST_CLICKHOUSE_PASSWORD="$PIKO_INGEST_CLICKHOUSE_PASSWORD" \
-PIKO_TRACKER_PATH=sdk/typescript/dist/tracker.js \
-./target/release/piko-ingest
+cargo build --locked --release -p highkey-ingest
+HIGHKEY_CLICKHOUSE_URL=http://127.0.0.1:8123 \
+HIGHKEY_INGEST_CLICKHOUSE_PASSWORD="$HIGHKEY_INGEST_CLICKHOUSE_PASSWORD" \
+HIGHKEY_TRACKER_PATH=sdk/typescript/dist/tracker.js \
+./target/release/highkey-ingest
 ```
 
-It signs in as `piko_ingest` (`PIKO_CLICKHOUSE_USER` overrides it), listens on `PIKO_BIND` (default `127.0.0.1:3001`), and refuses to start against a ClickHouse older than 25.8 or a schema older than it needs (run `bun run migrate` first). `bun scripts/clickhouse.ts dev-up` starts and migrates a local server; `bun run build:sdk` builds the tracker bundle. During development, `cargo run -p piko-ingest` builds and starts it in one step with the same variables, and `bun run dev:standalone` runs it beside the dashboard.
+It signs in as `highkey_ingest` (`HIGHKEY_CLICKHOUSE_USER` overrides it), listens on `HIGHKEY_BIND` (default `127.0.0.1:3001`), and refuses to start against a ClickHouse older than 25.8 or a schema older than it needs (run `bun run migrate` first). `bun scripts/clickhouse.ts dev-up` starts and migrates a local server; `bun run build:sdk` builds the tracker bundle. During development, `cargo run -p highkey-ingest` builds and starts it in one step with the same variables, and `bun run dev:standalone` runs it beside the dashboard.
 
 ## Measure a logging workload
 

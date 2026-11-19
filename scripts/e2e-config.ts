@@ -2,32 +2,32 @@ import { join } from "node:path";
 
 export function e2eEnvironment(root: string, run: string) {
   if (!/^[a-f0-9]{12}$/.test(run)) throw new Error("Invalid E2E run ID");
-  const name = "piko-e2e";
+  const name = "highkey-e2e";
   return {
     name,
     ingestName: `${name}-ingest`,
     directory: join(root, ".tako", "e2e", run),
     env: {
-      PIKO_E2E_RUN: run,
+      HIGHKEY_E2E_RUN: run,
       // The tests call the API where browsers do: on the dashboard.
-      PIKO_API_URL: `https://${name}.test`,
-      PIKO_INGEST_URL: `https://${name}-ingest.test`,
-      PIKO_DASHBOARD_URL: `https://${name}.test`,
-      PIKO_REALTIME: "1",
+      HIGHKEY_API_URL: `https://${name}.test`,
+      HIGHKEY_INGEST_URL: `https://${name}-ingest.test`,
+      HIGHKEY_DASHBOARD_URL: `https://${name}.test`,
+      HIGHKEY_REALTIME: "1",
       SSL_CERT_FILE: join(root, ".tako", "dev-ca.pem"),
     },
   };
 }
 
 export function assertIsolatedE2E(env: Record<string, string | undefined>) {
-  const run = env.PIKO_E2E_RUN;
+  const run = env.HIGHKEY_E2E_RUN;
   if (!run || !/^[a-f0-9]{12}$/.test(run))
     throw new Error("Run browser tests with bun test:e2e; direct runs can pollute preview data.");
   const expected = e2eEnvironment(".", run).env;
   if (
-    env.PIKO_API_URL !== expected.PIKO_API_URL ||
-    env.PIKO_INGEST_URL !== expected.PIKO_INGEST_URL ||
-    env.PIKO_DASHBOARD_URL !== expected.PIKO_DASHBOARD_URL
+    env.HIGHKEY_API_URL !== expected.HIGHKEY_API_URL ||
+    env.HIGHKEY_INGEST_URL !== expected.HIGHKEY_INGEST_URL ||
+    env.HIGHKEY_DASHBOARD_URL !== expected.HIGHKEY_DASHBOARD_URL
   )
     throw new Error("Browser tests must use their disposable E2E apps, never the preview.");
 }

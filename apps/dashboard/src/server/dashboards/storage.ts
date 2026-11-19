@@ -10,9 +10,9 @@ import { checkDocument, Limits, serializeDocument } from "./validate";
 
 export type Origin = "dashboard" | "mcp" | "api";
 
-/** `X-Piko-Origin: dashboard` marks writes made from the dashboard UI. */
+/** `X-Highkey-Origin: dashboard` marks writes made from the dashboard UI. */
 export function originFrom(request: Request): Origin {
-  return request.headers.get("x-piko-origin") === "dashboard" ? "dashboard" : "api";
+  return request.headers.get("x-highkey-origin") === "dashboard" ? "dashboard" : "api";
 }
 
 export interface Stored {

@@ -2,8 +2,8 @@
 //! that `bun scripts/clickhouse.ts test-up` starts and migrates.
 #![allow(dead_code)]
 use axum::{Router, body::Body, http::Request};
+use highkey_ingest::{ClickHouseConfig, Config};
 use http_body_util::BodyExt;
-use piko_ingest::{ClickHouseConfig, Config};
 use serde_json::Value;
 use std::{
     net::SocketAddr,
@@ -16,8 +16,8 @@ use std::{
 use tokio::net::{TcpListener, TcpStream};
 use tower::ServiceExt;
 
-pub const ADMIN_PASSWORD: &str = "piko-test";
-pub const INGEST_PASSWORD: &str = "piko-ingest-test";
+pub const ADMIN_PASSWORD: &str = "highkey-test";
+pub const INGEST_PASSWORD: &str = "highkey-ingest-test";
 
 pub struct TestCh {
     pub url: String,
@@ -52,7 +52,7 @@ pub fn config(url: &str) -> Config {
     Config {
         clickhouse: ClickHouseConfig {
             url: url.into(),
-            user: "piko_ingest".into(),
+            user: "highkey_ingest".into(),
             password: INGEST_PASSWORD.into(),
         },
         queue_capacity: 64,
@@ -65,7 +65,7 @@ pub async fn admin_query(sql: &str) -> Vec<Value> {
     let url = &clickhouse().url;
     let response = reqwest::Client::new()
         .post(format!("{url}/?default_format=JSON&wait_end_of_query=1"))
-        .header("X-ClickHouse-User", "piko_admin")
+        .header("X-ClickHouse-User", "highkey_admin")
         .header("X-ClickHouse-Key", ADMIN_PASSWORD)
         .body(sql.to_string())
         .send()
@@ -207,7 +207,7 @@ pub async fn get(app: &Router, path: &str) -> Reply {
     send(app, Request::get(path).body(Body::empty()).unwrap()).await
 }
 
-/// Registry key kinds, as `piko.ingest_keys.kind` stores them.
+/// Registry key kinds, as `highkey.ingest_keys.kind` stores them.
 #[derive(Clone, Copy)]
 pub enum Kind {
     Events,
@@ -270,7 +270,7 @@ pub async fn write_key(
         "updated_at": chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
     });
     admin_query(&format!(
-        "INSERT INTO piko.ingest_keys FORMAT JSONEachRow {row}"
+        "INSERT INTO highkey.ingest_keys FORMAT JSONEachRow {row}"
     ))
     .await;
 }

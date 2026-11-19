@@ -1,6 +1,6 @@
 ---
 
-name: "Piko"
+name: "Highkey"
 description: "Kanagawa Wave in ordered dither: sumi-ink analytics with warm text, glossy orange pills, Geist Pixel measurements, and 2px Bayer screen tones."
 colors:
   background: "#1f1f28"
@@ -211,13 +211,13 @@ components:
     height: "36px"
 ---
 
-# Design System: Piko
+# Design System: Highkey
 
 ## Overview
 
 **Creative North Star: "Kanagawa Wave"**
 
-Piko is a compact measurement tool using the user-selected Kanagawa palette. Sumi-ink surfaces and warm Fuji text frame Surimi Orange actions, Carp Yellow measurements, violet/aqua source categories, and green outcomes. Self-hosted Geist with Geist Pixel measurements, glossy pill controls, inset fields, single-frame segmented choices, ordered-dither screen tones, and the upright three-bar mark give the interface a precise character with a printed, 1-bit texture. Accessible shadcn Base UI primitives and Hugeicons provide the shared component language.
+Highkey is a compact measurement tool using the user-selected Kanagawa palette. Sumi-ink surfaces and warm Fuji text frame Surimi Orange actions, Carp Yellow measurements, violet/aqua source categories, and green outcomes. Self-hosted Geist with Geist Pixel measurements, glossy pill controls, inset fields, single-frame segmented choices, ordered-dither screen tones, and the upright three-bar mark give the interface a precise character with a printed, 1-bit texture. Accessible shadcn Base UI primitives and Hugeicons provide the shared component language.
 
 Analytical regions use flat surfaces, fine seams, aligned labels, and tabular values. Overview presents small square metrics, one wide activity chart, and paired reports; Events retains its open analytical field. Editing and inspection use contained surfaces where boundaries clarify the task. Density serves reading: supporting context remains visible, and loading states preserve the geometry of the result they will replace. One palette is present in server-rendered HTML and CSS. There is no appearance selector, theme preference, or system-theme listener.
 
@@ -231,7 +231,7 @@ Analytical regions use flat surfaces, fine seams, aligned labels, and tabular va
 
 ## Colors
 
-The palette is drawn from the [official Kanagawa colors](https://github.com/rebelot/kanagawa.nvim/blob/master/lua/kanagawa/colors.lua), with semantic interaction states derived for the built interface. Frontmatter values are normative. Piko uses one dark Wave palette, with warm primary accents and bounded data colors. All components use semantic CSS variables; foreground aliases resolve to their actual values in the frontmatter.
+The palette is drawn from the [official Kanagawa colors](https://github.com/rebelot/kanagawa.nvim/blob/master/lua/kanagawa/colors.lua), with semantic interaction states derived for the built interface. Frontmatter values are normative. Highkey uses one dark Wave palette, with warm primary accents and bounded data colors. All components use semantic CSS variables; foreground aliases resolve to their actual values in the frontmatter.
 
 ### Primary
 
@@ -369,7 +369,7 @@ Time series use an angular single-series line with linear interpolation, the Car
 
 ### Log stream and inspection
 
-The log explorer is an open analytical field, not a stack of cards. Its inset search field takes the available query-bar space, with Search, a single-frame segmented time window (15m, 1h, 6h, 24h, 7d, each with its full name as the accessible label), and Follow alongside it. Dragging across the histogram replaces the window with a "Selected range" chip that clears back to the rolling window. Severity and service are compact choices; additional context filters expand locally. Anything Piko has already received is a choice, never free text: services, environments, and attribute keys come from the query's facets (choosing a key also sets its value type). Only unbounded values, such as a trace ID or an attribute value, are typed. The volume histogram draws one dithered aqua column per bucket (a 50% tone under a solid 2px cap, as HTML columns so the 2px pixels stay square), with error volume solid red from the base. Counts, timestamps, aligned row seams, and literal messages provide the evidence without decorative framing.
+The log explorer is an open analytical field, not a stack of cards. Its inset search field takes the available query-bar space, with Search, a single-frame segmented time window (15m, 1h, 6h, 24h, 7d, each with its full name as the accessible label), and Follow alongside it. Dragging across the histogram replaces the window with a "Selected range" chip that clears back to the rolling window. Severity and service are compact choices; additional context filters expand locally. Anything Highkey has already received is a choice, never free text: services, environments, and attribute keys come from the query's facets (choosing a key also sets its value type). Only unbounded values, such as a trace ID or an attribute value, are typed. The volume histogram draws one dithered aqua column per bucket (a 50% tone under a solid 2px cap, as HTML columns so the 2px pixels stay square), with error volume solid red from the base. Counts, timestamps, aligned row seams, and literal messages provide the evidence without decorative framing.
 
 Rows remain dense, keyboard-focusable, and visibly separated; hover and keyboard focus lift the row with a 25% tone in darker ink. Severity always has a text label; color supports it through the existing semantic palette. The inspector preserves the selected record while newest results follow in the background. It uses the shared Sheet, context pairs, line tabs, typed attribute literals, and wrapped raw JSON. Values drop JSON quotes; their type shows through syntax color (strings green, numbers pink, booleans and null orange), a `title`, and a visually hidden type label. Failed requests, empty searches, and services awaiting their first logs receive distinct feedback; background failures keep the last results visible.
 

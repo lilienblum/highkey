@@ -27,7 +27,7 @@ export function blocks(tag: string, file: URL = DOCS): { line: number; text: str
 
 describe("documentation examples", () => {
   test("docs_examples_validate_against_schema_and_rules", () => {
-    const dashboards = blocks("piko-dashboard");
+    const dashboards = blocks("highkey-dashboard");
     expect(dashboards.length).toBeGreaterThanOrEqual(4);
     const signals = new Set<string>();
     for (const { line, text } of dashboards) {
@@ -43,7 +43,7 @@ describe("documentation examples", () => {
   });
 
   test("view_examples_in_the_docs_and_the_guide_validate", () => {
-    const views = [...blocks("piko-view"), ...blocks("view", GUIDE)];
+    const views = [...blocks("highkey-view"), ...blocks("view", GUIDE)];
     expect(views.length).toBeGreaterThanOrEqual(4);
     const kinds = new Set<string>();
     for (const { line, text } of views) {

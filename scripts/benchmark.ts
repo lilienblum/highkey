@@ -1,7 +1,7 @@
 // Mixed ingestion and query benchmark: four ingestion workers against the release ingest app
 // while two workers run Explore queries through the dashboard's API, on a ClickHouse of its own.
 import { cpus, platform, release, totalmem } from "node:os";
-import { Piko, type Event } from "../sdk/typescript/client";
+import { Highkey, type Event } from "../sdk/typescript/client";
 import { containerMemory, peakSampler, processRss, startStack } from "./bench-stack";
 const duration = Number(process.env.BENCH_SECONDS ?? 15);
 const preload = Number(process.env.BENCH_PRELOAD ?? 10000);
@@ -9,7 +9,7 @@ const port = Number(process.env.BENCH_PORT ?? 3199);
 // Fail before starting anything if another service owns the requested ingest port.
 const reservation = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response(null) });
 await reservation.stop(true);
-const stack = await startStack("piko-bench-clickhouse", 18126, port);
+const stack = await startStack("highkey-bench-clickhouse", 18126, port);
 const endpoint = stack.ingest;
 let peakRss = 0;
 let baselineRss = 0;
@@ -28,7 +28,7 @@ const percentile = (values: number[], p: number) => {
 async function request(path: string, body?: unknown) {
   const r = await fetch(`${stack.dashboard}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "x-piko-admin": "1", "content-type": "application/json" },
+    headers: { "x-highkey-admin": "1", "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15000),
   });
@@ -55,13 +55,13 @@ function batch(product: number, sequence: number, size = 100): Event[] {
 }
 let samplers: ReturnType<typeof peakSampler>[] = [];
 try {
-  const products: { id: string; client: Piko }[] = [];
+  const products: { id: string; client: Highkey }[] = [];
   for (const kind of ["website", "tool"]) {
     const p = await request("/products", { name: `Benchmark ${kind}`, retention_days: 90 });
     const k = await request(`/products/${p.id}/keys`, { label: "benchmark" });
     products.push({
       id: p.id,
-      client: new Piko({ endpoint, key: k.key, timeoutMs: 15000, retries: 0 }),
+      client: new Highkey({ endpoint, key: k.key, timeoutMs: 15000, retries: 0 }),
     });
   }
   for (let i = 0; i < Math.ceil(preload / 100); i++) {
@@ -150,8 +150,8 @@ try {
       clickhouse_image: stack.clickhouse.image,
       clickhouse_memory_limit: stack.clickhouse.memory,
       clickhouse_storage: "tmpfs",
-      ingest_queue_capacity: Number(process.env.PIKO_QUEUE_CAPACITY ?? 64),
-      dashboard_query_concurrency: Number(process.env.PIKO_QUERY_CONCURRENCY ?? 4),
+      ingest_queue_capacity: Number(process.env.HIGHKEY_QUEUE_CAPACITY ?? 64),
+      dashboard_query_concurrency: Number(process.env.HIGHKEY_QUERY_CONCURRENCY ?? 4),
       layout: "one ClickHouse table for every project, read through per-project views",
     },
     workload: {

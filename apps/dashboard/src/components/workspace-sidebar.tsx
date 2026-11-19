@@ -115,13 +115,13 @@ export function WorkspaceSidebar({
           <div className="workspace-brand-row">
             <Link
               {...workspaceTarget("/", product?.slug)}
-              aria-label="Piko overview"
+              aria-label="Highkey overview"
               className="brand-link"
               onClick={() => setOpenMobile(false)}
             >
               <span className="brand">
                 <img className="brand-mark" src="/favicon.svg?v=7" width="30" height="30" alt="" />
-                <span className="brand-word">piko</span>
+                <span className="brand-word">highkey</span>
               </span>
             </Link>
             {isMobile ? (

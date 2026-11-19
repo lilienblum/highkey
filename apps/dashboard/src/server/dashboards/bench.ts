@@ -99,10 +99,14 @@ export async function benchWidgets(
       });
     } catch (error) {
       if (error instanceof DashboardError && error.body.code === "query_timeout") {
-        // Waiting for a query slot is Piko's load, not the widget's cost.
+        // Waiting for a query slot is Highkey's load, not the widget's cost.
         if (error.queued)
           throw busyBench(
-            report(path, "Piko was busy running other queries", "Retry the save in a few seconds"),
+            report(
+              path,
+              "Highkey was busy running other queries",
+              "Retry the save in a few seconds",
+            ),
           );
         throw tooSlow(
           report(

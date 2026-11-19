@@ -134,8 +134,8 @@ export class ClickHouse {
 
 export function adminClient(env: Record<string, string | undefined> = process.env): ClickHouse {
   return new ClickHouse({
-    url: env.PIKO_CLICKHOUSE_URL ?? "http://127.0.0.1:8123",
-    user: env.PIKO_CLICKHOUSE_USER ?? "piko_admin",
-    password: env.PIKO_CLICKHOUSE_PASSWORD ?? "",
+    url: env.HIGHKEY_CLICKHOUSE_URL ?? "http://127.0.0.1:8123",
+    user: env.HIGHKEY_CLICKHOUSE_USER ?? "highkey_admin",
+    password: env.HIGHKEY_CLICKHOUSE_PASSWORD ?? "",
   });
 }

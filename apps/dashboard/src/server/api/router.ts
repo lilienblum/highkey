@@ -90,9 +90,9 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
       if (
         managed(url.pathname) &&
         request.method !== "GET" &&
-        request.headers.get("x-piko-admin") !== "1"
+        request.headers.get("x-highkey-admin") !== "1"
       )
-        throw new ApiError(403, "Management requests require X-Piko-Admin: 1");
+        throw new ApiError(403, "Management requests require X-Highkey-Admin: 1");
       response = await candidate.handler(request, ctx, params);
     } catch (error) {
       // Read and dashboard paths answer with typed bodies (code, errors[].path, hint).

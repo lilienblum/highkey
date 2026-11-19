@@ -95,7 +95,7 @@ function ProductFields({
           onChange={(e) => onChange({ ...value, website_url: e.target.value })}
         />
         <FieldDescription>
-          Optional. Piko fetches and stores the site icon on your server. Website addresses don’t
+          Optional. Highkey fetches and stores the site icon on your server. Website addresses don’t
           restrict keys automatically.
         </FieldDescription>
       </Field>
@@ -318,15 +318,15 @@ function ProductSettings({ product }: { product: Product }) {
   }
   const key = newKey || "YOUR_INGESTION_KEY";
   const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://piko.example.com";
+    typeof window !== "undefined" ? window.location.origin : "https://highkey.example.com";
   const snippet =
     integration === "browser"
       ? `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${origin}/tracker.js";\n\n  const tracker = startBrowserTracker({\n    endpoint: "${origin}",\n    key: "${key}",\n    identity: "none",\n  });\n\n  tracker.track("signup", { plan: "pro", trial: true, seats: 3 });\n</script>`
       : integration === "http"
         ? `POST ${origin}/api/ingest\nAuthorization: Bearer ${key}\nContent-Type: application/json\n\n${JSON.stringify({ event_id: "GENERATE_A_UUID_ONCE", name: "screen_view", source: "mobile", timestamp: "UTC_ISO_TIMESTAMP", properties: { screen: "home", version: "1.0.0", subscribed: false } }, null, 2)}`
         : integration === "typescript"
-          ? `import { Piko } from "./sdk/typescript/client";\n\nconst piko = new Piko({\n  endpoint: "${origin}",\n  key: "${key}",\n  timeoutMs: 800,\n});\n\nawait piko.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`
-          : `PIKO_TELEMETRY=1 \\\nPIKO_ENDPOINT="${origin}" \\\nPIKO_INGESTION_KEY="${key}" \\\ncargo run -p piko-sdk --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms budget, retries included.`;
+          ? `import { Highkey } from "./sdk/typescript/client";\n\nconst highkey = new Highkey({\n  endpoint: "${origin}",\n  key: "${key}",\n  timeoutMs: 800,\n});\n\nawait highkey.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`
+          : `HIGHKEY_TELEMETRY=1 \\\nHIGHKEY_ENDPOINT="${origin}" \\\nHIGHKEY_INGESTION_KEY="${key}" \\\ncargo run -p highkey-sdk --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms budget, retries included.`;
   return (
     <>
       {error && !revoke && <ErrorState message={error} />}

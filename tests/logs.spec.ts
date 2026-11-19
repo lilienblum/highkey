@@ -3,14 +3,14 @@ import { test, expect, type Page } from "@playwright/test";
 async function scrollToEnd(page: Page) {
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 }
-const endpoint = process.env.PIKO_API_URL;
+const endpoint = process.env.HIGHKEY_API_URL;
 if (!endpoint) throw new Error("Run log browser tests through bun test:e2e.");
 let project: { id: string; slug: string };
 let key: string;
 async function admin(path: string, body?: unknown) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: body ? JSON.stringify(body) : undefined,
   });
   expect(response.ok).toBe(true);
@@ -342,12 +342,12 @@ test("log settings create scoped keys and store independent retention", async ({
   await expect(settings).toBeInViewport({ ratio: 0.5 });
   await settings.getByText("Log setup guide", { exact: true }).click();
   await expect(settings.locator(".log-setup-guide")).toContainText(
-    `${process.env.PIKO_DASHBOARD_URL}/api/logs/ingest`,
+    `${process.env.HIGHKEY_DASHBOARD_URL}/api/logs/ingest`,
   );
   await expect(settings.locator(".log-setup-guide")).toContainText(
     "OTEL_EXPORTER_OTLP_LOGS_HEADERS",
   );
-  await expect(settings.locator(".log-setup-guide")).toContainText("$PIKO_LOG_KEY");
+  await expect(settings.locator(".log-setup-guide")).toContainText("$HIGHKEY_LOG_KEY");
   await settings.getByLabel("Log retention (days)").fill("3");
   await settings.getByRole("button", { name: "Save retention", exact: true }).click();
   await expect(settings.getByText("Log retention saved.")).toBeVisible();

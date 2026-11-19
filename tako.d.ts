@@ -42,12 +42,12 @@ declare module "tako.sh" {
    * ```ts
    * import { tako } from "tako.sh";
    *
-   * const pikoChangeToken = tako.secrets.PIKO_CHANGE_TOKEN;
+   * const highkeyChangeToken = tako.secrets.HIGHKEY_CHANGE_TOKEN;
    * ```
    */
   export interface TakoSecrets {
-    /** Secret `PIKO_CHANGE_TOKEN`. Read it with `tako.secrets.PIKO_CHANGE_TOKEN`. */
-    readonly PIKO_CHANGE_TOKEN: string;
+    /** Secret `HIGHKEY_CHANGE_TOKEN`. Read it with `tako.secrets.HIGHKEY_CHANGE_TOKEN`. */
+    readonly HIGHKEY_CHANGE_TOKEN: string;
   }
 
   /**

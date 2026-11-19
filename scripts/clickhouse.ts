@@ -1,4 +1,4 @@
-// Starts the ClickHouse server Piko uses in development and tests, in Docker. Production runs a
+// Starts the ClickHouse server Highkey uses in development and tests, in Docker. Production runs a
 // ClickHouse you install, with the same settings files (see docs/tako.md).
 //
 //   bun scripts/clickhouse.ts test-up    disposable server for `bun test` and `cargo test`
@@ -15,11 +15,11 @@ import { migrate } from "../apps/dashboard/src/server/clickhouse/migrate";
 export const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:26.8.37.168";
 /** The oldest server the apps accept. */
 export const MIN_CLICKHOUSE = [25, 8] as const;
-export const ADMIN_USER = "piko_admin";
+export const ADMIN_USER = "highkey_admin";
 
 const root = new URL("..", import.meta.url).pathname;
-const config = `${root}deploy/clickhouse/config.d/piko.xml`;
-const users = `${root}deploy/clickhouse/users.d/piko.xml`;
+const config = `${root}deploy/clickhouse/config.d/highkey.xml`;
+const users = `${root}deploy/clickhouse/users.d/highkey.xml`;
 
 export interface ServerOptions {
   name: string;
@@ -27,35 +27,35 @@ export interface ServerOptions {
   tmpfs: boolean;
   volume?: string;
   password: string;
-  /** The password `migrate` gives the `piko_ingest` user. */
+  /** The password `migrate` gives the `highkey_ingest` user. */
   ingestPassword: string;
   memory?: string;
 }
 
 export const TEST_SERVER: ServerOptions = {
-  name: "piko-test-clickhouse",
+  name: "highkey-test-clickhouse",
   port: 18123,
   tmpfs: true,
-  password: "piko-test",
-  ingestPassword: "piko-ingest-test",
+  password: "highkey-test",
+  ingestPassword: "highkey-ingest-test",
 };
 
 /** Each browser-test run gets its own disposable server, apart from `bun test`'s. */
 export const E2E_SERVER: ServerOptions = {
-  name: "piko-e2e-clickhouse",
+  name: "highkey-e2e-clickhouse",
   port: 18124,
   tmpfs: true,
-  password: "piko-e2e",
-  ingestPassword: "piko-ingest-e2e",
+  password: "highkey-e2e",
+  ingestPassword: "highkey-ingest-e2e",
 };
 
 export const DEV_SERVER: ServerOptions = {
-  name: "piko-dev-clickhouse",
+  name: "highkey-dev-clickhouse",
   port: 8123,
   tmpfs: false,
-  volume: "piko-dev-clickhouse",
-  password: process.env.PIKO_CLICKHOUSE_PASSWORD ?? "piko-dev",
-  ingestPassword: process.env.PIKO_INGEST_CLICKHOUSE_PASSWORD ?? "piko-ingest-dev",
+  volume: "highkey-dev-clickhouse",
+  password: process.env.HIGHKEY_CLICKHOUSE_PASSWORD ?? "highkey-dev",
+  ingestPassword: process.env.HIGHKEY_INGEST_CLICKHOUSE_PASSWORD ?? "highkey-ingest-dev",
 };
 
 async function docker(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -112,9 +112,9 @@ export async function startClickHouse(options: ServerOptions): Promise<{ url: st
       "CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1",
       // Mount the one file: the image's own config.d makes the server listen on all interfaces.
       "--volume",
-      `${config}:/etc/clickhouse-server/config.d/piko.xml:ro`,
+      `${config}:/etc/clickhouse-server/config.d/highkey.xml:ro`,
       "--volume",
-      `${users}:/etc/clickhouse-server/users.d/piko.xml:ro`,
+      `${users}:/etc/clickhouse-server/users.d/highkey.xml:ro`,
       "--ulimit",
       "nofile=262144:262144",
       ...(options.tmpfs

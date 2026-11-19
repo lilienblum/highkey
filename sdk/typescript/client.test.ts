@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { Piko, type Properties } from "./client";
+import { Highkey, type Properties } from "./client";
 const original = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = original;
@@ -12,9 +12,11 @@ test("retries preserve event IDs, timestamps and property types", async () => {
       ? new Response("{}", { status: 503 })
       : Response.json({ accepted: 1, duplicates: 0 });
   }) as typeof fetch;
-  const result = await new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 1000 }).send(
-    { name: "test", source: "cli", properties: { count: 12, success: true, version: "1" } },
-  );
+  const result = await new Highkey({
+    endpoint: "http://localhost",
+    key: "key",
+    timeoutMs: 1000,
+  }).send({ name: "test", source: "cli", properties: { count: 12, success: true, version: "1" } });
   expect(result.accepted).toBe(1);
   expect(payloads).toHaveLength(2);
   expect(payloads[0]).toBe(payloads[1]);
@@ -31,7 +33,7 @@ test("validation failures are not retried", async () => {
     return Response.json({ error: "Invalid event" }, { status: 400 });
   }) as unknown as typeof fetch;
   await expect(
-    new Piko({ endpoint: "http://localhost", key: "key" }).send({ name: "bad", source: "cli" }),
+    new Highkey({ endpoint: "http://localhost", key: "key" }).send({ name: "bad", source: "cli" }),
   ).rejects.toThrow("Invalid event");
   expect(attempts).toBe(1);
 });
@@ -43,7 +45,7 @@ test("retry-after cannot extend total deadline", async () => {
     })) as unknown as typeof fetch;
   const start = performance.now();
   await expect(
-    new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 80 }).send({
+    new Highkey({ endpoint: "http://localhost", key: "key", timeoutMs: 80 }).send({
       name: "test",
       source: "cli",
     }),
@@ -60,7 +62,11 @@ test("a 503 whose retry-after outlasts the budget is still retried within it", a
       ? new Response("{}", { status: 503, headers: { "retry-after": "1" } })
       : Response.json({ accepted: 1, duplicates: 0 });
   }) as unknown as typeof fetch;
-  const result = await new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 400 }).send({
+  const result = await new Highkey({
+    endpoint: "http://localhost",
+    key: "key",
+    timeoutMs: 400,
+  }).send({
     name: "test",
     source: "cli",
   });
@@ -78,7 +84,7 @@ test("a 429's retry-after is never shortened", async () => {
     return new Response("{}", { status: 429, headers: { "retry-after": "10" } });
   }) as unknown as typeof fetch;
   await expect(
-    new Piko({ endpoint: "http://localhost", key: "key", timeoutMs: 400 }).send({
+    new Highkey({ endpoint: "http://localhost", key: "key", timeoutMs: 400 }).send({
       name: "test",
       source: "cli",
     }),
@@ -93,7 +99,7 @@ test("delivery does not attach credentials or referrer and rejects redirects", a
     expect(init.redirect).toBe("error");
     return Response.json({ accepted: 1, duplicates: 0 });
   }) as typeof fetch;
-  await new Piko({ endpoint: "http://localhost", key: "key" }).send({
+  await new Highkey({ endpoint: "http://localhost", key: "key" }).send({
     name: "test",
     source: "sdk",
   });
@@ -107,7 +113,11 @@ test("aborted delivery never starts a request or retries after cancellation", as
     controller.abort();
     return new Response("{}", { status: 503 });
   }) as unknown as typeof fetch;
-  const client = new Piko({ endpoint: "http://localhost", key: "key", signal: controller.signal });
+  const client = new Highkey({
+    endpoint: "http://localhost",
+    key: "key",
+    signal: controller.signal,
+  });
   await expect(client.send({ name: "test", source: "sdk" })).rejects.toThrow();
   expect(attempts).toBe(1);
   await expect(client.send({ name: "test", source: "sdk" })).rejects.toThrow();
@@ -132,7 +142,7 @@ test("307 responses cannot forward event bodies to another endpoint", async () =
   });
   try {
     await expect(
-      new Piko({ endpoint: String(redirect.url), key: "key", retries: 0 }).send({
+      new Highkey({ endpoint: String(redirect.url), key: "key", retries: 0 }).send({
         name: "private_event",
         source: "sdk",
         properties: { confidential: "not forwarded" },
@@ -152,7 +162,7 @@ test("cancellation interrupts retry backoff immediately", async () => {
       status: 503,
       headers: { "retry-after": "2" },
     })) as unknown as typeof fetch;
-  const pending = new Piko({
+  const pending = new Highkey({
     endpoint: "http://localhost",
     key: "key",
     timeoutMs: 5000,
@@ -173,7 +183,7 @@ test("non-object error responses do not retry permanent failures", async () => {
     return Response.json(null, { status: 400 });
   }) as unknown as typeof fetch;
   await expect(
-    new Piko({ endpoint: "http://localhost", key: "key" }).send({
+    new Highkey({ endpoint: "http://localhost", key: "key" }).send({
       name: "test",
       source: "sdk",
     }),
@@ -183,9 +193,9 @@ test("non-object error responses do not retry permanent failures", async () => {
 
 test("delivery limits must be finite integers", () => {
   for (const timeoutMs of [NaN, Infinity, 0, -1, 1.5])
-    expect(() => new Piko({ endpoint: "http://localhost", key: "key", timeoutMs })).toThrow();
+    expect(() => new Highkey({ endpoint: "http://localhost", key: "key", timeoutMs })).toThrow();
   for (const retries of [NaN, Infinity, -1, 0.5])
-    expect(() => new Piko({ endpoint: "http://localhost", key: "key", retries })).toThrow();
+    expect(() => new Highkey({ endpoint: "http://localhost", key: "key", retries })).toThrow();
 });
 
 test("JavaScript properties are never silently coerced to null or dropped", async () => {
@@ -194,7 +204,7 @@ test("JavaScript properties are never silently coerced to null or dropped", asyn
     attempts++;
     return Response.json({ accepted: 1, duplicates: 0 });
   }) as unknown as typeof fetch;
-  const client = new Piko({ endpoint: "http://localhost", key: "key" });
+  const client = new Highkey({ endpoint: "http://localhost", key: "key" });
   for (const value of [NaN, Infinity, null, undefined, [], {}, 1n]) {
     await expect(
       client.send({ name: "test", source: "sdk", properties: { value } as unknown as Properties }),
@@ -218,7 +228,10 @@ test("malformed or inconsistent acknowledgments do not report successful deliver
       return Response.json(ack);
     }) as unknown as typeof fetch;
     await expect(
-      new Piko({ endpoint: "http://localhost", key: "key" }).send({ name: "test", source: "sdk" }),
+      new Highkey({ endpoint: "http://localhost", key: "key" }).send({
+        name: "test",
+        source: "sdk",
+      }),
     ).rejects.toThrow("Invalid ingestion acknowledgment");
   }
   expect(attempts).toBe(6);
@@ -230,7 +243,7 @@ test("batch count and serialized byte limits fail before sending", async () => {
     attempts++;
     return Response.json({ accepted: 1, duplicates: 0 });
   }) as unknown as typeof fetch;
-  const client = new Piko({ endpoint: "http://localhost", key: "key" });
+  const client = new Highkey({ endpoint: "http://localhost", key: "key" });
   const event = { name: "test", source: "sdk" };
   await expect(client.sendBatch([])).rejects.toThrow("1–100");
   await expect(client.sendBatch(Array(101).fill(event))).rejects.toThrow("1–100");
@@ -241,12 +254,12 @@ test("batch count and serialized byte limits fail before sending", async () => {
 });
 
 test("constructor snapshots options and supports an endpoint path prefix", async () => {
-  const options = { endpoint: "https://example.com/piko///", key: "original" };
-  const client = new Piko(options);
+  const options = { endpoint: "https://example.com/highkey///", key: "original" };
+  const client = new Highkey(options);
   options.endpoint = "https://unexpected.example";
   options.key = "changed";
   globalThis.fetch = (async (input: unknown, init: RequestInit) => {
-    expect(input).toBe("https://example.com/piko/api/ingest");
+    expect(input).toBe("https://example.com/highkey/api/ingest");
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer original");
     const event = JSON.parse(init.body as string).events[0];
     expect(event.event_id).toBe("stable");
@@ -272,10 +285,10 @@ test("invalid endpoints cannot carry credentials, queries, or fragments", () => 
     "https://example.com/?",
     "https://example.com/#",
   ]) {
-    expect(() => new Piko({ endpoint, key: "key" })).toThrow();
+    expect(() => new Highkey({ endpoint, key: "key" })).toThrow();
   }
   for (const key of ["", " ", "key\r\nother: header"]) {
-    expect(() => new Piko({ endpoint: "https://example.com", key })).toThrow();
+    expect(() => new Highkey({ endpoint: "https://example.com", key })).toThrow();
   }
 });
 
@@ -285,6 +298,6 @@ test("mutating the caller's batch during delivery does not change acknowledgment
     events.length = 0;
     return Response.json({ accepted: 1, duplicates: 0 });
   }) as unknown as typeof fetch;
-  const client = new Piko({ endpoint: "http://localhost", key: "key" });
+  const client = new Highkey({ endpoint: "http://localhost", key: "key" });
   expect(await client.sendBatch(events)).toEqual({ accepted: 1, duplicates: 0 });
 });

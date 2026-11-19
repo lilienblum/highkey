@@ -6,7 +6,7 @@ primary_target: "src/components/overview.tsx"
 related_targets: ["src/components/overview-widgets.tsx", "src/components/date-range-picker.tsx", "src/components/shared.tsx", "src/lib/date-range.ts", "src/lib/time-buckets.ts", "src/lib/workspace-search.ts", "src/lib/report-link.ts", "src/styles.css"]
 ---
 
-# Piko Overview
+# Highkey Overview
 
 Scope: Overview, shared report dates, and report-row actions. Mode: extend the existing Kanagawa Wave world.
 Audience: developers checking combined project activity or one website/CLI source before investigating events.
@@ -55,4 +55,4 @@ Supported page/referrer rows expose a separate external-link icon on hover or ke
 
 Keep shell, chart, reports, and unchanged-scope results mounted during refresh. Use installed Skullet text/box placeholders only within pending regions; changed scope must not relabel old data. Errors remain local with Retry, and empty ranges retain meaningful controls and explanations. Preserve keyboard chart inspection, focus, touch scrolling, and reduced-motion behavior. Active now is a live identified-actor measure, not an estimate inferred from IP or user agent.
 
-Reference screenshots: `/tmp/piko-overview-1440.png` and `/tmp/piko-overview-390.png`, captured with synthetic fixtures. Review confirmed reference fidelity and required Breakdown's stable first position during source resolution; that correction is implemented. Screenshots are validation artifacts, not product assets or customer evidence. Explore and Settings keep their established compositions; no new collection or backend feature is implied.
+Reference screenshots: `/tmp/highkey-overview-1440.png` and `/tmp/highkey-overview-390.png`, captured with synthetic fixtures. Review confirmed reference fidelity and required Breakdown's stable first position during source resolution; that correction is implemented. Screenshots are validation artifacts, not product assets or customer evidence. Explore and Settings keep their established compositions; no new collection or backend feature is implied.

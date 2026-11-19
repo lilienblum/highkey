@@ -146,7 +146,7 @@ fn attribute(value: &Value, depth: usize) -> bool {
 }
 
 impl crate::writer::Row for Log {
-    const TABLE: &'static str = "piko.logs";
+    const TABLE: &'static str = "highkey.logs";
     const ID_COLUMN: &'static str = "log_id";
     const COLUMNS: &'static [&'static str] = &[
         "product_id",

@@ -1,24 +1,24 @@
 # API and semantics
 
-Two applications serve Piko's HTTP paths. The **ingest app** (`apps/ingest`) receives events and logs and serves the browser tracker. The **dashboard app** (`apps/dashboard`) serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. Neither app depends on the other at runtime; they share only ClickHouse, where events and logs are stored. The dashboard keeps the project, source and key catalog, settings, dashboards and views in SQLite (`state.sqlite`) and mirrors what the ingest app needs into ClickHouse.
+Two applications serve Highkey's HTTP paths. The **ingest app** (`apps/ingest`) receives events and logs and serves the browser tracker. The **dashboard app** (`apps/dashboard`) serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. Neither app depends on the other at runtime; they share only ClickHouse, where events and logs are stored. The dashboard keeps the project, source and key catalog, settings, dashboards and views in SQLite (`state.sqlite`) and mirrors what the ingest app needs into ClickHouse.
 
 There is no application login, admin token, or admin session. Protect management access with Cloudflare Access and keep the origins private; see [access configuration](access.md). Ingestion requires a source-scoped, write-only ingestion key, which resolves the target project and source. The public API keeps its `/products` paths and `product_id` fields; "project" is the interface name for the same entity.
 
 ## Endpoints
 
-| Path                                          | Served by            | Purpose                                                       |
-| --------------------------------------------- | -------------------- | ------------------------------------------------------------- |
-| `POST /api/ingest`                            | Ingest app           | [Analytics events](#ingestion)                                |
-| `POST /api/logs/ingest`                       | Ingest app           | [Structured JSON logs](logs.md#connect-a-service)             |
-| `POST /api/logs/v1/logs`                      | Ingest app           | [OTLP/HTTP logs](logs.md#opentelemetry)                       |
-| `GET /tracker.js`                             | Ingest app           | The browser tracker module ([collection](collection.md))      |
-| `GET /health`                                 | Each app, for itself | Process health, no credentials required                       |
-| `/api/products…`, `POST /api/cleanup`         | Dashboard            | [Management](#management) and [queries](#query)               |
-| `/api/read/*`                                 | Dashboard            | [Read paths](#read-paths), the only cross-origin surface      |
-| `POST /api/mcp`, `POST /api/read/mcp`, `/mcp` | Dashboard            | [MCP](#mcp)                                                   |
-| `POST /_piko/changes`, `GET /_piko/runtime`   | Dashboard            | [Live hints](#live-hints-envelope-v2) and whether they are on |
+| Path                                              | Served by            | Purpose                                                       |
+| ------------------------------------------------- | -------------------- | ------------------------------------------------------------- |
+| `POST /api/ingest`                                | Ingest app           | [Analytics events](#ingestion)                                |
+| `POST /api/logs/ingest`                           | Ingest app           | [Structured JSON logs](logs.md#connect-a-service)             |
+| `POST /api/logs/v1/logs`                          | Ingest app           | [OTLP/HTTP logs](logs.md#opentelemetry)                       |
+| `GET /tracker.js`                                 | Ingest app           | The browser tracker module ([collection](collection.md))      |
+| `GET /health`                                     | Each app, for itself | Process health, no credentials required                       |
+| `/api/products…`, `POST /api/cleanup`             | Dashboard            | [Management](#management) and [queries](#query)               |
+| `/api/read/*`                                     | Dashboard            | [Read paths](#read-paths), the only cross-origin surface      |
+| `POST /api/mcp`, `POST /api/read/mcp`, `/mcp`     | Dashboard            | [MCP](#mcp)                                                   |
+| `POST /_highkey/changes`, `GET /_highkey/runtime` | Dashboard            | [Live hints](#live-hints-envelope-v2) and whether they are on |
 
-Route the three ingest paths and `/tracker.js` to the ingest app at the edge where you can, so ingestion never passes through the dashboard. If the edge sends everything to the dashboard (one Tunnel route, or local development), the dashboard forwards exactly those four paths to `PIKO_INGEST_URL` and serves everything else itself. See [the forwarding limits](#capacity-and-limits).
+Route the three ingest paths and `/tracker.js` to the ingest app at the edge where you can, so ingestion never passes through the dashboard. If the edge sends everything to the dashboard (one Tunnel route, or local development), the dashboard forwards exactly those four paths to `HIGHKEY_INGEST_URL` and serves everything else itself. See [the forwarding limits](#capacity-and-limits).
 
 ## Management
 
@@ -37,11 +37,11 @@ Route the three ingest paths and `/tracker.js` to the ingest app at the edge whe
 
 Log keys, log settings and the log query are listed in [application logs](logs.md#management-api). Query paths accept a project's slug as well as its UUID; the other management paths take the UUID.
 
-Management mutations require `X-Piko-Admin: 1`. This public request marker prevents cross-site form submissions; it is **not authentication**. Management paths send no CORS headers. Network access to management must be controlled by Cloudflare Access (or a trusted private network). Ingestion keys grant no bypass through Access and are never used as management credentials.
+Management mutations require `X-Highkey-Admin: 1`. This public request marker prevents cross-site form submissions; it is **not authentication**. Management paths send no CORS headers. Network access to management must be controlled by Cloudflare Access (or a trusted private network). Ingestion keys grant no bypass through Access and are never used as management credentials.
 
 ## Projects and sources
 
-A project has events, logs, independent retention for each, and any number of sources. Its events and logs are rows in ClickHouse's shared `piko.events` and `piko.logs` tables. The dashboard reads them only as the project's own ClickHouse user, through views that hold only that project's rows; see [isolation between projects](privacy.md#isolation-between-projects).
+A project has events, logs, independent retention for each, and any number of sources. Its events and logs are rows in ClickHouse's shared `highkey.events` and `highkey.logs` tables. The dashboard reads them only as the project's own ClickHouse user, through views that hold only that project's rows; see [isolation between projects](privacy.md#isolation-between-projects).
 
 A source is a named integration such as Website, iOS app, or CLI. All sources have the same analytics capabilities; there is no project or source type. Source names are unique within a project (ASCII case-insensitive). Creating a project automatically creates an initial source named **Events**, which can be renamed. Project responses include a stable, unique `slug` and `sources` with `id`, `product_id`, `name`, `slug`, `icon`, and `created_at`.
 
@@ -96,7 +96,7 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 Events are deduplicated by `(product_id, event_id)`. Two projects may reuse the same event ID independently. Sources within one project share the namespace: use globally unique event IDs, including across source keys.
 
-- **Exact for 24 hours.** Before each insert, the ingest app looks up the batch's IDs among the project's events received in the last 24 hours. A repeated ID is reported in `duplicates` and not stored again. The **first copy wins**: a later copy never overwrites it. Repeats within one request, or within one batch of queued requests, also keep the first occurrence. Each project's batches are written one at a time, so a retry always sees the earlier write. Piko's SDKs retry within a second, well inside the window.
+- **Exact for 24 hours.** Before each insert, the ingest app looks up the batch's IDs among the project's events received in the last 24 hours. A repeated ID is reported in `duplicates` and not stored again. The **first copy wins**: a later copy never overwrites it. Repeats within one request, or within one batch of queued requests, also keep the first occurrence. Each project's batches are written one at a time, so a retry always sees the earlier write. Highkey's SDKs retry within a second, well inside the window.
 - **After 24 hours, eventual.** An older repeat is stored. ClickHouse (a `ReplacingMergeTree` table) removes it during a background merge and keeps the earliest received copy. Queries do not wait for merges, so such a repeat can count until it is merged away. `duplicates` reports only repeats found within the window.
 - **Two cases leave a lasting duplicate.** Merges only combine rows with the same sort key, `(product_id, UTC day of the event time, name, event_id)`, so two copies stay apart when:
   - a client omits `timestamp` and resends the event more than a day later, so the copy gets a later receipt time and day;
@@ -110,7 +110,7 @@ On network failure, timeout, or 5xx/429, retry **the exact same IDs and timestam
 
 ### Keys and retention at the ingest app
 
-The ingest app reads keys from ClickHouse's `piko.ingest_keys` registry. The dashboard writes a key's row after each key, origin, source or retention change commits in SQLite, and rewrites the whole registry from SQLite at startup and every minute, which repairs a write that failed. The ingest app caches each lookup for 5 seconds (an unknown key for 1 second), so revocation and origin changes take effect within 5 seconds. A new key works once its row is written. Requests already authorized may finish.
+The ingest app reads keys from ClickHouse's `highkey.ingest_keys` registry. The dashboard writes a key's row after each key, origin, source or retention change commits in SQLite, and rewrites the whole registry from SQLite at startup and every minute, which repairs a write that failed. The ingest app caches each lookup for 5 seconds (an unknown key for 1 second), so revocation and origin changes take effect within 5 seconds. A new key works once its row is written. Requests already authorized may finish.
 
 Each new row expires at its event time plus the key's current retention. Changing a project's retention also rewrites the expiry of the rows already stored, after the registry has the new retention, and once more after the 5-second cache has passed, for rows stored meanwhile; see [capacity and limits](#capacity-and-limits). If ClickHouse is unreachable, the change is saved and the next successful reconcile, within a minute of ClickHouse returning, applies it. Ingestion is deliberately CORS-enabled without cookies; management is not.
 
@@ -143,11 +143,11 @@ The response includes `summary`, zero-filled `series`, top-12 `groups`, paginate
 
 ## Dashboards, views and MCP
 
-Custom dashboards are `piko.dashboard/v1` documents stored by the dashboard app, and saved views are named queries for the Events and Logs pages. Documents carry no SQL: every query is an events, logs, funnel or retention entity. [The dashboards guide](dashboards.md) documents the document, its queries, formulas, limits and examples. Read paths and MCP tools take a project by UUID or slug; write paths (`/api/products/:id/...`) take its UUID, like the other management endpoints.
+Custom dashboards are `highkey.dashboard/v1` documents stored by the dashboard app, and saved views are named queries for the Events and Logs pages. Documents carry no SQL: every query is an events, logs, funnel or retention entity. [The dashboards guide](dashboards.md) documents the document, its queries, formulas, limits and examples. Read paths and MCP tools take a project by UUID or slug; write paths (`/api/products/:id/...`) take its UUID, like the other management endpoints.
 
 ### Read paths
 
-Everything under `/api/read` is non-mutating whatever its method, needs no `X-Piko-Admin` marker, and answers cross-origin requests from loopback origins and `PIKO_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Scope a read-only Access token to this prefix; see [access](access.md#mcp-and-read-only-access).
+Everything under `/api/read` is non-mutating whatever its method, needs no `X-Highkey-Admin` marker, and answers cross-origin requests from loopback origins and `HIGHKEY_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Scope a read-only Access token to this prefix; see [access](access.md#mcp-and-read-only-access).
 
 | Method | Path                                                      | Result                                                                              |
 | ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -165,11 +165,11 @@ Everything under `/api/read` is non-mutating whatever its method, needs no `X-Pi
 | GET    | `/api/read/schemas/dashboard.v1.json`                     | The document's JSON Schema                                                          |
 | POST   | `/api/read/mcp`                                           | MCP, read tools only                                                                |
 
-Widget runs wait at the dashboard's own query gates, so dashboards cannot take every slot an interactive page needs: event widgets share one fewer slot than `PIKO_QUERY_CONCURRENCY` (default 4), and log widgets share one. A run waits for a slot until its deadline, and each run is bounded by the widget's `timeout_ms` (default 5,000; 1,000–10,000).
+Widget runs wait at the dashboard's own query gates, so dashboards cannot take every slot an interactive page needs: event widgets share one fewer slot than `HIGHKEY_QUERY_CONCURRENCY` (default 4), and log widgets share one. A run waits for a slot until its deadline, and each run is bounded by the widget's `timeout_ms` (default 5,000; 1,000–10,000).
 
 ### Write paths
 
-These sit with the management routes: they need `X-Piko-Admin: 1`, and no CORS headers are sent for them. Send `X-Piko-Origin: dashboard` only from the dashboard UI; it marks the revision's origin (otherwise the origin is `api`).
+These sit with the management routes: they need `X-Highkey-Admin: 1`, and no CORS headers are sent for them. Send `X-Highkey-Origin: dashboard` only from the dashboard UI; it marks the revision's origin (otherwise the origin is `api`).
 
 | Method | Path                                                     | Body → result                                                              |
 | ------ | -------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -186,7 +186,7 @@ Every dashboard or view write counts against 30 per minute per project, shared w
 
 ### MCP
 
-`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP in its stateless form: each POST carries one JSON-RPC message and gets one JSON response, with no sessions and no server-sent events. Other methods return 405. `/mcp` is a short address for `/api/mcp`; it is the one the agent guide shows. Any request that carries a browser `Origin` header is refused with 403, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`piko://schema/dashboard.v1`, `piko://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
+`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP in its stateless form: each POST carries one JSON-RPC message and gets one JSON response, with no sessions and no server-sent events. Other methods return 405. `/mcp` is a short address for `/api/mcp`; it is the one the agent guide shows. Any request that carries a browser `Origin` header is refused with 403, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`highkey://schema/dashboard.v1`, `highkey://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
 
 ### Error codes
 
@@ -230,11 +230,11 @@ Dashboard, view and MCP errors share one body:
 
 ### Live hints, envelope v2
 
-The ingest app posts a hint to `PIKO_CHANGE_URL` (the dashboard's `/_piko/changes`) after each insert that stored new rows; duplicate-only retries send none. Dashboard, view and workspace writes in the dashboard publish their own hint directly. Both reach browsers on the dashboard's ephemeral Tako channel as `{ "version": 2, "changes": null | [{ "product": "<uuid>", "signals": ["events", "logs", "dashboards"] }] }`. The ingest app coalesces signals per project over 250 ms, and more than 64 projects collapse to `changes: null` (refresh everything). The envelope holds ids and signal names only, never events, logs, documents or credentials. The dashboard also accepts the version 1 envelope (`{ "products": [...] }`, meaning events). Without Tako (`bun run dev:standalone`) there is no channel, and pages poll instead. See [realtime semantics](tako.md#realtime-semantics).
+The ingest app posts a hint to `HIGHKEY_CHANGE_URL` (the dashboard's `/_highkey/changes`) after each insert that stored new rows; duplicate-only retries send none. Dashboard, view and workspace writes in the dashboard publish their own hint directly. Both reach browsers on the dashboard's ephemeral Tako channel as `{ "version": 2, "changes": null | [{ "product": "<uuid>", "signals": ["events", "logs", "dashboards"] }] }`. The ingest app coalesces signals per project over 250 ms, and more than 64 projects collapse to `changes: null` (refresh everything). The envelope holds ids and signal names only, never events, logs, documents or credentials. The dashboard also accepts the version 1 envelope (`{ "products": [...] }`, meaning events). Without Tako (`bun run dev:standalone`) there is no channel, and pages poll instead. See [realtime semantics](tako.md#realtime-semantics).
 
 ## Capacity and limits
 
-**Ingestion.** The ingest app admits at most `PIKO_QUEUE_CAPACITY` (default 64, 1–1024) concurrent event uploads and holds as many requests waiting for a write; log uploads have their own 16 and 16. Each request has a 12-second deadline, and its acknowledgment waits at most 10 seconds. Envelopes are capped at 100 per request and bodies at 256 KiB. Exhausted capacity returns 503 with `Retry-After: 1`. No blocking work runs on Tokio workers; every ClickHouse call is asynchronous network I/O.
+**Ingestion.** The ingest app admits at most `HIGHKEY_QUEUE_CAPACITY` (default 64, 1–1024) concurrent event uploads and holds as many requests waiting for a write; log uploads have their own 16 and 16. Each request has a 12-second deadline, and its acknowledgment waits at most 10 seconds. Envelopes are capped at 100 per request and bodies at 256 KiB. Exhausted capacity returns 503 with `Retry-After: 1`. No blocking work runs on Tokio workers; every ClickHouse call is asynchronous network I/O.
 
 **Writes.** Each project's requests are written one batch at a time, in arrival order, with up to 100 requests per batch. While a batch is in flight, new requests for that project collect into the next one, so batches grow with load. Up to four inserts run at once across projects, for events and for logs. Inserts use ClickHouse's asynchronous inserts and wait for them, flushed within 50 ms, into tables with `fsync_after_insert`, so an acknowledgment means ClickHouse has written the rows to disk. A failed insert fails every request in its batch.
 
@@ -258,6 +258,6 @@ Project create/update accepts optional `website_url`. Bare domains default to HT
 
 On saving a website without a cached icon, the dashboard tries `/favicon.ico`, `/favicon.png`, and `/apple-touch-icon.png`. Supported raster types are ICO, PNG, JPEG, and WebP; SVG, HTML discovery, redirects, and remote icon services are deliberately not used. The default project icon remains if retrieval or rendering fails. Cached bytes live in `state.sqlite`, survive restarts, and are invalidated when the website changes. Saving again retries a missing icon.
 
-`GET /api/products/:id/favicon` returns the cached image, or 404 if absent. `favicon_version` in project responses identifies the cached bytes. This is a management route: keep it under the same edge protection as other project endpoints. Dashboard image requests stay on the Piko origin; only the dashboard server contacts the website, without visitor identifiers or browser credentials.
+`GET /api/products/:id/favicon` returns the cached image, or 404 if absent. `favicon_version` in project responses identifies the cached bytes. This is a management route: keep it under the same edge protection as other project endpoints. Dashboard image requests stay on the Highkey origin; only the dashboard server contacts the website, without visitor identifiers or browser credentials.
 
 Retrieval allows public HTTP/HTTPS addresses on their standard ports only. Resolved addresses are checked and pinned for the request; private, loopback, link-local, special-purpose and translated address ranges, and redirects are blocked. Downloads are limited to 256 KiB, two concurrent fetches, and a four-second overall deadline. A failed favicon does not prevent saving a project.

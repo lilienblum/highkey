@@ -5,11 +5,11 @@ import { parseChangeEnvelope } from "../lib/change-envelope";
 import { readBoundedBody } from "./request-body";
 
 export function realtimeEnabled(): boolean {
-  return Boolean(process.env.TAKO_APP_NAME && tako.secrets.PIKO_CHANGE_TOKEN);
+  return Boolean(process.env.TAKO_APP_NAME && tako.secrets.HIGHKEY_CHANGE_TOKEN);
 }
 
 export async function receiveChanges(request: Request): Promise<Response> {
-  const token = tako.secrets.PIKO_CHANGE_TOKEN;
+  const token = tako.secrets.HIGHKEY_CHANGE_TOKEN;
   if (!realtimeEnabled() || !token)
     return Response.json({ error: "Live updates are not configured" }, { status: 503 });
   const supplied = new TextEncoder().encode(request.headers.get("authorization") ?? "");

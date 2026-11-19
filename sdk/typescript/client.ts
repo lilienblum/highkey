@@ -28,7 +28,7 @@ export class DeliveryError extends Error {
   }
 }
 /** Small dependency-free client. A send's total deadline includes retries and backoff. */
-export class Piko {
+export class Highkey {
   private readonly options: Options;
   constructor(options: Options) {
     const timeout = options.timeoutMs ?? 800;

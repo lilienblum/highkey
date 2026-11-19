@@ -38,7 +38,7 @@ if (!stop) {
   if (
     !metadata.secrets?.some(
       (secret) =>
-        secret.name === "PIKO_CHANGE_TOKEN" && secret.environments.includes("development"),
+        secret.name === "HIGHKEY_CHANGE_TOKEN" && secret.environments.includes("development"),
     )
   ) {
     const token = crypto
@@ -51,7 +51,7 @@ if (!stop) {
         "tako.dashboard.toml",
         "secrets",
         "set",
-        "PIKO_CHANGE_TOKEN",
+        "HIGHKEY_CHANGE_TOKEN",
         "--env",
         "development",
         "--ci",
@@ -99,5 +99,5 @@ for (const config of ["tako.ingest.toml", "tako.dashboard.toml"]) {
 }
 if (!stop)
   console.log(
-    "Piko: https://piko.test · Ingest: https://piko-ingest.test\nStop both apps with bun run dev:stop; ClickHouse keeps running (bun scripts/clickhouse.ts dev-down stops it).",
+    "Highkey: https://highkey.test · Ingest: https://highkey-ingest.test\nStop both apps with bun run dev:stop; ClickHouse keeps running (bun scripts/clickhouse.ts dev-down stops it).",
   );

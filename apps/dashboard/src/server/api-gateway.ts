@@ -2,7 +2,7 @@ import { readBoundedBody } from "./request-body";
 
 // The dashboard serves every /api path itself except ingestion, which belongs to the ingest app.
 // Routes that cannot reach the ingest app directly (native development, a single-route tunnel)
-// arrive here and are forwarded to PIKO_INGEST_URL, with /tracker.js, which the ingest app serves.
+// arrive here and are forwarded to HIGHKEY_INGEST_URL, with /tracker.js, which the ingest app serves.
 
 const INGEST_PATHS = ["/api/ingest", "/api/logs/ingest", "/api/logs/v1/logs", "/tracker.js"];
 
@@ -29,7 +29,7 @@ export async function proxyIngest(request: Request): Promise<Response> {
     return unavailable("Too many pending ingestion requests; retry shortly");
   const upstream = new URL(
     url.pathname + url.search,
-    process.env.PIKO_INGEST_URL ?? "http://127.0.0.1:3001",
+    process.env.HIGHKEY_INGEST_URL ?? "http://127.0.0.1:3001",
   );
   // Only what ingestion reads travels on: never cookies, Access identities or client addresses.
   const headers = new Headers();

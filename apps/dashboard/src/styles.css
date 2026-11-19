@@ -579,18 +579,18 @@ h3,
  * Menus open with a short fade and a scale from the trigger (origin-aware), or a plain fade when a
  * select opens over its own trigger, and close faster than they open. Reduced motion removes both.
  */
-@keyframes piko-menu-in {
+@keyframes highkey-menu-in {
   from {
     opacity: 0;
     transform: scale(0.96);
   }
 }
-@keyframes piko-menu-fade-in {
+@keyframes highkey-menu-fade-in {
   from {
     opacity: 0;
   }
 }
-@keyframes piko-menu-out {
+@keyframes highkey-menu-out {
   to {
     opacity: 0;
   }
@@ -600,17 +600,17 @@ h3,
   [data-slot="dropdown-menu-content"],
   [data-slot="popover-content"]
 )[data-open] {
-  animation: piko-menu-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: highkey-menu-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 :is(
   [data-slot="select-content"],
   [data-slot="dropdown-menu-content"],
   [data-slot="popover-content"]
 )[data-closed] {
-  animation: piko-menu-out 100ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: highkey-menu-out 100ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 [data-slot="select-content"][data-side="none"][data-open] {
-  animation: piko-menu-fade-in 120ms ease-out;
+  animation: highkey-menu-fade-in 120ms ease-out;
 }
 /*
  * Copy buttons stack their three icons in one cell and cross-fade between them with a small scale

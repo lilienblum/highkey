@@ -1,4 +1,4 @@
-// The ingest app reads keys from piko.ingest_keys. SQLite stays the source of truth: every key,
+// The ingest app reads keys from highkey.ingest_keys. SQLite stays the source of truth: every key,
 // source or retention change is mirrored after it commits, and `reconcile` rewrites the whole
 // registry every minute, recreates whatever project access ClickHouse is missing (all of it at
 // startup), and applies retention changes that have not reached the stored rows yet.
@@ -50,13 +50,13 @@ function rows(ctx: ApiContext, productId: string, keyId?: string) {
 
 /** Mirrors one key (either kind). */
 export async function mirrorKey(ctx: ApiContext, productId: string, keyId: string): Promise<void> {
-  await ctx.admin.insert("piko.ingest_keys", rows(ctx, productId, keyId));
+  await ctx.admin.insert("highkey.ingest_keys", rows(ctx, productId, keyId));
 }
 
 /** Mirrors every key of a project, with its current retention. */
 export async function mirrorProject(ctx: ApiContext, productId: string): Promise<number> {
   const found = rows(ctx, productId);
-  await ctx.admin.insert("piko.ingest_keys", found);
+  await ctx.admin.insert("highkey.ingest_keys", found);
   return found.length;
 }
 
@@ -73,10 +73,10 @@ export async function afterCommit(step: () => Promise<unknown>): Promise<void> {
 export async function applyRetention(
   ctx: ApiContext,
   productId: string,
-  table: "piko.events" | "piko.logs",
+  table: "highkey.events" | "highkey.logs",
   days: number,
 ): Promise<void> {
-  const time = table === "piko.events" ? "event_time" : "timestamp";
+  const time = table === "highkey.events" ? "event_time" : "timestamp";
   await ctx.admin.command(
     `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}`,
     { params: { days, product: productId }, settings: { mutations_sync: 2 } },
@@ -89,7 +89,7 @@ const KEY_CACHE_MS = 5_000;
 const MIRROR_CHUNK = 10_000;
 
 type Signal = "events" | "logs";
-const TABLES = { events: "piko.events", logs: "piko.logs" } as const;
+const TABLES = { events: "highkey.events", logs: "highkey.logs" } as const;
 
 /**
  * Records that a project's stored rows must follow its new retention. Call it in the transaction
@@ -175,7 +175,7 @@ export async function reconcile(
   }
   const keys = all.flatMap((project) => rows(ctx, project.id));
   for (let start = 0; start < keys.length; start += MIRROR_CHUNK)
-    await ctx.admin.insert("piko.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
+    await ctx.admin.insert("highkey.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
   failed += await applyRetentionChanges(ctx);
   return { projects: all.length, keys: keys.length, failed };
 }
@@ -191,5 +191,5 @@ export async function cleanup(ctx: ApiContext): Promise<{ removed: number; logs_
     });
     return Number(result.data[0]?.n ?? 0);
   };
-  return { removed: await expired("piko.events"), logs_removed: await expired("piko.logs") };
+  return { removed: await expired("highkey.events"), logs_removed: await expired("highkey.logs") };
 }

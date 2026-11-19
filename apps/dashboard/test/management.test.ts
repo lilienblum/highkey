@@ -28,10 +28,10 @@ describe("management API", () => {
       "POST",
       "/api/products",
       { name: "CSRF", retention_days: 30 },
-      { "x-piko-admin": "" },
+      { "x-highkey-admin": "" },
     );
     expect(forged.status).toBe(403);
-    expect(forged.json.error).toBe("Management requests require X-Piko-Admin: 1");
+    expect(forged.json.error).toBe("Management requests require X-Highkey-Admin: 1");
     expect((await call(ctx, "GET", "/api/session")).status).toBe(404);
     const created = await project(ctx, "Public ingestion");
     expect(created.slug).toBe("public-ingestion");

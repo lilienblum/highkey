@@ -7,10 +7,10 @@
       "tools": {}
     },
     "serverInfo": {
-      "name": "piko",
+      "name": "highkey",
       "version": "0.1.0"
     },
-    "instructions": "Piko builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own data: `events` and `logs` already hold only the dashboard's range and source, `all_events` and `all_logs` hold all history (for cohorts), `bucket(event_time)` gives a row's bucket, and the parameters are $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Piko's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug."
+    "instructions": "Highkey builds dashboards and saved views from typed queries over a project's events and logs. Call describe_project first to see event names, properties, log services, SQL columns and limits. Preview every widget with run_widget before saving. Use formulas such as `errors / requests * 100` for ratios. SQL widgets are a single read-only SELECT over the project's own data: `events` and `logs` already hold only the dashboard's range and source, `all_events` and `all_logs` hold all history (for cohorts), `bucket(event_time)` gives a row's bucket, and the parameters are $from, $to, $bucket and $source. Stat and chart widgets compare with the previous period unless `compare` is `none`; set `better` to `down` when lower is better. Colors are yellow, violet, aqua, green, red and neutral. Every save is checked and timed; errors carry JSON paths and hints, so fix them and save again. Saved dashboards appear under Overview in Highkey's sidebar, and saved views under Events or Logs. Project, source, key and log settings tools manage the workspace; tools that revoke keys or delete need a confirm argument equal to the id or slug."
   },
   "tools": [
     {
@@ -132,7 +132,7 @@
             "type": ["integer", "null"]
           },
           "website_url": {
-            "description": "The project's website, such as https://example.com. Piko fetches its icon.",
+            "description": "The project's website, such as https://example.com. Highkey fetches its icon.",
             "type": ["string", "null"]
           }
         },
@@ -678,7 +678,7 @@
             "type": ["string", "null"]
           },
           "document": {
-            "description": "The `piko.dashboard/v1` document; see the piko://schema/dashboard.v1 resource."
+            "description": "The `highkey.dashboard/v1` document; see the highkey://schema/dashboard.v1 resource."
           },
           "project": {
             "description": "The project's id or slug.",
@@ -847,7 +847,7 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "document": {
-            "description": "The `piko.dashboard/v1` document; see the piko://schema/dashboard.v1 resource."
+            "description": "The `highkey.dashboard/v1` document; see the highkey://schema/dashboard.v1 resource."
           },
           "project": {
             "description": "The project's id or slug.",
@@ -865,13 +865,13 @@
   "resources": {
     "resources": [
       {
-        "uri": "piko://schema/dashboard.v1",
+        "uri": "highkey://schema/dashboard.v1",
         "name": "Dashboard JSON Schema",
-        "description": "The JSON Schema of a piko.dashboard/v1 document",
+        "description": "The JSON Schema of a highkey.dashboard/v1 document",
         "mimeType": "application/json"
       },
       {
-        "uri": "piko://docs/dashboards",
+        "uri": "highkey://docs/dashboards",
         "name": "Dashboards guide",
         "description": "How to write dashboards: queries, series, formulas, views, limits and examples",
         "mimeType": "text/markdown"

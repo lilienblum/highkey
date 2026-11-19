@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const root = new URL("..", import.meta.url).pathname;
-const password = "piko-test";
+const password = "highkey-test";
 
 async function cli(command: string): Promise<string> {
   const child = Bun.spawn(["bun", "scripts/clickhouse.ts", command], {
@@ -18,7 +18,7 @@ async function cli(command: string): Promise<string> {
   return stdout.trim();
 }
 
-async function sql(url: string, query: string, user = "piko_admin", key = password) {
+async function sql(url: string, query: string, user = "highkey_admin", key = password) {
   const response = await fetch(`${url}/?default_format=JSON`, {
     method: "POST",
     headers: { "X-ClickHouse-User": user, "X-ClickHouse-Key": key },
@@ -34,7 +34,7 @@ async function sql(url: string, query: string, user = "piko_admin", key = passwo
 }
 
 async function containerId(): Promise<string> {
-  const child = Bun.spawn(["docker", "ps", "-q", "--filter", "name=^piko-test-clickhouse$"], {
+  const child = Bun.spawn(["docker", "ps", "-q", "--filter", "name=^highkey-test-clickhouse$"], {
     stdout: "pipe",
   });
   await child.exited;
@@ -58,19 +58,19 @@ describe("the test ClickHouse", () => {
   );
 
   test(
-    "the Piko server config is applied",
+    "the Highkey server config is applied",
     async () => {
       const url = await cli("test-up");
       // A user with no grants may not read system tables.
-      await sql(url, "DROP USER IF EXISTS piko_probe_t1");
-      await sql(url, "CREATE USER piko_probe_t1 IDENTIFIED BY 'probe-password'");
+      await sql(url, "DROP USER IF EXISTS highkey_probe_t1");
+      await sql(url, "CREATE USER highkey_probe_t1 IDENTIFIED BY 'probe-password'");
       // (system.tables stays readable but lists only what the user may see.)
-      const probe = (query: string) => sql(url, query, "piko_probe_t1", "probe-password");
+      const probe = (query: string) => sql(url, query, "highkey_probe_t1", "probe-password");
       const users = await probe("SELECT name FROM system.users");
       const queries = await probe("SELECT query FROM system.query_log");
       const info = await probe("SELECT table_name FROM information_schema.tables");
       const visible = await probe("SELECT name FROM system.tables");
-      await sql(url, "DROP USER piko_probe_t1");
+      await sql(url, "DROP USER highkey_probe_t1");
       expect(users.code).toBe("497");
       expect(queries.code).toBe("497");
       expect(info.code).toBe("497");

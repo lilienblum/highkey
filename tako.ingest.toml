@@ -1,21 +1,21 @@
-name = "piko-ingest"
-main = "target/release/piko-ingest"
+name = "highkey-ingest"
+main = "target/release/highkey-ingest"
 app_root = "apps/ingest"
-dev = ["cargo", "run", "-p", "piko-ingest"]
-start = ["./target/release/piko-ingest"]
+dev = ["cargo", "run", "-p", "highkey-ingest"]
+start = ["./target/release/highkey-ingest"]
 
 # Build on Linux matching the destination server architecture and libc. The tracker bundle is
 # built from sdk/typescript and served by this app at /tracker.js.
 [build]
-run = "cargo build --release --locked -p piko-ingest && bun install --frozen-lockfile && bun run build:sdk"
-include = ["target/release/piko-ingest", "sdk/typescript/dist/tracker.js"]
+run = "cargo build --release --locked -p highkey-ingest && bun install --frozen-lockfile && bun run build:sdk"
+include = ["target/release/highkey-ingest", "sdk/typescript/dist/tracker.js"]
 
 [envs.development]
-route = "piko-ingest.test"
+route = "highkey-ingest.test"
 
 [vars.development]
 SSL_CERT_FILE = ".tako/dev-ca.pem"
-PIKO_CHANGE_URL = "https://piko.test/_piko/changes"
-PIKO_CLICKHOUSE_URL = "http://127.0.0.1:8123"
-PIKO_INGEST_CLICKHOUSE_PASSWORD = "piko-ingest-dev"
-PIKO_TRACKER_PATH = "sdk/typescript/dist/tracker.js"
+HIGHKEY_CHANGE_URL = "https://highkey.test/_highkey/changes"
+HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
+HIGHKEY_INGEST_CLICKHOUSE_PASSWORD = "highkey-ingest-dev"
+HIGHKEY_TRACKER_PATH = "sdk/typescript/dist/tracker.js"

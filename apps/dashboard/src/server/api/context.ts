@@ -46,20 +46,20 @@ let singleton: ApiContext | undefined;
 /** The process's context, built once from the environment. */
 export function apiContext(): ApiContext {
   if (singleton) return singleton;
-  const dataDir = process.env.PIKO_DATA_DIR ?? process.env.TAKO_DATA_DIR ?? "data";
-  const url = process.env.PIKO_CLICKHOUSE_URL ?? "http://127.0.0.1:8123";
-  const password = secret("PIKO_CLICKHOUSE_PASSWORD") ?? "";
-  const readerSecret = secret("PIKO_READER_SECRET") ?? password;
+  const dataDir = process.env.HIGHKEY_DATA_DIR ?? process.env.TAKO_DATA_DIR ?? "data";
+  const url = process.env.HIGHKEY_CLICKHOUSE_URL ?? "http://127.0.0.1:8123";
+  const password = secret("HIGHKEY_CLICKHOUSE_PASSWORD") ?? "";
+  const readerSecret = secret("HIGHKEY_READER_SECRET") ?? password;
   singleton = {
     store: Store.open(`${dataDir}/state.sqlite`),
     admin: new ClickHouse({
       url,
-      user: process.env.PIKO_CLICKHOUSE_USER ?? "piko_admin",
+      user: process.env.HIGHKEY_CLICKHOUSE_USER ?? "highkey_admin",
       password,
     }),
     readers: new Readers({ url, secret: readerSecret }),
     secret: readerSecret,
-    corsOrigins: parseOrigins(process.env.PIKO_CORS_ORIGINS),
+    corsOrigins: parseOrigins(process.env.HIGHKEY_CORS_ORIGINS),
     changes: { notify: () => {} },
     writeLimit: new WriteLimit(),
     gates: gatesFromEnv(),

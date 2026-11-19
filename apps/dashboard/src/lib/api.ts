@@ -88,8 +88,8 @@ export async function api<T>(
     signal,
     headers: {
       "content-type": "application/json",
-      "x-piko-admin": "1",
-      "x-piko-origin": "dashboard",
+      "x-highkey-admin": "1",
+      "x-highkey-origin": "dashboard",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

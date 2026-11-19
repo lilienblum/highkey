@@ -64,9 +64,9 @@ Settings lets you name sources and choose an optional icon from Hugeicons. **Aut
 
 ## Design notes
 
-The [Datafast demo](https://datafa.st/demo) and its [filter documentation](https://datafa.st/docs/datafast-filters) informed the actionable breakdown rows and dimension choices. Piko applies these ideas to both websites and developer tools using its existing event queries.
+The [Datafast demo](https://datafa.st/demo) and its [filter documentation](https://datafa.st/docs/datafast-filters) informed the actionable breakdown rows and dimension choices. Highkey applies these ideas to both websites and developer tools using its existing event queries.
 
-The [Plausible live dashboard](https://plausible.io/plausible.io) and its [dashboard tour](https://plausible.io/docs/guided-tour) informed the single period picker, calendar navigation, wide trend chart, paired reports, and separate filtering/external-link actions. Piko adapts that structure with small square metric tiles and automatic chart grouping.
+The [Plausible live dashboard](https://plausible.io/plausible.io) and its [dashboard tour](https://plausible.io/docs/guided-tour) informed the single period picker, calendar navigation, wide trend chart, paired reports, and separate filtering/external-link actions. Highkey adapts that structure with small square metric tiles and automatic chart grouping.
 
 Period comparisons exist on custom dashboards (see above), where widgets run their own queries for the previous period. Overview and Events do not have them yet; they need explicit partial-day alignment and a query shape that avoids fetching unused event pages for comparison summaries.
 
@@ -80,7 +80,7 @@ Use a property's filter action to run a matching query. This replaces the curren
 
 Choose 15, 30, or 50 rows per page. Filtering and pagination happen on the server. While a page loads, charts stay visible and loading rows replace the previous page. The inspector's newer/older controls move only through the loaded page. New committed data updates the table automatically without resetting the selected page or inspector.
 
-The [PostHog Activity interface](https://posthog.com/docs/activity) informed the useful event context and separate property, metadata, and JSON views. Piko uses its existing event model and bounded server queries.
+The [PostHog Activity interface](https://posthog.com/docs/activity) informed the useful event context and separate property, metadata, and JSON views. Highkey uses its existing event model and bounded server queries.
 
 ## Zooming from charts
 
@@ -111,7 +111,7 @@ Placeholders use the fixed Kanagawa palette and respect reduced-motion preferenc
 
 ## Interface icons
 
-Piko uses the free Stroke Rounded set from [Hugeicons](https://hugeicons.com/), rendered with `@hugeicons/react`. Import named icon data from `@hugeicons/core-free-icons` and pass it directly to `HugeiconsIcon`. Navigation, metric cards, controls, and installed shadcn primitives share this set. `apps/dashboard/components.json` also selects `hugeicons` for future generated components.
+Highkey uses the free Stroke Rounded set from [Hugeicons](https://hugeicons.com/), rendered with `@hugeicons/react`. Import named icon data from `@hugeicons/core-free-icons` and pass it directly to `HugeiconsIcon`. Navigation, metric cards, controls, and installed shadcn primitives share this set. `apps/dashboard/components.json` also selects `hugeicons` for future generated components.
 
 All sources share the same analytics interface. The optional icon is visual metadata; it does not change queries or infer identity.
 
@@ -125,12 +125,12 @@ Overview and Events use TanStack Charts. Hover or touch a time-series to inspect
 
 ## Component foundation
 
-Dashboard primitives use the official shadcn **Base UI** registry (`base-vega`) and `@base-ui/react`, with Hugeicons and Piko’s Kanagawa colors and existing compact control styles. Radix is not a dependency. Add or update components from the Base UI registry, merge local styling and behavior, and use `render` composition instead of `asChild`. Buttons rendering navigation links must retain link semantics.
+Dashboard primitives use the official shadcn **Base UI** registry (`base-vega`) and `@base-ui/react`, with Hugeicons and Highkey’s Kanagawa colors and existing compact control styles. Radix is not a dependency. Add or update components from the Base UI registry, merge local styling and behavior, and use `render` composition instead of `asChild`. Buttons rendering navigation links must retain link semantics.
 
 `ValueSelect` uses Base UI’s non-modal mode so opening a picker leaves the page scrollbar and viewport unchanged. An enclosing dialog keeps its own scroll lock. It supplies value/label items for server-rendered labels and uses a fixed popup positioner so opening a selector cannot scroll the document. Initial chart loading disables its controls until the result is ready; background refresh keeps them mounted. Dialogs, mobile navigation, tabs, and the event inspector preserve keyboard navigation and focus restoration. The sidebar continues to store its preference without cookies.
 
 ## Appearance
 
-Piko has one fixed Kanagawa Wave theme. Sumi-ink surfaces, warm text, orange primary actions, and yellow/violet/aqua chart accents are present from the first server-rendered paint. There is no appearance menu or theme preference, and old saved Light/Dark/Auto values are ignored.
+Highkey has one fixed Kanagawa Wave theme. Sumi-ink surfaces, warm text, orange primary actions, and yellow/violet/aqua chart accents are present from the first server-rendered paint. There is no appearance menu or theme preference, and old saved Light/Dark/Auto values are ignored.
 
 The shared component theme defines foreground/background pairs, hover and pressed surfaces, selection, focus, radii, and elevation in `apps/dashboard/src/styles.css`. Component variants consume those tokens directly. Buttons, button-like triggers, compact report selects, and segmented choices are pills; fields use 6px corners and a recessed surface, and cards 12px with a faint lit top edge. Translucent tints are replaced by ordered-dither screen tones (`--tone-25`, `--tone-50`, `--tone-75`) declared next to the `--tone-ink` they use. Menus use soft shadows, dialog backdrops are a sparse dot screen over a translucent dim, and keyboard focus uses a single yellow outline. Under forced colors, controls gain a system outline and selected states use the system highlight. Preserve these defaults when adding Base UI components instead of reintroducing generated dark-mode overrides or page-specific bevel styles.

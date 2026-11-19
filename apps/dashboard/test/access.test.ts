@@ -79,14 +79,14 @@ beforeAll(async () => {
   const server = await testClickHouse();
   url = server.url;
   admin = new ClickHouse({ url, user: server.user, password: server.password });
-  await migrate(admin, { ingestPassword: "piko-ingest-test" });
-  await admin.insert("piko.events", [
+  await migrate(admin, { ingestPassword: "highkey-ingest-test" });
+  await admin.insert("highkey.events", [
     event(A, sourceOne, "a-recent-1", 2 * day),
     event(A, sourceTwo, "a-recent-2", 3_600_000),
     event(A, sourceOne, "a-old", 40 * day),
     event(B, B, "b-recent", day),
   ]);
-  await admin.insert("piko.logs", [
+  await admin.insert("highkey.logs", [
     log(A, sourceOne, "a-log-1", 2 * day),
     log(A, sourceTwo, "a-log-2", 3_600_000),
     log(A, sourceOne, "a-log-old", 40 * day),
@@ -107,19 +107,19 @@ describe("project readers", () => {
     expect(await count("SELECT count() AS n FROM events", one)).toBe(1);
     expect(await count("SELECT count() AS n FROM logs", one)).toBe(1);
     // A query may widen its own range, but never past its project.
-    expect(await count("SELECT count() AS n FROM events SETTINGS SQL_piko_from = '0'")).toBe(3);
+    expect(await count("SELECT count() AS n FROM events SETTINGS SQL_highkey_from = '0'")).toBe(3);
     expect(
       await count(
-        "SELECT count() AS n FROM events SETTINGS SQL_piko_source = '', SQL_piko_from = '0'",
+        "SELECT count() AS n FROM events SETTINGS SQL_highkey_source = '', SQL_highkey_from = '0'",
       ),
     ).toBe(3);
   });
 
   test("the physical tables and other projects are unreachable", async () => {
     for (const table of [
-      "piko.events",
-      "piko.logs",
-      "piko.ingest_keys",
+      "highkey.events",
+      "highkey.logs",
+      "highkey.ingest_keys",
       `${projectDatabase(B)}.events`,
       `${projectDatabase(B)}.all_logs`,
     ]) {
@@ -132,12 +132,12 @@ describe("project readers", () => {
     for (const sql of [
       `SELECT * FROM url('${url}/ping', 'TSV', 'x String')`,
       "SELECT * FROM file('users.xml', 'TSV', 'x String')",
-      "SELECT count() FROM remote('127.0.0.1:9000', piko.events)",
+      "SELECT count() FROM remote('127.0.0.1:9000', highkey.events)",
       "SELECT * FROM s3('https://example.com/x.csv', 'CSV', 'x String')",
-      "SELECT count() FROM merge('piko', '.*')",
-      "SELECT count() FROM cluster('default', piko.events)",
-      "SELECT dictGet('piko.nothing', 'x', toUInt64(1))",
-      "SELECT joinGet('piko.events', 'name', 'x')",
+      "SELECT count() FROM merge('highkey', '.*')",
+      "SELECT count() FROM cluster('default', highkey.events)",
+      "SELECT dictGet('highkey.nothing', 'x', toUInt64(1))",
+      "SELECT joinGet('highkey.events', 'name', 'x')",
     ]) {
       expect({ sql, ...(await refused(sql)) }).toMatchObject({ sql, refused: true });
     }
@@ -165,12 +165,12 @@ describe("project readers", () => {
   test("writes, grants and role changes are refused", async () => {
     for (const sql of [
       "INSERT INTO events (event_id) VALUES ('x')",
-      `INSERT INTO piko.events (product_id, event_id) VALUES ('${A}', 'x')`,
-      "ALTER TABLE piko.events DELETE WHERE 1",
+      `INSERT INTO highkey.events (product_id, event_id) VALUES ('${A}', 'x')`,
+      "ALTER TABLE highkey.events DELETE WHERE 1",
       "CREATE TABLE scratch (a Int8) ENGINE = Memory",
       "CREATE TEMPORARY TABLE scratch (a Int8)",
       "DROP TABLE events",
-      `GRANT SELECT ON piko.* TO ${readerUser(A)}`,
+      `GRANT SELECT ON highkey.* TO ${readerUser(A)}`,
       "SELECT 1 SETTINGS readonly = 0",
       "SELECT 1; SELECT 2",
     ]) {
@@ -188,7 +188,7 @@ describe("project readers", () => {
         body: sql,
       });
     await send("SET ROLE ALL");
-    expect((await send("SELECT count() FROM piko.events")).status).not.toBe(200);
+    expect((await send("SELECT count() FROM highkey.events")).status).not.toBe(200);
   });
 
   test("resource settings cannot be raised", async () => {
@@ -211,12 +211,12 @@ describe("project readers", () => {
 
   test("B is unreachable by join, subquery, union, CTE or alias", async () => {
     for (const sql of [
-      "SELECT count() FROM events AS e JOIN piko.events AS p ON e.event_id = p.event_id",
-      "SELECT count() FROM (SELECT * FROM piko.events)",
+      "SELECT count() FROM events AS e JOIN highkey.events AS p ON e.event_id = p.event_id",
+      "SELECT count() FROM (SELECT * FROM highkey.events)",
       `SELECT count() FROM events UNION ALL SELECT count() FROM ${projectDatabase(B)}.events`,
-      "WITH other AS (SELECT * FROM piko.events) SELECT count() FROM other",
+      "WITH other AS (SELECT * FROM highkey.events) SELECT count() FROM other",
       `SELECT count() FROM all_events WHERE product_id = '${B}'`,
-      "SELECT count() FROM piko.events AS events",
+      "SELECT count() FROM highkey.events AS events",
     ]) {
       const result = await refused(sql);
       expect({ sql, refused: result.refused }).toEqual({ sql, refused: true });

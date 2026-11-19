@@ -18,8 +18,8 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
-import { Route as PikoChangesRouteImport } from './routes/[_]piko.changes'
-import { Route as PikoRuntimeRouteImport } from './routes/[_]piko.runtime'
+import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
+import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as ProjectsProjectSlugRouteImport } from './routes/projects.$projectSlug'
 import { Route as ProjectsProjectSlugIndexRouteImport } from './routes/projects.$projectSlug.index'
@@ -74,14 +74,14 @@ const TrackerDotjsRoute = TrackerDotjsRouteImport.update({
   path: '/tracker.js',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PikoChangesRoute = PikoChangesRouteImport.update({
-  id: '/_piko/changes',
-  path: '/_piko/changes',
+const HighkeyChangesRoute = HighkeyChangesRouteImport.update({
+  id: '/_highkey/changes',
+  path: '/_highkey/changes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PikoRuntimeRoute = PikoRuntimeRouteImport.update({
-  id: '/_piko/runtime',
-  path: '/_piko/runtime',
+const HighkeyRuntimeRoute = HighkeyRuntimeRouteImport.update({
+  id: '/_highkey/runtime',
+  path: '/_highkey/runtime',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -140,8 +140,8 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
-  '/_piko/changes': typeof PikoChangesRoute
-  '/_piko/runtime': typeof PikoRuntimeRoute
+  '/_highkey/changes': typeof HighkeyChangesRoute
+  '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
@@ -161,8 +161,8 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
-  '/_piko/changes': typeof PikoChangesRoute
-  '/_piko/runtime': typeof PikoRuntimeRoute
+  '/_highkey/changes': typeof HighkeyChangesRoute
+  '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
   '/projects/$projectSlug/explore': typeof ProjectsProjectSlugExploreRoute
@@ -182,8 +182,8 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
-  '/_piko/changes': typeof PikoChangesRoute
-  '/_piko/runtime': typeof PikoRuntimeRoute
+  '/_highkey/changes': typeof HighkeyChangesRoute
+  '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/projects/$projectSlug': typeof ProjectsProjectSlugRouteWithChildren
   '/projects/$projectSlug/events': typeof ProjectsProjectSlugEventsRoute
@@ -205,8 +205,8 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
-    | '/_piko/changes'
-    | '/_piko/runtime'
+    | '/_highkey/changes'
+    | '/_highkey/runtime'
     | '/api/$'
     | '/projects/$projectSlug'
     | '/projects/$projectSlug/events'
@@ -226,8 +226,8 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
-    | '/_piko/changes'
-    | '/_piko/runtime'
+    | '/_highkey/changes'
+    | '/_highkey/runtime'
     | '/api/$'
     | '/projects/$projectSlug/events'
     | '/projects/$projectSlug/explore'
@@ -246,8 +246,8 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
-    | '/_piko/changes'
-    | '/_piko/runtime'
+    | '/_highkey/changes'
+    | '/_highkey/runtime'
     | '/api/$'
     | '/projects/$projectSlug'
     | '/projects/$projectSlug/events'
@@ -268,8 +268,8 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   SettingsRoute: typeof SettingsRoute
   TrackerDotjsRoute: typeof TrackerDotjsRoute
-  PikoChangesRoute: typeof PikoChangesRoute
-  PikoRuntimeRoute: typeof PikoRuntimeRoute
+  HighkeyChangesRoute: typeof HighkeyChangesRoute
+  HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ProjectsProjectSlugRoute: typeof ProjectsProjectSlugRouteWithChildren
 }
@@ -339,18 +339,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackerDotjsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_piko/changes': {
-      id: '/_piko/changes'
-      path: '/_piko/changes'
-      fullPath: '/_piko/changes'
-      preLoaderRoute: typeof PikoChangesRouteImport
+    '/_highkey/changes': {
+      id: '/_highkey/changes'
+      path: '/_highkey/changes'
+      fullPath: '/_highkey/changes'
+      preLoaderRoute: typeof HighkeyChangesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_piko/runtime': {
-      id: '/_piko/runtime'
-      path: '/_piko/runtime'
-      fullPath: '/_piko/runtime'
-      preLoaderRoute: typeof PikoRuntimeRouteImport
+    '/_highkey/runtime': {
+      id: '/_highkey/runtime'
+      path: '/_highkey/runtime'
+      fullPath: '/_highkey/runtime'
+      preLoaderRoute: typeof HighkeyRuntimeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/$': {
@@ -444,8 +444,8 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   SettingsRoute: SettingsRoute,
   TrackerDotjsRoute: TrackerDotjsRoute,
-  PikoChangesRoute: PikoChangesRoute,
-  PikoRuntimeRoute: PikoRuntimeRoute,
+  HighkeyChangesRoute: HighkeyChangesRoute,
+  HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
   ProjectsProjectSlugRoute: ProjectsProjectSlugRouteWithChildren,
 }

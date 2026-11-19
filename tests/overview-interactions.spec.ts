@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-const api = process.env.PIKO_API_URL;
+const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("Use the isolated E2E runner");
 
 test("live identity widget, in-place filters, and independent external row links", async ({
@@ -9,7 +9,7 @@ test("live identity widget, in-place filters, and independent external row links
   async function post(path: string, body: unknown) {
     const response = await fetch(`${api}/api${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-piko-admin": "1" },
+      headers: { "content-type": "application/json", "x-highkey-admin": "1" },
       body: JSON.stringify(body),
     });
     expect(response.ok).toBe(true);
@@ -42,7 +42,7 @@ test("live identity widget, in-place filters, and independent external row links
     body: JSON.stringify({ events }),
   });
   expect(ingested.ok).toBe(true);
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.goto(`/projects/${project.slug}?source=all&days=30`);
   await expect(page.locator(".live-metric .widget-value")).toHaveText("2");
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("5");
@@ -98,12 +98,12 @@ test("Overview tiles and the activity headline show growth against the previous 
   const project = await post(
     "/products",
     { name: `Growth ${Date.now()}`, retention_days: 365 },
-    { "x-piko-admin": "1" },
+    { "x-highkey-admin": "1" },
   );
   const { key } = await post(
     `/products/${project.id}/keys`,
     { label: "Growth" },
-    { "x-piko-admin": "1" },
+    { "x-highkey-admin": "1" },
   );
   const hours = (ago: number) => new Date(Date.now() - ago * 3_600_000).toISOString();
   // Four events this week against two in the week before: +100%, and no baseline for durations.
@@ -122,7 +122,7 @@ test("Overview tiles and the activity headline show growth against the previous 
     },
     { authorization: `Bearer ${key}` },
   );
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.goto(`/projects/${project.slug}?source=all&days=7`);
   const tile = (label: string) => page.locator(".metric-widget", { hasText: label });
   await expect(tile("Events").locator(".widget-value")).toHaveText("4");

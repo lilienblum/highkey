@@ -8,17 +8,17 @@ Identity remains optional and scoped to the project and identity kind. No person
 
 ## JavaScript and TypeScript SDK
 
-Use the [`@piko/sdk` package](../sdk/typescript/README.md) in a website, Bun tool, or server. It ships JavaScript and TypeScript declarations with no runtime dependencies. The package guide covers local installation until registry publication. Existing source imports from `sdk/typescript/client.ts` also remain supported. Create a project and choose or add a source in Settings, then create an ingestion key for that source. Use only source-scoped ingestion keys in collectors; management access remains separate. For websites, use the browser tracker below to apply privacy signals and opt-out behavior. The generic client sends explicit calls and does not manage collection preferences.
+Use the [`@highkey/sdk` package](../sdk/typescript/README.md) in a website, Bun tool, or server. It ships JavaScript and TypeScript declarations with no runtime dependencies. The package guide covers local installation until registry publication. Existing source imports from `sdk/typescript/client.ts` also remain supported. Create a project and choose or add a source in Settings, then create an ingestion key for that source. Use only source-scoped ingestion keys in collectors; management access remains separate. For websites, use the browser tracker below to apply privacy signals and opt-out behavior. The generic client sends explicit calls and does not manage collection preferences.
 
 ```ts
-import { Piko } from "@piko/sdk";
-const piko = new Piko({
-  endpoint: "https://piko.example.com",
+import { Highkey } from "@highkey/sdk";
+const highkey = new Highkey({
+  endpoint: "https://highkey.example.com",
   key: "pk_...",
   timeoutMs: 800,
   retries: 1,
 });
-await piko.send({
+await highkey.send({
   name: "purchase",
   source: "server",
   properties: { amount: 29.5, paid: true, currency: "USD" },
@@ -29,13 +29,13 @@ await piko.send({
 
 ## Browser tracker
 
-Bundled applications can import `startBrowserTracker` from `@piko/sdk/browser`. The hosted module remains available without installing a package:
+Bundled applications can import `startBrowserTracker` from `@highkey/sdk/browser`. The hosted module remains available without installing a package:
 
 ```html
 <script type="module" referrerpolicy="no-referrer">
-  import { startBrowserTracker } from "https://piko.example.com/tracker.js";
+  import { startBrowserTracker } from "https://highkey.example.com/tracker.js";
   const tracker = startBrowserTracker({
-    endpoint: "https://piko.example.com",
+    endpoint: "https://highkey.example.com",
     key: "pk_...",
     identity: "none",
   });
@@ -43,7 +43,7 @@ Bundled applications can import `startBrowserTracker` from `@piko/sdk/browser`. 
 </script>
 ```
 
-Start the tracker only when your application's collection preference permits it. `enabled: false` returns an inert tracker: no automatic events, history hooks, timers, or identity storage. Piko treats Do Not Track (`navigator.doNotTrack === "1"`) and Global Privacy Control (`navigator.globalPrivacyControl === true`) as do-not-collect signals. They cannot be overridden. An absent signal is not a user's consent decision.
+Start the tracker only when your application's collection preference permits it. `enabled: false` returns an inert tracker: no automatic events, history hooks, timers, or identity storage. Highkey treats Do Not Track (`navigator.doNotTrack === "1"`) and Global Privacy Control (`navigator.globalPrivacyControl === true`) as do-not-collect signals. They cannot be overridden. An absent signal is not a user's consent decision.
 
 The hosted ESM module supports cross-origin import. The script's `referrerpolicy="no-referrer"` prevents the module request and its imports from carrying the embedding page's URL. For bundled or dynamically loaded integrations, configure the host page's Referrer-Policy too. The ingestion client independently omits Referer and cookies and refuses redirects.
 
@@ -53,7 +53,7 @@ Paths, hostnames, campaign labels, and custom properties can still contain perso
 
 ```ts
 const tracker = startBrowserTracker({
-  endpoint: "https://piko.example.com",
+  endpoint: "https://highkey.example.com",
   key: "pk_...",
   collectReferrer: false,
   sanitizePath: (path) => (path.startsWith("/users/") ? "/users/:id" : null),
@@ -75,12 +75,12 @@ The pending queue holds 100 events, sends batches of up to 20 (targeting 60 KiB 
 
 ## Rust SDK
 
-Use the standalone [`piko-sdk` crate](../sdk/rust/README.md) for new Rust integrations. It uses reqwest/rustls, Tokio, serde/serde_json, uuid, and chrono; it has no dependency on Piko's server or databases.
+Use the standalone [`highkey-sdk` crate](../sdk/rust/README.md) for new Rust integrations. It uses reqwest/rustls, Tokio, serde/serde_json, uuid, and chrono; it has no dependency on Highkey's server or databases.
 
 ```rust
-use piko_sdk::{Event, Piko};
+use highkey_sdk::{Event, Highkey};
 
-let client = Piko::new("https://piko.example.com", "pk_YOUR_SOURCE_KEY")?;
+let client = Highkey::new("https://highkey.example.com", "pk_YOUR_SOURCE_KEY")?;
 let event = Event::new("command_run", "cli")
     .property("command", "build")
     .property("success", true)
@@ -88,31 +88,31 @@ let event = Event::new("command_run", "cli")
 let ack = client.send(&event).await?;
 ```
 
-Run on a Tokio runtime and send only after your application's collection preference permits it. `Event::new` captures a UUID and timestamp once, without an actor or installation identity. `send_batch` accepts 1–100 events within 256 KiB. A send returns the committed acknowledgment or a typed error. The default 800 ms total deadline includes retries, response reads, and backoff; dropping the future cancels pending delivery. Use `Piko::with_options` to adjust the deadline and retry count. Reuse the original event when retrying in your application.
+Run on a Tokio runtime and send only after your application's collection preference permits it. `Event::new` captures a UUID and timestamp once, without an actor or installation identity. `send_batch` accepts 1–100 events within 256 KiB. A send returns the committed acknowledgment or a typed error. The default 800 ms total deadline includes retries, response reads, and backoff; dropping the future cancels pending delivery. Use `Highkey::with_options` to adjust the deadline and retry count. Reuse the original event when retrying in your application.
 
 `sdk/rust/examples/collect.rs` demonstrates the public SDK with explicit opt-in and `DO_NOT_TRACK` handling:
 
 ```sh
-PIKO_TELEMETRY=1 PIKO_ENDPOINT=http://127.0.0.1:3001 \
-PIKO_INGESTION_KEY=pk_YOUR_KEY cargo run -p piko-sdk --example collect
+HIGHKEY_TELEMETRY=1 HIGHKEY_ENDPOINT=http://127.0.0.1:3001 \
+HIGHKEY_INGESTION_KEY=pk_YOUR_KEY cargo run -p highkey-sdk --example collect
 ```
 
 ## Rust CLI example
 
-`sdk/rust/examples/cli.rs` reports each command a CLI runs, on the SDK's bounded delivery: 800 ms in all (`PIKO_TELEMETRY_TIMEOUT_MS`, 1–5000), retries included, and a failed send never fails the command.
+`sdk/rust/examples/cli.rs` reports each command a CLI runs, on the SDK's bounded delivery: 800 ms in all (`HIGHKEY_TELEMETRY_TIMEOUT_MS`, 1–5000), retries included, and a failed send never fails the command.
 
 ```sh
-PIKO_TELEMETRY=1 \
-PIKO_ENDPOINT=http://127.0.0.1:3000 \
-PIKO_INGESTION_KEY=pk_YOUR_KEY \
-cargo run -p piko-sdk --example cli -- build
+HIGHKEY_TELEMETRY=1 \
+HIGHKEY_ENDPOINT=http://127.0.0.1:3000 \
+HIGHKEY_INGESTION_KEY=pk_YOUR_KEY \
+cargo run -p highkey-sdk --example cli -- build
 ```
 
-The example sends only when `PIKO_TELEMETRY=1`, an endpoint, and a key are configured. `DO_NOT_TRACK=1` disables collection even when enabled. Try `-- fail` to report failure and exit nonzero. Events carry `command`, app `version`, `os`, `arch`, boolean `success`, and numeric `duration_ms`. Command labels are restricted to `build`, `fail`, `check`, `init`, `dev`, and `deploy`; other arguments are reported as `other`. The example does not create an installation ID automatically. Set `PIKO_INSTALLATION_ID` only to an optional random ID chosen under your application’s telemetry preference. To measure installations, generate one random ID once and store it in your application's configuration directory only with the user's chosen telemetry setting. Do not send usernames, machine names, arguments, filesystem paths, or command output by default.
+The example sends only when `HIGHKEY_TELEMETRY=1`, an endpoint, and a key are configured. `DO_NOT_TRACK=1` disables collection even when enabled. Try `-- fail` to report failure and exit nonzero. Events carry `command`, app `version`, `os`, `arch`, boolean `success`, and numeric `duration_ms`. Command labels are restricted to `build`, `fail`, `check`, `init`, `dev`, and `deploy`; other arguments are reported as `other`. The example does not create an installation ID automatically. Set `HIGHKEY_INSTALLATION_ID` only to an optional random ID chosen under your application’s telemetry preference. To measure installations, generate one random ID once and store it in your application's configuration directory only with the user's chosen telemetry setting. Do not send usernames, machine names, arguments, filesystem paths, or command output by default.
 
-The example runs its command first, then sends one event with the SDK's `send`, through `Piko::with_options` and the configured deadline. The SDK refuses redirects, retries once with the original ID and timestamp, honors Retry-After within the remaining deadline (a 5xx's longer delay is shortened to half of what remains), and gives up when the deadline expires. The example ignores the send's result, so analytics failure never changes the CLI result or delays exit beyond that deadline.
+The example runs its command first, then sends one event with the SDK's `send`, through `Highkey::with_options` and the configured deadline. The SDK refuses redirects, retries once with the original ID and timestamp, honors Retry-After within the remaining deadline (a 5xx's longer delay is shortened to half of what remains), and gives up when the deadline expires. The example ignores the send's result, so analytics failure never changes the CLI result or delays exit beyond that deadline.
 
-To exercise the actual Rust example and verify its stored types locally, run `bun scripts/verify-cli.ts` while Piko is running at `PIKO_API_URL` (default `http://127.0.0.1:3000`, as under `bun run dev:standalone`). It creates a small **Rust CLI example** project visible in the dashboard.
+To exercise the actual Rust example and verify its stored types locally, run `bun scripts/verify-cli.ts` while Highkey is running at `HIGHKEY_API_URL` (default `http://127.0.0.1:3000`, as under `bun run dev:standalone`). It creates a small **Rust CLI example** project visible in the dashboard.
 
 ## Mobile / HTTP collectors
 

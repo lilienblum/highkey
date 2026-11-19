@@ -52,7 +52,8 @@ pub struct ChangeDelivery {
 }
 impl ChangeDelivery {
     pub fn new(endpoint: &str, token: String) -> Result<Self> {
-        let endpoint = Url::parse(endpoint).context("PIKO_CHANGE_URL must be an absolute URL")?;
+        let endpoint =
+            Url::parse(endpoint).context("HIGHKEY_CHANGE_URL must be an absolute URL")?;
         ensure!(
             matches!(endpoint.scheme(), "http" | "https")
                 && endpoint.host_str().is_some()
@@ -60,11 +61,11 @@ impl ChangeDelivery {
                 && endpoint.password().is_none()
                 && endpoint.query().is_none()
                 && endpoint.fragment().is_none(),
-            "PIKO_CHANGE_URL must be HTTP(S), without credentials, query, or fragment"
+            "HIGHKEY_CHANGE_URL must be HTTP(S), without credentials, query, or fragment"
         );
         ensure!(
             !token.is_empty(),
-            "PIKO_CHANGE_TOKEN is required with PIKO_CHANGE_URL"
+            "HIGHKEY_CHANGE_TOKEN is required with HIGHKEY_CHANGE_URL"
         );
         Ok(Self { endpoint, token })
     }

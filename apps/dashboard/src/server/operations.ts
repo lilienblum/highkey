@@ -168,12 +168,12 @@ export function snippets(
   integration: string | null | undefined,
   secret: string,
 ): Record<string, string> | null {
-  const URL = "PIKO_URL";
+  const URL = "HIGHKEY_URL";
   const all: Record<(typeof INTEGRATIONS)[number], string> = {
     browser: `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${URL}/tracker.js";\n\n  const tracker = startBrowserTracker({\n    endpoint: "${URL}",\n    key: "${secret}",\n    identity: "none",\n  });\n\n  tracker.track("signup", { plan: "pro", trial: true, seats: 3 });\n</script>`,
-    typescript: `import { Piko } from "./sdk/typescript/client";\n\nconst piko = new Piko({\n  endpoint: "${URL}",\n  key: "${secret}",\n  timeoutMs: 800,\n});\n\nawait piko.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`,
+    typescript: `import { Highkey } from "./sdk/typescript/client";\n\nconst highkey = new Highkey({\n  endpoint: "${URL}",\n  key: "${secret}",\n  timeoutMs: 800,\n});\n\nawait highkey.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`,
     http: `POST ${URL}/api/ingest\nAuthorization: Bearer ${secret}\nContent-Type: application/json\n\n{\n  "event_id": "GENERATE_A_UUID_ONCE",\n  "name": "screen_view",\n  "source": "mobile",\n  "timestamp": "UTC_ISO_TIMESTAMP",\n  "properties": {\n    "screen": "home",\n    "version": "1.0.0",\n    "subscribed": false\n  }\n}`,
-    rust: `PIKO_TELEMETRY=1 \\\nPIKO_ENDPOINT="${URL}" \\\nPIKO_INGESTION_KEY="${secret}" \\\ncargo run -p piko-sdk --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms budget, retries included.`,
+    rust: `HIGHKEY_TELEMETRY=1 \\\nHIGHKEY_ENDPOINT="${URL}" \\\nHIGHKEY_INGESTION_KEY="${secret}" \\\ncargo run -p highkey-sdk --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms budget, retries included.`,
   };
   if (integration == null) return all;
   if (!(INTEGRATIONS as readonly string[]).includes(integration)) return null;

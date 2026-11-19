@@ -100,7 +100,7 @@ export function WidgetChart({
   /** Widgets with their own range ignore the workspace dates, so they do not zoom them. */
   zoom?: boolean;
 }) {
-  const toneId = `piko-widget-${useId().replace(/[^\w-]/g, "")}`;
+  const toneId = `highkey-widget-${useId().replace(/[^\w-]/g, "")}`;
   const kind = view.type === "bar" || view.type === "area" ? view.type : "line";
   const stacked = !!view.stacked && kind !== "line" && series.length > 1;
   const previous = result.series[0]?.previous_points;

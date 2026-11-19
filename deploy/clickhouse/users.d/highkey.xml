@@ -1,4 +1,4 @@
-<!-- Settings every ClickHouse user starts from. Piko property and attribute keys may contain
+<!-- Settings every ClickHouse user starts from. Highkey property and attribute keys may contain
      dots ("utm.source"); without escaping, the JSON type would store them as nested paths. -->
 <clickhouse>
     <profiles>

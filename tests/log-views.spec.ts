@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const endpoint = process.env.PIKO_API_URL;
+const endpoint = process.env.HIGHKEY_API_URL;
 if (!endpoint) throw new Error("Run dashboard browser tests through bun test:e2e.");
 
 type Project = { id: string; slug: string; name: string; sources?: { id: string }[] };
@@ -17,7 +17,7 @@ async function admin<T>(
 ) {
   const response = await fetch(`${endpoint}/api${path}`, {
     method,
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   expect(response.ok, `${path}: ${response.status}`).toBe(true);
@@ -94,7 +94,7 @@ test.beforeAll(async () => {
 });
 
 test("the sidebar lists log views under Logs from the server render", async ({ page }) => {
-  const runtime = page.waitForResponse((response) => response.url().endsWith("/_piko/runtime"));
+  const runtime = page.waitForResponse((response) => response.url().endsWith("/_highkey/runtime"));
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -350,9 +350,9 @@ test("without channels, an agent's change to the open log view applies by pollin
   const created = await admin<View>(`/products/${project.id}/views`, {
     document: { version: 1, kind: "logs", name, query: { level: "error" }, window: "6h" },
   });
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
   await page.clock.install();
-  const hydrated = page.waitForResponse("**/_piko/runtime");
+  const hydrated = page.waitForResponse("**/_highkey/runtime");
   await page.goto(`${logsUrl()}?view=${created.slug}`);
   await hydrated;
   await expect(severity(page)).toContainText("Error");

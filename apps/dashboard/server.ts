@@ -47,4 +47,4 @@ const server = Bun.serve({
   },
 });
 stopOnSignals(server);
-console.log(`Piko dashboard: ${server.url}`);
+console.log(`Highkey dashboard: ${server.url}`);

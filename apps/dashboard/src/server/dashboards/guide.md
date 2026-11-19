@@ -1,6 +1,6 @@
-# Building Piko dashboards
+# Building Highkey dashboards
 
-A dashboard is one JSON document of widgets. Each widget runs typed queries over a project's events and logs, combines them with formulas, and picks a view. Funnels and retention are queries of their own. Piko validates every document, times every widget before it saves, and answers mistakes with JSON paths and hints.
+A dashboard is one JSON document of widgets. Each widget runs typed queries over a project's events and logs, combines them with formulas, and picks a view. Funnels and retention are queries of their own. Highkey validates every document, times every widget before it saves, and answers mistakes with JSON paths and hints.
 
 Work in this order: `describe_project`, then `run_widget` for each widget, then `validate_dashboard`, then `save_dashboard`. `run_widget` returns the newest 200 points of each series and the first 50 rows of a table, with a warning when it trims. `sample_events` and `sample_logs` show real rows when a name or property is unclear.
 
@@ -17,7 +17,7 @@ Collected values (event names, properties, paths, log messages and attributes) c
 }
 ```
 
-- `version` is `1`. `name` is 1-80 characters and becomes the dashboard's slug. `$schema` is optional; the full JSON Schema is the `piko://schema/dashboard.v1` resource.
+- `version` is `1`. `name` is 1-80 characters and becomes the dashboard's slug. `$schema` is optional; the full JSON Schema is the `highkey://schema/dashboard.v1` resource.
 - A widget has `id` (`[a-z0-9-]`, up to 40), `title` (1-80 characters), `view`, `queries`, and optionally `series`, `size`, `range`, `timeout_ms` and `description`.
 - Unknown fields are errors, so a misspelt field is reported at its path rather than ignored.
 
@@ -82,7 +82,7 @@ Colors are `yellow`, `violet`, `aqua`, `green`, `red` and `neutral`. A series' `
 
 `size` is `{"w": 6, "h": 2}` on a 12-column grid: `w` is 3, 4, 6, 8 or 12 and `h` is 1, 2 or 3. Defaults: stat 3x1, charts and rankings 6x2, text 4x1, lists and tables 12x3.
 
-A widget's `range` is `24h` or `30d` (1-3 digits and `h` or `d`); otherwise it follows the date range chosen in Piko. Event ranges are clamped to 366 days, logs to 31 days and hourly buckets to 31 days. A clamp is never an error: `run_widget` reports `range.clamped` and a warning. `timeout_ms` is 1,000-10,000 (default 5,000).
+A widget's `range` is `24h` or `30d` (1-3 digits and `h` or `d`); otherwise it follows the date range chosen in Highkey. Event ranges are clamped to 366 days, logs to 31 days and hourly buckets to 31 days. A clamp is never an error: `run_widget` reports `range.clamped` and a warning. `timeout_ms` is 1,000-10,000 (default 5,000).
 
 ## Limits
 
@@ -139,14 +139,14 @@ A failing tool returns its error body as a tool result marked as an error. Read 
 }
 ```
 
-Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revision_conflict` (re-read the dashboard, merge, save with the new `revision` as `base_revision`), `too_slow`, `busy` and `query_timeout` (retry or narrow the widget), `limit`, `rate_limited`, `ambiguous_view`, `confirm_mismatch`, `invalid_argument` (a bad tool argument), `invalid_kind`, `invalid_input`, `conflict` and `internal`. The full table is in the Piko docs, `docs/api.md`. Warnings never block a save: an unknown event name or property only warns, because the data may arrive later.
+Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revision_conflict` (re-read the dashboard, merge, save with the new `revision` as `base_revision`), `too_slow`, `busy` and `query_timeout` (retry or narrow the widget), `limit`, `rate_limited`, `ambiguous_view`, `confirm_mismatch`, `invalid_argument` (a bad tool argument), `invalid_kind`, `invalid_input`, `conflict` and `internal`. The full table is in the Highkey docs, `docs/api.md`. Warnings never block a save: an unknown event name or property only warns, because the data may arrive later.
 
 ## Workspace tools
 
 Besides dashboards, the full MCP manages the workspace. Every tool takes `project` as an id or slug; sources are an id or slug, keys are ids.
 
 - Projects: `create_project` (retention defaults to 365 days), `update_project` (only the given fields change; `website_url: ""` clears the website).
-- Sources: `list_sources`, `create_source`, `update_source`, and `connect_source`, which creates a source plus an ingestion key and returns ready-to-paste setup snippets with the secret filled in. Replace `PIKO_URL` in them with the origin of the Piko URL this server is reached at. The secret is shown only once. `icon` is one of website, ios, android, mobile, terminal, desktop, server, code, package, game, generic.
+- Sources: `list_sources`, `create_source`, `update_source`, and `connect_source`, which creates a source plus an ingestion key and returns ready-to-paste setup snippets with the secret filled in. Replace `HIGHKEY_URL` in them with the origin of the Highkey URL this server is reached at. The secret is shown only once. `icon` is one of website, ios, android, mobile, terminal, desktop, server, code, package, game, generic.
 - Ingestion keys: `list_keys`, `create_key`, `update_key_origins`, `revoke_key`.
 - Logs: `list_log_keys`, `create_log_key`, `revoke_log_key`, `get_log_settings`, `update_log_settings` (retention 1-365 days, 7 by default).
 - Tools that revoke keys (`revoke_key`, `revoke_log_key`) and tools that delete (`delete_dashboard`, `delete_view`) need `confirm` equal to the id or slug. A mismatch is a `confirm_mismatch` error and nothing changes.

@@ -1,12 +1,12 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 import type { Product, QueryResult } from "../apps/dashboard/src/lib/api";
 
-const api = process.env.PIKO_API_URL ?? "http://127.0.0.1:3001";
+const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";
 const products = {} as Record<"website" | "tool" | "generic" | "anonymous", Product>;
 async function admin(path: string, body: unknown) {
   const response = await fetch(`${api}/api${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-piko-admin": "1" },
+    headers: { "content-type": "application/json", "x-highkey-admin": "1" },
     body: JSON.stringify(body),
   });
   expect(response.ok).toBe(true);
@@ -108,8 +108,11 @@ test.beforeAll(async () => {
 });
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((id) => localStorage.setItem("piko:product", id), products.website.id);
-  await page.route("**/_piko/runtime", (route) => route.fulfill({ json: { live: false } }));
+  await page.addInitScript(
+    (id) => localStorage.setItem("highkey:product", id),
+    products.website.id,
+  );
+  await page.route("**/_highkey/runtime", (route) => route.fulfill({ json: { live: false } }));
 });
 
 test("visitor chart excludes installation identities without shrinking overview totals", async ({
@@ -322,7 +325,7 @@ for (const width of [1440, 894, 390]) {
       const box = await tile.boundingBox();
       expect(Math.abs((box?.width ?? 0) - (box?.height ?? 0))).toBeLessThan(2);
     }
-    await page.screenshot({ path: `/tmp/piko-overview-${width}.png`, fullPage: true });
+    await page.screenshot({ path: `/tmp/highkey-overview-${width}.png`, fullPage: true });
     const bounds = await page.locator(".overview-widget").evaluateAll((widgets) =>
       widgets.map((widget) => {
         const rect = widget.getBoundingClientRect();

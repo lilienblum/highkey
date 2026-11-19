@@ -6,9 +6,9 @@ import { apiContext, setChangeBus } from "./server/api/context";
 import { startJobs } from "./server/jobs";
 import { publishChange } from "./server/realtime";
 
-const started = globalThis as { pikoJobs?: boolean };
-if (!started.pikoJobs) {
-  started.pikoJobs = true;
+const started = globalThis as { highkeyJobs?: boolean };
+if (!started.highkeyJobs) {
+  started.highkeyJobs = true;
   setChangeBus({ notify: publishChange });
   startJobs(apiContext());
 }
