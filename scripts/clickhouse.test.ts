@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { CLICKHOUSE_IMAGE } from "./clickhouse";
 
 const root = new URL("..", import.meta.url).pathname;
 const password = "piko-test";
@@ -100,13 +98,4 @@ describe("the test ClickHouse", () => {
     },
     { timeout: 60_000 },
   );
-});
-
-describe("deployment", () => {
-  test("compose.yaml pins the same ClickHouse image as scripts/clickhouse.ts", () => {
-    const compose = Bun.YAML.parse(readFileSync(`${root}compose.yaml`, "utf8")) as {
-      services: Record<string, { image?: string }>;
-    };
-    expect(compose.services.clickhouse?.image).toBe(CLICKHOUSE_IMAGE);
-  });
 });

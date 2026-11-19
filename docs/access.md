@@ -1,6 +1,6 @@
 # Cloudflare Access is the authentication boundary
 
-Piko intentionally has **no built-in authentication**. Neither app validates Access tokens or trusts an identity header as an authorization check. Access is enforced before traffic reaches the origin. Keep the origins private: use Cloudflare Tunnel, or an equivalent private network boundary. In Compose, ClickHouse and the ingest app have no published ports, and the dashboard is bound to localhost by default. Do not expose any of them directly to the Internet; ClickHouse in particular is never public.
+Piko intentionally has **no built-in authentication**. Neither app validates Access tokens or trusts an identity header as an authorization check. Access is enforced before traffic reaches the origin. Keep the origins private: use Cloudflare Tunnel, or an equivalent private network boundary. Both apps bind to localhost by default, and ClickHouse listens only on localhost unless you change it. Do not expose any of them directly to the Internet; ClickHouse in particular is never public.
 
 For a deployment at `piko.example.com`:
 
@@ -44,7 +44,7 @@ Agents and local pages reach Piko through two dashboard prefixes that you can gi
 
 ### Local pages and CORS
 
-A page you serve on your own machine (see [local pages](dashboards.md#local-pages)) can call `/api/read/*` cross-origin. The dashboard answers loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) by default, and other origins listed in `PIKO_CORS_ORIGINS`: comma-separated exact origins with scheme, host and port, no trailing slash and no path, never `null`. A literal `*` is accepted by the code but should not be used. [Compose](compose.md#cors-for-read-only-pages) shows where to set it. Only the headers `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret` are allowed, credentials are never enabled, and write paths send no CORS headers.
+A page you serve on your own machine (see [local pages](dashboards.md#local-pages)) can call `/api/read/*` cross-origin. The dashboard answers loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) by default, and other origins listed in `PIKO_CORS_ORIGINS`: comma-separated exact origins with scheme, host and port, no trailing slash and no path, never `null`. A literal `*` is accepted by the code but should not be used. Under native Tako, set it in `[vars.production]` of `tako.dashboard.toml`. Only the headers `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret` are allowed, credentials are never enabled, and write paths send no CORS headers.
 
 Access answers a browser's preflight itself, without credentials, with a 403. In the `/api/read/*` application's **Advanced settings → Cross-Origin Resource Sharing**, turn on **Bypass options requests to origin** so the preflight reaches Piko, which then applies its own allowlist. The page sends the read-only token's two headers on the real request. Anything in a page's source is readable by the page's visitors, so keep tokens out of pages you share.
 
@@ -64,9 +64,3 @@ The ingest host serves only `/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/log
 The ingest app needs server-to-server access to **only** `POST piko.example.com/_piko/changes`. A narrow path-specific Access bypass can expose this endpoint because the dashboard itself checks the separate `PIKO_CHANGE_TOKEN` bearer secret before publishing. Missing/wrong credentials fail; the token is never embedded in browser code. Never bypass `/_piko/*` or `/_tako/*` broadly. The public ingestion key does not authorize notifications, queries, or management.
 
 Verify that `/_piko/changes` without its secret returns 401, that `/_tako/channels/*` redirects or denies a signed-out user at Access, and that the ingest host answers only its public paths without Access.
-
-## Compose ingress
-
-Both [Compose options](compose.md) use one public hostname. ClickHouse and the ingest app have no published ports; the dashboard reaches the ingest app at `http://ingest:3001` and ClickHouse at `http://clickhouse:8123`. Use the same dashboard, ingestion, and tracker Access policies listed above. With standalone Compose, the Tunnel can route everything to the dashboard, or add [path rules](compose.md#cloudflare-tunnel) for the ingest paths and `/tracker.js` that reach the ingest container on the Compose network. For the Tako Compose group, direct the private Tunnel at Tako's configured routes rather than assuming the standalone loopback port remains published; Tako assigns its own private ingress ports, and the group's production routes send the ingest paths to the ingest app.
-
-Compose uses automatic polling without Tako channels or change webhooks. It needs no ingest hostname, Access service credential, notification secret, or `/_piko/changes` bypass. Keep `/_piko/*` under the dashboard's normal Access policy.

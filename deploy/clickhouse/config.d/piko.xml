@@ -1,6 +1,6 @@
 <!-- Piko's ClickHouse server settings: small-server memory use, quiet system logs, and no
-     system tables for users who were not granted them. Mounted read-only by Compose and by
-     scripts/clickhouse.ts. -->
+     system tables for users who were not granted them. scripts/clickhouse.ts mounts it into the
+     development and test servers; a server you install gets it in /etc/clickhouse-server/config.d/. -->
 <clickhouse>
     <access_control_improvements>
         <select_from_system_db_requires_grant>true</select_from_system_db_requires_grant>

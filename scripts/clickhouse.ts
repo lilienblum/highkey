@@ -1,4 +1,5 @@
-// Starts the ClickHouse server Piko uses in development and tests. Compose runs its own.
+// Starts the ClickHouse server Piko uses in development and tests, in Docker. Production runs a
+// ClickHouse you install, with the same settings files (see docs/tako.md).
 //
 //   bun scripts/clickhouse.ts test-up    disposable server for `bun test` and `cargo test`
 //   bun scripts/clickhouse.ts test-down
@@ -10,7 +11,7 @@
 import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
 import { migrate } from "../apps/dashboard/src/server/clickhouse/migrate";
 
-/** Pinned image. compose.yaml must name the same tag. */
+/** Pinned image: the version development and tests run, and the one production should match. */
 export const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:26.8.37.168";
 /** The oldest server the apps accept. */
 export const MIN_CLICKHOUSE = [25, 8] as const;

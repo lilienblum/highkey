@@ -19,18 +19,6 @@ Piko runs two independent applications on a self-hosted ClickHouse server:
 
 When the edge routes the ingest paths to the ingest app, ingestion never passes through the dashboard: a dashboard deploy leaves it running, and ClickHouse gives it priority over dashboard queries. When the edge cannot route them separately, the dashboard forwards them to the ingest app.
 
-## Run with Docker Compose
-
-Requires Docker with the Compose plugin. From this checkout, create a `.env` with the two ClickHouse passwords once, then start the stack:
-
-```sh
-printf 'PIKO_CLICKHOUSE_PASSWORD=%s\nPIKO_INGEST_CLICKHOUSE_PASSWORD=%s\n' \
-  "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > .env
-docker compose up --build -d
-```
-
-Open **http://127.0.0.1:3000**. Compose runs ClickHouse, a one-shot `migrate` job, the ingest app and the dashboard; everything builds inside Linux containers, so no local Bun, Rust, or Tako installation is needed. Stop with `docker compose down`, which retains your data. See the [Compose guide](docs/compose.md) for updates, backups, ClickHouse memory, Tunnel routing and Tako hosting.
-
 ## Develop locally with Tako
 
 Requires [Tako](https://tako.sh/) `0.0.0-9ae824f` or a later release with ephemeral channels, Bun 1.4+, a current stable Rust toolchain (tested with 1.95.0), a C compiler, and Docker for the local ClickHouse. No npm or Node runtime is required.
@@ -56,21 +44,13 @@ See [Tako setup, deployment, and realtime delivery](docs/tako.md). Development u
 
 ## Deployment
 
-Choose Docker Compose, a Tako Compose group, or native Tako. All run the same ingest app and dashboard on ClickHouse, with external access control.
+Piko deploys as two native Tako apps, `tako.ingest.toml` and `tako.dashboard.toml`, on a ClickHouse server you install on the host with Piko's settings files. See [Tako setup and deployment](docs/tako.md) for installing ClickHouse, deploying, updating and backing up. The two apps take separate production hostnames, so the ingest paths never pass through the dashboard, and they share a notification secret for immediate ephemeral channel hints (with polling recovery); ephemeral channels require one Tako server without a shared Postgres credential.
 
-| Option                                                    | Configuration                              | Automatic updates                                                          | Storage and releases                                                                                                          |
-| --------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [Docker Compose](docs/compose.md#run-with-docker-compose) | `compose.yaml`                             | Visible/online polling every 30 seconds, plus focus and reconnect          | ClickHouse on the `piko-clickhouse` volume; `state.sqlite` on `piko-data` at `/data`                                          |
-| [Tako Compose group](docs/compose.md#deploy-with-tako)    | `tako.compose.toml` + `compose.yaml`       | Polling as in Compose; channel hints inside the group are not verified yet | The same volumes; production routes you add send the ingest paths to the ingest app; ingest start-first, dashboard stop-first |
-| [Native Tako](docs/tako.md)                               | `tako.ingest.toml` + `tako.dashboard.toml` | Immediate ephemeral channel hints, with polling recovery                   | Your own ClickHouse server; `state.sqlite` under `$TAKO_DATA_DIR`; migrations with `bun run migrate` before each update       |
+There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Piko does not validate Access JWTs or provide fallback authentication.
 
-Compose publishes only the dashboard; ClickHouse and the ingest app stay on the container network. The Tako Compose group adds Tako's HTTPS routing, service updates, status, logs, and application rollback, and lets the ingest app take its own path routes so ingestion bypasses the dashboard (that routing is not verified yet). Native Tako uses separate production hostnames and a shared notification secret; ephemeral channels require one Tako server without a shared Postgres credential. See the guides for prerequisites, deployment, updates, and backups.
+Without Tako, build with `bun run build` and `cargo build --locked --release -p piko-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/piko-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
 
-Docker builds separate `ingest` and `dashboard` targets from [Dockerfile](Dockerfile); a dashboard-only change leaves the ingest image cached. Each mode has separate data; changing deployment mode does not migrate it. There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Piko does not validate Access JWTs or provide fallback authentication.
-
-Without Tako or Docker for the apps, build with `bun run build` and `cargo build --locked --release -p piko-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/piko-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
-
-The dashboard keeps `state.sqlite` (with its WAL files) in `PIKO_DATA_DIR`: `$TAKO_DATA_DIR` under native Tako (locally `.tako/data/app`), the `piko-data` volume at `/data` in Compose, and `./data` by default. Run exactly one dashboard process per data directory, on durable local storage, never a network filesystem. Events and logs live in ClickHouse, on its own volume. Back up both: ClickHouse with `BACKUP DATABASE piko`, and `state.sqlite` with `VACUUM INTO`; see [backups and restore](docs/compose.md#backups-and-restore). Tako app-data backups do not include Compose named volumes. Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
+The dashboard keeps `state.sqlite` (with its WAL files) in `PIKO_DATA_DIR`: `$TAKO_DATA_DIR` under native Tako (locally `.tako/data/app`), and `./data` by default. Run exactly one dashboard process per data directory, on durable local storage, never a network filesystem. Events and logs live in ClickHouse. Back up both: ClickHouse with `BACKUP DATABASE piko`, and `state.sqlite` with `VACUUM INTO`; see [backups and restore](docs/tako.md#backups-and-restore). Retention is ClickHouse TTL: expired rows are deleted during background merges, so disk use need not shrink immediately. Run one ingest process, because exact deduplication relies on it.
 
 Ingest app settings:
 
@@ -168,7 +148,7 @@ See [the verification record](docs/verification.md) for measured checks and thei
 
 ## Scope and limitations
 
-- External access control, one ClickHouse node, one ingest process, one dashboard process. Compose updates the dashboard stop-first, which briefly interrupts the UI; under Tako the stateless ingest app updates start-first. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference without removing it. No replication, multi-user permissions, or automatic backups yet.
+- External access control, one ClickHouse node, one ingest process, one dashboard process. Tako updates both apps with a rolling replacement; for a few seconds the old and new dashboard share `state.sqlite`, and SQLite's locking serializes their writes. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference without removing it. No replication, multi-user permissions, or automatic backups yet.
 - Browser ingestion keys are intentionally public and write-only. They are not anti-abuse credentials; a key holder can submit fabricated events. There is global capacity backpressure, but no per-key fairness or bot detection.
 - Identity is explicit, optional, and project-scoped. There is no IP/user-agent fingerprinting. The browser tracker defaults to unidentified events and always honors Do Not Track and Global Privacy Control. Installations are distinct from website visitors and sessions.
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.

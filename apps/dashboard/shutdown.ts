@@ -1,6 +1,6 @@
 // Stops the server on SIGTERM or SIGINT: it stops accepting connections, lets requests in flight
-// finish, and exits. In a container Bun runs as PID 1, which ignores a signal it has no handler
-// for, so without this `docker stop` waits out its grace period and then kills the process.
+// finish, and exits, so an update or restart does not cut off requests. (Bun as a container's
+// PID 1 would otherwise ignore SIGTERM entirely.)
 
 interface Stoppable {
   stop(closeActiveConnections?: boolean): Promise<void>;

@@ -1,4 +1,4 @@
-// `bun run migrate`: applies Piko's ClickHouse migrations. Compose runs it as a one-shot job
+// `bun run migrate`: applies Piko's ClickHouse migrations. Run it from the release you deploy,
 // before the ingest app and the dashboard start.
 import { adminClient } from "./client";
 import { migrate } from "./migrate";

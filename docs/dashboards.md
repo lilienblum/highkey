@@ -17,7 +17,7 @@ Piko serves an MCP server (streamable HTTP) in the API. It has two paths:
 
 `/mcp` is served by the dashboard and forwards to the API's own `/api/mcp`. Use `/api/mcp` only when an agent reaches the API directly, without the dashboard in front. The read-only server stays at `/api/read/mcp` so Access can scope a read token to `/api/read/*`.
 
-Piko has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev`, standalone or Compose) there is no Access and the agent needs no headers.
+Piko has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev` or standalone) there is no Access and the agent needs no headers.
 
 ### Claude Code
 
@@ -497,7 +497,7 @@ The stat counts the people active in the range who were first seen before it. Th
 Because the read paths are plain HTTP, you can write your own page against a project (a wallboard, a status page, a README badge generator) and keep it wherever you like. Under `/api/read/*` every request is non-mutating whatever its method, so a read-only token can be scoped to that prefix. These paths answer cross-origin requests from an allowlist:
 
 - **Loopback origins are allowed by default**: `http://localhost`, `http://127.0.0.1` and `http://[::1]` (HTTP or HTTPS) with any port.
-- **Other origins are added with `PIKO_CORS_ORIGINS`**, a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path), for example `PIKO_CORS_ORIGINS=https://wall.example.com,http://192.168.1.20:8080`. Set it on the API process; see [Compose](compose.md#cors-for-read-only-pages).
+- **Other origins are added with `PIKO_CORS_ORIGINS`**, a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path), for example `PIKO_CORS_ORIGINS=https://wall.example.com,http://192.168.1.20:8080`. Set it on the dashboard; under native Tako, in `[vars.production]` of `tako.dashboard.toml`.
 - **`null` is never allowed.** A page opened from disk (`file://`) has the `null` origin, so serve it instead: `python3 -m http.server 8000` or `bunx serve` in its folder, then open `http://localhost:8000`.
 - A literal `*` in `PIKO_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point, and with Access in front the origin you list is the only page that should read your data.
 - Credentials are never enabled, no write path sends CORS headers at all, and the only request headers allowed are `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret`.

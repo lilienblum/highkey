@@ -370,7 +370,7 @@ No production deployment, external Access configuration, backup restoration into
 
 ## ClickHouse and the ingest app — 2026-11-16
 
-The Rust API was replaced by two apps on self-hosted ClickHouse: `apps/ingest` receives events and logs and serves `/tracker.js`, and the dashboard serves every other path, with management state in SQLite. Events and logs moved from per-project DuckDB files to ClickHouse tables with TTL retention, deduplication became exact for 24 hours, each project reads through its own ClickHouse user, and dashboard documents lost their SQL signal. `compose.yaml` became one file for standalone Compose and a Tako Compose group.
+The Rust API was replaced by two apps on self-hosted ClickHouse: `apps/ingest` receives events and logs and serves `/tracker.js`, and the dashboard serves every other path, with management state in SQLite. Events and logs moved from per-project DuckDB files to ClickHouse tables with TTL retention, deduplication became exact for 24 hours, each project reads through its own ClickHouse user, and dashboard documents lost their SQL signal.
 
 This change is verified with:
 
@@ -386,13 +386,17 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 bun run test:e2e
 bun run test:load
-bun scripts/compose-smoke.ts
 ```
 
 - `cargo test` runs the ingest app against the test ClickHouse: server-version and contract checks, key lookup and revocation within the cache lifetime, origin rules before the payload, atomic validation, deduplication within the window and a merge keeping the first copy beyond it, retention by event time, OTLP formats and limits, capacity and connection-loss 503s, acknowledged events surviving an ingest crash, change hints that skip duplicate retries, and the Rust SDK's delivery.
 - `bun run test` runs the SDK and script tests and the dashboard server tests: management, the Explore and Logs queries, widget runs including funnels and retention, dashboard and view storage and validation, the MCP tools against recorded fixtures, migrations, the key registry and its reconcile, and the escape tests that keep each project's reader inside its own rows.
 - `bun run test:e2e` runs the Chromium suite against disposable Tako apps and their own ClickHouse.
 - `bun run test:load` compares ingest acknowledgment latency with and without heavy dashboard reads, and fails if any ingest request fails or if the loaded p99 is more than twice the unloaded one or reaches 250 ms.
-- `bun scripts/compose-smoke.ts` builds the Compose stack with fresh passwords and checks that an event sent through the dashboard reaches Explore.
 
-Results for these runs are not recorded in this entry. These checks do not cover the Tako Compose group (host-plus-path routes and channels are not verified yet), the backup and restore procedures in [the Compose guide](compose.md#backups-and-restore), native production against an external ClickHouse, or Cloudflare Access. `bun benchmark` and `bun benchmark:logs` run on the same stack; [the benchmark report](benchmark.md) records their measurements and the load test's.
+Results for these runs are not recorded in this entry. These checks do not cover the backup and restore procedures in [the Tako guide](tako.md#backups-and-restore), native production against an installed ClickHouse, or Cloudflare Access. `bun benchmark` and `bun benchmark:logs` run on the same stack; [the benchmark report](benchmark.md) records their measurements and the load test's.
+
+## Native Tako only, and the final review — 2026-11-19
+
+Docker Compose, the Tako Compose group, the Dockerfile and `scripts/compose-smoke.ts` were removed: Piko runs as the two native Tako apps, with ClickHouse in Docker locally and installed on the host in production ([installation](tako.md#clickhouse-on-the-server)). A ClickHouse container started without the image's user variables, carrying only Piko's two settings files and the documented `piko-admin.xml`, accepted `bun run migrate`, provisioned a project reader that read its own views and was refused `piko.events` (code 497), and let `piko_ingest` read the contract.
+
+The whole-branch review's fixes were verified with `bun run test` (293 pass), `cargo test` (57 pass), `cargo clippy --all-targets --all-features -- -D warnings`, `bun typecheck`, `bun lint`, `bun run build` and `bun run test:load` (p99 158.3 ms alone, 123.8 ms with eight readers). `bun run test:e2e` was not rerun: the current Tako CLI cannot start dev apps on this machine.

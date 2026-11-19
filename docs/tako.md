@@ -1,6 +1,6 @@
 # Native Tako applications
 
-Piko supports native Tako and [Docker Compose](compose.md). This guide covers the two native apps: `tako.ingest.toml` runs the ingest app as `piko-ingest`, and `tako.dashboard.toml` runs the dashboard as `piko`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own. Compose can run standalone or as one Tako Compose group; it refreshes by polling instead of channel hints.
+Piko runs as two native Tako apps: `tako.ingest.toml` runs the ingest app as `piko-ingest`, and `tako.dashboard.toml` runs the dashboard as `piko`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own.
 
 Piko uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. Tako itself is unchanged. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. Use CLI/server release `0.0.0-9ae824f` or later with ephemeral support; the JavaScript SDK is pinned to that release.
 
@@ -33,7 +33,7 @@ The development runner creates a random shared `PIKO_CHANGE_TOKEN` through the C
 
 The dashboard stores `state.sqlite` under `$TAKO_DATA_DIR`, locally `.tako/data/app`; events and logs live in ClickHouse's volume. The ingest app has no data directory.
 
-`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with `state.sqlite` in `./data`. Standalone mode and [Docker Compose](compose.md) refresh automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
+`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with `state.sqlite` in `./data`. Standalone mode refreshes automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
 
 ## Realtime semantics
 
@@ -56,7 +56,33 @@ Each analytical request has a 15-second deadline. Queries retry a short server-a
 
 ## Production and updates
 
-Native production needs your own ClickHouse server, version 25.8 or newer; the ingest app refuses older servers at startup. Keep it private and reachable from both apps. Give it Piko's server settings, `deploy/clickhouse/config.d/piko.xml` and `deploy/clickhouse/users.d/piko.xml`: they turn on the access-control checks that keep projects apart and the JSON key escaping Piko's properties rely on. The dashboard and the migrations sign in as an admin user with access management, `piko_admin` unless `PIKO_CLICKHOUSE_USER` names another.
+Production needs a ClickHouse server, version 25.8 or newer, which you install on the host; the ingest app refuses older servers at startup. Development and tests run `clickhouse/clickhouse-server:26.8.37.168` (pinned in `scripts/clickhouse.ts`), so prefer that release line.
+
+### ClickHouse on the server
+
+1. Install ClickHouse from its [official packages](https://clickhouse.com/docs/install). The packaged server listens only on localhost; keep it that way when both apps run on the same host, and never expose it to the Internet.
+2. Copy Piko's server settings into place: `deploy/clickhouse/config.d/piko.xml` to `/etc/clickhouse-server/config.d/piko.xml`, and `deploy/clickhouse/users.d/piko.xml` to `/etc/clickhouse-server/users.d/piko.xml`. They turn on the access-control checks that keep projects apart, the JSON key escaping Piko's properties rely on, and small-server memory settings.
+3. Create the admin user the dashboard and the migrations sign in as (`piko_admin` unless `PIKO_CLICKHOUSE_USER` names another), in `/etc/clickhouse-server/users.d/piko-admin.xml`. It needs access management, which lets it create each project's reader user, views and grants:
+
+   ```xml
+   <clickhouse>
+       <users>
+           <piko_admin>
+               <!-- printf '%s' "$PIKO_CLICKHOUSE_PASSWORD" | sha256sum -->
+               <password_sha256_hex>…</password_sha256_hex>
+               <networks><ip>127.0.0.1</ip><ip>::1</ip></networks>
+               <profile>default</profile>
+               <quota>default</quota>
+               <access_management>1</access_management>
+               <named_collection_control>1</named_collection_control>
+           </piko_admin>
+       </users>
+   </clickhouse>
+   ```
+
+4. Restart ClickHouse (`sudo systemctl restart clickhouse-server`), then run the migrations below. They create the `piko_ingest` user; every project's reader is created by the dashboard.
+
+A server set up this way, with only these three files, passed the same checks as the development server: the migrations applied, a project reader read its own views and was refused the shared tables, and the ingest user read the contract.
 
 Run the migrations from a checkout of the release you are deploying, before the first start and before every update, with `PIKO_CLICKHOUSE_URL`, the admin `PIKO_CLICKHOUSE_PASSWORD` and `PIKO_INGEST_CLICKHOUSE_PASSWORD` set in the environment:
 
@@ -108,9 +134,44 @@ To update:
 
 1. Run `bun run migrate` against the production ClickHouse from the new release. Migrations only add, so the running apps keep working.
 2. Deploy the ingest app with `tako -c tako.ingest.toml deploy --env production`. It holds no state, so Tako's normal rolling replacement works. While the old and new processes overlap, a retry that reaches the other process can be stored twice until a merge removes it (see [deduplication](api.md#deduplication)).
-3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. `state.sqlite` must have one owner, but a native rolling update starts the replacement before it drains the old process, so the two overlap for a few seconds; SQLite's file locking serializes their writes on a local disk. Compose avoids the overlap with stop-first updates.
+3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. `state.sqlite` must have one owner, but a native rolling update starts the replacement before it drains the old process, so the two overlap for a few seconds; SQLite's file locking serializes their writes on a local disk.
 
-Do not delete an app to deploy an update; deletion can remove persistent data. Back up ClickHouse with `BACKUP DATABASE piko` and `state.sqlite` with `VACUUM INTO`, as described for [Compose](compose.md#backups-and-restore). No production deployment or Cloudflare configuration is performed by local setup.
+Do not delete an app to deploy an update; deletion can remove persistent data. No production deployment or Cloudflare configuration is performed by local setup.
+
+## Backups and restore
+
+Back up two things: ClickHouse's `piko` database, which holds events, logs and the key registry, and the dashboard's `state.sqlite`, which holds projects, sources, key hashes, settings, dashboards, views and pending retention changes. The rest of ClickHouse's Piko state is rebuilt: `bun run migrate` creates the schema, settings profiles and shared users, and from `state.sqlite` the dashboard recreates each project's views, reader user and grant at startup, recreates whatever is missing every minute, and rewrites the key registry. Take both backups at about the same time, and store them with restricted access.
+
+### ClickHouse
+
+Back up the `piko` database as the admin user (`clickhouse-client --user piko_admin --password`) to S3 or S3-compatible storage, with a new path for every backup:
+
+```sql
+BACKUP DATABASE piko
+TO S3('https://your-bucket.s3.amazonaws.com/piko/2026-11-19', '<key id>', '<key secret>');
+```
+
+Restore onto a fresh server set up as above: run `bun run migrate` first, so the schema and users exist, then restore the two data tables, which are still empty:
+
+```sql
+RESTORE TABLE piko.events, TABLE piko.logs
+FROM S3('https://your-bucket.s3.amazonaws.com/piko/2026-11-19', '<key id>', '<key secret>');
+```
+
+`RESTORE` refuses tables that already hold rows, so do not restore into a server that has been ingesting. Restore `state.sqlite` next, then start the apps.
+
+### SQLite
+
+`VACUUM INTO` writes a consistent copy of `state.sqlite` while the dashboard keeps running. On the server, in the dashboard's data directory (its `TAKO_DATA_DIR`):
+
+```sh
+sqlite3 state.sqlite "VACUUM INTO '/var/backups/piko-state.sqlite'"
+```
+
+The copy holds key hashes and display prefixes, never key secrets. To restore, stop the dashboard, replace `state.sqlite` and delete its `state.sqlite-wal` and `state.sqlite-shm` files, and start it again. The dashboard rewrites the key registry from the restored file when it starts. Keys created after the snapshot are not in it, but their registry rows stay in ClickHouse, so they keep authorizing ingestion until those rows are removed from `piko.ingest_keys`. Events of a project the snapshot does not hold stay stored, but no page shows them.
+
+Local development and each deployed environment have separate storage; selecting another config does not copy data. To move an installation, take both backups, restore them on the new server as above, and check projects, keys, queries and duplicate retries before pointing collectors at it.
+
 
 ## Verification boundaries
 
