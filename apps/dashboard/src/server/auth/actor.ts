@@ -41,16 +41,23 @@ export async function memberRole(ctx: ApiContext, orgId: string, userId: string)
 
 /**
  * The role `userId` holds in `orgId`, for a request acting there: refused when they are not a
- * member, or when the organization requires two-factor codes and they have not turned them on.
+ * member, when they are banned, or when the organization requires two-factor codes and they
+ * have not turned them on.
  */
 async function standing(ctx: ApiContext, orgId: string, userId: string, notMember: string) {
   const role = await memberRole(ctx, orgId, userId);
   if (!role) throw new ApiError(403, notMember, {}, "not_a_member");
-  const row = await one<{ required: number | null; enabled: number | null }>(
+  const row = await one<{
+    required: number | null;
+    enabled: number | null;
+    banned: number | null;
+  }>(
     ctx.db,
-    'SELECT o."requireTwoFactor" AS required, u."twoFactorEnabled" AS enabled FROM organization o, "user" u WHERE o.id = ? AND u.id = ?',
+    'SELECT o."requireTwoFactor" AS required, u."twoFactorEnabled" AS enabled, u.banned FROM organization o, "user" u WHERE o.id = ? AND u.id = ?',
     [orgId, userId],
   );
+  // A banned person's sessions are gone; their keys and agent tokens stop here.
+  if (row?.banned) throw new ApiError(403, "This account is banned", {}, "banned");
   if (row?.required && !row.enabled)
     throw new ApiError(
       403,

@@ -46,7 +46,9 @@ async function ensureRoutes(): Promise<void> {
   const { registerMcp } = await import("../mcp/server");
   const { registerApiKeys } = await import("../auth/key-routes");
   const { registerConnections } = await import("../auth/connections");
+  const { registerAdmin } = await import("../admin");
   registerManagement();
+  registerAdmin();
   registerApiKeys();
   registerConnections();
   registerQueries();
