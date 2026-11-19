@@ -3423,3 +3423,103 @@ button.workspace-dashboards-menu-link {
   font-size: 11px;
   color: var(--muted-foreground);
 }
+/* Settings' parts: a row of destinations above the page heading. */
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-nav-link {
+  margin-bottom: -1px;
+  padding: 8px 0 10px;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  transition: color 120ms ease-out;
+}
+.settings-nav-link:hover {
+  color: var(--foreground);
+}
+.settings-nav-link.is-active {
+  border-bottom-color: var(--primary);
+  color: var(--foreground);
+}
+.settings-nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 880px;
+}
+.settings-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settings-muted {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.settings-secret {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.settings-secret code {
+  flex: 1;
+  min-width: 0;
+}
+.settings-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-nav-link {
+    transition: none;
+  }
+}
+.invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+  align-items: end;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .invite-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.invite-link {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.admin-search {
+  display: flex;
+  gap: 8px;
+  max-width: 480px;
+}

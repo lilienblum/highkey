@@ -3,7 +3,7 @@ import { validateExploreSearch } from "@/lib/explore-search";
 import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
-import { useWorkspaceTarget, workspaceView } from "@/lib/workspace-route";
+import { isOrganizationPage, useWorkspaceTarget, workspaceView } from "@/lib/workspace-route";
 import { dashboardQueries } from "@/server/dashboards";
 import { viewQueries } from "@/lib/views";
 import { ProjectIcon } from "./project-icon";
@@ -178,10 +178,23 @@ export function AppShell({
     (requestedProject && !product) ||
     (product && drilldown?.productId && product.id !== drilldown.productId) ||
     (!drilldown && search.source && missingSource);
+  // Organization and account pages need no project, so nothing resolves or redirects there.
+  const organizationPage = isOrganizationPage(path);
   const resolvingProject =
-    !!product && !projectSlug && !selectionError && !(drilldown && missingSource);
+    !organizationPage &&
+    !!product &&
+    !projectSlug &&
+    !selectionError &&
+    !(drilldown && missingSource);
   useEffect(() => {
-    if (!preferencesReady || !product || selectionError || (drilldown && missingSource)) return;
+    if (
+      organizationPage ||
+      !preferencesReady ||
+      !product ||
+      selectionError ||
+      (drilldown && missingSource)
+    )
+      return;
     savePreference("highkey:product", product.id);
     savePreference("highkey:days", String(days));
     savePreference(`highkey:source:${product.id}`, sourceId ?? "");
@@ -219,6 +232,7 @@ export function AppShell({
     search.days,
     navigate,
     workspaceTarget,
+    organizationPage,
   ]);
   const rangeIdentity = JSON.stringify([
     view,

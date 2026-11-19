@@ -44,6 +44,7 @@ import {
 import { api, type Product } from "@/lib/api";
 import { highlight } from "@/lib/highlight";
 import { PageHeader, useWorkspace } from "./app-shell";
+import { SettingsNav } from "./settings/settings-nav";
 import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
@@ -152,6 +153,7 @@ export function Settings() {
   }
   return (
     <>
+      <SettingsNav />
       <PageHeader
         title="Project settings"
         description="Manage collection, ingestion keys, and retention."

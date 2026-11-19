@@ -56,7 +56,16 @@ export function useWorkspaceTarget() {
  * `logs` or `settings` still reads as its own Overview. Bare `/events`, `/logs` and `/settings`
  * are the browser-saved project's views; dashboards exist only under a project.
  */
+/**
+ * Pages about the organization or the account rather than a project: they stay where they are
+ * instead of being sent to the saved project's address, and show under Settings.
+ */
+export function isOrganizationPage(path: string): boolean {
+  return /^\/(settings\/(organization|members|keys|agents|account)|admin)\/?$/.test(path);
+}
+
 export function workspaceView(path: string): WorkspaceView {
+  if (isOrganizationPage(path)) return "/settings";
   const view = /^(?:\/[^/]+\/[^/]+)?\/(events|logs|settings)\/?$/.exec(path)?.[1];
   if (view) return `/${view}` as WorkspaceView;
   if (/^\/[^/]+\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";

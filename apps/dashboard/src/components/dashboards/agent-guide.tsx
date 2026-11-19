@@ -294,10 +294,11 @@ export function AgentGuide({ intent, project }: { intent: GuideIntent; project: 
           </TabsContent>
         </Tabs>
         <p className="agent-guide-note">
-          Once per machine. Behind Cloudflare Access, add the CF-Access-Client-Id and
-          CF-Access-Client-Secret headers;{" "}
+          Once per machine. The agent then opens Highkey for you to sign in and choose its
+          organization and access: in Claude Code run <code>/mcp</code> and choose Authenticate; in
+          Codex run <code>codex mcp login highkey</code>.{" "}
           <a href={docsUrl} target="_blank" rel="noreferrer">
-            see the docs
+            See the docs
           </a>
           .
         </p>

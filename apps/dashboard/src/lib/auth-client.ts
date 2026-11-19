@@ -89,3 +89,25 @@ export function follow(data: unknown, fallback: string): void {
   const { url } = (data ?? {}) as { url?: unknown };
   window.location.assign(typeof url === "string" && url ? url : fallback);
 }
+
+/** GETs a Better Auth endpoint; throws the sentence to show when it fails. */
+export async function authGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`/api/auth${path}`, {
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+    signal,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(messageOf(data, response.status));
+  return data as T;
+}
+
+/** POSTs to a Better Auth endpoint; throws the sentence to show when it fails. */
+export async function authAction<T = unknown>(
+  path: string,
+  body: Record<string, unknown> = {},
+): Promise<T> {
+  const result = await authPost<T>(path, body);
+  if (!result.ok) throw new Error(result.error ?? "Something went wrong. Try again.");
+  return result.data as T;
+}
