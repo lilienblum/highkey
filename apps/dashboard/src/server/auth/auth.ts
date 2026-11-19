@@ -3,10 +3,12 @@
 // Its tables come from migrations/, generated with apps/dashboard/scripts/auth-schema.ts.
 import type { Database } from "bun:sqlite";
 import { apiKey } from "@better-auth/api-key";
+import { cimd } from "@better-auth/cimd";
+import { mcp } from "@better-auth/mcp";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth, getCurrentAdapter } from "better-auth";
 import { APIError } from "better-auth/api";
-import { admin, organization } from "better-auth/plugins";
+import { admin, jwt, organization } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { tako } from "tako.sh";
 import type { BunDb } from "../db/bun-db";
@@ -14,6 +16,7 @@ import type { Db } from "../db/db";
 import { managementDb, takoDatabase } from "../db/open";
 import { adoptOrphanProjects } from "../db/products";
 import { projectSlug } from "../db/sources";
+import { cimdFetch } from "./cimd-fetch";
 import { keyFrom } from "./keys";
 import { ac, roles } from "./roles";
 
@@ -46,6 +49,29 @@ export interface AuthOptions {
   mailer: Mailer | null;
   signup: "open" | "invite";
   keyRateLimit?: { timeWindow: number; maxRequests: number };
+  /** How agents' client metadata documents are fetched; tests serve their own. */
+  cimdFetch?: Parameters<typeof cimd>[0]["fetchClientMetadataResource"];
+}
+
+/** The scopes agents ask for; `mcp:write` adds the changing tools to `mcp:read`'s. */
+export const MCP_SCOPES = ["openid", "profile", "offline_access", "mcp:read", "mcp:write"];
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Whether agents can sign in over OAuth at this address: OAuth needs HTTPS, except on loopback for
+ * development. Without it (a plain-HTTP address on a private network) agents use API keys.
+ */
+export function oauthAvailable(publicUrl: string): boolean {
+  const url = new URL(publicUrl);
+  return (
+    url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname))
+  );
+}
+
+/** The MCP resource agents' tokens are bound to: the `/mcp` address users are shown. */
+export function mcpResource(publicUrl: string): string {
+  return `${new URL(publicUrl).origin}/mcp`;
 }
 
 /** An invitation is pending for `email` and not yet expired. */
@@ -108,7 +134,23 @@ export function createAuth(options: AuthOptions) {
           transaction: true,
         };
   // The instance, for hooks that call its API (they run only after it exists).
-  let self: { api: { createOrganization(input: unknown): Promise<unknown> } } | null = null;
+  let self: {
+    api: { createOrganization(input: unknown): Promise<unknown> };
+    $context: Promise<{ adapter: unknown }>;
+  } | null = null;
+  /** The role `userId` holds in `orgId` now, read through the instance (and any open transaction). */
+  const roleIn = async (orgId: string, userId: string): Promise<string | null> => {
+    if (!self) return null;
+    const adapter = await adapterOf({ context: await self.$context });
+    const member = await adapter?.findOne<{ role: string }>({
+      model: "member",
+      where: [
+        { field: "organizationId", value: orgId },
+        { field: "userId", value: userId },
+      ],
+    });
+    return member?.role ?? null;
+  };
   const instance = betterAuth({
     appName: "Highkey",
     baseURL: options.publicUrl,
@@ -119,6 +161,8 @@ export function createAuth(options: AuthOptions) {
     // API keys are made, listed and revoked only through Highkey's /api/keys, which scope them to
     // an organization; the plugin's own endpoints stay closed.
     disabledPaths: [
+      // The JWT plugin's session-to-JWT endpoint: agents get tokens only through OAuth.
+      "/token",
       "/api-key/create",
       "/api-key/get",
       "/api-key/list",
@@ -189,6 +233,56 @@ export function createAuth(options: AuthOptions) {
         customAPIKeyGetter: (ctx) => (ctx.headers ? keyFrom(ctx.headers) : null),
         rateLimit: { enabled: true, ...(options.keyRateLimit ?? KEY_RATE_LIMIT) },
       }),
+      // Agents sign in over OAuth 2.1. Before consent the person picks the organization the
+      // connection is for (the select-organization page sets it active, then continues); the
+      // consent is stored for that organization, and each token names it in its `org` claim.
+      ...(oauthAvailable(options.publicUrl)
+        ? [
+            jwt({ disableSettingJwtHeader: true }),
+            mcp({
+              loginPage: "/sign-in",
+              consentPage: "/consent",
+              resource: mcpResource(options.publicUrl),
+              scopes: MCP_SCOPES,
+              accessTokenExpiresIn: 900,
+              postLogin: {
+                page: "/select-organization",
+                // Always ask first; on return, go on only with an organization the person is in.
+                shouldRedirect: async ({ user, session, isContinuation }) => {
+                  if (!isContinuation) return true;
+                  const org = session.activeOrganizationId as string | null | undefined;
+                  return !(org && (await roleIn(org, user.id)));
+                },
+                consentReferenceId: async ({ user, session }) => {
+                  const org = session.activeOrganizationId as string | null | undefined;
+                  if (!org || !(await roleIn(org, user.id)))
+                    throw new APIError("FORBIDDEN", {
+                      message: "Choose an organization you belong to for this connection",
+                    });
+                  return org;
+                },
+              },
+              // Every token (and every refresh) checks the person still belongs to the organization,
+              // and that a viewer was not granted write access.
+              customAccessTokenClaims: async ({ user, referenceId, scopes }) => {
+                const role = user && referenceId ? await roleIn(referenceId, user.id) : null;
+                if (!role)
+                  throw new APIError("FORBIDDEN", {
+                    message: "This connection's person is no longer a member of its organization",
+                  });
+                if (scopes.includes("mcp:write") && role === "viewer")
+                  throw new APIError("FORBIDDEN", {
+                    message: "A viewer can grant read-only access",
+                  });
+                return { org: referenceId };
+              },
+            }),
+            cimd({
+              fetchClientMetadataResource: options.cimdFetch ?? cimdFetch,
+              metadataProfile: "mcp-2026-07-28",
+            }),
+          ]
+        : []),
       // The server admin (users with role "admin"), above every organization.
       admin({ adminRoles: ["admin"] }),
       // Must stay last, so cookies set by server-side calls reach TanStack Start's response.

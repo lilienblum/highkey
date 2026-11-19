@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { serveApi } from "../server/api/serve";
 
-// The short address agents connect to: the full MCP server at /api/mcp. The read-only server
-// keeps /api/read/mcp so Access can scope its token.
+// The address agents connect to, and the resource their OAuth tokens are bound to: the full MCP
+// server at /api/mcp. Scheduled runs use the read-only /api/read/mcp with an API key.
 const forward = ({ request }: { request: Request }) => {
   const url = new URL(request.url);
   url.pathname = "/api/mcp";

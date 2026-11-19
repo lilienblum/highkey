@@ -3,7 +3,7 @@ import { type Auth, createAuth, type memoryMailer } from "../src/server/auth/aut
 import type { BunDb } from "../src/server/db/bun-db";
 import type { TestContext } from "./helpers";
 
-export const TEST_ORIGIN = "http://highkey.test";
+export const TEST_ORIGIN = "https://highkey.test";
 
 export function testAuth(
   ctx: TestContext,
@@ -11,6 +11,7 @@ export function testAuth(
     signup?: "open" | "invite";
     mailer?: ReturnType<typeof memoryMailer> | null;
     keyRateLimit?: { timeWindow: number; maxRequests: number };
+    cimdFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   } = {},
 ): Auth {
   return createAuth({
@@ -21,6 +22,7 @@ export function testAuth(
     mailer: options.mailer === undefined ? null : options.mailer,
     signup: options.signup ?? "open",
     keyRateLimit: options.keyRateLimit,
+    cimdFetch: options.cimdFetch,
   });
 }
 

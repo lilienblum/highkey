@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createAuth } from "../src/server/auth/auth";
 import type { BunDb } from "../src/server/db/bun-db";
 import { type TestContext, testContext } from "./helpers";
-import { authRequest, cookieFrom, testAuth } from "./auth-helpers";
+import { authRequest, cookieFrom, TEST_ORIGIN, testAuth } from "./auth-helpers";
 
 let ctx: TestContext;
 beforeAll(async () => {
@@ -52,7 +52,7 @@ describe("accounts", () => {
     // A new process: a fresh instance on the same database and secret.
     const after = createAuth({
       database: { bun: (ctx.db as BunDb).raw },
-      publicUrl: "http://highkey.test",
+      publicUrl: TEST_ORIGIN,
       secret: "highkey-test-secret-at-least-32-characters",
       mailer: null,
       signup: "open",

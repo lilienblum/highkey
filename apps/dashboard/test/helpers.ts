@@ -93,7 +93,7 @@ export async function call(
   };
   if (body !== undefined && method !== "GET" && method !== "HEAD")
     init.body = typeof body === "string" ? body : JSON.stringify(body);
-  const response = await handleApi(new Request(`http://highkey.test${path}`, init), ctx);
+  const response = await handleApi(new Request(`${TEST_ORIGIN}${path}`, init), ctx);
   const bytes = new Uint8Array(await response.arrayBuffer());
   let json: unknown = null;
   try {

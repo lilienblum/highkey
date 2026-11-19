@@ -22,9 +22,12 @@ import {
 type Json = any;
 
 let ctx: TestContext;
+/** The owner's write API key: how a script or a scheduled agent reaches MCP. */
+let agentKey: string;
 
 beforeEach(async () => {
   ctx = await testContext();
+  agentKey = (await call(ctx, "POST", "/api/keys", { name: "Agent", access: "write" })).json.key;
 }, 300_000);
 
 afterEach(() => ctx?.cleanup());
@@ -34,9 +37,11 @@ const READ = "/api/read/mcp";
 const DAY = 86_400_000;
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
-  // An agent's request: MCP refuses any browser Origin.
+  // An agent's request: an API key, no session cookie, and no Origin (MCP refuses browsers).
   return call(ctx, "POST", path, body, {
     origin: "",
+    cookie: "",
+    authorization: `Bearer ${agentKey}`,
     accept: "application/json, text/event-stream",
     ...headers,
   });

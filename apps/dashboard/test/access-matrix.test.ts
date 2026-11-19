@@ -58,8 +58,18 @@ describe("access", () => {
     for (const route of routes) {
       const path = concrete(route.pattern);
       const scoped = route.pattern.includes(":id") || route.pattern.includes(":project");
+      // MCP takes agents' tokens and API keys, never a browser session (mcp-oauth tests).
+      const agentsOnly = route.pattern.endsWith("/mcp");
       for (const role of ["owner", "admin", "member", "viewer"] as Role[]) {
         const status = await send(route.method, path, as[role]);
+        if (agentsOnly) {
+          expect({ route: route.pattern, role, status }).toEqual({
+            route: route.pattern,
+            role,
+            status: 401,
+          });
+          continue;
+        }
         const allowed = route.need === "server-admin" ? role === "owner" : can(role, route.need);
         expect({
           route: `${route.method} ${route.pattern}`,

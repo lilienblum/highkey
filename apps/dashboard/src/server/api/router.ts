@@ -2,7 +2,9 @@
 // the permission it needs; the dashboard's /api/$ route calls `handleApi`, which resolves who is
 // asking, checks that permission, and resolves any project in the path within the asker's
 // organization before a handler runs, so no handler can skip those checks.
-import { resolveActor } from "../auth/actor";
+import { type Actor, resolveActor, withAccessToken } from "../auth/actor";
+import { oauthAvailable } from "../auth/auth";
+import { keyFrom } from "../auth/keys";
 import { can, type Permission } from "../auth/roles";
 import { resolveProduct } from "../db/products";
 import type { ApiContext } from "./context";
@@ -43,8 +45,10 @@ async function ensureRoutes(): Promise<void> {
   const { registerViews } = await import("../views");
   const { registerMcp } = await import("../mcp/server");
   const { registerApiKeys } = await import("../auth/key-routes");
+  const { registerConnections } = await import("../auth/connections");
   registerManagement();
   registerApiKeys();
+  registerConnections();
   registerQueries();
   registerDashboards();
   registerViews();
@@ -129,9 +133,7 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
     if (!params) continue;
     allowed = true;
     if (candidate.method !== request.method) continue;
-    let response: Response;
-    try {
-      const actor = await resolveActor(ctx, request);
+    const proceed = async (actor: Actor): Promise<Response> => {
       const writes = request.method !== "GET" && request.method !== "HEAD";
       // MCP refuses any request with an Origin itself (browsers never call it), so only the other
       // paths need a session's writes to come from Highkey's own pages.
@@ -153,7 +155,30 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
       for (const name of ["id", "project"])
         if (params[name] !== undefined)
           params[name] = (await resolveProduct(ctx.db, params[name] as string, actor.orgId)).id;
-      response = await candidate.handler(request, { ...ctx, actor }, params);
+      return candidate.handler(request, { ...ctx, actor }, params);
+    };
+    let response: Response;
+    try {
+      const key = keyFrom(request.headers) !== null;
+      // /api/mcp takes agents' OAuth tokens or API keys; /api/read/mcp, API keys only (scheduled
+      // and CI runs, which cannot sign in). Neither takes a browser session.
+      if (url.pathname === "/api/mcp" && !key && !oauthAvailable(ctx.publicUrl))
+        throw new ApiError(
+          401,
+          "Agents sign in over OAuth only when Highkey is served over HTTPS; connect with an API key",
+          {},
+          "unauthenticated",
+        );
+      if (url.pathname === "/api/mcp" && !key)
+        response = await withAccessToken(ctx, request, proceed);
+      else if (url.pathname === "/api/read/mcp" && !key)
+        throw new ApiError(
+          401,
+          "Connect to /api/read/mcp with an API key (a read-only one is enough)",
+          {},
+          "unauthenticated",
+        );
+      else response = await proceed(await resolveActor(ctx, request));
     } catch (error) {
       // Read and dashboard paths answer with typed bodies (code, errors[].path, hint).
       const typed = read || /\/(dashboards|views)(\/|$)/.test(url.pathname);

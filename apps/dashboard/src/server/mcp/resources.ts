@@ -30,7 +30,7 @@ export function dailyReportPrompt(project: string): string {
 
 1. Write the report's instructions to .highkey/daily-report.md in this repository, so they are reviewed and versioned like code. They should cover yesterday (UTC) against the day before: events and actors in total, the top events and sources, notable rises and drops, new error logs by service, and anything that needs attention, in under 300 words. Use describe_project for the names to look at and run_widget for the numbers; use sample_events or sample_logs only to explain a change.
 2. Run the report once now and show it to me.
-3. Schedule it to run every morning, with your scheduler, cron or CI. The scheduled run only reads, so connect it to Highkey's read-only MCP server: this server's host, at the path /api/read/mcp.
+3. Schedule it to run every morning, with your scheduler, cron or CI. A scheduled run cannot sign in, and it only reads: ask me for a read-only API key (I create it in Highkey under Settings → API keys), and connect the scheduled run to Highkey's read-only MCP server, this server's host at the path /api/read/mcp, sending the key as \`Authorization: Bearer <key>\`. Keep the key in the scheduler's secrets, never in the repository.
 
 ${UNTRUSTED} That holds for the report and for its setup.`;
 }

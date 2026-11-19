@@ -1,9 +1,12 @@
 // Who is asking: every /api request resolves to an actor in one organization, with the role it
 // holds there right now (read from `member` on each request, so a removal or demotion counts at
-// once). Sessions come from Better Auth's cookie, API keys from `Authorization` or `X-Api-Key`.
+// once). Sessions come from Better Auth's cookie, API keys from `Authorization` or `X-Api-Key`,
+// and agents' OAuth access tokens (on /mcp only) from `Authorization`.
+import { requireMcpAuth } from "@better-auth/mcp";
 import type { ApiContext } from "../api/context";
 import { ApiError } from "../api/errors";
 import { one } from "../db/db";
+import { mcpResource } from "./auth";
 import { keyFrom, keyMetadata } from "./keys";
 import { isRole, maxAccess, type Role } from "./roles";
 
@@ -98,4 +101,70 @@ export async function resolveActor(ctx: ApiContext, request: Request): Promise<A
     via: "session",
     serverAdmin: (session.user as { role?: string | null }).role === "admin",
   };
+}
+
+/**
+ * The actor behind an agent's OAuth access token: the person who granted it, in the organization
+ * it names, while that grant still stands and they still belong there. `mcp:write` grants the
+ * changing tools, capped by the person's role.
+ */
+type Claims = Parameters<Parameters<typeof requireMcpAuth>[1]>[1];
+
+export async function tokenActor(ctx: ApiContext, claims: Claims): Promise<Actor> {
+  const userId = claims.sub;
+  const clientId = typeof claims.azp === "string" ? claims.azp : null;
+  const orgId = typeof claims.org === "string" ? claims.org : null;
+  const scopes = new Set(String(claims.scope ?? "").split(" "));
+  const revoked = new ApiError(
+    401,
+    "This connection was revoked; connect the agent again",
+    { "www-authenticate": 'Bearer error="invalid_token"' },
+    "unauthenticated",
+  );
+  if (!userId || !clientId || !orgId) throw revoked;
+  if (!scopes.has("mcp:read") && !scopes.has("mcp:write"))
+    throw new ApiError(
+      403,
+      "This token was not granted access to Highkey's tools",
+      {},
+      "forbidden",
+    );
+  const granted = await one(
+    ctx.db,
+    'SELECT 1 AS found FROM "oauthConsent" WHERE "userId" = ? AND "clientId" = ? AND "referenceId" = ?',
+    [userId, clientId, orgId],
+  );
+  if (!granted) throw revoked;
+  const role = await memberRole(ctx, orgId, userId);
+  if (!role)
+    throw new ApiError(
+      403,
+      "This connection's person is no longer a member of its organization",
+      {},
+      "not_a_member",
+    );
+  return {
+    userId,
+    orgId,
+    role,
+    access: scopes.has("mcp:write") ? maxAccess(role) : "read",
+    via: "mcp",
+    serverAdmin: false,
+  };
+}
+
+/**
+ * Runs `proceed` as the agent whose access token the request carries. Without a valid token the
+ * answer is a 401 whose `WWW-Authenticate` points at the protected-resource metadata, which is
+ * how an MCP client learns to start the OAuth flow.
+ */
+export async function withAccessToken(
+  ctx: ApiContext,
+  request: Request,
+  proceed: (actor: Actor) => Promise<Response>,
+): Promise<Response> {
+  const auth = await ctx.auth();
+  return requireMcpAuth(auth, async (_request, claims) => proceed(await tokenActor(ctx, claims)), {
+    resource: mcpResource(ctx.publicUrl),
+  })(request);
 }

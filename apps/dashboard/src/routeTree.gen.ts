@@ -18,6 +18,7 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TrackerDotjsRouteImport } from './routes/tracker[.]js'
+import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known.$'
 import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
 import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
@@ -73,6 +74,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const TrackerDotjsRoute = TrackerDotjsRouteImport.update({
   id: '/tracker.js',
   path: '/tracker.js',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
+  id: '/.well-known/$',
+  path: '/.well-known/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HighkeyChangesRoute = HighkeyChangesRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
   '/tracker.js': typeof TrackerDotjsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_highkey/changes': typeof HighkeyChangesRoute
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
+    | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
+    | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/settings'
     | '/tracker.js'
+    | '/.well-known/$'
     | '/_highkey/changes'
     | '/_highkey/runtime'
     | '/api/$'
@@ -280,6 +292,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   SettingsRoute: typeof SettingsRoute
   TrackerDotjsRoute: typeof TrackerDotjsRoute
+  DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute
   HighkeyChangesRoute: typeof HighkeyChangesRoute
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
@@ -350,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/tracker.js'
       fullPath: '/tracker.js'
       preLoaderRoute: typeof TrackerDotjsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/$': {
+      id: '/.well-known/$'
+      path: '/.well-known/$'
+      fullPath: '/.well-known/$'
+      preLoaderRoute: typeof DotwellKnownSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_highkey/changes': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   SettingsRoute: SettingsRoute,
   TrackerDotjsRoute: TrackerDotjsRoute,
+  DotwellKnownSplatRoute: DotwellKnownSplatRoute,
   HighkeyChangesRoute: HighkeyChangesRoute,
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
