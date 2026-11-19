@@ -118,13 +118,15 @@ databases = { main = "highkey" }
 backup = { storage = "private_backups" }
 
 [vars.production]
+HIGHKEY_PUBLIC_URL = "https://highkey.example.com"
 HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
 HIGHKEY_INGEST_URL = "https://highkey-ingest.example.com"
+# HIGHKEY_SIGNUP = "open"   # the default, "invite", admits the first account and invited people
 ```
 
 The Tako database needs a network (`tako network` commands) and is created once on the server that will hold it: `tako sqlite create highkey --server your-server`. `backup.storage` names a private S3-compatible storage resource (`[storages.private_backups]`, with credentials set by `tako storages credentials private_backups --env production`) that receives the database's encrypted snapshots; without one, Tako takes no snapshots and losing the server loses the management state. Tako applies `migrations/` on every deploy, after a snapshot and before the new release starts.
 
-Set `HIGHKEY_CHANGE_TOKEN` for production through `tako -c tako.dashboard.toml secrets set HIGHKEY_CHANGE_TOKEN --env production`; the two root configs share this secret store. `HIGHKEY_READER_SECRET`, which derives each project's ClickHouse reader password, is optional and read only by the dashboard; it defaults to the admin password.
+Set `HIGHKEY_CHANGE_TOKEN` for production through `tako -c tako.dashboard.toml secrets set HIGHKEY_CHANGE_TOKEN --env production`; the two root configs share this secret store. Set `BETTER_AUTH_SECRET` the same way, to a long random value: it signs sessions, and changing it signs everyone out. Email and social sign-in are optional secrets too: `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM`, `HIGHKEY_GITHUB_CLIENT_ID` and `HIGHKEY_GITHUB_CLIENT_SECRET`, `HIGHKEY_GOOGLE_CLIENT_ID` and `HIGHKEY_GOOGLE_CLIENT_SECRET` (see [accounts](access.md#accounts)). `HIGHKEY_READER_SECRET`, which derives each project's ClickHouse reader password, is optional and read only by the dashboard; it defaults to the admin password.
 
 Set both ClickHouse passwords as secrets in the shared store: `HIGHKEY_CLICKHOUSE_PASSWORD` (the admin user, which only the dashboard uses) and `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` (the `highkey_ingest` user: the dashboard's migration sets it, and the ingest app reads it before the generic name):
 
@@ -133,7 +135,7 @@ tako -c tako.dashboard.toml secrets set HIGHKEY_CLICKHOUSE_PASSWORD --env produc
 tako -c tako.dashboard.toml secrets set HIGHKEY_INGEST_CLICKHOUSE_PASSWORD --env production
 ```
 
-The ingest host serves only the ingest paths, `/tracker.js` and `/health`. It needs no service-auth gateway, because the dashboard no longer proxies management to it; see [the access boundary](access.md#native-tako-hosts-and-realtime). Collectors can send to either host: the dashboard forwards the ingest paths to `HIGHKEY_INGEST_URL`.
+The ingest host serves only the ingest paths, `/tracker.js` and `/health`. It needs no other protection: its paths take only ingestion keys; see [the network boundary](access.md#network-boundary). Collectors can send to either host: the dashboard forwards the ingest paths to `HIGHKEY_INGEST_URL`.
 
 Use one server, one ingest instance and one dashboard instance. The dashboard's ephemeral channel also requires all subscribers and publishers to share that Tako server process. Do not configure a shared `postgres_url` credential: Tako currently rejects ephemeral subscriptions and publications in that mode. The native Rust build must run on Linux with the target server's architecture and libc; a macOS binary is not a deployment artifact. Tako does not cross-compile Rust for this config. The ingest build also builds the tracker bundle with Bun. Build/deploy the two configs **sequentially** because their local staging directory is shared. Deployment artifacts contain the compiled apps and the tracker, not local databases.
 
@@ -143,7 +145,7 @@ To update:
 2. Deploy the ingest app with `tako -c tako.ingest.toml deploy --env production`. It holds no state, so Tako's normal rolling replacement works. While the old and new processes overlap, a retry that reaches the other process can be stored twice until a merge removes it (see [deduplication](api.md#deduplication)).
 3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. Tako applies any new file in `migrations/` first (they only add, so the running release keeps working), then replaces the app and its workflow worker. Old and new instances share the hosted database while they overlap.
 
-Do not delete an app to deploy an update; deletion can remove persistent data. No production deployment or Cloudflare configuration is performed by local setup.
+Do not delete an app to deploy an update; deletion can remove persistent data. No production deployment is performed by local setup. After the first deploy, open the dashboard and create the first account: it administers the server.
 
 ## Backups and restore
 

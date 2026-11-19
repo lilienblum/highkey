@@ -12,7 +12,7 @@ Developers and small product teams measuring websites, CLIs, and developer tools
 
 ## Product Purpose
 
-Provide a clear, minimal, self-hosted view of product usage and application behavior. Success means moving from a project trend or log search to the underlying structured record without losing context.
+Provide a clear, minimal view of product usage and application behavior, self-hosted or as a hosted subscription. Success means moving from a project trend or log search to the underlying structured record without losing context.
 
 ## Positioning
 
@@ -24,7 +24,11 @@ Overview for regular checks, Events for server-side queries and event inspection
 
 ## Capabilities and Constraints
 
-Two Tako applications: Rust API and TanStack Start dashboard. Separate per-project DuckDB files for analytics and logs; SQLite application state. Preserve bounded ingestion, durable acknowledgments, typed queries, deduplication, and external authentication through Cloudflare Access. No new backend scope for this redesign. Bun tooling only; MIT license.
+Two Tako applications: the Rust ingest app (collection only) and the TanStack Start dashboard (everything else). Events and logs in self-hosted ClickHouse; management state, accounts and organizations in a Tako-hosted SQLite database. Preserve bounded ingestion, durable acknowledgments, typed queries, and deduplication. Bun tooling only; MIT license.
+
+## Accounts and organizations
+
+People sign in to Highkey (email and password, optionally GitHub or Google, optional two-factor codes). Signing up creates an organization you own; owners and admins invite people with a role (owner, admin, member, viewer) that covers every project of the organization, and one person can belong to several organizations, switched from the name above the project picker. Project addresses carry the organization: `/<organization>/<project>/…`. Scripts and local pages use API keys; AI agents sign in over OAuth and are granted read only or read and write for one organization. A self-hosted server works without email or OAuth apps: invitations are shared as links and the first account, the server admin, hands out password reset links. Sharing happens by inviting a viewer, never through public links.
 
 One fixed Kanagawa Wave theme, Hugeicons, accessible shadcn Base UI primitives, TanStack Charts, and server-paginated tables remain. Theme selection and saved/system appearance preferences are removed. Existing privacy controls and stable refresh behavior must survive. Logs support JSON and OTLP/HTTP, literal message search, typed attribute filters, and cursor pagination. No arbitrary SQL, full-text index, log alerts, funnels, session replay, dashboard builders, or multi-user administration in v1.
 

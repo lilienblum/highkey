@@ -1,8 +1,8 @@
 # API and semantics
 
-Two applications serve Highkey's HTTP paths. The **ingest app** (`apps/ingest`) receives events and logs and serves the browser tracker. The **dashboard app** (`apps/dashboard`) serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. Neither app depends on the other at runtime; they share only ClickHouse, where events and logs are stored. The dashboard keeps the project, source and key catalog, settings, dashboards and views in SQLite (`state.sqlite`) and mirrors what the ingest app needs into ClickHouse.
+Two applications serve Highkey's HTTP paths. The **ingest app** (`apps/ingest`) receives events and logs and serves the browser tracker. The **dashboard app** (`apps/dashboard`) serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. Neither app depends on the other at runtime; they share only ClickHouse, where events and logs are stored. The dashboard keeps accounts, organizations, the project, source and key catalog, settings, dashboards and views in its management database (the Tako database `highkey`, or `state.sqlite` without Tako) and mirrors what the ingest app needs into ClickHouse.
 
-There is no application login, admin token, or admin session. Protect management access with Cloudflare Access and keep the origins private; see [access configuration](access.md). Ingestion requires a source-scoped, write-only ingestion key, which resolves the target project and source. The public API keeps its `/products` paths and `product_id` fields; "project" is the interface name for the same entity.
+Every path except collection needs a signed-in session, an API key (`Authorization: Bearer hk_…` or `X-Api-Key`), or on `/mcp` an agent's OAuth token, and acts inside one organization with its person's current role; see [accounts and access](access.md). Ingestion requires a source-scoped, write-only ingestion key, which resolves the target project and source. The public API keeps its `/products` paths and `product_id` fields; "project" is the interface name for the same entity.
 
 ## Endpoints
 
@@ -13,7 +13,9 @@ There is no application login, admin token, or admin session. Protect management
 | `POST /api/logs/v1/logs`                          | Ingest app           | [OTLP/HTTP logs](logs.md#opentelemetry)                       |
 | `GET /tracker.js`                                 | Ingest app           | The browser tracker module ([collection](collection.md))      |
 | `GET /health`                                     | Each app, for itself | Process health, no credentials required                       |
+| `/api/auth/*`                                     | Dashboard            | Sign-in, accounts, organizations, invitations, agent OAuth    |
 | `/api/products…`, `POST /api/cleanup`             | Dashboard            | [Management](#management) and [queries](#query)               |
+| `/api/keys…`, `/api/connections…`, `/api/admin/*` | Dashboard            | [Accounts](#api-keys-connections-and-the-server-admin)        |
 | `/api/read/*`                                     | Dashboard            | [Read paths](#read-paths), the only cross-origin surface      |
 | `POST /api/mcp`, `POST /api/read/mcp`, `/mcp`     | Dashboard            | [MCP](#mcp)                                                   |
 | `POST /_highkey/changes`, `GET /_highkey/runtime` | Dashboard            | [Live hints](#live-hints-envelope-v2) and whether they are on |
@@ -33,11 +35,33 @@ Route the three ingest paths and `/tracker.js` to the ingest app at the edge whe
 | PATCH      | `/api/products/:id/keys/:keyId`       | Replace `{ allowed_origins }`                                                     |
 | DELETE     | `/api/products/:id/keys/:keyId`       | Revoke the key, scoped to the project                                             |
 | POST       | `/api/products/:id/query`             | The analytics query [below](#query)                                               |
-| POST       | `/api/cleanup`                        | Delete expired events and logs now; returns `{ removed, logs_removed }`           |
+| POST       | `/api/products/:id/move`              | `{ organization }` (id or slug): move it; needs admin or owner in both            |
+| DELETE     | `/api/products/:id`                   | 204; hidden and its keys stopped; restorable for 7 days                           |
+| GET        | `/api/deleted-products`               | Deleted projects still restorable, with `restorable_until`                        |
+| POST       | `/api/deleted-products/:id/restore`   | The restored project, keys as they were                                           |
+| POST       | `/api/cleanup`                        | Server admin: delete expired events and logs now; `{ removed, logs_removed }`     |
 
 Log keys, log settings and the log query are listed in [application logs](logs.md#management-api). Query paths accept a project's slug as well as its UUID; the other management paths take the UUID.
 
-Management mutations require `X-Highkey-Admin: 1`. This public request marker prevents cross-site form submissions; it is **not authentication**. Management paths send no CORS headers. Network access to management must be controlled by Cloudflare Access (or a trusted private network). Ingestion keys grant no bypass through Access and are never used as management credentials.
+Every path states the permission it needs (see [roles](access.md#organizations-and-roles)): a viewer's request to change something answers `403 forbidden`, and a project of another organization answers 404 like one that does not exist. Writes made with a session cookie must come from `HIGHKEY_PUBLIC_URL`'s origin (`403 cross_site` otherwise); requests for any other host answer `421`. Management paths send no CORS headers. Ingestion keys are never management credentials.
+
+## API keys, connections and the server admin
+
+| Method | Path                                   | Body/result                                                                                              |
+| ------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/keys`                            | Your API keys in this organization (owners and admins: everyone's), never secrets                        |
+| POST   | `/api/keys`                            | `{ name, access: "read" \| "write", expires_in_days? }` → `{ id, key }`, key once                        |
+| DELETE | `/api/keys/:id`                        | Revoke a key (yours, or anyone's for owners and admins)                                                  |
+| GET    | `/api/connections`                     | Agent connections: client, person, access, `last_used_at`                                                |
+| DELETE | `/api/connections/:id`                 | Revoke a connection and its tokens                                                                       |
+| GET    | `/api/admin/users?search=`             | Server admin: people, with role, ban and two-factor state                                                |
+| GET    | `/api/admin/organizations?search=`     | Server admin: organizations with member and project counts                                               |
+| POST   | `/api/admin/users/:id/ban`, `/unban`   | Server admin: ban (`{ reason? }`) or unban; a ban ends sessions, keys and agents                         |
+| POST   | `/api/admin/users/:id/revoke-sessions` | Server admin: sign someone out everywhere                                                                |
+| POST   | `/api/admin/users/:id/reset-link`      | Server admin: `{ link }`, a one-time password reset link valid for 24 hours                              |
+| DELETE | `/api/admin/users/:id`                 | Server admin: delete an account (refused while they are an organization's only owner with other members) |
+
+Keys and connections are managed from a signed-in session; an API key cannot create or revoke keys. Accounts, organizations, members and invitations are Better Auth's endpoints under `/api/auth` (for example `POST /api/auth/organization/invite-member`, whose response carries the invitation's `link`).
 
 ## Projects and sources
 
@@ -147,7 +171,7 @@ Custom dashboards are `highkey.dashboard/v1` documents stored by the dashboard a
 
 ### Read paths
 
-Everything under `/api/read` is non-mutating whatever its method, needs no `X-Highkey-Admin` marker, and answers cross-origin requests from loopback origins and `HIGHKEY_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Scope a read-only Access token to this prefix; see [access](access.md#mcp-and-read-only-access).
+Everything under `/api/read` is non-mutating whatever its method, and answers cross-origin requests from loopback origins and `HIGHKEY_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Pages and scripts read with a read-only API key; see [access](access.md#api-keys).
 
 | Method | Path                                                      | Result                                                                              |
 | ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -163,13 +187,13 @@ Everything under `/api/read` is non-mutating whatever its method, needs no `X-Hi
 | GET    | `/api/read/products/{project}/views`                      | Saved views; `?kind=events` or `?kind=logs` narrows                                 |
 | GET    | `/api/read/products/{project}/views/{key}`                | One view; pass `kind` when both kinds share the slug                                |
 | GET    | `/api/read/schemas/dashboard.v1.json`                     | The document's JSON Schema                                                          |
-| POST   | `/api/read/mcp`                                           | MCP, read tools only                                                                |
+| POST   | `/api/read/mcp`                                           | MCP, read tools only; API keys only                                                 |
 
 Widget runs wait at the dashboard's own query gates, so dashboards cannot take every slot an interactive page needs: event widgets share one fewer slot than `HIGHKEY_QUERY_CONCURRENCY` (default 4), and log widgets share one. A run waits for a slot until its deadline, and each run is bounded by the widget's `timeout_ms` (default 5,000; 1,000–10,000).
 
 ### Write paths
 
-These sit with the management routes: they need `X-Highkey-Admin: 1`, and no CORS headers are sent for them. Send `X-Highkey-Origin: dashboard` only from the dashboard UI; it marks the revision's origin (otherwise the origin is `api`).
+These sit with the management routes and need a member, admin or owner; no CORS headers are sent for them. Send `X-Highkey-Origin: dashboard` only from the dashboard UI; it marks the revision's origin (otherwise the origin is `api`).
 
 | Method | Path                                                     | Body → result                                                              |
 | ------ | -------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -180,13 +204,13 @@ These sit with the management routes: they need `X-Highkey-Admin: 1`, and no COR
 | POST   | `/api/products/:id/views`                                | `{ document }` → the stored view                                           |
 | PUT    | `/api/products/:id/views/:key`                           | `{ document }` replaces the view in full; its kind cannot change           |
 | DELETE | `/api/products/:id/views/:key`                           | 204; `?kind=` when both kinds share the slug                               |
-| POST   | `/api/mcp`                                               | MCP, every tool                                                            |
+| POST   | `/api/mcp`                                               | MCP, every tool the credential allows                                      |
 
 Every dashboard or view write counts against 30 per minute per project, shared with MCP (see [error codes](#error-codes)). Saves are validated and each new or changed widget is timed before anything is stored. Slugs come from the name; `:key` is a slug or the UUID.
 
 ### MCP
 
-`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP in its stateless form: each POST carries one JSON-RPC message and gets one JSON response, with no sessions and no server-sent events. Other methods return 405. `/mcp` is a short address for `/api/mcp`; it is the one the agent guide shows. Any request that carries a browser `Origin` header is refused with 403, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`highkey://schema/dashboard.v1`, `highkey://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
+`/api/mcp` and `/api/read/mcp` speak MCP over streamable HTTP in its stateless form: each POST carries one JSON-RPC message and gets one JSON response, with no sessions and no server-sent events. Other methods return 405. `/mcp` is a short address for `/api/mcp`; it is the one the agent guide shows, and the resource agents' OAuth tokens are bound to. Without a token or key it answers 401 with a `WWW-Authenticate` header naming `/.well-known/oauth-protected-resource/mcp`, where an MCP client starts signing in; a read-only grant or key lists only the read tools. `/api/read/mcp` takes API keys only. Any request that carries a browser `Origin` header is refused with 403, so a web page cannot drive MCP; clients such as Claude Code and Codex send none. Bodies are limited to 256 KiB like every other request. The tools, resources (`highkey://schema/dashboard.v1`, `highkey://docs/dashboards`) and the `build_dashboard` prompt are listed under [Ask your AI](dashboards.md#ask-your-ai). Tools that revoke keys or delete need `confirm` equal to the id or slug.
 
 ### Error codes
 

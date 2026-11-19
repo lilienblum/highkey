@@ -14,7 +14,7 @@ Events shows the linked interval and applied filters. Use its query controls to 
 
 ## Dashboards
 
-Custom dashboards sit under **Overview** in the sidebar (and in its collapsed menu), one entry per dashboard, at `/projects/<slug>/dashboards/<dashboard>`. They are JSON documents that an agent writes over MCP; see [custom dashboards](dashboards.md). Dashboards use the same project, source and date controls as Overview, and a widget with its own `range` ignores the date picker.
+Custom dashboards sit under **Overview** in the sidebar (and in its collapsed menu), one entry per dashboard, at `/<organization>/<project>/dashboards/<dashboard>`. They are JSON documents that an agent writes over MCP; see [custom dashboards](dashboards.md). Dashboards use the same project, source and date controls as Overview, and a widget with its own `range` ignores the date picker.
 
 A dashboard is a 12-column grid of widget cards: stats, line, area and bar charts, rankings, event and log lists, SQL tables and text. Each card has a title (with an info hint when the widget has a description), its body, and a footer that notes the bucket and UTC, a range override, a clamped range ("Newest 31 days") and log retention ("Logs kept 7 days"). Hover the footer for how long the widget took. Widgets load as they near the viewport and refresh in the background without moving the layout; a failed one shows its error with a Retry inside its own card.
 
@@ -24,9 +24,9 @@ There is no manual editing. **Edit**, **New dashboard** in the sidebar, and the 
 
 ## Shareable URLs
 
-Projects have stable, unique slugs. An example Overview link is `/projects/orbit?source=all&period=month`. A renamed project keeps its slug. Explicit URL selections win over browser preferences; unavailable projects/sources and malformed scope parameters show an error instead of querying a fallback project. Links do not change access permissions.
+Projects have stable slugs, unique within their organization, and addresses that start with the organization's: an example Overview link is `/acme/orbit?source=all&period=month`. A renamed project keeps its slug. Explicit URL selections win over browser preferences; unavailable projects/sources and malformed scope parameters show an error instead of querying a fallback project. Links do not change access: someone outside the organization sees "This selection is unavailable", as for a project that does not exist.
 
-- Project paths: `/projects/<slug>`, `/projects/<slug>/events`, and `/projects/<slug>/settings`. Bare `/`, `/events`, and `/settings` open the saved project and replace the URL with its canonical path.
+- Project paths: `/<organization>/<project>`, `/<organization>/<project>/events`, and `/<organization>/<project>/settings`. Bare `/`, `/events`, and `/settings` open the saved project of the open organization and replace the URL with its canonical path. Older `/projects/<project>/…` links redirect when one of your organizations has that project.
 - Shared query parameters: `source` (`all` or a source UUID), `days` (7, 30, or 90), `period` (`today`, `yesterday`, `month`, `last-month`, `year`, or `12months`), and optional `from` / `to` (a complete pair of exact UTC ISO timestamps, start inclusive and end exclusive).
 - Overview parameters: `metric`, `breakdown`, `duration` (`avg` or `p95`), and a JSON `filter` with `field` and typed `value`. Fields are `name`, `source` (client), or `property:<name>`. Old `interval` parameters are ignored.
 - Logs parameters include `view` (a saved log view's slug), `minLevel` (`warn`, `error` or `fatal`), `logSource` (a source a view pins) and `moreFilters` (attribute filters beyond the first).
@@ -134,3 +134,9 @@ Dashboard primitives use the official shadcn **Base UI** registry (`base-vega`) 
 Highkey has one fixed Kanagawa Wave theme. Sumi-ink surfaces, warm text, orange primary actions, and yellow/violet/aqua chart accents are present from the first server-rendered paint. There is no appearance menu or theme preference, and old saved Light/Dark/Auto values are ignored.
 
 The shared component theme defines foreground/background pairs, hover and pressed surfaces, selection, focus, radii, and elevation in `apps/dashboard/src/styles.css`. Component variants consume those tokens directly. Buttons, button-like triggers, compact report selects, and segmented choices are pills; fields use 6px corners and a recessed surface, and cards 12px with a faint lit top edge. Translucent tints are replaced by ordered-dither screen tones (`--tone-25`, `--tone-50`, `--tone-75`) declared next to the `--tone-ink` they use. Menus use soft shadows, dialog backdrops are a sparse dot screen over a translucent dim, and keyboard focus uses a single yellow outline. Under forced colors, controls gain a system outline and selected states use the system highlight. Preserve these defaults when adding Base UI components instead of reintroducing generated dark-mode overrides or page-specific bevel styles.
+
+## Organizations and settings
+
+The name above the project picker is the open organization; it opens a menu of your organizations (with your role in each), **Create organization** and **Sign out**. Switching loads the other organization's address afresh.
+
+Settings has a row of parts: **Project** (this project's sources, keys, retention and logs), **Organization** (name, address, requiring two-factor codes, transferring ownership, deleting it), **Members** (inviting with a role and a copyable link, changing roles, removing people, pending invitations), **API keys**, **Agents** (connected agents, with their access and last use, to revoke), **Account** (name, password, two-factor codes with backup codes, sessions, deleting your account) and, for the server admin, **Server** (`/admin`: everyone's accounts and organizations, banning, signing someone out everywhere, password reset links, deleting accounts). What a page offers follows your role; see [roles](access.md#organizations-and-roles).

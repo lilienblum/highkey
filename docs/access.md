@@ -1,66 +1,78 @@
-# Cloudflare Access is the authentication boundary
+# Accounts, organizations and access
 
-Highkey intentionally has **no built-in authentication**. Neither app validates Access tokens or trusts an identity header as an authorization check. Access is enforced before traffic reaches the origin. Keep the origins private: use Cloudflare Tunnel, or an equivalent private network boundary. Both apps bind to localhost by default, and ClickHouse listens only on localhost unless you change it. Do not expose any of them directly to the Internet; ClickHouse in particular is never public.
+Highkey has its own sign-in. People have accounts, accounts belong to organizations, and organizations hold projects. Everything except collection (the ingest app's public endpoints) needs a signed-in person, an API key or an agent's OAuth token, and every request acts inside one organization with the role its person holds there now.
 
-For a deployment at `highkey.example.com`:
+Authentication runs on [Better Auth](https://www.better-auth.com/) inside the dashboard, with its tables in the same management database as projects and keys. Set `HIGHKEY_PUBLIC_URL` to the address people use (for example `https://highkey.example.com`) and `BETTER_AUTH_SECRET` to a long random secret (a Tako secret in production). The public URL is the only origin cookie-authenticated writes are accepted from, and a request for any other host (except loopback in development) is refused.
 
-| Access application path                | Policy                                      | Purpose                                                   |
-| -------------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
-| `highkey.example.com`                  | Allow only your chosen users/groups         | Dashboard and all management endpoints                    |
-| `highkey.example.com/api/ingest`       | Bypass / Everyone                           | Public write-only collectors and their OPTIONS preflights |
-| `highkey.example.com/api/logs/ingest`  | Bypass / Everyone (if collecting logs)      | Service logs authorized by separate `pl_` log keys        |
-| `highkey.example.com/api/logs/v1/logs` | Bypass / Everyone (if collecting OTLP logs) | OTLP/HTTP exporters authorized by log keys                |
-| `highkey.example.com/tracker.js`       | Bypass / Everyone                           | Public standalone browser module                          |
+## Accounts
 
-The bypassed paths are exactly the ones the ingest app serves. Create separate path-specific self-hosted Access applications for them. Cloudflare applies more-specific application paths ahead of broader paths; those policies are not inherited from the parent. This is documented in [application path precedence](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) and [bypassing public endpoints](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/common-policies/).
+- **Signing up.** `HIGHKEY_SIGNUP=invite` (the default) admits the very first account and people with a pending invitation. `HIGHKEY_SIGNUP=open` admits anyone (the hosted service). Signing up on your own creates an organization named after you, which you own; signing up from an invitation joins only the inviting organization.
+- **The server admin.** The first account on a server is its admin, above every organization: they find people and organizations, ban and unban, sign someone out everywhere, hand over a one-time password-reset link, and delete accounts (`/api/admin/*`, server admin only). On an upgraded install, projects that existed before accounts join the first account's organization.
+- **Email.** With `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM` set (Tako secrets or environment), Highkey sends plain-text email through [Resend](https://resend.com/): address verification (required before sign-in), password reset links and invitations. Without them there is no email: verification is off, every invitation shows a link to share yourself, and a forgotten password is reset with a link the server admin creates.
+- **Two-factor codes.** Anyone can turn on TOTP codes from an authenticator app, with backup codes. An owner who uses them can require them of everyone in the organization; members without codes are then refused (by session, API key or agent) until they turn them on.
+- **GitHub and Google.** Each is offered when both its client id and secret are set: `HIGHKEY_GITHUB_CLIENT_ID` and `HIGHKEY_GITHUB_CLIENT_SECRET`, `HIGHKEY_GOOGLE_CLIENT_ID` and `HIGHKEY_GOOGLE_CLIENT_SECRET`. Register the callback `https://highkey.example.com/api/auth/callback/github` (or `/google`).
+- **Deleting an account.** People delete their own account (with their password), and the server admin can delete anyone else's. Either is refused while the person is the only owner of an organization with other members; transfer ownership first. Organizations where they are the only member go with them.
 
-Do **not** bypass `/api/*`: project creation, key management, cleanup, and analytical queries must remain covered by Access. The tracker is a standalone bundle; its public import needs only `/tracker.js`, not the dashboard's `/assets/*`. Allow preflight OPTIONS on the ingest paths; preflight requests carry no Access credentials. The ingest app accepts only POST and its CORS preflight on these paths, with source-scoped ingestion-key authorization.
+## Organizations and roles
 
-Point your Tunnel's hostname at the Bun dashboard (`http://localhost:3000`, or `http://dashboard:3000` from the same container network). Optionally add path rules that send the ingest paths and `/tracker.js` to the ingest app; otherwise the dashboard forwards them. The Access policies are the same either way, because Access applies at the edge before the Tunnel routes a request. Apply your Access allow policy to the hostname before publishing it. No Cloudflare account or Tunnel is configured automatically by this repository.
+A role covers every project of its organization.
 
-Verify from a signed-out browser or unauthenticated client after configuring the edge:
+| Can                                                    | Owner | Admin | Member | Viewer |
+| ------------------------------------------------------ | ----- | ----- | ------ | ------ |
+| Read everything: projects, dashboards, events, logs    | yes   | yes   | yes    | yes    |
+| Dashboards and views: save, restore, delete            | yes   | yes   | yes    | —      |
+| Sources and ingestion keys of every project            | yes   | yes   | yes    | —      |
+| Projects: create, update, delete, restore, move        | yes   | yes   | —      | —      |
+| People: invite, change roles, remove                   | yes   | yes   | —      | —      |
+| Organization: rename; require two-factor codes (owner) | yes   | yes   | —      | —      |
+| Organization: delete, transfer ownership               | yes   | —     | —      | —      |
+| API keys and agent connections of their own            | yes   | yes   | yes    | read   |
+| See and revoke everyone's keys and connections         | yes   | yes   | —      | —      |
 
-- `/`, `/events`, `/settings`, and `/api/products` require Access authentication.
-- `/api/products/<id>/query`, project/key mutation paths, and `/api/cleanup` cannot bypass Access.
-- `/tracker.js` loads as a public JavaScript module with CORS.
-- `OPTIONS /api/ingest` succeeds; `POST /api/ingest` without an ingestion key returns 401; a valid ingestion key can only send to its own project.
-- The origin addresses and ports, including ClickHouse's, are unreachable directly from the Internet.
+- **Invitations** name an email address and a role, and expire after 7 days. The Join page they link to shows who invited you, to which organization and as what. An organization always keeps at least one owner.
+- **Moving a project** to another organization needs admin or owner in both. Its keys, dashboards and views go with it; its data in ClickHouse does not move, because it is stored by project.
+- **Deleting a project** stops its ingestion keys at once and hides it everywhere; an admin can restore it for 7 days. After that a background job deletes its events and logs, its ClickHouse reader and views, and its records, one project at a time.
+- **Deleting an organization** (owner only) is refused while it has projects, deleted ones included until they are wiped. Its members, invitations, API keys and agent connections go with it.
+- A removed member, or one demoted to viewer, loses access on their next request: roles are read on every request, not cached in the session.
 
-Access configuration is deployment-specific and was not provisioned or verified against a live Cloudflare account during local development. The local tests verify key scoping, the CSRF marker, CORS, and browser tracking; they do not assert that an external Access policy is installed.
+## API keys
 
-## MCP and read-only access
+API keys (`hk_…`) let scripts, local pages, scheduled reports and CI reach the API and MCP. Each is created in **Settings → API keys** (or `POST /api/keys`) by a signed-in person for one organization, read-only or read and write, optionally expiring. Send it as `Authorization: Bearer hk_…` or `X-Api-Key: hk_…`.
 
-Agents and local pages reach Highkey through two dashboard prefixes that you can give separate Access policies. Both authenticate with a Cloudflare Access [service token](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) (a `CF-Access-Client-Id` and `CF-Access-Client-Secret` pair). Highkey itself never sees a login: it has no built-in token, and nothing here adds one.
-
-| Access application path        | Policy                                                                                                                  | Purpose                                                                                                      |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `highkey.example.com/api/read` | Two policies: Allow your users and groups (the same as the main application), plus Service Auth for the read-only token | The dashboard UI itself calls these paths as the signed-in user; the token serves read-only agents and pages |
-| `highkey.example.com`          | Allow your users, plus Service Auth for the full token                                                                  | Everything else, including `/mcp`, which can change dashboards, views, projects, sources and keys            |
-
-- **Read-only token.** Add a more specific Access application for `highkey.example.com/api/read/*` with two policies: an Allow policy for the same users and groups as the main application, and a Service Auth policy for one token. The dashboard UI loads dashboards, widget runs, the catalog and saved views from `/api/read/*` as the signed-in user, and a more specific application replaces the main policy for its paths, so an application that allows only the token locks every signed-in person out of dashboards and views. Everything under `/api/read` is non-mutating whatever its method, so the token cannot write or create keys. It can still read your analytics and raw event and log samples; see [privacy](privacy.md#ai-agents-and-mcp).
-- **Full token.** A service token allowed on the main application can use `/mcp` and every management endpoint. Treat it as full trust: it is as powerful as a signed-in admin, it can create and revoke keys and see their secrets, and anyone who holds it holds all of that. Keep it in the agent's own configuration, give each agent its own token so you can revoke one, and set a short Access token duration if you can.
-- **Agent setup.** Point the client at `https://highkey.example.com/mcp` (or `/api/read/mcp` with the read token) and send the two headers. [Claude Code and Codex configuration](dashboards.md#ask-your-ai) is in the dashboards guide. Local development has no Access and needs no headers.
-- The dashboard refuses MCP requests that carry a browser `Origin` header, so a web page cannot use the MCP endpoints even with a leaked token.
+- A key belongs to the person who made it. On every use it is capped by that person's current role: a removed member's keys stop at once, and a viewer's keys only read (viewers can create read-only keys only).
+- Keys are stored hashed and shown once. Owners and admins see everyone's keys in their organization (name, owner, access, last use) and can revoke them; nobody sees a secret again.
+- Each key may make 1,000 requests a minute; past that it gets `429` until the minute passes.
+- A key cannot create or revoke keys, and never acts as the server admin.
+- Collection does not use these keys: ingestion keys (`pk_…`, `pl_…`) are separate, public, and can only send data to their own source.
 
 ### Local pages and CORS
 
-A page you serve on your own machine (see [local pages](dashboards.md#local-pages)) can call `/api/read/*` cross-origin. The dashboard answers loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) by default, and other origins listed in `HIGHKEY_CORS_ORIGINS`: comma-separated exact origins with scheme, host and port, no trailing slash and no path, never `null`. A literal `*` is accepted by the code but should not be used. Under native Tako, set it in `[vars.production]` of `tako.dashboard.toml`. Only the headers `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret` are allowed, credentials are never enabled, and write paths send no CORS headers.
+A page you serve on your own machine (see [local pages](dashboards.md#local-pages)) can call `/api/read/*` cross-origin with a read-only key. The dashboard answers loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) and the exact origins in `HIGHKEY_CORS_ORIGINS` (comma-separated, scheme, host and port, no path, never `null`). It allows the `Content-Type`, `Authorization` and `X-Api-Key` headers, never credentials (cookies), and write paths send no CORS headers. Anything in a page's source is readable by the page's visitors, so keep keys out of pages you share.
 
-Access answers a browser's preflight itself, without credentials, with a 403. In the `/api/read/*` application's **Advanced settings → Cross-Origin Resource Sharing**, turn on **Bypass options requests to origin** so the preflight reaches Highkey, which then applies its own allowlist. The page sends the read-only token's two headers on the real request. Anything in a page's source is readable by the page's visitors, so keep tokens out of pages you share.
+## Agents (MCP)
 
-Verify from outside after configuring the edge:
+Agents connect to `https://highkey.example.com/mcp`, an OAuth 2.1 protected resource.
 
-- `GET /api/read/products` without the token redirects or denies at Access; with the read-only token it returns the projects.
-- A signed-in user can still open a dashboard in the UI, run its widgets and open saved views.
-- `PUT /api/products/<id>/dashboards/<slug>` and `POST /mcp` with the read-only token are denied at Access.
-- `POST /api/read/mcp` with the read-only token lists only the read tools.
+1. The agent finds the authorization server through `/.well-known/oauth-protected-resource/mcp` and identifies itself with a [Client ID Metadata Document](https://modelcontextprotocol.io/) (its `client_id` is an HTTPS URL). Highkey fetches that document over HTTPS only, from public addresses, with no redirects, at most 64 KiB in 5 seconds.
+2. The person signs in, chooses the organization the agent works in, and consents to **Read only** or **Read and write** (viewers can grant read only). A read-only grant lists only the read tools.
+3. The agent's access tokens last 15 minutes, are bound to `/mcp` and name the organization; it refreshes them while in use. Every request checks that the grant still stands and that its person still belongs to the organization, so revoking a connection in **Settings → Agents** (owners and admins see everyone's) or removing the member stops the agent at once.
 
-## Native Tako hosts and realtime
+`/mcp` also accepts API keys. `/api/read/mcp` accepts API keys only and lists only the read tools whatever the key allows; scheduled and CI runs, which cannot sign in, use it with a read-only key. Neither address accepts a browser session, and both refuse any request carrying a browser `Origin`.
 
-With the native Tako configs, route `highkey.example.com` to the dashboard and `highkey-ingest.example.com` to the ingest app. Keep both origins private behind the Tunnel. Keep the dashboard's `/_tako/channels/*` receive endpoint under the same Access user policy as the dashboard: it carries workspace-wide project identifiers, and channel parameters are not an authorization boundary.
+Agent sign-in needs HTTPS: when `HIGHKEY_PUBLIC_URL` is plain HTTP on a non-loopback address (a server on a private network without TLS), OAuth is off and agents connect with API keys instead.
 
-The ingest host serves only `/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`, `/tracker.js` and `/health`. Bypass Access for the three ingest paths and `/tracker.js` on that host, as in the table above, and leave the rest of the host under a policy that denies the public. It needs no service-auth gateway: the dashboard no longer proxies management to it, and it forwards only ingestion requests, which those bypasses already admit. Both hosts can then take public collection; the dashboard host forwards its ingest paths to `HIGHKEY_INGEST_URL`.
+## Network boundary
 
-The ingest app needs server-to-server access to **only** `POST highkey.example.com/_highkey/changes`. A narrow path-specific Access bypass can expose this endpoint because the dashboard itself checks the separate `HIGHKEY_CHANGE_TOKEN` bearer secret before publishing. Missing/wrong credentials fail; the token is never embedded in browser code. Never bypass `/_highkey/*` or `/_tako/*` broadly. The public ingestion key does not authorize notifications, queries, or management.
+- Put a TLS terminator in front of the dashboard and route `highkey.example.com` to it. Keep ClickHouse private; never expose it.
+- The ingest app serves only `/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`, `/tracker.js` and `/health`, authorized by ingestion keys. It can have its own hostname or be reached through the dashboard, which forwards those paths.
+- Live updates (`/_tako/channels/analytics-changes`) need the session of a member of the organization the stream belongs to.
+- The ingest app notifies the dashboard at `POST /_highkey/changes`, authorized by the separate `HIGHKEY_CHANGE_TOKEN` secret.
 
-Verify that `/_highkey/changes` without its secret returns 401, that `/_tako/channels/*` redirects or denies a signed-out user at Access, and that the ingest host answers only its public paths without Access.
+Verify from a signed-out browser or client:
+
+- `/`, `/events` and `/settings` go to the sign-in page; `GET /api/products` answers 401.
+- `POST /api/products` from another origin with a valid session answers 403; a request for another host answers 421.
+- `GET /api/read/products` with a read-only key answers 200; `POST /api/products` with it answers 403.
+- `POST /mcp` without a token answers 401 with a `WWW-Authenticate` header naming the protected-resource metadata.
+- `/tracker.js` loads publicly; `POST /api/ingest` without an ingestion key answers 401.
+- `/_highkey/changes` without its secret answers 401.

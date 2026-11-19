@@ -5,7 +5,7 @@ Privacy-first, self-hosted product analytics and application logs for websites, 
 Highkey runs two independent applications on a self-hosted ClickHouse server:
 
 - **`apps/ingest`** — Rust/Axum/Tokio, package `highkey-ingest`. It only receives events and logs (`/api/ingest`, `/api/logs/ingest`, `/api/logs/v1/logs`) and serves the browser tracker at `/tracker.js`. It checks each key against ClickHouse's key registry, writes to ClickHouse, and acknowledges only after ClickHouse has stored the rows. It holds no state of its own and knows nothing about the dashboard.
-- **`apps/dashboard`** — React/TypeScript with **TanStack Start**, Vite, shadcn/ui on Base UI, [TanStack Charts](https://tanstack.com/charts/latest), and TanStack Table. Runs on **Bun** and serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. It keeps that management state in a Tako-hosted SQLite database (schema in `migrations/`), owns the ClickHouse schema (`clickhouse/migrations`), and mirrors keys and retention into ClickHouse. Authentication is handled by Cloudflare Access, outside the app.
+- **`apps/dashboard`** — React/TypeScript with **TanStack Start**, Vite, shadcn/ui on Base UI, [TanStack Charts](https://tanstack.com/charts/latest), and TanStack Table. Runs on **Bun** and serves the UI and every other path: projects, sources, keys, queries, dashboards, saved views, MCP and live hints. It keeps that management state in a Tako-hosted SQLite database (schema in `migrations/`), owns the ClickHouse schema (`clickhouse/migrations`), and mirrors keys and retention into ClickHouse. It also handles accounts, organizations, API keys and agent sign-in (Better Auth).
 - **ClickHouse** — one node, never public. It stores events and logs with TTL retention. Each project reads its data as its own ClickHouse user, through views that hold only its rows.
 
 ```
@@ -46,7 +46,7 @@ See [Tako setup, deployment, and realtime delivery](docs/tako.md). Development u
 
 Highkey deploys as two native Tako apps, `tako.ingest.toml` and `tako.dashboard.toml`, on a ClickHouse server you install on the host with Highkey's settings files. See [Tako setup and deployment](docs/tako.md) for installing ClickHouse, deploying, updating and backing up. The two apps take separate production hostnames, so the ingest paths never pass through the dashboard, and they share a notification secret for immediate ephemeral channel hints (with polling recovery); ephemeral channels require one Tako server without a shared Postgres credential.
 
-There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Protect all management access using Cloudflare Tunnel and Access before exposing either app. See [the access boundary](docs/access.md). Highkey does not validate Access JWTs or provide fallback authentication.
+There is no migration from the earlier DuckDB-based versions: start a new deployment and create projects and keys there. Set `HIGHKEY_PUBLIC_URL` and `BETTER_AUTH_SECRET`, put TLS in front of the dashboard, and create the first account: it administers the server. See [accounts, organizations and access](docs/access.md).
 
 Without Tako, build with `bun run build` and `cargo build --locked --release -p highkey-ingest`, migrate your ClickHouse with `bun run migrate`, then run `./target/release/highkey-ingest` and `bun run --cwd apps/dashboard start` in separate terminals, with the settings below. The ingest app listens at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000.
 
@@ -67,18 +67,23 @@ Ingest app settings:
 
 Dashboard settings:
 
-| Setting                              | Default                   | Purpose                                                                                        |
-| ------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| `HIGHKEY_CLICKHOUSE_URL`             | `http://127.0.0.1:8123`   | ClickHouse's HTTP interface                                                                    |
-| `HIGHKEY_CLICKHOUSE_USER`            | `highkey_admin`           | Admin user for migrations, access control and the key registry                                 |
-| `HIGHKEY_CLICKHOUSE_PASSWORD`        | empty                     | The admin password                                                                             |
-| `HIGHKEY_READER_SECRET`              | the admin password        | Derives each project's ClickHouse reader password                                              |
-| `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` | none                      | `bun run migrate` only: the password it gives `highkey_ingest`                                 |
-| `HIGHKEY_INGEST_URL`                 | `http://127.0.0.1:3001`   | Where the dashboard forwards the ingest paths and `/tracker.js`                                |
-| `HIGHKEY_DATA_DIR`                   | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite` when no Tako database is bound                                     |
-| `HIGHKEY_QUERY_CONCURRENCY`          | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
-| `HIGHKEY_CORS_ORIGINS`               | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
-| `HOST`, `PORT`                       | `127.0.0.1`, `3000`       | Standalone Bun dashboard listener                                                              |
+| Setting                                  | Default                   | Purpose                                                                                        |
+| ---------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `HIGHKEY_CLICKHOUSE_URL`                 | `http://127.0.0.1:8123`   | ClickHouse's HTTP interface                                                                    |
+| `HIGHKEY_CLICKHOUSE_USER`                | `highkey_admin`           | Admin user for migrations, access control and the key registry                                 |
+| `HIGHKEY_CLICKHOUSE_PASSWORD`            | empty                     | The admin password                                                                             |
+| `HIGHKEY_READER_SECRET`                  | the admin password        | Derives each project's ClickHouse reader password                                              |
+| `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD`     | none                      | `bun run migrate` only: the password it gives `highkey_ingest`                                 |
+| `HIGHKEY_INGEST_URL`                     | `http://127.0.0.1:3001`   | Where the dashboard forwards the ingest paths and `/tracker.js`                                |
+| `HIGHKEY_DATA_DIR`                       | `TAKO_DATA_DIR` or `data` | Directory of `state.sqlite` when no Tako database is bound                                     |
+| `HIGHKEY_QUERY_CONCURRENCY`              | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
+| `HIGHKEY_PUBLIC_URL`                     | `http://127.0.0.1:3000`   | The address people use; the only origin for signed-in writes, and agents' OAuth resource       |
+| `BETTER_AUTH_SECRET`                     | Tako secret               | Signs sessions and tokens; a long random value                                                 |
+| `HIGHKEY_SIGNUP`                         | `invite`                  | `open` lets anyone sign up; `invite` admits the first account and invited people               |
+| `HIGHKEY_RESEND_API_KEY`, `…_EMAIL_FROM` | unset (no email)          | Resend key and sender for verification, reset and invitation email                             |
+| `HIGHKEY_GITHUB_CLIENT_ID`, `…_SECRET`   | unset                     | GitHub sign-in (likewise `HIGHKEY_GOOGLE_CLIENT_ID` and `…_SECRET`)                            |
+| `HIGHKEY_CORS_ORIGINS`                   | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
+| `HOST`, `PORT`                           | `127.0.0.1`, `3000`       | Standalone Bun dashboard listener                                                              |
 
 ## Use it
 
@@ -87,11 +92,11 @@ Dashboard settings:
 3. **Events:** select an event, measure, grouping, and optional typed property filter. Counts, distinct actors, numeric sum/average/min/max, and p50/p95 run in ClickHouse. Charts, grouping, filtering, and event pagination are server-side. Click an event for its original typed envelope.
 4. **Logs:** search messages, filter by severity, service, and context, inspect structured records, and follow live logs. Services send structured JSON or OTLP/HTTP with separate `pl_` log keys created in Settings → Logs. Logs live in ClickHouse apart from events, with an independent seven-day default retention. See [application logs](docs/logs.md).
 
-There is no built-in login, admin token, password, or admin session cookie. Management mutations use an `X-Highkey-Admin: 1` request marker to prevent cross-site form submissions; it is not a secret or authorization mechanism. Cloudflare Access is the authentication boundary.
+Everyone signs in. Signing up creates an organization you own; owners and admins invite people with a role (owner, admin, member or viewer), and one person can belong to several organizations. Scripts and local pages use API keys, and agents sign in over OAuth. See [accounts, organizations and access](docs/access.md).
 
 Click an Overview breakdown row to filter the dashboard in place; **View matching events** opens the filtered event stream. Page and referrer rows offer a separate external-link action on hover or keyboard focus. See [the dashboard guide](docs/dashboard.md) for drilldowns, typed filters, and date behavior.
 
-Project, source, range, chart choices, applied Events queries, and Logs filters live in the URL. For example, `/projects/orbit?source=all&period=month`. One date picker provides presets, custom calendar dates, and previous/next navigation for calendar periods and fixed ranges. Custom dates use inclusive UTC days as explicit `from` / `to` timestamps (the API end is exclusive); they do not archive results. Chart grouping adjusts automatically to the chosen range. Reload, sharing, and browser history restore the view.
+Project, source, range, chart choices, applied Events queries, and Logs filters live in the URL. For example, `/acme/orbit?source=all&period=month` (organization, then project). One date picker provides presets, custom calendar dates, and previous/next navigation for calendar periods and fixed ranges. Custom dates use inclusive UTC days as explicit `from` / `to` timestamps (the API end is exclusive); they do not archive results. Chart grouping adjusts automatically to the chosen range. Reload, sharing, and browser history restore the view.
 
 ## Dashboards and MCP
 

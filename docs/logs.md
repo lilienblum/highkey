@@ -69,7 +69,7 @@ The volume chart shows matching records and errors over the selected window; dra
 
 ## Management API
 
-The dashboard serves these paths. Management requests stay behind Cloudflare Access. Mutations also require the `X-Highkey-Admin: 1` CSRF marker.
+The dashboard serves these paths, to a signed-in session or an API key; log keys and settings need a member, admin or owner (see [access](access.md)).
 
 | Method      | Path                                 | Body/result                                                        |
 | ----------- | ------------------------------------ | ------------------------------------------------------------------ |

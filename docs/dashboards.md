@@ -8,55 +8,50 @@ The same document works over plain HTTP ([API reference](api.md#dashboards-views
 
 ## Ask your AI
 
-Highkey serves an MCP server (streamable HTTP) in the API. It has two paths:
+Highkey serves an MCP server (streamable HTTP) in the dashboard. It has two addresses:
 
-| Path            | Tools                                                                                       | Use it with                 |
-| --------------- | ------------------------------------------------------------------------------------------- | --------------------------- |
-| `/mcp`          | Everything: read, build and save dashboards and views, manage projects, sources and keys    | A full Access service token |
-| `/api/read/mcp` | Read only: projects, catalog, `run_widget`, samples, dashboards and views to read, validate | A read-only token           |
+| Address         | Tools                                                                                                    | Signs in with                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `/mcp`          | What the connection allows: read, build and save dashboards and views, manage projects, sources and keys | OAuth (the agent opens a browser), or an API key |
+| `/api/read/mcp` | Read only: projects, catalog, `run_widget`, samples, dashboards and views to read, validate              | A read-only API key, for scheduled and CI runs   |
 
-`/mcp` is served by the dashboard and forwards to the API's own `/api/mcp`. Use `/api/mcp` only when an agent reaches the API directly, without the dashboard in front. The read-only server stays at `/api/read/mcp` so Access can scope a read token to `/api/read/*`.
+Connecting an agent to `/mcp` signs it in as you: the agent opens Highkey in your browser, you sign in, choose the organization it works in, and allow **Read only** or **Read and write** (viewers can allow read only). It then sees only that organization's projects, and only the read tools when it may only read. Its connection appears under **Settings → Agents**, where you (or an owner or admin) can revoke it; see [agents](access.md#agents-mcp). `/mcp` is served by the dashboard and forwards to its own `/api/mcp`.
 
-Highkey has no login of its own. Cloudflare Access is the boundary, so a remote agent presents an Access [service token](access.md#mcp-and-read-only-access). Locally (`bun dev` or standalone) there is no Access and the agent needs no headers.
+A run that cannot sign in (a scheduled report, CI) uses an API key instead: create a read-only key under **Settings → API keys** and send it as `Authorization: Bearer hk_…` to `/api/read/mcp`.
 
 ### Claude Code
 
-Locally, through the dashboard:
-
 ```sh
-claude mcp add --transport http highkey http://127.0.0.1:3000/mcp
+claude mcp add --transport http highkey https://highkey.example.com/mcp
 ```
 
-Against a deployment behind Access, add the service token's two headers:
+Then run `/mcp` inside Claude Code and choose **Authenticate**: Claude Code opens Highkey to sign in and connect. Locally, use `https://highkey.test/mcp` under `bun dev`, or `http://127.0.0.1:3000/mcp` standalone.
+
+For a scheduled run with a read-only key:
 
 ```sh
-claude mcp add --transport http highkey https://highkey.example.com/mcp \
-  --header "CF-Access-Client-Id: <client id>.access" \
-  --header "CF-Access-Client-Secret: <client secret>"
+claude mcp add --transport http highkey-reports https://highkey.example.com/api/read/mcp \
+  --header "Authorization: Bearer hk_…"
 ```
 
-Claude Code does not expand environment variables inside a remote server's URL or headers, so paste the literal values. `claude mcp add` does not check them; run `/mcp` inside Claude Code to confirm the connection (a wrong token shows the HTTP status, such as 401). For a read-only agent use `/api/read/mcp` and the read token instead.
+Claude Code does not expand environment variables inside a remote server's URL or headers, so paste the literal key, and keep it in your local configuration only.
 
 ### Codex
 
-Add a server to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.highkey]
-url = "https://highkey.example.com/mcp"
-http_headers = { "CF-Access-Client-Id" = "<client id>.access", "CF-Access-Client-Secret" = "<client secret>" }
+```sh
+codex mcp add highkey --url https://highkey.example.com/mcp
+codex mcp login highkey
 ```
 
-To keep the secret out of the file, use `env_http_headers`, which maps a header name to the name of an environment variable:
+`codex mcp login` opens Highkey to sign in and connect. For a scheduled run, read the key from an environment variable instead of signing in, in `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.highkey]
-url = "https://highkey.example.com/mcp"
-http_headers = { "CF-Access-Client-Id" = "<client id>.access" }
-env_http_headers = { "CF-Access-Client-Secret" = "HIGHKEY_ACCESS_CLIENT_SECRET" }
+[mcp_servers.highkey-reports]
+url = "https://highkey.example.com/api/read/mcp"
+bearer_token_env_var = "HIGHKEY_API_KEY"
 ```
 
-Locally, `url = "http://127.0.0.1:3000/mcp"` is enough.
+Agent sign-in needs Highkey served over HTTPS (or loopback). On a plain-HTTP address on a private network, connect agents with an API key in the same way.
 
 ### What the agent can do
 
@@ -496,17 +491,17 @@ The stat counts the people active in the range who were first seen before it. Th
 
 ## Local pages
 
-Because the read paths are plain HTTP, you can write your own page against a project (a wallboard, a status page, a README badge generator) and keep it wherever you like. Under `/api/read/*` every request is non-mutating whatever its method, so a read-only token can be scoped to that prefix. These paths answer cross-origin requests from an allowlist:
+Because the read paths are plain HTTP, you can write your own page against a project (a wallboard, a status page, a README badge generator) and keep it wherever you like. Under `/api/read/*` every request is non-mutating whatever its method, and a read-only API key is all a page needs. These paths answer cross-origin requests from an allowlist:
 
 - **Loopback origins are allowed by default**: `http://localhost`, `http://127.0.0.1` and `http://[::1]` (HTTP or HTTPS) with any port.
 - **Other origins are added with `HIGHKEY_CORS_ORIGINS`**, a comma-separated list of exact origins (scheme, host and port; no trailing slash and no path), for example `HIGHKEY_CORS_ORIGINS=https://wall.example.com,http://192.168.1.20:8080`. Set it on the dashboard; under native Tako, in `[vars.production]` of `tako.dashboard.toml`.
 - **`null` is never allowed.** A page opened from disk (`file://`) has the `null` origin, so serve it instead: `python3 -m http.server 8000` or `bunx serve` in its folder, then open `http://localhost:8000`.
-- A literal `*` in `HIGHKEY_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point, and with Access in front the origin you list is the only page that should read your data.
-- Credentials are never enabled, no write path sends CORS headers at all, and the only request headers allowed are `Content-Type`, `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
+- A literal `*` in `HIGHKEY_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point.
+- Credentials (cookies) are never enabled, no write path sends CORS headers at all, and the only request headers allowed are `Content-Type`, `Authorization` and `X-Api-Key`.
 
-Against a deployment behind Access, a browser's CORS preflight carries no credentials and Access answers it with 403. In the Access application that covers `/api/read/*`, turn on **Bypass options requests to origin** (under Cross-Origin Resource Sharing settings) so Highkey answers the preflight, and send the read-only service token's two headers on the real request. Anything in a page's source is readable by whoever opens it, so only put a read-only token in a page you serve to yourself.
+Every read needs an API key: create a read-only one under **Settings → API keys** and send it as `Authorization: Bearer hk_…`. Anything in a page's source is readable by whoever opens it, so only put a key in a page you serve to yourself, and revoke it when the page is gone.
 
-This page asks one widget for its result and prints the numbers. Locally it works as is; edit `highkey` and the `headers` for a deployment.
+This page asks one widget for its result and prints the numbers. Edit `highkey`, `project` and `key`.
 
 ```html
 <!doctype html>
@@ -518,10 +513,8 @@ This page asks one widget for its result and prints the numbers. Locally it work
 <script type="module">
   const highkey = "http://127.0.0.1:3000"; // or https://highkey.example.com
   const project = "orbit"; // a project slug or id
-  const headers = { "Content-Type": "application/json" };
-  // Deployed behind Access, add the read-only token here:
-  // headers["CF-Access-Client-Id"] = "<client id>.access";
-  // headers["CF-Access-Client-Secret"] = "<client secret>";
+  const key = "hk_…"; // a read-only API key (Settings → API keys)
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${key}` };
 
   const to = new Date();
   const from = new Date(to.getTime() - 7 * 24 * 3600 * 1000);
