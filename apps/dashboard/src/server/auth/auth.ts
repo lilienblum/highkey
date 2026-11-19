@@ -7,8 +7,8 @@ import { cimd } from "@better-auth/cimd";
 import { mcp } from "@better-auth/mcp";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth, getCurrentAdapter } from "better-auth";
-import { APIError } from "better-auth/api";
-import { admin, jwt, organization } from "better-auth/plugins";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { admin, jwt, organization, twoFactor } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { tako } from "tako.sh";
 import type { BunDb } from "../db/bun-db";
@@ -18,23 +18,10 @@ import { adoptOrphanProjects } from "../db/products";
 import { projectSlug } from "../db/sources";
 import { cimdFetch } from "./cimd-fetch";
 import { keyFrom } from "./keys";
+import { type Mailer, resendMailer, type SocialProviders, socialFromEnv } from "./mailer";
 import { ac, roles } from "./roles";
 
-/** Sends the account emails: verification, password reset, invitations. */
-export interface Mailer {
-  send(message: { to: string; subject: string; text: string }): Promise<void>;
-}
-
-/** A mailer that keeps what it was asked to send, for tests. */
-export function memoryMailer(): Mailer & { sent: { to: string; subject: string; text: string }[] } {
-  const sent: { to: string; subject: string; text: string }[] = [];
-  return {
-    sent,
-    async send(message) {
-      sent.push(message);
-    },
-  };
-}
+export { type Mailer, memoryMailer } from "./mailer";
 
 /** How many requests an API key may make, per window; tests pass a smaller one. */
 export const KEY_RATE_LIMIT = { timeWindow: 60_000, maxRequests: 1_000 };
@@ -49,6 +36,8 @@ export interface AuthOptions {
   mailer: Mailer | null;
   signup: "open" | "invite";
   keyRateLimit?: { timeWindow: number; maxRequests: number };
+  /** GitHub and Google sign-in, each present only when configured. */
+  social?: SocialProviders;
   /** How agents' client metadata documents are fetched; tests serve their own. */
   cimdFetch?: Parameters<typeof cimd>[0]["fetchClientMetadataResource"];
 }
@@ -124,7 +113,20 @@ async function freeSlug(adapter: Adapter, name: string): Promise<string> {
   }
 }
 
+const ROLE_PHRASES: Record<string, string> = {
+  owner: "an owner",
+  admin: "an admin",
+  member: "a member",
+  viewer: "a viewer",
+};
+
+/** The Join page for an invitation. */
+export function invitationLink(publicUrl: string, invitationId: string): string {
+  return `${new URL(publicUrl).origin}/join/${invitationId}`;
+}
+
 export function createAuth(options: AuthOptions) {
+  const mailer: Mailer | null = options.mailer;
   const database =
     "bun" in options.database
       ? options.database.bun
@@ -157,7 +159,47 @@ export function createAuth(options: AuthOptions) {
     secret: options.secret,
     trustedOrigins: [new URL(options.publicUrl).origin],
     database,
-    emailAndPassword: { enabled: true, minPasswordLength: 10 },
+    // With email, addresses are verified before sign-in and passwords reset by email; without
+    // it (a typical self-host) verification is off and the server admin issues reset links.
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 10,
+      requireEmailVerification: mailer !== null,
+      sendResetPassword: mailer
+        ? async ({ user, url }) =>
+            mailer.send({
+              to: user.email,
+              subject: "Reset your Highkey password",
+              text: `Someone asked to reset the password of your Highkey account (${user.email}). To choose a new password, open this link within an hour:\n\n${url}\n\nIf it was not you, ignore this email; your password stays as it is.`,
+            })
+        : undefined,
+    },
+    emailVerification: mailer
+      ? {
+          sendOnSignUp: true,
+          autoSignInAfterVerification: true,
+          sendVerificationEmail: async ({ user, url }) =>
+            mailer.send({
+              to: user.email,
+              subject: "Verify your email for Highkey",
+              text: `Open this link to verify ${user.email} and sign in to Highkey:\n\n${url}\n\nIf you did not sign up for Highkey, ignore this email.`,
+            }),
+        }
+      : undefined,
+    socialProviders: options.social ?? {},
+    hooks: {
+      // An invitation's response carries the link to its Join page, to copy when there is no
+      // email (and to resend by hand when there is).
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/organization/invite-member") return;
+        const invitation = ctx.context.returned as { id?: unknown } | null;
+        if (invitation && typeof invitation.id === "string")
+          return ctx.json({
+            ...invitation,
+            link: invitationLink(options.publicUrl, invitation.id),
+          });
+      }),
+    },
     // API keys are made, listed and revoked only through Highkey's /api/keys, which scope them to
     // an organization; the plugin's own endpoints stay closed.
     disabledPaths: [
@@ -223,6 +265,40 @@ export function createAuth(options: AuthOptions) {
         roles,
         creatorRole: "owner",
         invitationExpiresIn: 7 * 24 * 60 * 60,
+        sendInvitationEmail: mailer
+          ? async ({ email, role, organization: org, inviter, id }) =>
+              mailer.send({
+                to: email,
+                subject: `${inviter.user.name} invited you to ${org.name} on Highkey`,
+                text: `${inviter.user.name} (${inviter.user.email}) invited you to join ${org.name} on Highkey as ${ROLE_PHRASES[role] ?? role}. Open this link within 7 days to accept:\n\n${invitationLink(options.publicUrl, id)}\n\nIf you were not expecting this, ignore this email.`,
+              })
+          : undefined,
+        // An owner can require two-factor codes of everyone in the organization.
+        schema: {
+          organization: {
+            additionalFields: {
+              requireTwoFactor: {
+                type: "boolean",
+                required: false,
+                defaultValue: false,
+                input: true,
+              },
+            },
+          },
+        },
+        organizationHooks: {
+          beforeUpdateOrganization: async ({ organization: changes, user, member }) => {
+            if (changes.requireTwoFactor === undefined) return;
+            if (!String(member.role).split(",").includes("owner"))
+              throw new APIError("FORBIDDEN", {
+                message: "Only an owner can require two-factor codes",
+              });
+            if (changes.requireTwoFactor && !user.twoFactorEnabled)
+              throw new APIError("FORBIDDEN", {
+                message: "Turn on two-factor codes for your own account before requiring them",
+              });
+          },
+        },
       }),
       // Keys belong to the person who made them; the organization and access are their metadata.
       apiKey({
@@ -283,6 +359,8 @@ export function createAuth(options: AuthOptions) {
             }),
           ]
         : []),
+      // TOTP codes from an authenticator app, with backup codes.
+      twoFactor({ issuer: "Highkey" }),
       // The server admin (users with role "admin"), above every organization.
       admin({ adminRoles: ["admin"] }),
       // Must stay last, so cookies set by server-side calls reach TanStack Start's response.
@@ -303,6 +381,13 @@ function setting(name: string): string | undefined {
   }
 }
 
+/** Resend, when `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM` are both set. */
+function mailerFromSettings(): Mailer | null {
+  const key = setting("HIGHKEY_RESEND_API_KEY");
+  const from = setting("HIGHKEY_EMAIL_FROM");
+  return key && from ? resendMailer(key, from) : null;
+}
+
 let instance: Promise<Auth> | null = null;
 
 /** The process's Better Auth, on the management database. */
@@ -315,8 +400,14 @@ export function getAuth(): Promise<Auth> {
       db: await managementDb(),
       publicUrl: process.env.HIGHKEY_PUBLIC_URL ?? "http://127.0.0.1:3000",
       secret: setting("BETTER_AUTH_SECRET"),
-      mailer: null,
+      mailer: mailerFromSettings(),
       signup: process.env.HIGHKEY_SIGNUP === "open" ? "open" : "invite",
+      social: socialFromEnv({
+        HIGHKEY_GITHUB_CLIENT_ID: setting("HIGHKEY_GITHUB_CLIENT_ID"),
+        HIGHKEY_GITHUB_CLIENT_SECRET: setting("HIGHKEY_GITHUB_CLIENT_SECRET"),
+        HIGHKEY_GOOGLE_CLIENT_ID: setting("HIGHKEY_GOOGLE_CLIENT_ID"),
+        HIGHKEY_GOOGLE_CLIENT_SECRET: setting("HIGHKEY_GOOGLE_CLIENT_SECRET"),
+      }),
     });
   })().catch((error) => {
     instance = null;

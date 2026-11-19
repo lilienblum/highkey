@@ -1,5 +1,6 @@
 // Better Auth on a test context's database, and requests to it as a browser would send them.
-import { type Auth, createAuth, type memoryMailer } from "../src/server/auth/auth";
+import { type Auth, createAuth } from "../src/server/auth/auth";
+import type { Mailer, SocialProviders } from "../src/server/auth/mailer";
 import type { BunDb } from "../src/server/db/bun-db";
 import type { TestContext } from "./helpers";
 
@@ -9,7 +10,8 @@ export function testAuth(
   ctx: TestContext,
   options: {
     signup?: "open" | "invite";
-    mailer?: ReturnType<typeof memoryMailer> | null;
+    mailer?: Mailer | null;
+    social?: SocialProviders;
     keyRateLimit?: { timeWindow: number; maxRequests: number };
     cimdFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   } = {},
@@ -23,6 +25,7 @@ export function testAuth(
     signup: options.signup ?? "open",
     keyRateLimit: options.keyRateLimit,
     cimdFetch: options.cimdFetch,
+    social: options.social,
   });
 }
 
@@ -33,10 +36,13 @@ export function authRequest(
   body: unknown,
   headers: HeadersInit = {},
 ): Promise<Response> {
+  const merged = new Headers(headers);
+  merged.set("content-type", "application/json");
+  if (!merged.has("origin")) merged.set("origin", TEST_ORIGIN);
   return auth.handler(
     new Request(`${TEST_ORIGIN}/api/auth${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", origin: TEST_ORIGIN, ...headers },
+      headers: merged,
       body: JSON.stringify(body),
     }),
   );

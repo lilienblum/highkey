@@ -39,6 +39,28 @@ export async function memberRole(ctx: ApiContext, orgId: string, userId: string)
   return role && isRole(role) ? role : null;
 }
 
+/**
+ * The role `userId` holds in `orgId`, for a request acting there: refused when they are not a
+ * member, or when the organization requires two-factor codes and they have not turned them on.
+ */
+async function standing(ctx: ApiContext, orgId: string, userId: string, notMember: string) {
+  const role = await memberRole(ctx, orgId, userId);
+  if (!role) throw new ApiError(403, notMember, {}, "not_a_member");
+  const row = await one<{ required: number | null; enabled: number | null }>(
+    ctx.db,
+    'SELECT o."requireTwoFactor" AS required, u."twoFactorEnabled" AS enabled FROM organization o, "user" u WHERE o.id = ? AND u.id = ?',
+    [orgId, userId],
+  );
+  if (row?.required && !row.enabled)
+    throw new ApiError(
+      403,
+      "This organization requires two-factor codes; turn them on in your account settings",
+      {},
+      "two_factor_required",
+    );
+  return role;
+}
+
 /** The actor the router resolved for this request; handlers behind the router always have one. */
 export function requireActor(ctx: ApiContext): Actor {
   if (!ctx.actor) throw new ApiError(401, "Sign in to use Highkey", {}, "unauthenticated");
@@ -63,14 +85,12 @@ async function keyActor(ctx: ApiContext, key: string): Promise<Actor> {
   const userId = result.key?.referenceId;
   if (!meta || !userId)
     throw new ApiError(401, "This API key is not valid or has expired", {}, "unauthenticated");
-  const role = await memberRole(ctx, meta.orgId, userId);
-  if (!role)
-    throw new ApiError(
-      403,
-      "This key's owner is no longer a member of its organization",
-      {},
-      "not_a_member",
-    );
+  const role = await standing(
+    ctx,
+    meta.orgId,
+    userId,
+    "This key's owner is no longer a member of its organization",
+  );
   return {
     userId,
     orgId: meta.orgId,
@@ -90,9 +110,12 @@ export async function resolveActor(ctx: ApiContext, request: Request): Promise<A
   const orgId = session.session.activeOrganizationId;
   if (!orgId)
     throw new ApiError(403, "Join or create an organization first", {}, "no_organization");
-  const role = await memberRole(ctx, orgId, session.user.id);
-  if (!role)
-    throw new ApiError(403, "You are no longer a member of this organization", {}, "not_a_member");
+  const role = await standing(
+    ctx,
+    orgId,
+    session.user.id,
+    "You are no longer a member of this organization",
+  );
   return {
     userId: session.user.id,
     orgId,
@@ -135,14 +158,12 @@ export async function tokenActor(ctx: ApiContext, claims: Claims): Promise<Actor
     [userId, clientId, orgId],
   );
   if (!granted) throw revoked;
-  const role = await memberRole(ctx, orgId, userId);
-  if (!role)
-    throw new ApiError(
-      403,
-      "This connection's person is no longer a member of its organization",
-      {},
-      "not_a_member",
-    );
+  const role = await standing(
+    ctx,
+    orgId,
+    userId,
+    "This connection's person is no longer a member of its organization",
+  );
   return {
     userId,
     orgId,
