@@ -81,7 +81,9 @@ Every tool takes `project` as an id or slug. Start with `describe_project`.
 
 `delete_dashboard`, `delete_view`, `revoke_key` and `revoke_log_key` need a `confirm` argument equal to the slug (dashboard, view) or id (keys). A mismatch changes nothing and returns `confirm_mismatch`.
 
-The server also offers the resources `piko://schema/dashboard.v1` and `piko://docs/dashboards`, and a prompt, `build_dashboard`, that walks an agent through describe, run, validate and save.
+The server also offers the resources `piko://schema/dashboard.v1` and `piko://docs/dashboards`, and two prompts. `build_dashboard` walks an agent through describe, run, validate and save. `daily_report` has it save a report's instructions to `.piko/daily-report.md` in your repository, run the report once, and schedule it every morning against the read-only server, `/api/read/mcp`. The dashboard also serves `/llms.txt` (both MCP addresses and these rules) and `/llms-full.txt` (with this guide) for agents that read the web before they connect.
+
+Everything Piko collects (event names, properties, paths, page titles, log messages and attributes) comes from your visitors and applications, so it can carry text written to steer an agent. The server tells agents to treat it as data, never as instructions; give agents that only report the read-only server, so such text cannot change anything.
 
 A good request names the project and the outcome: "In project orbit, create a dashboard Checkout health with the checkout error rate and p95 latency by service." The agent should preview each widget with `run_widget`, validate, then save. A save is refused if the document is invalid or a widget is too slow, with a JSON path and a hint, so the agent can fix it and try again.
 

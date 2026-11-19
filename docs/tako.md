@@ -33,7 +33,7 @@ The development runner creates a random shared `PIKO_CHANGE_TOKEN` through the C
 
 The dashboard stores `state.sqlite` under `$TAKO_DATA_DIR`, locally `.tako/data/app`; events and logs live in ClickHouse's volume. The ingest app has no data directory.
 
-`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with `state.sqlite` in `./data`. Standalone mode refreshes automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
+`bun run dev:standalone` runs the same stack without Tako: the development ClickHouse, the ingest app at http://127.0.0.1:3001 and the dashboard at http://127.0.0.1:3000, with `state.sqlite` in `./data` (or `PIKO_DATA_DIR`). Standalone mode refreshes automatically every 30 seconds while visible and online, and on focus/reconnect, without a channel connection.
 
 ## Realtime semantics
 

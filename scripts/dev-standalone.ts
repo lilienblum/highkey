@@ -22,7 +22,7 @@ const dashboard = Bun.spawn(["bun", "run", "dev"], {
     PIKO_CLICKHOUSE_URL: url,
     PIKO_CLICKHOUSE_PASSWORD: DEV_SERVER.password,
     PIKO_INGEST_URL: "http://127.0.0.1:3001",
-    PIKO_DATA_DIR: `${process.cwd()}/data`,
+    PIKO_DATA_DIR: process.env.PIKO_DATA_DIR ?? `${process.cwd()}/data`,
   },
   stdout: "inherit",
   stderr: "inherit",

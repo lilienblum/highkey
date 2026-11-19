@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -40,6 +42,16 @@ const EventsRoute = EventsRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
+  id: '/llms-full.txt',
+  path: '/llms-full.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsRoute = LogsRouteImport.update({
@@ -122,6 +134,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
@@ -141,6 +155,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
@@ -160,6 +176,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
   '/settings': typeof SettingsRoute
@@ -181,6 +199,8 @@ export interface FileRouteTypes {
     | '/'
     | '/events'
     | '/explore'
+    | '/llms-full.txt'
+    | '/llms.txt'
     | '/logs'
     | '/mcp'
     | '/settings'
@@ -200,6 +220,8 @@ export interface FileRouteTypes {
     | '/'
     | '/events'
     | '/explore'
+    | '/llms-full.txt'
+    | '/llms.txt'
     | '/logs'
     | '/mcp'
     | '/settings'
@@ -218,6 +240,8 @@ export interface FileRouteTypes {
     | '/'
     | '/events'
     | '/explore'
+    | '/llms-full.txt'
+    | '/llms.txt'
     | '/logs'
     | '/mcp'
     | '/settings'
@@ -238,6 +262,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EventsRoute: typeof EventsRoute
   ExploreRoute: typeof ExploreRoute
+  LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
+  LlmsDottxtRoute: typeof LlmsDottxtRoute
   LogsRoute: typeof LogsRoute
   McpRoute: typeof McpRoute
   SettingsRoute: typeof SettingsRoute
@@ -269,6 +295,20 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms-full.txt': {
+      id: '/llms-full.txt'
+      path: '/llms-full.txt'
+      fullPath: '/llms-full.txt'
+      preLoaderRoute: typeof LlmsFullDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs': {
@@ -398,6 +438,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EventsRoute: EventsRoute,
   ExploreRoute: ExploreRoute,
+  LlmsFullDottxtRoute: LlmsFullDottxtRoute,
+  LlmsDottxtRoute: LlmsDottxtRoute,
   LogsRoute: LogsRoute,
   McpRoute: McpRoute,
   SettingsRoute: SettingsRoute,

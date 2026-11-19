@@ -24,6 +24,8 @@ import { badArgument, confirmMismatch, orMissing, projectId, sourceId, type Tool
 const URL_NOTE =
   "Replace PIKO_URL with the origin of the Piko URL this MCP server is reached at. The secret is shown only once.";
 const LOGS_NOTE = "For logs, call create_log_key.";
+const VERIFY_NOTE =
+  "After installing a snippet, send one event, then call sample_events for this project to confirm it arrived; it lists the newest events first.";
 
 export const workspaceTools: Record<string, Tool> = {
   create_project: async (ctx, a) =>
@@ -80,6 +82,7 @@ export const workspaceTools: Record<string, Tool> = {
         instructions: URL_NOTE,
         snippets: snippets(a.integration, key.key) ?? {},
         logs: LOGS_NOTE,
+        verify: VERIFY_NOTE,
       },
     };
   },

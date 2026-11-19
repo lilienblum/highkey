@@ -452,7 +452,12 @@ test("New dashboard opens the agent guide with copyable commands and prompts", a
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     `In Piko project "${project.slug}", create a dashboard named "…" that shows … . Use describe_project first, preview widgets with run_widget, then save_dashboard.`,
   );
-  for (const example of ["Checkout error rate", "Weekly churn by cohort", "Slowest routes"])
+  for (const example of [
+    "Checkout error rate",
+    "Weekly retention by cohort",
+    "Slowest routes",
+    "Daily report",
+  ])
     await expect(dialog.getByRole("button", { name: `Copy example: ${example}` })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();

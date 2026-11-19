@@ -874,6 +874,17 @@
           "required": true
         }
       ]
+    },
+    {
+      "name": "daily_report",
+      "description": "Set up a daily report that is saved in the repository, run once and scheduled",
+      "arguments": [
+        {
+          "name": "project",
+          "description": "The project's slug or id",
+          "required": true
+        }
+      ]
     }
   ],
   "serverInfo": {
