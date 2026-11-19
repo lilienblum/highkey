@@ -17,13 +17,7 @@ function window(days: number) {
 }
 
 const run = (widget: unknown, days = 7) =>
-  call(
-    ctx,
-    "POST",
-    "/api/read/products/shop/widgets/run",
-    { widget, ...window(days) },
-    { "x-highkey-admin": "" },
-  );
+  call(ctx, "POST", "/api/read/products/shop/widgets/run", { widget, ...window(days) });
 
 const stat = (query: unknown) => ({
   id: "w",
@@ -65,13 +59,9 @@ describe("richer typed queries", () => {
     expect(reply.json.series.map((s: { total: number }) => s.total)).toEqual([1, 1, 1, 1, 1, 1]);
     const seven = { ...widget, queries: { ...queries, g: { signal: "events", event: "g" } } };
     seven.series = [...widget.series, { expr: "g" }];
-    const validated = await call(
-      ctx,
-      "POST",
-      "/api/read/products/shop/dashboards/validate",
-      { document: { version: 1, name: "Lines", widgets: [seven] } },
-      { "x-highkey-admin": "" },
-    );
+    const validated = await call(ctx, "POST", "/api/read/products/shop/dashboards/validate", {
+      document: { version: 1, name: "Lines", widgets: [seven] },
+    });
     expect(validated.json.errors.map((e: { path: string }) => e.path)).toContain(
       "/widgets/0/queries",
     );

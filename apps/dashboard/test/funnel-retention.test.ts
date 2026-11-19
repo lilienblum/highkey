@@ -18,13 +18,7 @@ function window(days: number) {
 }
 
 const run = (key: string, widget: unknown, days = 7) =>
-  call(
-    ctx,
-    "POST",
-    `/api/read/products/${key}/widgets/run`,
-    { widget, ...window(days) },
-    { "x-highkey-admin": "" },
-  );
+  call(ctx, "POST", `/api/read/products/${key}/widgets/run`, { widget, ...window(days) });
 
 const step = (event: string) => ({ event });
 
@@ -215,13 +209,9 @@ describe("no SQL in dashboards", () => {
       view: { type: "stat" },
       queries: { a: { signal: "sql", database: "events", sql: "SELECT 1 AS value" } },
     };
-    const reply = await call(
-      ctx,
-      "POST",
-      "/api/read/products/shop/dashboards/validate",
-      { document: { version: 1, name: "SQL", widgets: [widget] } },
-      { "x-highkey-admin": "" },
-    );
+    const reply = await call(ctx, "POST", "/api/read/products/shop/dashboards/validate", {
+      document: { version: 1, name: "SQL", widgets: [widget] },
+    });
     expect(reply.status).toBe(200);
     expect(reply.json.valid).toBe(false);
     expect(reply.json.errors[0].path).toBe("/widgets/0/queries/a/signal");
@@ -328,9 +318,7 @@ describe("benchmarks before saving", () => {
     });
     expect(reply.headers.get("retry-after")).not.toBeNull();
     held?.();
-    const list = await call(ctx, "GET", "/api/read/products/shop/dashboards", undefined, {
-      "x-highkey-admin": "",
-    });
+    const list = await call(ctx, "GET", "/api/read/products/shop/dashboards");
     expect(list.json).toEqual([]);
     const again = await call(ctx, "POST", path(shop.id), {
       document: board("Busy", [views("a", "x")]),

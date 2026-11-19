@@ -63,8 +63,14 @@ export async function product(db: Db, id: string): Promise<Product> {
   return withLinks(db, await productRow(db, id));
 }
 
-export async function products(db: Db): Promise<Product[]> {
-  const rows = await all<Row>(db, `SELECT ${ROW} FROM products ORDER BY created_at, id`);
+/** An organization's projects, or (without `orgId`) every project, for background work. */
+export async function products(db: Db, orgId?: string): Promise<Product[]> {
+  const rows =
+    orgId === undefined
+      ? await all<Row>(db, `SELECT ${ROW} FROM products ORDER BY created_at, id`)
+      : await all<Row>(db, `SELECT ${ROW} FROM products WHERE org_id = ? ORDER BY created_at, id`, [
+          orgId,
+        ]);
   return Promise.all(rows.map((row) => withLinks(db, row)));
 }
 
@@ -73,11 +79,23 @@ export async function requireProduct(db: Db, id: string): Promise<void> {
     throw projectMissing();
 }
 
-/** A project by id, or else by slug. */
-export async function resolveProduct(db: Db, key: string): Promise<Row> {
+/**
+ * A project by id, or else by slug, within organization `orgId`: another organization's project
+ * is missing, exactly like one that does not exist. Without `orgId` (background work only) any
+ * project matches by id.
+ */
+export async function resolveProduct(db: Db, key: string, orgId?: string): Promise<Row> {
   const row =
-    (await one<Row>(db, `SELECT ${ROW} FROM products WHERE id = ?`, [key])) ??
-    (await one<Row>(db, `SELECT ${ROW} FROM products WHERE slug = ?`, [key]));
+    orgId === undefined
+      ? await one<Row>(db, `SELECT ${ROW} FROM products WHERE id = ?`, [key])
+      : ((await one<Row>(db, `SELECT ${ROW} FROM products WHERE id = ? AND org_id = ?`, [
+          key,
+          orgId,
+        ])) ??
+        (await one<Row>(db, `SELECT ${ROW} FROM products WHERE slug = ? AND org_id = ?`, [
+          key,
+          orgId,
+        ])));
   if (!row) throw projectMissing();
   return row;
 }
@@ -117,7 +135,6 @@ export async function saveProduct(
       const base = projectSlug(input.name);
       let slug = base;
       for (let suffix = 2; ; suffix++) {
-        // The unique index arbitrates concurrent creators.
         // Slugs are unique within an organization; there, the unique index arbitrates.
         const inserted = await changes(
           tx,
@@ -134,6 +151,32 @@ export async function saveProduct(
     );
   });
   return product(db, productId);
+}
+
+/**
+ * Moves a project to organization `orgId` with everything that hangs off it (sources, keys,
+ * dashboards, views). It keeps its slug unless the target has one; then it takes the next free one.
+ */
+export async function moveProduct(db: Db, id: string, orgId: string): Promise<Product> {
+  await db.transaction(async (tx) => {
+    const row = await one<{ name: string; slug: string; org_id: string | null }>(
+      tx,
+      "SELECT name, slug, org_id FROM products WHERE id = ?",
+      [id],
+    );
+    if (!row) throw projectMissing();
+    if (row.org_id === orgId) return;
+    const base = projectSlug(row.name);
+    for (let suffix = 2, slug = row.slug; ; slug = `${base}-${suffix++}`) {
+      const moved = await changes(
+        tx,
+        "UPDATE OR IGNORE products SET org_id = ?2, slug = ?3 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM products WHERE slug = ?3 AND org_id = ?2)",
+        [id, orgId, slug],
+      );
+      if (moved === 1) return;
+    }
+  });
+  return product(db, id);
 }
 
 /** Caches a fetched favicon, unless the project's website changed meanwhile. */

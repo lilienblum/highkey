@@ -23,10 +23,12 @@ export const getDashboard = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }): Promise<StoredDashboard | null> => {
     if (!key.test(data.project) || !key.test(data.dashboard)) return null;
-    const { serveApi } = await import("./api/serve");
+    const { serveApi, visitorRequest } = await import("./api/serve");
+    const { getRequest } = await import("@tanstack/react-start/server");
     const response = await serveApi(
-      new Request(
-        `http://localhost/api/read/products/${encodeURIComponent(data.project)}/dashboards/${encodeURIComponent(data.dashboard)}`,
+      visitorRequest(
+        getRequest(),
+        `/api/read/products/${encodeURIComponent(data.project)}/dashboards/${encodeURIComponent(data.dashboard)}`,
       ),
     );
     if (response.status === 404) return null;

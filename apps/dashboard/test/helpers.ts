@@ -9,10 +9,13 @@ import { gatesFromEnv } from "../src/server/dashboards/gates";
 import { WriteLimit } from "../src/server/dashboards/limit";
 import { ClickHouse } from "../src/server/clickhouse/client";
 import { migrate } from "../src/server/clickhouse/migrate";
+import { signUp, TEST_ORIGIN, testAuth } from "./auth-helpers";
 import { testClickHouse } from "./clickhouse";
 
 export interface TestContext extends ApiContext {
   signals: { product: string; signal: Signal }[];
+  /** The signed-in owner's session cookie, which `call` sends unless told otherwise. */
+  session: Headers;
   cleanup(): void;
 }
 
@@ -26,15 +29,20 @@ export async function testAdmin(): Promise<ClickHouse> {
   return admin;
 }
 
-export async function testContext(options: { corsOrigins?: string[] } = {}): Promise<TestContext> {
+export async function testContext(
+  options: { corsOrigins?: string[]; signedIn?: boolean } = {},
+): Promise<TestContext> {
   const server = await testClickHouse();
   const admin = await testAdmin();
   const db = openBunDb(":memory:");
   await applyMigrations(db);
   const secret = "dashboard-test-secret";
   const signals: { product: string; signal: Signal }[] = [];
-  return {
+  const ctx: TestContext = {
     db,
+    auth: async () => auth,
+    publicUrl: TEST_ORIGIN,
+    session: new Headers(),
     admin,
     readers: new Readers({ url: server.url, secret }),
     secret,
@@ -49,6 +57,11 @@ export async function testContext(options: { corsOrigins?: string[] } = {}): Pro
       void db.close();
     },
   };
+  const auth = testAuth(ctx);
+  // Most tests act as the owner of one organization, who is also the first account (the server
+  // admin). Tests about sign-up itself start with no accounts.
+  if (options.signedIn !== false) ctx.session = await signUp(auth, "owner@highkey.test", "Owner");
+  return ctx;
 }
 
 export interface Reply {
@@ -66,9 +79,17 @@ export async function call(
   body?: unknown,
   headers: Record<string, string> = {},
 ): Promise<Reply> {
+  const session = Object.fromEntries((ctx as Partial<TestContext>).session ?? new Headers());
+  // A header given as "" is left out, so a test can send no Origin or no session.
+  const merged = {
+    "content-type": "application/json",
+    origin: TEST_ORIGIN,
+    ...session,
+    ...headers,
+  };
   const init: RequestInit = {
     method,
-    headers: { "content-type": "application/json", "x-highkey-admin": "1", ...headers },
+    headers: Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== "")),
   };
   if (body !== undefined && method !== "GET" && method !== "HEAD")
     init.body = typeof body === "string" ? body : JSON.stringify(body);

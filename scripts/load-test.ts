@@ -71,6 +71,9 @@ try {
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: LOAD_SERVER.password });
   const ctx: ApiContext = {
     db: openBunDb(join(directory, "state.sqlite")),
+    // The load test calls operations directly, as no one in particular.
+    auth: () => Promise.reject(new Error("The load test has no accounts")),
+    publicUrl: "http://127.0.0.1",
     admin,
     readers: new Readers({ url, secret: LOAD_SERVER.password }),
     secret: LOAD_SERVER.password,

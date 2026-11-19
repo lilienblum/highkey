@@ -24,7 +24,7 @@ const runBody = (widget: unknown, days: number, extra: Record<string, unknown> =
   ...extra,
 });
 const run = (key: string, body: unknown) =>
-  call(ctx, "POST", `/api/read/products/${key}/widgets/run`, body, { "x-highkey-admin": "" });
+  call(ctx, "POST", `/api/read/products/${key}/widgets/run`, body);
 
 function errorRate() {
   return {
@@ -198,23 +198,22 @@ describe("widget runs", () => {
     const managed = await call(ctx, "POST", `/api/products/${p.id}/query`, query);
     expect(managed.json.summary.total).toBe(4);
     for (const key of [p.id, "read-prefix"]) {
-      const read = await call(ctx, "POST", `/api/read/products/${key}/query`, query, {
-        "x-highkey-admin": "",
-      });
+      const read = await call(ctx, "POST", `/api/read/products/${key}/query`, query);
       expect(read.json).toEqual(managed.json);
     }
     const logs = window(7);
     const managedLogs = await call(ctx, "POST", `/api/products/${p.id}/logs/query`, logs);
     expect(managedLogs.json.total).toBe(2);
     for (const key of [p.id, "read-prefix"]) {
-      const read = await call(ctx, "POST", `/api/read/products/${key}/logs/query`, logs, {
-        "x-highkey-admin": "",
-      });
+      const read = await call(ctx, "POST", `/api/read/products/${key}/logs/query`, logs);
       expect(read.json).toEqual(managedLogs.json);
     }
     expect(
-      (await call(ctx, "POST", `/api/products/${p.id}/query`, query, { "x-highkey-admin": "" }))
-        .status,
+      (
+        await call(ctx, "POST", `/api/products/${p.id}/query`, query, {
+          origin: "https://attacker.example",
+        })
+      ).status,
     ).toBe(403);
     expect((await call(ctx, "POST", "/api/read/products/missing/query", query)).status).toBe(404);
   });
@@ -398,13 +397,7 @@ describe("widget runs", () => {
       ],
     });
     const validate = (document: unknown) =>
-      call(
-        ctx,
-        "POST",
-        "/api/read/products/shop/dashboards/validate",
-        { document },
-        { "x-highkey-admin": "" },
-      );
+      call(ctx, "POST", "/api/read/products/shop/dashboards/validate", { document });
     expect((await validate(doc("checkout"))).json).toEqual({
       valid: true,
       errors: [],

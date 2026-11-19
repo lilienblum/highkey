@@ -44,7 +44,7 @@ const put = (
   headers: Record<string, string> = {},
 ) => call(ctx, "PUT", `${path(id)}/${key}`, { base_revision: base, document: doc }, headers);
 
-const read = (p: string) => call(ctx, "GET", p, undefined, { "x-highkey-admin": "" });
+const read = (p: string) => call(ctx, "GET", p);
 
 describe("dashboard storage", () => {
   test("create_get_update_and_list_by_id_or_slug", async () => {
@@ -242,12 +242,12 @@ describe("dashboard storage", () => {
     expect(missing.json.code).toBe("not_found");
   });
 
-  test("writes_require_marker_and_limits_hold", async () => {
+  test("cross_site_writes_are_refused_and_limits_hold", async () => {
     const shop = await project(ctx, "Shop");
     const body = { document: document("Board") };
-    expect((await call(ctx, "POST", path(shop.id), body, { "x-highkey-admin": "" })).status).toBe(
-      403,
-    );
+    expect(
+      (await call(ctx, "POST", path(shop.id), body, { origin: "https://attacker.example" })).status,
+    ).toBe(403);
     expect((await read("/api/read/products/shop/dashboards")).json).toEqual([]);
     for (let n = 0; n < 50; n++) await create(shop.id, `Board ${n}`);
     const limited = await call(ctx, "POST", path(shop.id), body);
@@ -273,7 +273,9 @@ describe("dashboard storage", () => {
     const created = await create(shop.id, "Board");
     await put(shop.id, "board", 1, document("Board"));
     const p = `${path(shop.id)}/board`;
-    expect((await call(ctx, "DELETE", p, undefined, { "x-highkey-admin": "" })).status).toBe(403);
+    expect(
+      (await call(ctx, "DELETE", p, undefined, { origin: "https://attacker.example" })).status,
+    ).toBe(403);
     expect((await call(ctx, "DELETE", p)).status).toBe(204);
     expect((await read("/api/read/products/shop/dashboards/board")).status).toBe(404);
     expect((await call(ctx, "DELETE", p)).status).toBe(404);

@@ -1,5 +1,6 @@
 // The tools on both MCP paths: they read projects, run widgets and check documents, and never
 // change anything. Each calls the function its HTTP route calls.
+import { requireActor } from "../auth/actor";
 import type { ApiContext } from "../api/context";
 import { catalog } from "../dashboards/catalog";
 import { validateFor } from "../dashboards/routes";
@@ -96,7 +97,7 @@ const defined = (entries: [string, unknown][]) =>
 
 export const readTools: Record<string, Tool> = {
   list_projects: async (ctx) =>
-    (await products(ctx.db)).map((p) => ({
+    (await products(ctx.db, requireActor(ctx).orgId)).map((p) => ({
       id: p.id,
       slug: p.slug,
       name: p.name,

@@ -23,17 +23,18 @@ async function preflight(context: TestContext, path: string, origin: string) {
 }
 
 describe("management API", () => {
-  test("management_has_no_app_auth_but_rejects_cross_site_mutations", async () => {
+  test("management_needs_a_session_and_rejects_cross_site_mutations", async () => {
     expect((await call(ctx, "GET", "/api/products")).status).toBe(200);
+    expect((await call(ctx, "GET", "/api/products", undefined, { cookie: "" })).status).toBe(401);
     const forged = await call(
       ctx,
       "POST",
       "/api/products",
       { name: "CSRF", retention_days: 30 },
-      { "x-highkey-admin": "" },
+      { origin: "https://attacker.example" },
     );
     expect(forged.status).toBe(403);
-    expect(forged.json.error).toBe("Management requests require X-Highkey-Admin: 1");
+    expect(forged.json.code).toBe("cross_site");
     expect((await call(ctx, "GET", "/api/session")).status).toBe(404);
     const created = await project(ctx, "Public ingestion");
     expect(created.slug).toBe("public-ingestion");

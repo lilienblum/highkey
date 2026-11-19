@@ -7,7 +7,7 @@ import { type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
 beforeEach(async () => {
-  ctx = await testContext();
+  ctx = await testContext({ signedIn: false });
 }, 300_000);
 afterEach(() => ctx?.cleanup());
 

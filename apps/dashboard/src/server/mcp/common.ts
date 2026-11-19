@@ -2,6 +2,7 @@
 // errors, and the lookups that answer a miss with the nearest slugs. A failing tool returns the
 // HTTP error body as a tool result marked as an error, so an agent can read the JSON paths and
 // hints and fix its call; JSON-RPC errors are only for unknown tools and protocol faults.
+import { requireActor } from "../auth/actor";
 import type { ApiContext } from "../api/context";
 import { ApiError } from "../api/errors";
 import { DashboardError, detailed, notFound, parts } from "../dashboards/errors";
@@ -107,10 +108,10 @@ export async function orMissing<T>(what: string, hint: string, work: () => Promi
 /** The id of the project named by id or slug. A miss names the nearest slugs. */
 export async function projectId(ctx: ApiContext, key: string): Promise<string> {
   try {
-    return (await resolveProduct(ctx.db, key)).id;
+    return (await resolveProduct(ctx.db, key, requireActor(ctx).orgId)).id;
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error;
-    const slugs = (await products(ctx.db)).map((p) => p.slug);
+    const slugs = (await products(ctx.db, requireActor(ctx).orgId)).map((p) => p.slug);
     throw notFound("Project", missingHint(key, slugs, "projects"));
   }
 }

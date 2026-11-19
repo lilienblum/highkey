@@ -6,7 +6,7 @@
 import { fields, readJson } from "./api/body";
 import type { ApiContext } from "./api/context";
 import { ApiError, json, noContent } from "./api/errors";
-import { route } from "./api/router";
+import { READ, route } from "./api/router";
 import schema from "./dashboards/dashboard.v1.schema.json";
 import { detailed, invalid, limit, notFound } from "./dashboards/errors";
 import { throttle } from "./dashboards/routes";
@@ -438,27 +438,27 @@ const kindOf = (request: Request) => kindParam(new URL(request.url).searchParams
 
 export function registerViews(): void {
   const read = "/api/read/products/:project/views";
-  route("GET", read, async (request, ctx, { project }) => {
+  route("GET", read, READ, async (request, ctx, { project }) => {
     const kind = kindOf(request);
     return json(
       await listViews(ctx.db, (await resolveProduct(ctx.db, project as string)).id, kind),
     );
   });
-  route("GET", `${read}/:key`, async (request, ctx, { project, key }) => {
+  route("GET", `${read}/:key`, READ, async (request, ctx, { project, key }) => {
     const kind = kindOf(request);
     const product = (await resolveProduct(ctx.db, project as string)).id;
     return json(await getView(ctx.db, product, key as string, kind));
   });
   const write = "/api/products/:id/views";
-  route("POST", write, async (request, ctx, { id }) => {
+  route("POST", write, { dashboard: ["write"] }, async (request, ctx, { id }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
     return json(await createFor(ctx, id as string, value));
   });
-  route("PUT", `${write}/:key`, async (request, ctx, { id, key }) => {
+  route("PUT", `${write}/:key`, { dashboard: ["write"] }, async (request, ctx, { id, key }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
     return json(await replaceFor(ctx, id as string, key as string, value));
   });
-  route("DELETE", `${write}/:key`, async (request, ctx, { id, key }) => {
+  route("DELETE", `${write}/:key`, { dashboard: ["write"] }, async (request, ctx, { id, key }) => {
     const kind = kindOf(request);
     await deleteFor(ctx, id as string, key as string, kind);
     return noContent();

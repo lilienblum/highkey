@@ -3,7 +3,7 @@
 import { fields, readJson } from "../api/body";
 import type { ApiContext } from "../api/context";
 import { json, noContent } from "../api/errors";
-import { route } from "../api/router";
+import { READ, route } from "../api/router";
 import { resolveProduct } from "../db/products";
 import { benchWidgets } from "./bench";
 import { catalog, warnUnknownDocument } from "./catalog";
@@ -139,22 +139,26 @@ export function registerDashboards(): void {
   setValidateExtras(async (ctx, product, doc, report) =>
     warnUnknownDocument(doc, await catalog(ctx, product), report),
   );
-  route("POST", "/api/read/products/:project/widgets/run", async (request, ctx, { project }) =>
-    json(await runWidget(ctx, project as string, parseRunRequest(await readJson(request)))),
+  route(
+    "POST",
+    "/api/read/products/:project/widgets/run",
+    READ,
+    async (request, ctx, { project }) =>
+      json(await runWidget(ctx, project as string, parseRunRequest(await readJson(request)))),
   );
-  route("GET", "/api/read/products/:project/catalog", async (_r, ctx, { project }) =>
+  route("GET", "/api/read/products/:project/catalog", READ, async (_r, ctx, { project }) =>
     json(await catalog(ctx, project as string)),
   );
   const read = "/api/read/products/:project/dashboards";
-  route("GET", "/api/read/schemas/dashboard.v1.json", async () => json(schema));
-  route("GET", read, async (_r, ctx, { project }) =>
+  route("GET", "/api/read/schemas/dashboard.v1.json", READ, async () => json(schema));
+  route("GET", read, READ, async (_r, ctx, { project }) =>
     json(await listDashboards(ctx.db, (await resolveProduct(ctx.db, project as string)).id)),
   );
-  route("POST", `${read}/validate`, async (request, ctx, { project }) => {
+  route("POST", `${read}/validate`, READ, async (request, ctx, { project }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
     return json(await validateFor(ctx, project as string, value));
   });
-  route("GET", `${read}/:key`, async (_r, ctx, { project, key }) =>
+  route("GET", `${read}/:key`, READ, async (_r, ctx, { project, key }) =>
     json(
       await getDashboard(
         ctx.db,
@@ -163,7 +167,7 @@ export function registerDashboards(): void {
       ),
     ),
   );
-  route("GET", `${read}/:key/revisions`, async (_r, ctx, { project, key }) =>
+  route("GET", `${read}/:key/revisions`, READ, async (_r, ctx, { project, key }) =>
     json(
       await listRevisions(
         ctx.db,
@@ -173,11 +177,11 @@ export function registerDashboards(): void {
     ),
   );
   const write = "/api/products/:id/dashboards";
-  route("POST", write, async (request, ctx, { id }) => {
+  route("POST", write, { dashboard: ["write"] }, async (request, ctx, { id }) => {
     const { document: value } = fields(await readJson(request), { document: "unknown" });
     return json(await createFor(ctx, id as string, value, originFrom(request)));
   });
-  route("PUT", `${write}/:key`, async (request, ctx, { id, key }) => {
+  route("PUT", `${write}/:key`, { dashboard: ["write"] }, async (request, ctx, { id, key }) => {
     const input = fields(await readJson(request), {
       base_revision: "integer",
       document: "unknown",
@@ -193,11 +197,15 @@ export function registerDashboards(): void {
       ),
     );
   });
-  route("DELETE", `${write}/:key`, async (_r, ctx, { id, key }) => {
+  route("DELETE", `${write}/:key`, { dashboard: ["write"] }, async (_r, ctx, { id, key }) => {
     await removeFor(ctx, id as string, key as string);
     return noContent();
   });
-  route("POST", `${write}/:key/revisions/:n/restore`, async (request, ctx, { id, key, n }) =>
-    json(await restoreFor(ctx, id as string, key as string, Number(n), originFrom(request))),
+  route(
+    "POST",
+    `${write}/:key/revisions/:n/restore`,
+    { dashboard: ["write"] },
+    async (request, ctx, { id, key, n }) =>
+      json(await restoreFor(ctx, id as string, key as string, Number(n), originFrom(request))),
   );
 }

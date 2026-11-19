@@ -3,7 +3,11 @@
 // (keys, retention, access) to ClickHouse, then tells open dashboards through the dashboards
 // signal, so every caller behaves the same.
 import type { ApiContext } from "./api/context";
+import { ApiError } from "./api/errors";
+import { type Actor, memberRole } from "./auth/actor";
+import { can } from "./auth/roles";
 import { ensureProjectAccess } from "./clickhouse/access";
+import { one } from "./db/db";
 import {
   createKey,
   createLogKey,
@@ -12,7 +16,14 @@ import {
   setLogRetention,
   updateKeyOrigins,
 } from "./db/keys";
-import { cacheFavicon, type Product, type ProductInput, product, saveProduct } from "./db/products";
+import {
+  cacheFavicon,
+  moveProduct,
+  type Product,
+  type ProductInput,
+  product,
+  saveProduct,
+} from "./db/products";
 import { type Source, type SourceInput, saveSource } from "./db/sources";
 import {
   afterCommit,
@@ -39,7 +50,8 @@ async function withFavicon(ctx: ApiContext, project: Product): Promise<Product> 
 }
 
 export async function createProject(ctx: ApiContext, input: ProductInput): Promise<Product> {
-  const project = await saveProduct(ctx.db, null, input);
+  // A project belongs to the organization of whoever creates it.
+  const project = await saveProduct(ctx.db, null, input, ctx.actor?.orgId ?? null);
   await afterCommit(async () => {
     await ensureProjectAccess(ctx.admin, project.id, ctx.secret);
     await mirrorProject(ctx, project.id);
@@ -62,6 +74,35 @@ export async function updateProject(
   if (project.retention_days !== before) await applyRetentionChanges(ctx, project.id);
   ctx.changes.notify(project.id, "dashboards");
   return withFavicon(ctx, project);
+}
+
+/**
+ * Moves a project to another organization (by id or slug), where `actor` must also be able to move
+ * projects. Its keys, dashboards and views go with it; ClickHouse is untouched, since its rows and
+ * reader belong to the project, not the organization.
+ */
+export async function moveProject(
+  ctx: ApiContext,
+  actor: Actor,
+  projectId: string,
+  target: string,
+): Promise<Product> {
+  const org = await one<{ id: string }>(
+    ctx.db,
+    "SELECT id FROM organization WHERE id = ? OR slug = ?",
+    [target, target],
+  );
+  const role = org ? await memberRole(ctx, org.id, actor.userId) : null;
+  if (!org || !role || !can(role, { project: ["move"] }))
+    throw new ApiError(
+      403,
+      "Only an admin or owner of the target organization can move a project there",
+      {},
+      "forbidden",
+    );
+  const moved = await moveProduct(ctx.db, projectId, org.id);
+  ctx.changes.notify(projectId, "dashboards");
+  return moved;
 }
 
 export async function createSource(

@@ -1,5 +1,6 @@
 // The stack the benchmarks measure: a ClickHouse of its own (4 GB, tmpfs), the release ingest
 // binary, and the dashboard's API served by Bun as in production. Nothing outside it is touched.
+import { type Auth, createAuth } from "../apps/dashboard/src/server/auth/auth";
 import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
 import { applyMigrations } from "../apps/dashboard/src/server/db/migrations";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -46,8 +47,13 @@ export async function startStack(name: string, port: number, ingestPort: number)
   const { url } = await startClickHouse(server);
   const admin = new ClickHouse({ url, user: ADMIN_USER, password: server.password });
   const directory = mkdtempSync(join(tmpdir(), "highkey-bench-"));
+  const db = openBunDb(join(directory, "state.sqlite"));
+  // The benchmark acts as the owner of one organization, signed in once.
+  let auth: Auth | undefined;
   const ctx: ApiContext = {
-    db: openBunDb(join(directory, "state.sqlite")),
+    db,
+    auth: async () => auth as Auth,
+    publicUrl: "http://127.0.0.1",
     admin,
     readers: new Readers({ url, secret: server.password }),
     secret: server.password,
@@ -58,7 +64,39 @@ export async function startStack(name: string, port: number, ingestPort: number)
     now: () => new Date(),
   };
   await applyMigrations(ctx.db);
-  const http = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (r) => handleApi(r, ctx) });
+  auth = createAuth({
+    database: { bun: db.raw },
+    db,
+    publicUrl: "http://127.0.0.1",
+    secret: "highkey-benchmark-secret-at-least-32-chars",
+    mailer: null,
+    signup: "open",
+  });
+  const signedUp = await auth.handler(
+    new Request("http://127.0.0.1/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://127.0.0.1" },
+      body: JSON.stringify({
+        email: "bench@highkey.test",
+        password: "benchmark password",
+        name: "Bench",
+      }),
+    }),
+  );
+  const cookie = signedUp.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .join("; ");
+  const http = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (r) => {
+      const headers = new Headers(r.headers);
+      headers.set("cookie", cookie);
+      headers.set("origin", new URL(r.url).origin);
+      return handleApi(new Request(r, { headers }), ctx);
+    },
+  });
   const build = Bun.spawn(["cargo", "build", "--locked", "--release", "-p", "highkey-ingest"], {
     cwd: root,
     stdout: "inherit",

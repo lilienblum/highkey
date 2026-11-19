@@ -5,6 +5,8 @@ import { Readers } from "../clickhouse/access";
 import { ClickHouse } from "../clickhouse/client";
 import { type Gates, gatesFromEnv } from "../dashboards/gates";
 import { WriteLimit } from "../dashboards/limit";
+import type { Actor } from "../auth/actor";
+import { type Auth, getAuth } from "../auth/auth";
 import type { Db } from "../db/db";
 import { lazyDb, managementDb } from "../db/open";
 
@@ -17,6 +19,12 @@ export interface ChangeBus {
 export interface ApiContext {
   /** The management database: the Tako database bound as `main`, or a local file without Tako. */
   db: Db;
+  /** Better Auth, on the same database. */
+  auth(): Promise<Auth>;
+  /** The dashboard's public origin; requests for any other host (but loopback) are refused. */
+  publicUrl: string;
+  /** Who is asking, once the router has resolved it for a request. */
+  actor?: Actor;
   admin: ClickHouse;
   readers: Readers;
   /** Derives each project's ClickHouse reader password. */
@@ -53,6 +61,8 @@ export function apiContext(): ApiContext {
   const readerSecret = secret("HIGHKEY_READER_SECRET") ?? password;
   singleton = {
     db: lazyDb(managementDb),
+    auth: getAuth,
+    publicUrl: process.env.HIGHKEY_PUBLIC_URL ?? "http://127.0.0.1:3000",
     admin: new ClickHouse({
       url,
       user: process.env.HIGHKEY_CLICKHOUSE_USER ?? "highkey_admin",

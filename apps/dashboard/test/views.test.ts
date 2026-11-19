@@ -39,7 +39,7 @@ function logView(name: string): Json {
 
 const viewsPath = (p: { id: string }) => `/api/read/products/${p.id}/views`;
 const writePath = (p: { id: string }) => `/api/products/${p.id}/views`;
-const read = (path: string) => call(ctx, "GET", path, undefined, { "x-highkey-admin": "" });
+const read = (path: string) => call(ctx, "GET", path);
 const save = (p: { id: string }, document: Json) => call(ctx, "POST", writePath(p), { document });
 
 describe("saved views", () => {
@@ -269,9 +269,9 @@ describe("saved views", () => {
     expect(views[0].document).toBeUndefined();
   });
 
-  test("view_writes_need_the_marker_and_reads_do_not", async () => {
+  test("cross_site_view_writes_are_refused_and_reads_are_not", async () => {
     const shop = await project(ctx, "Shop");
-    const none = { "x-highkey-admin": "" };
+    const none = { origin: "https://attacker.example" };
     const path = writePath(shop);
     expect((await call(ctx, "POST", path, { document: eventView("A") }, none)).status).toBe(403);
     const created = await save(shop, eventView("A"));

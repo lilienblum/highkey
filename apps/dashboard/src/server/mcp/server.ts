@@ -3,8 +3,10 @@
 // and gets one JSON response; there are no sessions and no server-sent events. `/api/read/mcp`
 // lists only the read tools, `/api/mcp` everything. No browser may call MCP: a request that
 // carries an Origin is refused, so the read path's CORS cannot reach it.
+import { requireActor } from "../auth/actor";
+import { can, type Permission } from "../auth/roles";
 import type { ApiContext } from "../api/context";
-import { route } from "../api/router";
+import { READ, route } from "../api/router";
 import { SchemaParser, ShapeError } from "../dashboards/shape";
 import catalog from "./catalog.json";
 import { type Args, errorBody, type Tool } from "./common";
@@ -59,6 +61,33 @@ function argumentsFor(definition: Definition, value: unknown): Args {
 
 const text = (value: unknown) => [{ type: "text", text: JSON.stringify(value) }];
 
+/** What each full-mode tool needs from the role table; read-mode tools need only to read. */
+const TOOL_NEEDS: Record<string, Permission> = {
+  list_keys: { read: ["all"] },
+  list_log_keys: { read: ["all"] },
+  save_dashboard: { dashboard: ["write"] },
+  restore_revision: { dashboard: ["write"] },
+  delete_dashboard: { dashboard: ["write"] },
+  save_view: { dashboard: ["write"] },
+  delete_view: { dashboard: ["write"] },
+  create_project: { project: ["create"] },
+  update_project: { project: ["update"] },
+  create_source: { source: ["write"] },
+  update_source: { source: ["write"] },
+  connect_source: { source: ["write"] },
+  create_key: { key: ["write"] },
+  update_key_origins: { key: ["write"] },
+  revoke_key: { key: ["write"] },
+  create_log_key: { key: ["write"] },
+  revoke_log_key: { key: ["write"] },
+  update_log_settings: { key: ["write"] },
+};
+
+/** What a tool needs, or null for one nobody stated a need for, which no one may call. */
+export function toolNeed(name: string): Permission | null {
+  return TOOL_NEEDS[name] ?? (READ_TOOLS.has(name) ? { read: ["all"] } : null);
+}
+
 async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
   const name = String(params.name ?? "");
   const definition = definitions.get(name);
@@ -75,6 +104,17 @@ async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
       isError: true,
     };
   }
+  const actor = requireActor(ctx);
+  const need = toolNeed(name);
+  const writes = need !== null && !("read" in need);
+  if (need === null || !can(actor.role, need) || (writes && actor.access === "read"))
+    return {
+      content: text({
+        error: "Your role or this connection's access does not allow this tool",
+        code: "forbidden",
+      }),
+      isError: true,
+    };
   try {
     return { content: text(await (HANDLERS[name] as Tool)(ctx, args)), isError: false };
   } catch (error) {
@@ -188,6 +228,6 @@ export function mcpHandler(
 }
 
 export function registerMcp(): void {
-  route("POST", "/api/mcp", (request, ctx) => mcpHandler(ctx, "full")(request));
-  route("POST", "/api/read/mcp", (request, ctx) => mcpHandler(ctx, "read")(request));
+  route("POST", "/api/mcp", READ, (request, ctx) => mcpHandler(ctx, "full")(request));
+  route("POST", "/api/read/mcp", READ, (request, ctx) => mcpHandler(ctx, "read")(request));
 }
