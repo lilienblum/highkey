@@ -104,6 +104,11 @@ pub(crate) async fn authorize(
 ) -> ApiResult<KeyRecord> {
     let key = bearer(headers).ok_or_else(ApiError::unauthorized)?;
     let record = state.keys.resolve(key, kind).await?;
+    if record.server_key && headers.contains_key(header::ORIGIN) {
+        return Err(ApiError::forbidden(
+            "Server event keys cannot be used from a browser",
+        ));
+    }
     origins::check(&record.allowed_origins, origin(headers))?;
     Ok(record)
 }
@@ -121,6 +126,14 @@ async fn ingest_events(
     }
     let now = chrono::Utc::now();
     for (i, event) in events.iter_mut().enumerate() {
+        if event.properties.contains_key("revenue")
+            && !record.server_key
+            && !record.allow_browser_revenue
+        {
+            return Err(ApiError::forbidden(
+                "Revenue requires a server event key or the project's browser-revenue opt-in",
+            ));
+        }
         event
             .validate(now, i64::from(record.retention_days))
             .map_err(|e| ApiError::bad(format!("events[{i}]: {}", e.1)))?;

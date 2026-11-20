@@ -18,6 +18,13 @@ function useOrigin(): string {
 
 /** A working snippet for `integration`, sending to `origin` with `key`. */
 export function integrationSnippet(integration: Integration, origin: string, key: string): string {
+  if (key.startsWith("sk_")) {
+    if (integration === "browser" || integration === "rust")
+      return "Use a public key for this integration. Secret server keys must stay on your backend.";
+    if (integration === "http")
+      return `POST ${origin}/api/ingest\nAuthorization: Bearer ${key}\nContent-Type: application/json\n\n${JSON.stringify({ event_id: "STABLE_PAYMENT_EVENT_ID", name: "purchase", source: "server", timestamp: "UTC_ISO_TIMESTAMP", properties: { revenue: 2950 } }, null, 2)}`;
+    return `import { Highkey } from "./sdk/typescript/client";\n\nconst highkey = new Highkey({\n  endpoint: "${origin}",\n  key: process.env.HIGHKEY_SERVER_KEY!,\n});\n\nawait highkey.send({\n  event_id: paymentEvent.id,\n  timestamp: paymentEvent.timestamp,\n  name: "purchase", source: "server",\n  properties: { revenue: 2950 },\n});`;
+  }
   switch (integration) {
     case "browser":
       return `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${origin}/tracker.js";\n\n  const tracker = startBrowserTracker({\n    endpoint: "${origin}",\n    key: "${key}",\n    identity: "none",\n  });\n\n  tracker.track("signup", { plan: "pro", trial: true, seats: 3 });\n</script>`;
@@ -69,6 +76,8 @@ export function IntegrationTabs({
   onCopyError: () => void;
 }) {
   const origin = useOrigin();
+  const server = ingestionKey?.startsWith("sk_");
+  if (server && (value === "browser" || value === "rust")) value = "typescript";
   const snippet = integrationSnippet(value, origin, ingestionKey || "YOUR_INGESTION_KEY");
   return (
     <Tabs value={value} onValueChange={(next) => onValueChange(next as Integration)}>
@@ -77,10 +86,10 @@ export function IntegrationTabs({
         aria-label="Integration language"
         className="mb-4 w-full justify-start overflow-x-auto sm:w-auto"
       >
-        <TabsTrigger value="browser">Browser</TabsTrigger>
+        {!server && <TabsTrigger value="browser">Browser</TabsTrigger>}
         <TabsTrigger value="typescript">TypeScript</TabsTrigger>
-        <TabsTrigger value="rust">Rust CLI</TabsTrigger>
-        <TabsTrigger value="http">HTTP / Mobile</TabsTrigger>
+        {!server && <TabsTrigger value="rust">Rust CLI</TabsTrigger>}
+        <TabsTrigger value="http">{server ? "HTTP / Server" : "HTTP / Mobile"}</TabsTrigger>
       </TabsList>
       <TabsContent value={value} key={value}>
         <div className="code-toolbar">
@@ -92,7 +101,11 @@ export function IntegrationTabs({
         <pre className="integration-code">
           <code>{highlight(snippet, LANGUAGE[value])}</code>
         </pre>
-        <p className="quiet">{NOTE[value]}</p>
+        <p className="quiet">
+          {server
+            ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
+            : NOTE[value]}
+        </p>
       </TabsContent>
     </Tabs>
   );

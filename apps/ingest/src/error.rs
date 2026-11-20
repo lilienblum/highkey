@@ -17,6 +17,9 @@ impl ApiError {
     pub fn unauthorized() -> Self {
         Self(StatusCode::UNAUTHORIZED, "Authentication required".into())
     }
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self(StatusCode::FORBIDDEN, message.into())
+    }
     /// No capacity left, or storage is briefly unavailable. SDKs retry with the same event IDs,
     /// so deduplication holds.
     pub fn busy() -> Self {

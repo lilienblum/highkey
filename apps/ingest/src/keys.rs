@@ -31,6 +31,8 @@ pub struct KeyRecord {
     pub source_id: Uuid,
     pub allowed_origins: Vec<String>,
     pub retention_days: u16,
+    pub server_key: bool,
+    pub allow_browser_revenue: bool,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +43,8 @@ struct Row {
     allowed_origins: Vec<String>,
     retention_days: u16,
     revoked: u8,
+    server_key: u8,
+    allow_browser_revenue: u8,
 }
 
 struct Entry {
@@ -81,7 +85,7 @@ impl Keys {
         let rows = self
             .clickhouse
             .select_json::<Row>(
-                "SELECT kind, product_id, source_id, allowed_origins, retention_days, revoked FROM highkey.ingest_keys WHERE hash = {hash:String}",
+                "SELECT k.kind AS kind, k.product_id AS product_id, k.source_id AS source_id, k.allowed_origins AS allowed_origins, k.retention_days AS retention_days, k.revoked AS revoked, ifNull(p.server_key, 0) AS server_key, ifNull(p.allow_browser_revenue, 0) AS allow_browser_revenue FROM highkey.ingest_keys k LEFT JOIN (SELECT * FROM highkey.ingest_key_policies WHERE hash = {hash:String}) p USING (hash, product_id) WHERE k.hash = {hash:String}",
                 &[("hash", hash.to_string())],
             )
             .await?;
@@ -93,6 +97,8 @@ impl Keys {
                     source_id: row.source_id,
                     allowed_origins: row.allowed_origins,
                     retention_days: row.retention_days,
+                    server_key: row.server_key != 0,
+                    allow_browser_revenue: row.allow_browser_revenue != 0,
                 },
             )
         }))
@@ -131,7 +137,11 @@ impl Keys {
             }
         };
         match found {
-            Some((found_kind, record)) if found_kind == kind => Ok(record),
+            Some((found_kind, record))
+                if found_kind == kind && (bearer.starts_with("sk_") == record.server_key) =>
+            {
+                Ok(record)
+            }
             _ => Err(ApiError::unauthorized()),
         }
     }

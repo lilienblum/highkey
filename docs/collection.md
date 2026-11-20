@@ -6,6 +6,32 @@ For service logs, use [structured JSON or OTLP/HTTP collection](logs.md). Logs u
 
 Identity remains optional and scoped to the project and identity kind. No person is automatically linked across web/mobile/tool sources. If you explicitly send the same opaque actor ID and identity kind from two sources, combined distinct-actor queries count it once. Use source-specific random IDs if that linkage is not intended. Visitor and installation identities remain distinct.
 
+## Revenue and checkout
+
+Use `properties.revenue` for integer cents, including zero and negative refunds. Keep one currency per project; Highkey does not perform currency conversion.
+
+Create a secret server event key with `POST /api/products/:id/keys` and `{ "label": "Payments", "kind": "server" }`, or MCP `create_key` with `kind: "server"`. Store the returned `sk_…` secret on the backend:
+
+```ts
+const client = new Highkey({ endpoint: HIGHKEY_URL, key: SERVER_EVENT_KEY });
+await client.send({
+  event_id: paymentEventId, // Reuse for webhook retries.
+  timestamp: paymentTimestamp,
+  name: "purchase",
+  source: "server",
+  profile_id: userId,
+  properties: { revenue: 2950, path: "/checkout", order_id: orderId },
+});
+```
+
+Server keys reject browser requests. Public keys accept revenue only when an owner/admin explicitly enables it with `PATCH /api/products/:id/revenue/settings` and `{ "allow_browser_revenue": true }`.
+
+In Project settings, choose **Secret server** under Ingestion keys for a backend key. The **Allow browser revenue** switch is off by default. MCP agents can use `update_revenue_settings` with the same `allow_browser_revenue` flag; read-only agents see the policy in `describe_project`.
+
+In Explore, choose **Sum** and the `revenue` property to chart cents, then group by `path` or filter to a source. Agent-written dashboards use an event query with `{ "signal": "events", "measure": "sum", "property": "revenue" }`; divide by 100 in a formula when displaying currency units. Refund events subtract from the total.
+
+For that opted-in browser flow, call `tracker.beginCheckout(2950)` before navigating away, then `tracker.completeCheckout({ path: "/thanks" })` on the thank-you page. The first call stores only integer cents, an event ID and a 24-hour expiry in this tab's session storage; the second emits `purchase` through the usual filter and sanitizer. Failed delivery preserves the ID for a retry after reload; acknowledgment clears it. `cancelCheckout()` and `optOut()` discard it. Calls are refused while disabled, deferred, or blocked by privacy signals. Ordinary tracking never accesses checkout storage. Browser delivery is best effort; use server events for authoritative revenue and avoid sending both for the same purchase.
+
 ## AI generation events
 
 Use the dependency-free wrappers with your existing provider SDK. They emit `ai_generation` with model, provider, reported token counts, latency, error/cancellation flags, and optional USD cost. Supply `trace_id` to correlate with application logs and `profile_id` or `groups` for attribution.

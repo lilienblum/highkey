@@ -4,6 +4,24 @@ const original = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = original;
 });
+test("revenue is safe integer cents on ordinary events, with zero and refunds supported", async () => {
+  const values: unknown[] = [];
+  globalThis.fetch = (async (_input: unknown, init: RequestInit) => {
+    values.push(JSON.parse(init.body as string).events[0].properties.revenue);
+    return Response.json({ accepted: 1, duplicates: 0 });
+  }) as typeof fetch;
+  const client = new Highkey({ endpoint: "http://localhost", key: "sk_test" });
+  for (const revenue of [2500, -500, 0])
+    await client.send({ name: "purchase", source: "server", properties: { revenue } });
+  for (const revenue of ["2500", true, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])
+    await expect(
+      client.send({ name: "purchase", source: "server", properties: { revenue } }),
+    ).rejects.toThrow("integer cents");
+  await expect(
+    client.identify({ source: "server", profile_id: "u1", properties: { revenue: 100 } }),
+  ).rejects.toThrow("integer cents");
+  expect(values).toEqual([2500, -500, 0]);
+});
 test("identify and group keep typed changes and reject non-finite increments before sending", async () => {
   const payloads: unknown[] = [];
   globalThis.fetch = (async (_input: unknown, init: RequestInit) => {

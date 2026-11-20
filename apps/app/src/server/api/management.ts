@@ -5,6 +5,7 @@ import { requireActor } from "../auth/actor";
 import { favicon, products, requireProduct } from "../db/products";
 import { listKeys, listLogKeys, logRetention } from "../db/keys";
 import { listSources } from "../db/sources";
+import { revenueSettings } from "../db/revenue";
 import { cleanup } from "../registry";
 import { contentType } from "../website";
 import {
@@ -19,6 +20,7 @@ import {
   updateLogSettings,
   updateProject,
   updateSource,
+  updateRevenueSettings,
 } from "../operations";
 import { fields, readJson } from "./body";
 import { json, missing, noContent } from "./errors";
@@ -90,13 +92,33 @@ export function registerManagement(): void {
   route("POST", "/api/products/:id/keys", { key: ["write"] }, async (request, ctx, { id }) => {
     const input = fields(
       await readJson(request),
-      { label: "string", source_id: "string?", allowed_origins: "string[]" },
-      { allowed_origins: [] },
+      { label: "string", source_id: "string?", allowed_origins: "string[]", kind: "string" },
+      { allowed_origins: [], kind: "public" },
     );
     return json(
-      await createEventKey(ctx, id as string, input.label, input.source_id, input.allowed_origins),
+      await createEventKey(
+        ctx,
+        id as string,
+        input.label,
+        input.source_id,
+        input.allowed_origins,
+        input.kind,
+      ),
     );
   });
+
+  route("GET", "/api/products/:id/revenue/settings", READ, async (_r, ctx, { id }) =>
+    json(await revenueSettings(ctx.db, id as string)),
+  );
+  route(
+    "PATCH",
+    "/api/products/:id/revenue/settings",
+    { project: ["update"] },
+    async (request, ctx, { id }) => {
+      const input = fields(await readJson(request), { allow_browser_revenue: "boolean" });
+      return json(await updateRevenueSettings(ctx, id as string, input.allow_browser_revenue));
+    },
+  );
 
   route(
     "PATCH",

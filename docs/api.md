@@ -24,22 +24,23 @@ Route the three ingest paths and `/tracker.js` to the ingest app at the edge whe
 
 ## Management
 
-| Method     | Path                                  | Body/result                                                                       |
-| ---------- | ------------------------------------- | --------------------------------------------------------------------------------- |
-| GET / POST | `/api/products`                       | List / create `{ name, retention_days, website_url? }`                            |
-| PATCH      | `/api/products/:id`                   | Edit name, website and retention (1–3650 days)                                    |
-| GET        | `/api/products/:id/favicon`           | The cached website icon, or 404                                                   |
-| GET / POST | `/api/products/:id/sources`           | List / create `{ name, icon? }`                                                   |
-| PATCH      | `/api/products/:id/sources/:sourceId` | Edit `{ name, icon? }`                                                            |
-| GET / POST | `/api/products/:id/keys`              | List metadata / create `{ label, source_id?, allowed_origins? }` → full key, once |
-| PATCH      | `/api/products/:id/keys/:keyId`       | Replace `{ allowed_origins }`                                                     |
-| DELETE     | `/api/products/:id/keys/:keyId`       | Revoke the key, scoped to the project                                             |
-| POST       | `/api/products/:id/query`             | The analytics query [below](#query)                                               |
-| POST       | `/api/products/:id/move`              | `{ organization }` (id or slug): move it; needs admin or owner in both            |
-| DELETE     | `/api/products/:id`                   | 204; hidden and its keys stopped; restorable for 7 days                           |
-| GET        | `/api/deleted-products`               | Deleted projects still restorable, with `restorable_until`                        |
-| POST       | `/api/deleted-products/:id/restore`   | The restored project, keys as they were                                           |
-| POST       | `/api/cleanup`                        | Server admin: delete expired events and logs now; `{ removed, logs_removed }`     |
+| Method      | Path                                  | Body/result                                                                              |
+| ----------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| GET / POST  | `/api/products`                       | List / create `{ name, retention_days, website_url? }`                                   |
+| PATCH       | `/api/products/:id`                   | Edit name, website and retention (1–3650 days)                                           |
+| GET         | `/api/products/:id/favicon`           | The cached website icon, or 404                                                          |
+| GET / POST  | `/api/products/:id/sources`           | List / create `{ name, icon? }`                                                          |
+| PATCH       | `/api/products/:id/sources/:sourceId` | Edit `{ name, icon? }`                                                                   |
+| GET / POST  | `/api/products/:id/keys`              | List metadata / create `{ label, source_id?, allowed_origins?, kind? }` → full key, once |
+| GET / PATCH | `/api/products/:id/revenue/settings`  | Read / replace `{ allow_browser_revenue }`, off by default                               |
+| PATCH       | `/api/products/:id/keys/:keyId`       | Replace `{ allowed_origins }`                                                            |
+| DELETE      | `/api/products/:id/keys/:keyId`       | Revoke the key, scoped to the project                                                    |
+| POST        | `/api/products/:id/query`             | The analytics query [below](#query)                                                      |
+| POST        | `/api/products/:id/move`              | `{ organization }` (id or slug): move it; needs admin or owner in both                   |
+| DELETE      | `/api/products/:id`                   | 204; hidden and its keys stopped; restorable for 7 days                                  |
+| GET         | `/api/deleted-products`               | Deleted projects still restorable, with `restorable_until`                               |
+| POST        | `/api/deleted-products/:id/restore`   | The restored project, keys as they were                                                  |
+| POST        | `/api/cleanup`                        | Server admin: delete expired events and logs now; `{ removed, logs_removed }`            |
 
 Log keys, log settings and the log query are listed in [application logs](logs.md#management-api). Query paths accept a project's slug as well as its UUID; the other management paths take the UUID.
 
@@ -85,6 +86,14 @@ Slugs are allocated from the project name on creation, with numeric suffixes for
 Sources get slugs the same way, unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. `all` is reserved for the combined view, so a source named All becomes `all-2`. Dashboard URLs name the source by slug (`?source=web-app`); links with a source ID still open and are rewritten to the slug.
 
 ## Ingestion
+
+MCP exposes the same revenue policy through `update_revenue_settings` (owner/admin, write connection). Omit `allow_browser_revenue` to inspect it. Read-only agents can inspect the policy and integer-cent unit through `describe_project`.
+
+`properties.revenue` is reserved for **integer cents**, including zero and negative refunds, within JavaScript's safe integer range. Strings, fractions, booleans, and revenue on identify/group mutation records are rejected atomically with the batch. Use one currency per project; Highkey does not convert currencies.
+
+Create an event key with `kind: "server"` (`sk_…`) for revenue from your backend or payment webhook. It is write-only, source-scoped, stored hashed, shown once, and rejects requests carrying any `Origin` header. It must never appear in browser code. `kind: "public"` (`pk_…`) is the default; it can send revenue only after an owner/admin enables `allow_browser_revenue` for the project. Omitting `Origin` does not bypass this policy. Server keys require empty `allowed_origins`. Changes and revocations propagate within the key cache's five seconds after mirroring; outages are repaired by the app's minute reconciliation.
+
+Revenue enforcement requires ingest contract 3: deploy the new app/migrations before the new ingest build. Old ingest builds accept newer schemas but do not enforce the revenue policy.
 
 The ingest app serves this path. Locally it listens on `127.0.0.1:3001` (`bun run dev:standalone`); the dashboard on port 3000 forwards the same request.
 

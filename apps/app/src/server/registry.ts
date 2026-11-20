@@ -13,6 +13,7 @@ import { productRow, products } from "./db/products";
 import { dueWipe, type WipePayload, wipeProject } from "./wipe";
 
 interface KeyRow {
+  kind: "public" | "server";
   hash: string;
   product_id: string;
   source_id: string;
@@ -34,22 +35,32 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
   // brings them back as they were).
   const stopped = project.deleted_at !== null;
   const logDays = await logRetention(ctx.db, productId);
+  const revenue = await one<{ allow_browser_revenue: number }>(
+    ctx.db,
+    "SELECT allow_browser_revenue FROM revenue_settings WHERE product_id = ?",
+    [productId],
+  );
   const where = keyId ? "product_id = ? AND id = ?" : "product_id = ?";
   const args = keyId ? [productId, keyId] : [productId];
   const events = await all<KeyRow>(
     ctx.db,
-    `SELECT hash, product_id, source_id, allowed_origins, revoked FROM ingestion_keys WHERE ${where}`,
+    `SELECT hash, product_id, source_id, allowed_origins, revoked, kind FROM ingestion_keys WHERE ${where}`,
     args,
   );
   const logs = await all<KeyRow>(
     ctx.db,
-    `SELECT hash, product_id, source_id, '[]' AS allowed_origins, revoked FROM log_keys WHERE ${where}`,
+    `SELECT hash, product_id, source_id, '[]' AS allowed_origins, revoked, 'public' AS kind FROM log_keys WHERE ${where}`,
     args,
   );
   const updated_at = stamp();
   return [
-    ...events.map((row) => ({ ...row, kind: "events", retention_days: eventRetention })),
-    ...logs.map((row) => ({ ...row, kind: "logs", retention_days: logDays })),
+    ...events.map((row) => ({
+      ...row,
+      server_key: row.kind === "server" ? 1 : 0,
+      kind: "events",
+      retention_days: eventRetention,
+    })),
+    ...logs.map((row) => ({ ...row, server_key: 0, kind: "logs", retention_days: logDays })),
   ].map((row) => ({
     hash: row.hash,
     kind: row.kind,
@@ -59,18 +70,36 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
     retention_days: row.retention_days,
     revoked: stopped ? 1 : row.revoked,
     updated_at,
+    server_key: row.server_key,
+    allow_browser_revenue: revenue?.allow_browser_revenue === 1 ? 1 : 0,
   }));
+}
+
+async function mirrorRows(ctx: ApiContext, found: Awaited<ReturnType<typeof rows>>) {
+  await ctx.admin.insert(
+    "highkey.ingest_keys",
+    found.map(({ server_key: _server, allow_browser_revenue: _revenue, ...key }) => key),
+  );
+  await ctx.admin.insert(
+    "highkey.ingest_key_policies",
+    found.map(({ hash, product_id, server_key, allow_browser_revenue }) => ({
+      hash,
+      product_id,
+      server_key,
+      allow_browser_revenue,
+    })),
+  );
 }
 
 /** Mirrors one key (either kind). */
 export async function mirrorKey(ctx: ApiContext, productId: string, keyId: string): Promise<void> {
-  await ctx.admin.insert("highkey.ingest_keys", await rows(ctx, productId, keyId));
+  await mirrorRows(ctx, await rows(ctx, productId, keyId));
 }
 
 /** Mirrors every key of a project, with its current retention. */
 export async function mirrorProject(ctx: ApiContext, productId: string): Promise<number> {
   const found = await rows(ctx, productId);
-  await ctx.admin.insert("highkey.ingest_keys", found);
+  await mirrorRows(ctx, found);
   return found.length;
 }
 
@@ -207,7 +236,7 @@ export async function reconcile(
   }
   const keys = (await Promise.all(projects.map((project) => rows(ctx, project.id)))).flat();
   for (let start = 0; start < keys.length; start += MIRROR_CHUNK)
-    await ctx.admin.insert("highkey.ingest_keys", keys.slice(start, start + MIRROR_CHUNK));
+    await mirrorRows(ctx, keys.slice(start, start + MIRROR_CHUNK));
   failed += await applyRetentionChanges(ctx);
   return { projects: projects.length, keys: keys.length, failed };
 }

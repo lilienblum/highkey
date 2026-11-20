@@ -124,6 +124,11 @@ export async function wipeProject(
   await step("keys", () =>
     ctx.admin.command("DELETE FROM highkey.ingest_keys WHERE product_id = {p:UUID}", { params }),
   );
+  await step("key-policies", () =>
+    ctx.admin.command("DELETE FROM highkey.ingest_key_policies WHERE product_id = {p:UUID}", {
+      params,
+    }),
+  );
   await step("organization", () => removeEmptyOrganization(ctx.db, org));
   return "wiped";
 }

@@ -43,7 +43,7 @@ API keys (`hk_…`) let scripts, local pages, scheduled reports and CI reach the
 - Keys are stored hashed and shown once. Owners and admins see everyone's keys in their organization (name, owner, access, last use) and can revoke them; nobody sees a secret again.
 - Each key may make 1,000 requests a minute; past that it gets `429` until the minute passes.
 - A key cannot create or revoke keys, and never acts as the server admin.
-- Collection does not use these keys: ingestion keys (`pk_…`, `pl_…`) are separate, public, and can only send data to their own source.
+- Collection does not use these keys: public ingestion keys (`pk_…`, `pl_…`) and secret server event keys (`sk_…`) are separate and can only send data to their own source. Server keys permit revenue and must stay on the backend.
 
 ### Local pages and CORS
 

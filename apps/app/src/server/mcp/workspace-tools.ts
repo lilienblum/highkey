@@ -2,6 +2,7 @@
 // full MCP path. They call the operations the HTTP routes call (workspace.ts); this file handles
 // arguments, and common.ts turns errors into tool errors that name the argument at fault.
 import { listKeys, listLogKeys, logRetention } from "../db/keys";
+import { revenueSettings } from "../db/revenue";
 import { productRow } from "../db/products";
 import { getSource } from "../db/sources";
 import {
@@ -16,6 +17,7 @@ import {
   setKeyOrigins,
   snippets,
   updateLogSettings,
+  updateRevenueSettings,
   updateProject,
   updateSource,
 } from "../operations";
@@ -90,7 +92,7 @@ export const workspaceTools: Record<string, Tool> = {
   create_key: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
     const source = a.source != null ? await sourceId(ctx, id, a.source) : null;
-    return createEventKey(ctx, id, a.label, source, a.allowed_origins ?? []);
+    return createEventKey(ctx, id, a.label, source, a.allowed_origins ?? [], a.kind ?? "public");
   },
   update_key_origins: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
@@ -123,5 +125,10 @@ export const workspaceTools: Record<string, Tool> = {
     const id = await projectId(ctx, a.project);
     if (a.retention_days == null) return { retention_days: await logRetention(ctx.db, id) };
     return updateLogSettings(ctx, id, a.retention_days);
+  },
+  update_revenue_settings: async (ctx, a) => {
+    const id = await projectId(ctx, a.project);
+    if (a.allow_browser_revenue == null) return revenueSettings(ctx.db, id);
+    return updateRevenueSettings(ctx, id, a.allow_browser_revenue);
   },
 };

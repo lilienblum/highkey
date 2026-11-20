@@ -190,6 +190,16 @@ impl Event {
                 "ai_prompt is limited to 32768 bytes on ai_generation events",
             ));
         }
+        if let Some(revenue) = self.properties.get("revenue")
+            && (self.record_type != RecordType::Event
+                || !revenue.as_i64().is_some_and(|cents| {
+                    (-9_007_199_254_740_991..=9_007_199_254_740_991).contains(&cents)
+                }))
+        {
+            return Err(ApiError::bad(
+                "revenue must be safe integer cents on an event",
+            ));
+        }
         for properties in [&self.properties, &self.traits] {
             validate_properties(properties)?;
         }

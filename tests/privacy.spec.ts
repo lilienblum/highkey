@@ -142,11 +142,13 @@ for (const signal of ["disabled", "dnt", "gpc"] as const) {
       await open(page, f.server.url);
       const state = await page.evaluate(async () => {
         const tracked = window.tracker.track("blocked", { secret: "not collected" });
+        const checkout = [window.tracker.beginCheckout(100), window.tracker.completeCheckout()];
         window.tracker.pageView();
         await window.tracker.flush();
         await window.tracker.shutdown();
         return {
           tracked,
+          checkout,
           storage: window.storageCalls,
           timers: window.timerCalls,
           listeners: window.listenerCalls,
@@ -156,6 +158,7 @@ for (const signal of ["disabled", "dnt", "gpc"] as const) {
       });
       expect(state).toEqual({
         tracked: false,
+        checkout: [false, false],
         storage: 0,
         timers: 0,
         listeners: 0,

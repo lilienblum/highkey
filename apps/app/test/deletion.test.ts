@@ -170,6 +170,7 @@ describe("deleting", () => {
     expect(await count("highkey.events", shop.id)).toBe(0);
     expect(await count("highkey.logs", shop.id)).toBe(0);
     expect(await count("highkey.ingest_keys", shop.id)).toBe(0);
+    expect(await count("highkey.ingest_key_policies", shop.id)).toBe(0);
     const users = await ctx.admin.query<{ n: string }>(
       "SELECT count() AS n FROM system.users WHERE name = {u:String}",
       { params: { u: readerUser(shop.id) } },
@@ -224,6 +225,7 @@ describe("deleting", () => {
       "access",
       "rows",
       "keys",
+      "key-policies",
       "organization",
     ]);
   }, 60_000);

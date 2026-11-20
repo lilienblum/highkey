@@ -1,4 +1,4 @@
-// Ingestion keys (`pk_`) and log keys (`pl_`). Only a SHA-256 hash of each secret is kept.
+// Public/server event keys (`pk_`/`sk_`) and log keys (`pl_`). Only SHA-256 hashes are kept.
 import { createHash } from "node:crypto";
 import { bad, missing } from "../api/errors";
 import { normalizeOrigins } from "../origins";
@@ -11,7 +11,7 @@ export function hashSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");
 }
 
-export function newSecret(prefix: "pk_" | "pl_"): string {
+export function newSecret(prefix: "pk_" | "pl_" | "sk_"): string {
   const simple = () => crypto.randomUUID().replaceAll("-", "");
   return `${prefix}${simple()}${simple()}`;
 }
@@ -22,6 +22,7 @@ function checkLabel(label: string): void {
 }
 
 export interface KeyInfo {
+  kind: "public" | "server";
   allowed_origins: string[];
   id: string;
   source_id: string;
@@ -37,16 +38,19 @@ export async function createKey(
   label: string,
   sourceId: string | null | undefined,
   allowedOrigins: readonly string[],
+  kind: string = "public",
 ) {
   await requireProduct(db, productId);
   const source = sourceId ?? productId;
   await getSource(db, productId, source);
   checkLabel(label);
   const origins = normalizeOrigins(allowedOrigins);
-  const key = newSecret("pk_");
+  if (kind !== "public" && kind !== "server") throw bad("Key kind must be public or server");
+  if (kind === "server" && origins.length) throw bad("Server keys reject browser origins");
+  const key = newSecret(kind === "server" ? "sk_" : "pk_");
   const id = newId();
   await db.execute(
-    "INSERT INTO ingestion_keys(id, product_id, label, prefix, hash, created_at, source_id, allowed_origins) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO ingestion_keys(id, product_id, label, prefix, hash, created_at, source_id, allowed_origins, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       id,
       productId,
@@ -56,9 +60,10 @@ export async function createKey(
       now(),
       source,
       JSON.stringify(origins),
+      kind,
     ],
   );
-  return { id, key, source_id: source, allowed_origins: origins };
+  return { id, key, source_id: source, allowed_origins: origins, kind };
 }
 
 export async function updateKeyOrigins(
@@ -68,6 +73,12 @@ export async function updateKeyOrigins(
   allowedOrigins: readonly string[],
 ): Promise<string[]> {
   const origins = normalizeOrigins(allowedOrigins);
+  const key = await one<{ kind: string }>(
+    db,
+    "SELECT kind FROM ingestion_keys WHERE product_id = ? AND id = ?",
+    [productId, keyId],
+  );
+  if (key?.kind === "server" && origins.length) throw bad("Server keys reject browser origins");
   const changed = await changes(
     db,
     "UPDATE ingestion_keys SET allowed_origins = ? WHERE product_id = ? AND id = ? AND revoked = 0",
@@ -92,7 +103,7 @@ export async function listKeys(db: Db, productId: string): Promise<KeyInfo[]> {
     Omit<KeyInfo, "revoked" | "allowed_origins"> & { revoked: number; allowed_origins: string }
   >(
     db,
-    "SELECT id, label, prefix, created_at, revoked, source_id, allowed_origins FROM ingestion_keys WHERE product_id = ? ORDER BY created_at, id",
+    "SELECT id, label, prefix, created_at, revoked, source_id, allowed_origins, kind FROM ingestion_keys WHERE product_id = ? ORDER BY created_at, id",
     [productId],
   );
   return rows.map((row) => ({

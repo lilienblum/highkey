@@ -74,6 +74,12 @@ export class Highkey {
     if (!events.length || events.length > 100) throw new Error("Send 1–100 events");
     const eventCount = events.length;
     for (const event of events) {
+      if (
+        Object.hasOwn(event.properties ?? {}, "revenue") &&
+        (!Number.isSafeInteger(event.properties?.revenue) ||
+          (event.record_type !== undefined && event.record_type !== "event"))
+      )
+        throw new Error("revenue must be safe integer cents on an event");
       for (const value of [
         ...Object.values(event.properties ?? {}),
         ...Object.values(event.traits ?? {}),

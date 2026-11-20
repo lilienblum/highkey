@@ -39,6 +39,7 @@ export function startBrowserTracker(options: BrowserOptions) {
   let actor: string | undefined;
   let profile: string | undefined;
   let groups: Record<string, string> = {};
+  let checkoutEventId: string | undefined;
   let cleanup = () => {};
   const privacyBlocked = () =>
     options.enabled === false ||
@@ -63,6 +64,7 @@ export function startBrowserTracker(options: BrowserOptions) {
     } catch {
       /* Storage may be unavailable; collection is still stopped. */
     }
+    cancelCheckout();
   }
   function canTrack() {
     if (stopped) return false;
@@ -106,6 +108,12 @@ export function startBrowserTracker(options: BrowserOptions) {
       if (options.filter && !options.filter(event)) return false;
       const accepted = options.beforeSend ? options.beforeSend(event) : event;
       if (!accepted || !canTrack()) return false;
+      if (
+        Object.hasOwn(accepted.properties ?? {}, "revenue") &&
+        (!Number.isSafeInteger(accepted.properties?.revenue) ||
+          (accepted.record_type !== undefined && accepted.record_type !== "event"))
+      )
+        return false;
       queue.push({
         ...accepted,
         properties: { ...accepted.properties },
@@ -121,6 +129,40 @@ export function startBrowserTracker(options: BrowserOptions) {
   }
   function track(name: string, properties: Properties = {}) {
     return enqueue(name, properties);
+  }
+  function cancelCheckout() {
+    checkoutEventId = undefined;
+    try {
+      sessionStorage.removeItem(`${namespace}:checkout`);
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }
+  function checkout() {
+    try {
+      const raw = sessionStorage.getItem(`${namespace}:checkout`);
+      if (!raw) return;
+      if (raw.length > 256) {
+        cancelCheckout();
+        return;
+      }
+      const saved = JSON.parse(raw) as { event_id: string; revenue: number; expires: number };
+      if (
+        !saved ||
+        typeof saved.event_id !== "string" ||
+        !/^[a-zA-Z0-9_./-]{1,64}$/.test(saved.event_id) ||
+        !Number.isSafeInteger(saved.revenue) ||
+        !Number.isSafeInteger(saved.expires) ||
+        saved.expires <= Date.now() ||
+        saved.expires > Date.now() + 86_400_000
+      ) {
+        cancelCheckout();
+        return;
+      }
+      return saved;
+    } catch {
+      return;
+    }
   }
   const validId = (id: string) =>
     typeof id === "string" && id.length > 0 && new TextEncoder().encode(id).length <= 128;
@@ -168,6 +210,11 @@ export function startBrowserTracker(options: BrowserOptions) {
         queue.unshift(...batch.splice(-1));
       }
       await client.sendBatch(batch);
+      if (checkoutEventId && batch.some((event) => event.event_id === checkoutEventId)) {
+        // A later checkout may have replaced the one whose delivery just completed.
+        if (checkout()?.event_id === checkoutEventId) cancelCheckout();
+        checkoutEventId = undefined;
+      }
     })()
       .then(
         () => {},
@@ -183,6 +230,36 @@ export function startBrowserTracker(options: BrowserOptions) {
     pageView,
     flush,
     optOut,
+    /** Explicitly stores cents in this tab for up to 24 hours while checkout navigates away. */
+    beginCheckout(cents: number) {
+      if (!canTrack() || deferred || !Number.isSafeInteger(cents)) return false;
+      try {
+        sessionStorage.setItem(
+          `${namespace}:checkout`,
+          JSON.stringify({
+            event_id: crypto.randomUUID(),
+            revenue: cents,
+            expires: Date.now() + 86_400_000,
+          }),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    /** Call on the thank-you page. Retries reuse the checkout ID until acknowledged. */
+    completeCheckout(properties: Properties = {}) {
+      if (!canTrack() || deferred) return false;
+      const saved = checkout();
+      if (!saved) return false;
+      checkoutEventId = saved.event_id;
+      return enqueue(
+        "purchase",
+        { ...properties, revenue: saved.revenue },
+        { event_id: saved.event_id },
+      );
+    },
+    cancelCheckout,
     identify(id: string, traits: Properties = {}, increments: Record<string, number> = {}) {
       if (!canTrack() || deferred || !validId(id)) return false;
       const accepted = enqueue(
@@ -265,6 +342,8 @@ export function startBrowserTracker(options: BrowserOptions) {
   }
   if (!Number.isSafeInteger(capacity) || capacity <= 0)
     throw new Error("capacity must be a positive finite integer");
+  if (options.key.startsWith("sk_"))
+    throw new Error("Server event keys must never be used in a browser");
   const client = new Highkey({
     ...options,
     keepalive: true,

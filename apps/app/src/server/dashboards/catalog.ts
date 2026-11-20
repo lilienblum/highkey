@@ -5,6 +5,7 @@ import type { ApiContext } from "../api/context";
 import { runSettings } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
 import { logRetention } from "../db/keys";
+import { revenueSettings } from "../db/revenue";
 import { resolveProduct } from "../db/products";
 import { listSources } from "../db/sources";
 import { facets, LEVELS } from "../queries/logs";
@@ -99,6 +100,7 @@ export async function catalog(ctx: ApiContext, project: string) {
   const product = await resolveProduct(ctx.db, project);
   const sources = await listSources(ctx.db, product.id);
   const logsDays = await logRetention(ctx.db, product.id);
+  const revenue = await revenueSettings(ctx.db, product.id);
   const now = Date.now();
   return readAs(ctx, product.id, async (reader) => {
     const cutoff = now - product.retention_days * DAY;
@@ -149,6 +151,7 @@ export async function catalog(ctx: ApiContext, project: string) {
       logs: { ...logFacets, levels: LEVELS.filter((l) => present.has(l)) },
       sources: sources.map((s) => ({ id: s.id, name: s.name })),
       retention: { events_days: product.retention_days, logs_days: logsDays },
+      revenue: { ...revenue, property: "revenue", unit: "integer_cents" },
       limits: limitsJson(),
     };
   });

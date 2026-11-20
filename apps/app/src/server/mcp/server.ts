@@ -82,6 +82,7 @@ const TOOL_NEEDS: Record<string, Permission> = {
   create_log_key: { key: ["write"] },
   revoke_log_key: { key: ["write"] },
   update_log_settings: { key: ["write"] },
+  update_revenue_settings: { project: ["update"] },
 };
 
 /** What a tool needs, or null for one nobody stated a need for, which no one may call. */

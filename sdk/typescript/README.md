@@ -50,6 +50,10 @@ Successful sends return `{ accepted, duplicates }` after the API commits. Invali
 
 ## Browser collection
 
+For revenue, send `properties: { revenue: 2950 }` (integer cents) using a secret `sk_` event key from your backend. Zero and negative refunds are supported. Do not mix currencies in a project. Public `pk_` keys need the project's browser-revenue opt-in; the tracker refuses server keys.
+
+For a browser checkout, explicitly call `tracker.beginCheckout(2950)` before leaving the site, then `tracker.completeCheckout({ path: "/thanks" })` on the thank-you page. This stores only cents, an event ID and a 24-hour expiry in the current tab's session storage. Completion emits `purchase` through the ordinary filter/sanitizer and retains the ID across failed delivery and reloads until acknowledgment. `cancelCheckout()` or `optOut()` removes it. These methods return false when blocked, deferred, invalid, or storage is unavailable. No checkout storage is accessed during ordinary tracking. Browser checkout collection remains best effort; authoritative revenue belongs in server events.
+
 AI provider wrappers are available from `@highkey/sdk/ai`: `trackOpenAI`, `trackAnthropic`, `trackVercelAI`, and streaming `vercelAIHooks`. They preserve provider results and errors while recording token usage, latency, optional USD cost, and trace/profile attribution. Prompt retention requires explicit opt-in. See the collection guide for usage and streaming behavior.
 
 `highkey.identify({source, profile_id, traits?, increments?})` updates an explicit profile. `highkey.group({source, group_type, group_id, group_name?, traits?, increments?})` updates a group. Negative increments decrement; sets happen first. Ordinary events can carry `profile_id` and `groups: {team: "team-id"}`. Mutation records share event deduplication but do not count as analytics events.

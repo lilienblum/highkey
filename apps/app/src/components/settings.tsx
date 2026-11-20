@@ -44,12 +44,14 @@ import { api, type Product } from "@/lib/api";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { ProjectLifecycle } from "./settings/project-lifecycle";
 import { SettingsNav } from "./settings/settings-nav";
+import { RevenueSettings } from "./settings/revenue";
 import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
 import { LogSettings } from "./log-settings";
 import { type Integration, IntegrationTabs } from "./integration-guide";
 type KeyInfo = {
+  kind: "public" | "server";
   allowed_origins: string[];
   source_id: string;
   id: string;
@@ -276,6 +278,7 @@ function ProductSettings({ product }: { product: Product }) {
   >({ status: "loading" });
   const [label, setLabel] = useState("");
   const [allowedOrigins, setAllowedOrigins] = useState("");
+  const [keyKind, setKeyKind] = useState("public");
   const [createdKey, setCreatedKey] = useState<{ id: string; key: string } | null>(null);
   const newKey = createdKey?.key ?? "";
   const [error, setError] = useState("");
@@ -329,6 +332,7 @@ function ProductSettings({ product }: { product: Product }) {
         </Alert>
       )}
       <SourceSettings product={product} />
+      <RevenueSettings projectId={product.id} />
       <div className="settings-grid">
         <Card>
           <CardHeader>
@@ -398,7 +402,9 @@ function ProductSettings({ product }: { product: Product }) {
                 <HugeiconsIcon icon={SecurityCheckIcon} strokeWidth={2} aria-hidden="true" />
                 <AlertTitle>Copy your new key</AlertTitle>
                 <AlertDescription>
-                  This is the only time the full key is shown.
+                  {newKey.startsWith("sk_")
+                    ? "Secret server key. Store it on your backend, never in browser or distributed app code. This is the only time the full key is shown."
+                    : "This is the only time the full key is shown."}
                   <code className="new-key">{newKey}</code>
                   <CopyButton
                     content={newKey}
@@ -438,12 +444,14 @@ function ProductSettings({ product }: { product: Product }) {
                           "Initial source"}
                       </span>
                       <span className="quiet [overflow-wrap:anywhere]">
-                        {k.allowed_origins?.length
-                          ? k.allowed_origins.join(", ")
-                          : "Any origin · CLI and mobile allowed"}
+                        {k.kind === "server"
+                          ? "Secret server key · Revenue allowed"
+                          : k.allowed_origins?.length
+                            ? k.allowed_origins.join(", ")
+                            : "Any origin · CLI and mobile allowed"}
                       </span>
                     </div>
-                    {!k.revoked && (
+                    {!k.revoked && k.kind !== "server" && (
                       <KeyOriginsEditor
                         productId={product.id}
                         keyInfo={k}
@@ -487,10 +495,12 @@ function ProductSettings({ product }: { product: Product }) {
                     {
                       label,
                       source_id: keySourceId,
-                      allowed_origins: parseOrigins(allowedOrigins),
+                      kind: keyKind,
+                      allowed_origins: keyKind === "server" ? [] : parseOrigins(allowedOrigins),
                     },
                   );
                   setCreatedKey(result);
+                  if (result.key.startsWith("sk_")) setIntegration("typescript");
                   setLabel("");
                   setNotice("Ingestion key created.");
                   await loadKeys(
@@ -501,6 +511,23 @@ function ProductSettings({ product }: { product: Product }) {
               }}
             >
               <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="key-kind">Key type</FieldLabel>
+                  <ValueSelect
+                    id="key-kind"
+                    value={keyKind}
+                    disabled={busy || keyState.status !== "ready"}
+                    options={[
+                      ["public", "Public"],
+                      ["server", "Secret server"],
+                    ]}
+                    onValueChange={setKeyKind}
+                  />
+                  <FieldDescription>
+                    Public keys collect from websites and apps. Secret server keys also accept
+                    revenue and must stay on your backend.
+                  </FieldDescription>
+                </Field>
                 <Field>
                   <FieldLabel htmlFor="key-source">Key source</FieldLabel>
                   <ValueSelect
@@ -531,13 +558,15 @@ function ProductSettings({ product }: { product: Product }) {
                     placeholder="e.g. Production website"
                   />
                 </Field>
-                <AllowedOriginsField
-                  id="key-origins"
-                  website={product.website_url}
-                  value={allowedOrigins}
-                  onChange={setAllowedOrigins}
-                  disabled={busy || keyState.status !== "ready"}
-                />
+                {keyKind === "public" && (
+                  <AllowedOriginsField
+                    id="key-origins"
+                    website={product.website_url}
+                    value={allowedOrigins}
+                    onChange={setAllowedOrigins}
+                    disabled={busy || keyState.status !== "ready"}
+                  />
+                )}
                 <Button
                   type="submit"
                   variant="outline"

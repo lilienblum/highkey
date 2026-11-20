@@ -33,6 +33,7 @@ import {
   retentionChanged,
 } from "./registry";
 import { fetchIcon } from "./website";
+import { setRevenueSettings } from "./db/revenue";
 
 let fetchingIcons = 0;
 
@@ -132,12 +133,20 @@ export async function createEventKey(
   label: string,
   sourceId: string | null | undefined,
   origins: readonly string[],
+  kind: string = "public",
 ) {
-  const key = await createKey(ctx.db, id, label, sourceId, origins);
+  const key = await createKey(ctx.db, id, label, sourceId, origins, kind);
   // The ingest app authorizes from the registry, so the key works once it is mirrored.
   await afterCommit(() => mirrorKey(ctx, id, key.id));
   ctx.changes.notify(id, "dashboards");
   return key;
+}
+
+export async function updateRevenueSettings(ctx: ApiContext, id: string, allow: boolean) {
+  const saved = await setRevenueSettings(ctx.db, id, allow);
+  await afterCommit(() => mirrorProject(ctx, id));
+  ctx.changes.notify(id, "dashboards");
+  return saved;
 }
 
 /** Replaces a key's allowed origins and returns them as normalized. */
