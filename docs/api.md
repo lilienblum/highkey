@@ -119,7 +119,7 @@ Send one envelope or `{ "events": [ ... ] }` with 1–100 envelopes. The body li
 - `increments`: up to 32 finite numeric values, only on identify/group records. Negative amounts decrement. Sets happen before increments on the same record. A missing or nonnumeric previous value starts at zero. Mutations are applied in event-time order (event ID breaks ties), with each ID applied once.
 - `group_type`, `group_id`, `group_name`: group mutations require a valid type (event-name syntax) and a 1–128 byte ID. The optional name is at most 256 bytes; omit it to retain the previous name.
 - `groups`: up to eight type-to-ID pairs on an event, e.g. `{"team":"team-1"}`.
-- `ai_prompt`: optional, explicitly supplied text up to 32768 bytes on `ai_generation` events only, with a 30-day column TTL.
+- `ai_prompt`: optional, explicitly supplied text up to 32768 bytes on `ai_generation` events only. Readers hide it after 30 days; the column TTL erases stored text during TTL merges.
 - `received_at`: set by the server. Both timestamps are stored with millisecond precision in UTC; queries filter by event time.
 
 Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only after ClickHouse has stored the new rows. One invalid event rejects the whole HTTP batch.

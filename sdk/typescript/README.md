@@ -50,6 +50,8 @@ Successful sends return `{ accepted, duplicates }` after the API commits. Invali
 
 ## Browser collection
 
+AI provider wrappers are available from `@highkey/sdk/ai`: `trackOpenAI`, `trackAnthropic`, `trackVercelAI`, and streaming `vercelAIHooks`. They preserve provider results and errors while recording token usage, latency, optional USD cost, and trace/profile attribution. Prompt retention requires explicit opt-in. See the collection guide for usage and streaming behavior.
+
 `highkey.identify({source, profile_id, traits?, increments?})` updates an explicit profile. `highkey.group({source, group_type, group_id, group_name?, traits?, increments?})` updates a group. Negative increments decrement; sets happen first. Ordinary events can carry `profile_id` and `groups: {team: "team-id"}`. Mutation records share event deduplication but do not count as analytics events.
 
 ```js

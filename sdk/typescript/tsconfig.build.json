@@ -11,5 +11,5 @@
     "rootDir": ".",
     "types": []
   },
-  "include": ["index.ts", "client.ts", "browser.ts"]
+  "include": ["index.ts", "client.ts", "browser.ts", "ai.ts"]
 }

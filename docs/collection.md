@@ -6,6 +6,33 @@ For service logs, use [structured JSON or OTLP/HTTP collection](logs.md). Logs u
 
 Identity remains optional and scoped to the project and identity kind. No person is automatically linked across web/mobile/tool sources. If you explicitly send the same opaque actor ID and identity kind from two sources, combined distinct-actor queries count it once. Use source-specific random IDs if that linkage is not intended. Visitor and installation identities remain distinct.
 
+## AI generation events
+
+Use the dependency-free wrappers with your existing provider SDK. They emit `ai_generation` with model, provider, reported token counts, latency, error/cancellation flags, and optional USD cost. Supply `trace_id` to correlate with application logs and `profile_id` or `groups` for attribution.
+
+```ts
+import { trackOpenAI, trackAnthropic, trackVercelAI, vercelAIHooks } from "@highkey/sdk/ai";
+
+const options = { source: "server", model: "your-model", trace_id: requestTraceId };
+const response = await trackOpenAI(client, options, () =>
+  openai.responses.create({ model: options.model, input: prompt }),
+);
+const message = await trackAnthropic(client, options, () =>
+  anthropic.messages.create({ model: options.model, max_tokens: 1024, messages }),
+);
+const generated = await trackVercelAI(client, options, () => generateText({ model, prompt }));
+// AI SDK streaming uses callbacks and never drains the stream for telemetry:
+const streamed = streamText({ model, prompt, ...vercelAIHooks(client, options) });
+```
+
+OpenAI Responses, Chat Completions and Anthropic `messages.create({stream:true})` streams are tracked when consumed with `for await`. Chunks pass through untouched; an early break closes the source and records cancellation. For streamed Chat Completions, request `stream_options: {include_usage: true}` to receive token counts. Helper methods that consume provider streams internally are outside this iterator wrapper; use the provider's raw async iterator.
+
+Vercel hooks support `onFinish` and `onEnd` completion names, plus `onError`/`onAbort`. If you already use these callbacks, call both your callback and the corresponding hook. Each hook set records once. Nonstreaming `trackVercelAI` uses total usage across steps when available.
+
+No prompts, generated text, or error messages are collected automatically. To retain a prompt, pass both `capturePrompt: true` and `prompt`; text is bounded to 32 KiB at a Unicode boundary, hidden from readers after 30 days, and erased by ClickHouse TTL. Numeric metrics follow normal project retention. `cost` may be an explicit USD amount or a function of the reported token counts; omitted or unavailable costs stay absent, never guessed from model names. Anthropic cached-read and cache-write input counts are separate from uncached input.
+
+Provider results and thrown errors are preserved even if collection fails. Completion waits for the collection client's bounded delivery deadline (800 ms by default). Use a shorter client timeout for latency-sensitive paths.
+
 ## Profiles and groups
 
 Identity remains opt-in. Use an opaque application ID rather than an email as the profile ID:

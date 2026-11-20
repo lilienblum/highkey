@@ -52,7 +52,7 @@ export function runSettings(scope: RunScope): Record<string, string> {
 }
 
 const EVENT_COLUMNS =
-  "source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties, backfill, profile_id, groups, ai_prompt";
+  "source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties, backfill, profile_id, groups, if(event_time + INTERVAL 30 DAY > now(), ai_prompt, '') AS ai_prompt";
 const LOG_COLUMNS =
   "source_id, log_id, timestamp, received_at, level, message, service, environment, trace_id, span_id, request_id, attributes";
 
