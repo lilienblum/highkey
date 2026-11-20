@@ -205,6 +205,7 @@ export function AppShell({
           source: sourceValue,
           days,
         }),
+        hash: true,
         replace: true,
         resetScroll: false,
       });
