@@ -155,7 +155,7 @@ export function LogSettings({ product, sourceId }: { product: Product; sourceId?
           </Button>
         </form>
         <div>
-          <h3 className="mb-2 text-sm font-medium">Log ingestion keys</h3>
+          <h3>Log ingestion keys</h3>
           <p className="quiet mb-4">
             Keep these keys on your servers. Analytics keys cannot send logs, and log keys cannot
             read data.

@@ -12,6 +12,9 @@
   /* The interface is set in Geist Mono; Geist Pixel carries titles and measurements. */
   --font-sans: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-pixel: "Geist Pixel Variable", "Geist Variable", sans-serif;
+  --color-heading: var(--heading);
+  --color-data: var(--data);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -187,16 +190,29 @@ button:disabled {
 a {
   text-decoration: none;
 }
-h1,
-h2,
-h3,
 p {
   margin: 0;
 }
-h1,
-h2,
-h3,
-[data-slot="card-title"] {
+/* Headings are element defaults, so utilities on a heading can restyle it. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    color: var(--heading);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.5;
+  }
+}
+/* Titles the primitives render as headings keep the heading grammar over their own utilities. */
+:is(
+  [data-slot="card-title"],
+  [data-slot="dialog-title"],
+  [data-slot="alert-dialog-title"],
+  [data-slot="sheet-title"],
+  [data-slot="popover-title"]
+) {
   color: var(--heading);
   font-size: 15px;
   font-weight: 650;
@@ -999,15 +1015,23 @@ h3,
   gap: 20px;
   margin-bottom: 22px;
 }
-/* Page titles and single measurements use Geist Pixel at its only weight; Geist carries the rest. */
-h1 {
-  font-family: var(--font-pixel);
-  font-size: 28px;
-  font-weight: 400;
-  font-synthesis-weight: none;
-  letter-spacing: 0;
-  line-height: 1.3;
-  text-wrap: balance;
+/* Page titles and single measurements use Geist Pixel at its only weight; Geist carries the rest.
+   An element default, so utilities on a title can size it. */
+@layer base {
+  h1 {
+    font-family: var(--font-pixel);
+    font-size: 28px;
+    font-weight: 400;
+    font-synthesis-weight: none;
+    letter-spacing: 0;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  @media (max-width: 800px) {
+    h1 {
+      font-size: 24px;
+    }
+  }
 }
 .page-heading p {
   font-size: 13px;
@@ -1452,7 +1476,7 @@ h1 {
 .integration-card [data-slot="card-title"] svg {
   width: 16px;
 }
-.integration-card .code-toolbar {
+.code-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1522,9 +1546,6 @@ h1 {
     align-items: flex-start;
     gap: 15px;
     margin-bottom: 24px;
-  }
-  h1 {
-    font-size: 24px;
   }
   .heading-actions {
     display: none;
@@ -2551,6 +2572,10 @@ h1 {
 
 html {
   scrollbar-gutter: stable;
+}
+/* A page that never scrolls reaches the window's edge instead of leaving the gutter empty. */
+html:has([data-page="new-project"]) {
+  scrollbar-gutter: auto;
 }
 
 /* Keep the plot's SSR/loading geometry while TanStack measures its container. */
