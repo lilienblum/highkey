@@ -15,6 +15,8 @@ export type BrowserOptions = Options & {
   collectReferrer?: boolean;
   collectTitle?: boolean;
   trackHashChanges?: boolean;
+  trackOutboundLinks?: boolean;
+  trackAttributes?: boolean;
   sanitizePath?: (path: string) => string | null;
   beforeSend?: (event: Event) => Event | null;
   capacity?: number;
@@ -217,12 +219,53 @@ export function startBrowserTracker(options: BrowserOptions) {
   const pageHide = () => {
     void flush();
   };
+  const click = (event: MouseEvent) => {
+    if (!canTrack() || event.button > 1) return;
+    const elements = event
+      .composedPath()
+      .filter((node): node is HTMLElement => node instanceof HTMLElement);
+    if (options.trackAttributes) {
+      const element = elements.find((node) => node.hasAttribute("data-track"));
+      const name = element?.dataset.track;
+      if (element && name && /^[a-zA-Z0-9_./-]{1,64}$/.test(name)) {
+        const properties = Object.fromEntries(
+          Object.entries(element.dataset)
+            .filter(([key]) => key !== "track" && /^[a-zA-Z0-9_./-]{1,64}$/.test(key))
+            .slice(0, 32)
+            .map(([key, value]) => [key, (value ?? "").slice(0, 512)]),
+        );
+        track(name, properties);
+      }
+    }
+    if (options.trackOutboundLinks) {
+      const anchor = elements.find(
+        (node): node is HTMLAnchorElement =>
+          node instanceof HTMLAnchorElement && node.hasAttribute("href"),
+      );
+      if (!anchor) return;
+      let url: URL;
+      try {
+        url = new URL(anchor.href);
+      } catch {
+        return;
+      }
+      if (!["http:", "https:"].includes(url.protocol) || url.origin === location.origin) return;
+      track("link_out", {
+        url: `${url.origin}${url.pathname}`.slice(0, 512),
+        text: (anchor.textContent ?? "").trim().slice(0, 512),
+      });
+    }
+  };
   const timer = setInterval(() => void flush(), 2000);
   cleanup = () => {
     clearInterval(timer);
     removeEventListener("popstate", navigation);
     if (options.trackHashChanges) removeEventListener("hashchange", navigation);
     removeEventListener("pagehide", pageHide);
+    if (options.trackOutboundLinks || options.trackAttributes) {
+      removeEventListener("click", click, true);
+      removeEventListener("auxclick", click, true);
+    }
     options.signal?.removeEventListener("abort", optOut);
     if (history.pushState === wrappedPush) history.pushState = push;
     if (history.replaceState === wrappedReplace) history.replaceState = replace;
@@ -232,6 +275,10 @@ export function startBrowserTracker(options: BrowserOptions) {
   addEventListener("popstate", navigation);
   if (options.trackHashChanges) addEventListener("hashchange", navigation);
   addEventListener("pagehide", pageHide);
+  if (options.trackOutboundLinks || options.trackAttributes) {
+    addEventListener("click", click, true);
+    addEventListener("auxclick", click, true);
+  }
   options.signal?.addEventListener("abort", optOut, { once: true });
   pageView();
   return tracker;

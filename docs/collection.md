@@ -53,6 +53,20 @@ For reviewed page titles, set `collectTitle: true`. Each page view includes the 
 
 For hash-based routes, set `trackHashChanges: true`. The fragment becomes part of `path` (for example `/app#/settings`), and hash changes produce page views. Back/Forward navigation emits one view even when the browser fires both `popstate` and `hashchange`. The URL's query string is still excluded, but the opted-in fragment is passed in full to `sanitizePath`: remove sensitive values, including any query-like values inside the fragment. Both options default to false and still obey DNT/GPC, opt-out, and `beforeSend`.
 
+### Click events
+
+`trackOutboundLinks: true` collects a `link_out` event when someone clicks an HTTP(S) link to another origin, including keyboard and middle-click activation. It sends `url` (origin and pathname only, without credentials, query or fragment) and `text` (trimmed link text), each limited to 512 UTF-16 code units. Internal links, email links and other protocols are ignored. The tracker never cancels or delays navigation.
+
+`trackAttributes: true` collects clicks on elements you explicitly mark:
+
+```html
+<button data-track="signup" data-plan="pro" data-seats="3">Sign up</button>
+```
+
+This sends `signup` with `{ plan: "pro", seats: "3" }`. Values remain strings; dataset keys use the browser's camelCase convention. The nearest marked element supplies the event, including clicks on its children and inside open shadow roots. Up to 32 valid property names are collected, with values limited to 512 UTF-16 code units. Invalid event names are ignored. This does not read form values.
+
+Both click options are off by default. They use the same bounded queue, privacy signals and `beforeSend` filter as other events. Review destination paths, link text and `data-*` attributes before enabling them. An outgoing link marked with `data-track` produces both events when both options are enabled.
+
 Paths, hostnames, campaign labels, and custom properties can still contain personal data. Prefer static route patterns and bounded product categories. Configure these controls before starting collection:
 
 ```ts
