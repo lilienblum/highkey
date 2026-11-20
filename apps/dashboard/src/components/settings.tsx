@@ -30,7 +30,6 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { ValueSelect } from "./value-select";
 import { TimeZoneSelect } from "./time-zone-select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -42,7 +41,6 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { api, type Product } from "@/lib/api";
-import { highlight } from "@/lib/highlight";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { ProjectLifecycle } from "./settings/project-lifecycle";
 import { SettingsNav } from "./settings/settings-nav";
@@ -50,6 +48,7 @@ import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
 import { LogSettings } from "./log-settings";
+import { type Integration, IntegrationTabs } from "./integration-guide";
 type KeyInfo = {
   allowed_origins: string[];
   source_id: string;
@@ -283,7 +282,7 @@ function ProductSettings({ product }: { product: Product }) {
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<"save" | "create-key" | "revoke" | null>(null);
   const busy = pending !== null;
-  const [integration, setIntegration] = useState("browser");
+  const [integration, setIntegration] = useState<Integration>("browser");
   const [revoke, setRevoke] = useState<KeyInfo | null>(null);
   const [revokeError, setRevokeError] = useState("");
   const loadKeys = useCallback(
@@ -320,17 +319,6 @@ function ProductSettings({ product }: { product: Product }) {
       setPending(null);
     }
   }
-  const key = newKey || "YOUR_INGESTION_KEY";
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://highkey.example.com";
-  const snippet =
-    integration === "browser"
-      ? `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${origin}/tracker.js";\n\n  const tracker = startBrowserTracker({\n    endpoint: "${origin}",\n    key: "${key}",\n    identity: "none",\n  });\n\n  tracker.track("signup", { plan: "pro", trial: true, seats: 3 });\n</script>`
-      : integration === "http"
-        ? `POST ${origin}/api/ingest\nAuthorization: Bearer ${key}\nContent-Type: application/json\n\n${JSON.stringify({ event_id: "GENERATE_A_UUID_ONCE", name: "screen_view", source: "mobile", timestamp: "UTC_ISO_TIMESTAMP", properties: { screen: "home", version: "1.0.0", subscribed: false } }, null, 2)}`
-        : integration === "typescript"
-          ? `import { Highkey } from "./sdk/typescript/client";\n\nconst highkey = new Highkey({\n  endpoint: "${origin}",\n  key: "${key}",\n  timeoutMs: 800,\n});\n\nawait highkey.send({\n  name: "build_complete", source: "server",\n  properties: { duration_ms: 142, success: true, version: "1.2.0" },\n});`
-          : `HIGHKEY_TELEMETRY=1 \\\nHIGHKEY_ENDPOINT="${origin}" \\\nHIGHKEY_INGESTION_KEY="${key}" \\\ncargo run -p highkey-sdk --example cli -- build\n\n# Explicit telemetry opt-in; no installation ID is sent.\n# DO_NOT_TRACK=1 disables collection.\n# Delivery has an 800 ms budget, retries included.`;
   return (
     <>
       {error && !revoke && <ErrorState message={error} />}
@@ -578,81 +566,32 @@ function ProductSettings({ product }: { product: Product }) {
           </CardContent>
         </Card>
       </div>
-      <Tabs value={integration} onValueChange={setIntegration}>
-        <Card className="integration-card">
-          <CardHeader>
-            <div className="card-heading">
-              <div>
-                <CardTitle>
-                  <HugeiconsIcon icon={SourceCodeIcon} strokeWidth={2} aria-hidden="true" />
-                  Connect {keySource?.name ?? "a source"}
-                </CardTitle>
-                <CardDescription>
-                  Use a key for this source. Identity is off by default; no users are linked
-                  automatically.
-                </CardDescription>
-              </div>
+      <Card className="integration-card">
+        <CardHeader>
+          <div className="card-heading">
+            <div>
+              <CardTitle>
+                <HugeiconsIcon icon={SourceCodeIcon} strokeWidth={2} aria-hidden="true" />
+                Connect {keySource?.name ?? "a source"}
+              </CardTitle>
+              <CardDescription>
+                Use a key for this source. Identity is off by default; no users are linked
+                automatically.
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            <TabsList
-              variant="line"
-              aria-label="Integration language"
-              className="mb-4 w-full sm:w-auto"
-            >
-              <TabsTrigger value="browser">Browser</TabsTrigger>
-              <TabsTrigger value="typescript">TypeScript</TabsTrigger>
-              <TabsTrigger value="rust">Rust CLI</TabsTrigger>
-              <TabsTrigger value="http">HTTP / Mobile</TabsTrigger>
-            </TabsList>
-            <TabsContent value={integration} key={integration}>
-              <div className="code-toolbar">
-                <span>
-                  {integration === "browser"
-                    ? "index.html"
-                    : integration === "rust"
-                      ? "terminal"
-                      : integration === "http"
-                        ? "HTTP request"
-                        : "analytics.ts"}
-                </span>
-                <CopyButton
-                  variant="ghost"
-                  content={snippet}
-                  onCopyError={() =>
-                    setError("Clipboard unavailable. Select the snippet and copy it manually.")
-                  }
-                >
-                  Copy snippet
-                </CopyButton>
-              </div>
-              <pre className="integration-code">
-                <code>
-                  {highlight(
-                    snippet,
-                    integration === "browser"
-                      ? "html"
-                      : integration === "http"
-                        ? "http"
-                        : integration === "typescript"
-                          ? "js"
-                          : "shell",
-                  )}
-                </code>
-              </pre>
-              <p className="quiet">
-                {integration === "browser"
-                  ? "No cookies or stored visitor IDs. Campaign capture is off, and DNT/GPC stop collection. Map private routes before collecting page views."
-                  : integration === "rust"
-                    ? "Telemetry requires explicit opt-in. No installation ID is created, and unknown command names are reported as other. Never send arguments or output."
-                    : integration === "http"
-                      ? "Send this request from your native app’s HTTP client after opt-in. Generate an event ID and UTC timestamp once, and reuse both on retries. Omit advertising IDs, device fingerprints, and personal data."
-                      : "Send only the properties your project needs. No identity is added automatically. Keep emails, credentials, and private content out of events."}
-              </p>
-            </TabsContent>
-          </CardContent>
-        </Card>
-      </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <IntegrationTabs
+            value={integration}
+            onValueChange={setIntegration}
+            ingestionKey={newKey}
+            onCopyError={() =>
+              setError("Clipboard unavailable. Select the snippet and copy it manually.")
+            }
+          />
+        </CardContent>
+      </Card>
       <AlertDialog
         open={!!revoke}
         onOpenChange={(open) => {

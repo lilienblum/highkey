@@ -260,48 +260,60 @@ function Step({
   );
 }
 
-/** Three steps: connect an agent, ask it, or start from an example. */
-export function AgentGuide({ intent, project }: { intent: GuideIntent; project: Product }) {
+/**
+ * Connecting an agent over MCP: the Claude Code command or the Codex config for this host, and
+ * how the agent then signs in. Used by the agent guide and the new-project page.
+ */
+export function ConnectAgent() {
   const origin = useOrigin();
   const [agent, setAgent] = useAgent();
+  return (
+    <>
+      <Tabs
+        value={agent}
+        onValueChange={(value) => setAgent(value as Agent)}
+        className="agent-guide-tabs"
+      >
+        <TabsList variant="line" aria-label="Agent">
+          <TabsTrigger value="claude">Claude Code</TabsTrigger>
+          <TabsTrigger value="codex">Codex</TabsTrigger>
+        </TabsList>
+        <TabsContent value="claude">
+          <GuideCode
+            caption="Terminal"
+            copyLabel="Copy Claude Code command"
+            text={claudeCommand(origin)}
+          />
+        </TabsContent>
+        <TabsContent value="codex">
+          <GuideCode
+            caption="~/.codex/config.toml"
+            copyLabel="Copy Codex config"
+            text={codexConfig(origin)}
+          />
+        </TabsContent>
+      </Tabs>
+      <p className="agent-guide-note">
+        Once per machine. The agent then opens Highkey for you to sign in and choose its
+        organization and access: in Claude Code run <code>/mcp</code> and choose Authenticate; in
+        Codex run <code>codex mcp login highkey</code>.{" "}
+        <a href={docsUrl} target="_blank" rel="noreferrer">
+          See the docs
+        </a>
+        .
+      </p>
+    </>
+  );
+}
+
+/** Three steps: connect an agent, ask it, or start from an example. */
+export function AgentGuide({ intent, project }: { intent: GuideIntent; project: Product }) {
   const ids = useId();
   const { prompt, examples } = guideCopy(intent, project.slug);
   return (
     <ol className="agent-guide">
       <Step number={1} heading="Connect your agent" id={`${ids}-connect`}>
-        <Tabs
-          value={agent}
-          onValueChange={(value) => setAgent(value as Agent)}
-          className="agent-guide-tabs"
-        >
-          <TabsList variant="line" aria-label="Agent">
-            <TabsTrigger value="claude">Claude Code</TabsTrigger>
-            <TabsTrigger value="codex">Codex</TabsTrigger>
-          </TabsList>
-          <TabsContent value="claude">
-            <GuideCode
-              caption="Terminal"
-              copyLabel="Copy Claude Code command"
-              text={claudeCommand(origin)}
-            />
-          </TabsContent>
-          <TabsContent value="codex">
-            <GuideCode
-              caption="~/.codex/config.toml"
-              copyLabel="Copy Codex config"
-              text={codexConfig(origin)}
-            />
-          </TabsContent>
-        </Tabs>
-        <p className="agent-guide-note">
-          Once per machine. The agent then opens Highkey for you to sign in and choose its
-          organization and access: in Claude Code run <code>/mcp</code> and choose Authenticate; in
-          Codex run <code>codex mcp login highkey</code>.{" "}
-          <a href={docsUrl} target="_blank" rel="noreferrer">
-            See the docs
-          </a>
-          .
-        </p>
+        <ConnectAgent />
       </Step>
       <Step number={2} heading="Ask it" id={`${ids}-ask`}>
         <GuideCode caption="Prompt" copyLabel="Copy prompt" text={prompt}>
