@@ -20,7 +20,7 @@ export function AuthFrame({
     <main className="auth-screen">
       <section className="auth-panel" aria-labelledby="auth-title">
         <header className="auth-identity">
-          <DitherField />
+          <DitherField profile="band" />
           <a href="/" className="brand-link" aria-label="Highkey">
             <span className="brand">
               <img className="brand-mark" src="/favicon.svg?v=7" width="30" height="30" alt="" />

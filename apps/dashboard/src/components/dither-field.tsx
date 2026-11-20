@@ -50,10 +50,26 @@ function resolvePalette(context: CanvasRenderingContext2D): Palette {
  * drifting over a slow wave, quantised to the sidebar palette. It drifts for a few seconds on
  * arrival and while the identity area is hovered, then holds a still frame. Reduced motion only
  * ever draws the still frame.
+ *
+ * `top` (the sidebar) lights the field from its top edge and dissolves it downward. `band` (a
+ * short header such as the account panel's) centres the blooms on the middle row and dissolves
+ * them equally toward both edges, so a mark centred in the header sits in the field's middle.
+ * `field` (a panel of its own) spreads larger blooms over the frame and dissolves its lower part
+ * into the ground, where text can sit on plain ground. `drift="always"` keeps it moving while the
+ * page is visible, still under reduced motion.
  */
-export function DitherField() {
+export function DitherField({
+  profile = "top",
+  drift = "arrival",
+}: {
+  profile?: "top" | "band" | "field";
+  drift?: "arrival" | "always";
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
+    const band = profile === "band";
+    const field = profile === "field";
+    const always = drift === "always";
     const canvas = canvasRef.current;
     const frame = canvas?.parentElement;
     const host = frame?.parentElement;
@@ -76,18 +92,37 @@ export function DitherField() {
 
     const render = () => {
       if (!image || !columns || !rows) return;
-      const reach = Math.max(width * 0.55, 96) ** 2;
-      const orangeX = width * (0.2 + 0.1 * Math.sin(time * 0.23));
-      const orangeY = height * (0.08 + 0.12 * Math.cos(time * 0.31));
-      const violetX = width * (0.84 + 0.08 * Math.cos(time * 0.19));
-      const violetY = height * (0.04 + 0.1 * Math.sin(time * 0.27));
+      const reach = (field ? Math.max(width, height) * 0.5 : Math.max(width * 0.55, 96)) ** 2;
+      const swell = field ? 0.12 : 0.09;
+      const orangeX =
+        width * (field ? 0.3 + 0.14 * Math.sin(time * 0.23) : 0.2 + 0.1 * Math.sin(time * 0.23));
+      const orangeY =
+        height *
+        (field
+          ? 0.42 + 0.14 * Math.cos(time * 0.31)
+          : band
+            ? 0.5 + 0.16 * Math.cos(time * 0.31)
+            : 0.08 + 0.12 * Math.cos(time * 0.31));
+      const violetX =
+        width * (field ? 0.76 + 0.12 * Math.cos(time * 0.19) : 0.84 + 0.08 * Math.cos(time * 0.19));
+      const violetY =
+        height *
+        (field
+          ? 0.22 + 0.12 * Math.sin(time * 0.27)
+          : band
+            ? 0.5 + 0.12 * Math.sin(time * 0.27)
+            : 0.04 + 0.1 * Math.sin(time * 0.27));
       for (let y = 0; y < rows; y++) {
         const py = y * CELL;
-        const fade = Math.max(0, 1 - py / Math.min(height, FADE_PX)) ** 2;
+        const fade = field
+          ? Math.min(1, Math.max(0, (1 - py / height) / 0.45)) ** 2
+          : band
+            ? Math.sin(Math.PI * Math.min(1, (py + CELL / 2) / height)) ** 1.5
+            : Math.max(0, 1 - py / Math.min(height, FADE_PX)) ** 2;
         const row = y * columns;
         for (let x = 0; x < columns; x++) {
           const px = x * CELL;
-          const wave = 0.09 * Math.sin(px * 0.045 + py * 0.024 - time * 0.9);
+          const wave = swell * Math.sin(px * 0.045 + py * 0.024 - time * 0.9);
           const orange =
             (Math.exp((-1.6 * ((px - orangeX) ** 2 + (py - orangeY) ** 2)) / reach) * 0.62 + wave) *
             fade;
@@ -142,6 +177,7 @@ export function DitherField() {
     };
     const visibility = () => {
       if (document.visibilityState === "hidden") sleep();
+      else if (always) wake(Number.POSITIVE_INFINITY);
     };
     const preference = () => {
       sleep();
@@ -167,7 +203,7 @@ export function DitherField() {
     host.addEventListener("pointerleave", leave);
     document.addEventListener("visibilitychange", visibility);
     motion.addEventListener("change", preference);
-    wake(ARRIVAL_MS);
+    wake(always ? Number.POSITIVE_INFINITY : ARRIVAL_MS);
     return () => {
       sleep();
       resize.disconnect();
@@ -176,7 +212,7 @@ export function DitherField() {
       document.removeEventListener("visibilitychange", visibility);
       motion.removeEventListener("change", preference);
     };
-  }, []);
+  }, [profile, drift]);
   return (
     <div className="dither-field" aria-hidden="true">
       <canvas ref={canvasRef} />

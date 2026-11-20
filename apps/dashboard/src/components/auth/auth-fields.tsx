@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { GithubIcon, GoogleIcon } from "@hugeicons/core-free-icons";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authPost, follow } from "@/lib/auth-client";
@@ -57,8 +57,14 @@ export function TextField({
   name,
   label,
   aside,
+  hint,
   ...input
-}: { name: string; label: string; aside?: React.ReactNode } & React.ComponentProps<"input">) {
+}: {
+  name: string;
+  label: string;
+  aside?: React.ReactNode;
+  hint?: React.ReactNode;
+} & React.ComponentProps<"input">) {
   const id = `auth-${name}`;
   return (
     <Field>
@@ -66,7 +72,8 @@ export function TextField({
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {aside}
       </div>
-      <Input id={id} name={name} {...input} />
+      <Input id={id} name={name} aria-describedby={hint ? `${id}-hint` : undefined} {...input} />
+      {hint ? <FieldDescription id={`${id}-hint`}>{hint}</FieldDescription> : null}
     </Field>
   );
 }

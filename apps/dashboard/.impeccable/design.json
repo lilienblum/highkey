@@ -726,7 +726,7 @@
       {
         "name": "dither-field",
         "value": "12fps timer drift for 6s after arrival and while hovered; 600ms fade-in once drawn",
-        "purpose": "The sidebar identity field, the one ambient motion. Holds a still frame otherwise, pauses in background tabs, and never animates under reduced motion."
+        "purpose": "The sidebar identity field, the one ambient motion in the workspace. Holds a still frame otherwise, pauses in background tabs, and never animates under reduced motion. The account panel's head uses the band profile (blooms centred on the mark's row); the new-project page's field profile keeps drifting while the page is visible."
       },
       {
         "name": "menu-open",
