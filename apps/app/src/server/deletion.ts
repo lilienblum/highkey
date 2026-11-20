@@ -150,7 +150,9 @@ export function registerDeletion(): void {
     if (target.id === requireActor(ctx).userId)
       throw bad("Delete your own account from your account settings");
     await prepareUserDeletion(ctx, target.id);
-    await (await ctx.auth()).api.removeUser({
+    await (
+      await ctx.auth()
+    ).api.removeUser({
       body: { userId: target.id },
       headers: request.headers,
     });

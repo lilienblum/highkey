@@ -1,9 +1,20 @@
 ---
-
 version: 1
 slug: "src-components-dashboards-dashboard-page-tsx"
 primary_target: "src/components/dashboards/dashboard-page.tsx"
-related_targets: ["src/components/dashboards/widget.tsx", "src/components/dashboards/widget-chart.tsx", "src/components/dashboards/agent-guide.tsx", "src/components/dashboards/revisions-sheet.tsx", "src/components/dashboards/new-dashboard-dialog.tsx", "src/components/dashboards/dashboards.css", "src/lib/dashboards.ts", "src/lib/growth.ts", "src/routes/projects.$projectSlug.dashboards.$dashboardSlug.tsx", "src/components/workspace-sidebar.tsx"]
+related_targets:
+  [
+    "src/components/dashboards/widget.tsx",
+    "src/components/dashboards/widget-chart.tsx",
+    "src/components/dashboards/agent-guide.tsx",
+    "src/components/dashboards/revisions-sheet.tsx",
+    "src/components/dashboards/new-dashboard-dialog.tsx",
+    "src/components/dashboards/dashboards.css",
+    "src/lib/dashboards.ts",
+    "src/lib/growth.ts",
+    "src/routes/projects.$projectSlug.dashboards.$dashboardSlug.tsx",
+    "src/components/workspace-sidebar.tsx",
+  ]
 ---
 
 # Highkey Dashboards

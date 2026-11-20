@@ -67,7 +67,6 @@ The loading-state follow-up adds seven browser tests. Held requests verify catal
 
 The loading-only iteration above left Rust and the benchmark harness unchanged. The subsequent Tako migration below reran Rust and benchmark verification.
 
-
 ## Tako runtime and durable channels
 
 Two native apps were exercised at `https://highkey.test` and `https://highkey-api.test`, with certificate verification enabled. Existing sample data was copied while the former API was stopped, then read successfully under Tako's persistent directory. The original directory was retained. Manual browser review covered Orbit website Overview and Orbit CLI Explore/typed event inspection, with the Live indicator connected.
@@ -84,7 +83,6 @@ The release benchmark was rerun after the runtime fix: **15,142 newly committed 
 
 Production deployment, Linux artifact execution, Cloudflare policies, and Docker image startup were not exercised on this host. Compose syntax and the compiled standalone runtime were verified. The documented API maintenance procedure is required because DuckDB cannot overlap old and new processes during a rolling release. No claim of power-loss durability or long-running production capacity is made.
 
-
 ## Stable manual refresh
 
 Manual refresh previously detached Overview cards/charts and Explore results while loading, and reset Explore pagination as the rolling interval advanced. Browser tests reproduced both detachments before the fix. Refresh now preserves the current result scope and page, with activity icons in place. The live-data action occupies a fixed-size button in the query header, so announcing or acknowledging new data does not insert or remove a banner. A failed refresh retains known results and offers retry feedback.
@@ -93,20 +91,17 @@ All **38 Chromium tests passed in 2.1 minutes** against the two running Tako app
 
 `bun fmt`, `bun fmt:check`, `bun typecheck`, `bun lint`, `bun test` (five tests), and `bun run build` passed. The build retains its existing large-client-chunk warning. This iteration changes frontend state and presentation only; the Rust backend, persistence behavior, and benchmark measurements above are unchanged.
 
-
 ## Hugeicons migration
 
 All dashboard icons and installed shadcn controls now use native Hugeicons icon data and the official React renderer. Lucide was removed from the dependency graph. The shadcn CLI confirms `iconLibrary: hugeicons` with the existing Radix base. Manual browser review covered Settings, appearance-menu icons and its filled selection dot, and select chevrons/checkmarks.
 
 The existing **38 Chromium tests passed in 2.3 minutes**, including website/CLI flows, keyboard navigation, themes, narrow layouts, loading feedback, and stable refresh. No new tests were added for this visual replacement. `bun fmt`, `bun typecheck`, `bun lint`, five Bun tests, and the production build passed. The main client chunk is 948.82 kB (293.68 kB gzip); the existing chunk-size warning remains. The Rust backend and prior ingestion benchmarks are unchanged.
 
-
 ## Collapsed sidebar alignment
 
 The reported collapsed sidebar was reproduced in the user's existing localhost tab and again after loading the current Hugeicons build. Each navigation SVG was 8 px left of its button center because the large-button variant removed padding without centering content. Two collapsed-only alignment utilities now center menu items in the rail and center icons in their existing square buttons. Browser measurements changed from `iconOffsetX: -8` to `iconOffsetX: 0` and `iconOffsetY: 0` for Overview, Explore, Settings, and Documentation.
 
 Four existing sidebar/theme/mobile Chromium checks passed in 16.5 seconds, with a temporary 894×870 dark screenshot capture matching the reported viewport. The capture instrumentation was removed afterward. Bun formatting, typecheck, lint, five unit tests, and the production build passed. Manual review also confirmed the current preview at `https://highkey.test/explore`, where Tako serves live channels.
-
 
 ## Overview chart metrics and intervals
 
@@ -117,7 +112,6 @@ Four new browser tests verify mixed identities, numeric duration types, and stab
 All **42 Chromium tests passed in 2.7 minutes** with `HIGHKEY_REALTIME=1` against the two running Tako apps. One existing text assertion was scoped to the summary cards because the same metric label now also appears in the chart control. The final suite includes all six durable-channel tests and all five stable-refresh regressions. Temporary screenshot capture for the seeded website and CLI views was removed before committing. Manual browser review covered visitor, duration, and hourly selections with unchanged overview totals.
 
 `bun fmt`, `bun typecheck`, `bun lint`, five Bun unit tests, and `bun run build` passed. The existing large-client-chunk warning remains (950.13 kB, 294.10 kB gzip). This iteration changes the dashboard only; backend behavior and benchmark measurements above are unchanged.
-
 
 ## Privacy-first collection
 
@@ -138,7 +132,6 @@ Reviewed eight rendered combinations across Overview, Explore, and Settings: web
 The finish review requested denser desktop Explore results. The final 1440×960px website view places the event stream at y=573.83px, with 56px rows and five complete events visible. Mobile retains stacked context and larger touch controls. Refresh geometry remains stable. The initial Explore placeholder now uses three breakdown rows to match the compact chart region; the loading regression asserts that the stream's initial and loaded desktop positions differ by at most 12px.
 
 The full browser run passed **55 checks in 3.0 minutes**: all **54 committed behavior tests**, including durable channels and refresh regressions, plus one temporary eight-view capture harness. After the final placeholder adjustment, all seven loading tests and the loaded-preview capture passed again. The temporary harness was removed. `bun fmt`, `bun fmt:check`, `bun typecheck`, `bun lint`, nine Bun tests, and the production build passed. Impeccable's manual detector returned no findings. The existing large-client-chunk warning remains (950.26 kB, 294.19 kB gzip). This iteration changes the dashboard and its documentation; Rust behavior and prior benchmark measurements are unchanged.
-
 
 ## Ponytail code review
 
@@ -168,7 +161,6 @@ An immediate post-restart test setup encountered controlled 503 ingestion respon
 
 Source deletion/merging and native Swift/Kotlin SDKs are not implemented; mobile has HTTP examples. Retention and optional identity remain project-scoped. This update was not deployed to production. Pre-source binaries require restoration of the complete pre-upgrade backup to write again; this is documented in the API migration notes.
 
-
 ## Ephemeral refresh channels — 2026-11-01
 
 Highkey now pins JavaScript SDK `0.0.0-9ae824f` and declares `ephemeral: true` for refresh hints. The local CLI and shared dev daemon were upgraded to the matching release. A real two-subscriber test verifies live UUID-only messages with empty IDs, no disconnected-history replay, and successful reconnection with an old durable cursor. A separate test commits CLI events between the initial Explore query and first subscription, proves their hint was already published, then verifies explicit refresh recovers the database total. Existing reconnect, duplicate, project-scoping, and stable-refresh tests remain.
@@ -178,7 +170,6 @@ The first transport check caught the old daemon still issuing durable IDs after 
 A full browser run also exposed three transient query-capacity responses during navigation and refresh. Queries now honor one short advertised `Retry-After` delay, with cancellation and no mutation retries. Four new Bun tests verify payload preservation, bounded retries, cancellation, and mutation behavior; the three affected browser cases passed when rerun after the fix.
 
 The final **61-test Playwright suite passed in 3.7 minutes** against the upgraded local Tako hosts. `bun fmt`, `bun fmt:check`, `bun typecheck`, `bun lint`, all **20 Bun tests**, and the production build pass. The existing client chunk warning remains (925.98 kB minified / 284.03 kB gzip). Rust source, database schemas, ingestion acknowledgment semantics, and the prior benchmark are unchanged; Rust checks and the benchmark were not rerun for this dashboard/SDK change. Production deployment and Cloudflare policy enforcement were not tested. Ephemeral channels currently require one Tako server without a shared Postgres credential.
-
 
 ## Server-rendered workspace — 2026-11-01
 
@@ -194,7 +185,6 @@ The final compiled standalone dashboard passed **67 browser tests in 1.7 minutes
 
 Final checks pass: bun fmt, bun fmt:check, bun typecheck, bun lint, all **20 Bun tests**, and bun run build. The existing large-client-chunk warning remains. Rust and the ingestion benchmark are unchanged and were not rerun. No production deployment was performed.
 
-
 ## Source icons and shared analytics — 2026-11-01
 
 Source and project types are removed from the catalog, management payloads, and dashboard. Every source uses the same four metrics, event chart, and breakdown choices. Overview totals include custom events alongside page views and commands. Optional visitor, installation, and generic actor identities remain distinct; icons never affect queries, identity, or ingestion. Settings offers eleven Hugeicons choices plus Automatic, inferred locally from the name. Explicit choices survive renaming; Automatic follows the new name.
@@ -206,7 +196,6 @@ Checks pass: `bun fmt`, `bun fmt:check`, `bun typecheck`, `bun lint`, all **22 B
 The compiled standalone dashboard passed **68 browser tests in 1.6 minutes**, with seven native-channel cases intentionally skipped. The native Tako run covered all seven channel cases plus refresh, SSR geometry, and sources: 26 passed initially; a hot-reload workspace error and a transient mobile-width assertion passed their targeted rerun after editing stopped. Together these runs cover every case in the **75-test suite**. The final select-alignment change was rebuilt and covered by the native checks. In-app browser inspection confirmed the Website and CLI overview layouts, automatic icons on the existing sample sources, and the icon picker at 390 px.
 
 The existing client-chunk warning remains (933.98 kB minified / 286.62 kB gzip). No new benchmark was run: analytical storage and query execution are unchanged, and prior measured results remain in [the benchmark report](benchmark.md). Production deployment, Docker startup, and Cloudflare policies were not re-tested.
-
 
 ## Yuzu visual system — 2026-11-01
 
@@ -274,7 +263,6 @@ Optional project websites now feed a server-fetched, locally cached favicon in t
 
 **31 Rust tests**, **30 Bun tests**, and **7 affected Chromium browser tests** passed, along with formatting, TypeScript, lint, Clippy with warnings denied, and the production build. The opt-in network smoke test passed separately. Browser checks used disposable Tako apps/databases, which were removed afterward. Manual review covered Dark desktop Settings and the origin editor, plus the Light mobile screenshot. The running preview API was restarted on the new binary; its five existing projects migrated successfully, and the origin editor was verified against that API without changing existing key policies. The full browser suite and mixed-load benchmark were not rerun; no production deployment was performed.
 
-
 ## TanStack Charts — 2026-11-02
 
 Overview and Explore now use the native React/SVG adapter from `@tanstack/charts` 1.1.0. Removed the vendored Bklit runtime, registry entry, license notice, chart-theme tokens, and unused direct D3, Motion, and Number Flow dependencies. D3 dependencies owned by TanStack Charts remain transitive. Current integration details live in [charts.md](charts.md).
@@ -287,7 +275,6 @@ Formatting, typecheck, lint, **30 Bun tests / 141 assertions**, and the client/S
 
 The largest client chunk measures **569.47 kB minified / 189.05 kB gzip**. The existing Vite chunk-size warning remains. This is a build-size measurement, not a runtime performance benchmark.
 
-
 ## Automatic analytics freshness — 2026-11-02
 
 Removed both routine refresh controls. Overview and Explore reconcile after commit hints, first connection/reconnection, window focus, tab return, and network recovery. A 30-second visible/online fallback covers missed ephemeral notifications and standalone mode. Bursts coalesce behind in-flight work. Fixed-date drilldowns invalidate without expanding their dates; draft edits and the selected page persist. The inspector retains its opening page and adjacent-record navigation even when arriving events push those records off the live table. Background updates retain charts and results without disabling query or pagination controls.
@@ -297,7 +284,6 @@ Transient analytical failures retry automatically with bounded backoff and 15-se
 **102 Chromium tests passed in 4.5 minutes** against the isolated Tako apps. Coverage includes live website/CLI ingestion, product isolation, duplicate suppression, SSE interruption, initial-subscription races, no-channel polling, hidden-tab pause/resume, network recovery, burst coalescing, fixed-date late arrivals, retained inspector state, automatic transient-error recovery, and desktop/mobile refresh geometry. The clock-driven polling tests install their clock before navigation so the application's timers are controlled. Test teardown removed its temporary apps and databases; no fixtures were added to the preview.
 
 **32 Bun tests / 148 assertions**, `bun fmt`, `bun typecheck`, `bun lint`, and the client/SSR production build pass. Manual preview inspection covered combined Overview, website/CLI Explore, source switching, and event inspection. The existing Vite chunk warning remains: the largest client chunk measures **531.21 kB minified / 178.02 kB gzip**. This is a bundle-size measurement, not a runtime performance claim. Rust/API/storage code is unchanged; backend tests and the ingestion benchmark were not rerun for this dashboard change.
-
 
 ## Project paths and shareable report state — 2026-11-02
 
@@ -329,7 +315,6 @@ The Sources widget uses a plain exact event count, source icon/name, and Explore
 
 After incorporating the concurrent SDK package commit, formatting, lint, all 41 Bun tests, and the combined SDK/dashboard production build and typecheck were rerun successfully. Both verification records are retained.
 
-
 ## Date menu and keyboard shortcuts — 2026-11-02
 
 Replaced the preset ToggleGroup with official shadcn Base UI DropdownMenu/RadioGroup components, semantic groups and separators, Hugeicons checks, and shadcn Kbd hints. The date label and applicable previous/next arrows share one frame, with arrows on opposite sides. Added a rolling Last 24 hours preset, visible single-key shortcuts, bracket period navigation, and a persistent browser preference to disable shortcuts. Keyboard guards ignore editable controls, composition, repeats, modifiers, and other open overlays, including hidden/closing Base UI ancestors. The custom calendar receives and restores focus, stays anchored without layout movement, and becomes visible when invoked after scrolling down the report.
@@ -344,13 +329,11 @@ Moved the existing shadcn SidebarTrigger from the footer to the brand header. It
 
 Bun formatting, typecheck, lint, all 50 unit tests, and the production build pass. All 17 focused browser checks passed: click/keyboard toggling, preference persistence, unchanged trigger and shell geometry through hydration on three routes at desktop/mobile widths, mobile navigation, blocked browser storage, and scrollable source lists in short viewports. The overflow fixture now supplies several sources instead of assuming two rows must overflow. Manual browser inspection covered expanded and collapsed states. Isolated test apps and databases were cleaned up; backend tests were not rerun for this UI-only change.
 
-
 ## Reset filters when switching projects — 2026-11-02
 
 The project picker and newly created project selection now share one navigation path that starts with All sources and Last 30 days. It explicitly clears retained date parameters and drops Overview filters/chart choices, Explore queries and drafts, drilldowns, and pagination. Switching destinations within a project, direct report URLs, and Back/Forward retain their existing behavior.
 
 Bun formatting, typecheck, lint, all 50 unit tests, and the SDK/dashboard production build pass. All 8 URL-state browser tests pass, including three new regressions covering custom dates, calendar periods, legacy snapshots, source/event/property filters, query drafts, pagination, and history restoration. Tests verify both the visible results and unfiltered server query payloads. Manual preview inspection confirmed Today clears on switching from Orbit to Orbit CLI. Isolated test apps and temporary databases were removed. Backend tests were not rerun for this dashboard-only change.
-
 
 ## Seven-day default — 2026-11-02
 

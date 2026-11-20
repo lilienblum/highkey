@@ -15,9 +15,7 @@ import { applyMigrations, MIGRATIONS_DIR } from "../src/server/db/migrations";
 
 const name = process.argv[2];
 if (!name || !/^[a-z0-9_]+$/.test(name)) {
-  console.error(
-    "Usage: bun apps/app/scripts/auth-schema.ts <name> (lowercase letters, digits, _)",
-  );
+  console.error("Usage: bun apps/app/scripts/auth-schema.ts <name> (lowercase letters, digits, _)");
   process.exit(1);
 }
 const db = openBunDb(":memory:");

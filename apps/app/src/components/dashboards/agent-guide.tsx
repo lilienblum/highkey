@@ -201,7 +201,6 @@ function Marked({ text }: { text: string }) {
   const parts = text.split("…");
   return parts.map((part, index) => (
     // The text is static, so a part's position is its identity.
-    // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
     <Fragment key={index}>
       {part}
       {index < parts.length - 1 && <span className="agent-guide-blank">…</span>}

@@ -10,6 +10,7 @@ Cultural home: tools for making, measuring, and debugging, with clear instrument
 Ruts excluded: blue SaaS card grid; its predictable opposite, black neon terminal chrome.
 
 Seven candidate systems, ordered by resonance:
+
 1. Scientific plotting workbench — precise axes, ink text, aubergine selection, flat measurement rows; lends authority to numeric evidence without corporate styling.
 2. Transit operations board — amber controls, graphite text, segmented status lanes; makes product/date scope and current state immediate.
 3. Desktop publishing tool palette — white and raspberry, compact contextual toolbars, generous live canvas; emphasizes constructing queries and inspecting output.
@@ -25,6 +26,7 @@ The candidates span scientific graphics, civic information systems, publishing i
 Seed: 1c47a4fc, assigned candidate 5. Build the field-station label system, with a compact query rail above a shared result field. User delegated the final choice.
 
 Challengers evaluated on audience identification and product clarity:
+
 - Developer console: high identification / high clarity, but preserves too much of the rejected app-kit world; field station gives the same precision with a distinct daytime identity.
 - Botanical folio: medium identification / low clarity; the illustrated lifecycle staging invents relationships Highkey does not model.
 - Type specimen: medium identification / low clarity; gigantic glyph manipulation displaces analytics rather than explaining it.

@@ -183,7 +183,6 @@ A snapshot holds key hashes and display prefixes, never key secrets. A restore p
 
 Local development and each deployed environment have separate storage; selecting another config does not copy data. To move an installation, take both backups, restore them on the new server as above, and check projects, keys, queries and duplicate retries before pointing collectors at it.
 
-
 ## Verification boundaries
 
 `cargo test` runs the ingest app against a real ClickHouse: the contract and server-version checks, keys and their cache, origins, validation, deduplication, OTLP, retention by event time, capacity, and change hints. `bun run test` runs the SDK and script tests and the dashboard server tests against the same disposable ClickHouse: management, queries, dashboards, views, MCP, migrations, the key registry and the isolation between projects. Browser tests run through `bun run test:e2e` using dedicated Tako hosts and a disposable ClickHouse; they never target the preview. `bun run test:load` checks ingestion latency under heavy dashboard load. [Verification](verification.md) records the checks actually run; [the benchmark](benchmark.md) measures the ingest app, the dashboard's API and ClickHouse on loopback, excluding the channel bridge, TLS, and the edge.

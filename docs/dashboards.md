@@ -282,7 +282,10 @@ Error logs divided by checkout requests, from two signals in one formula. The wi
           "expr": "errors / requests * 100",
           "label": "Error rate",
           "color": "red",
-          "thresholds": [{ "at": 1, "color": "yellow" }, { "at": 5, "color": "red" }]
+          "thresholds": [
+            { "at": 1, "color": "yellow" },
+            { "at": 5, "color": "red" }
+          ]
         }
       ]
     }

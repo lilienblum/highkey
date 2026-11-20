@@ -1,9 +1,20 @@
 ---
-
 version: 1
 slug: "src-components-logs-tsx"
 primary_target: "src/components/logs.tsx"
-related_targets: ["src/components/log-stream.tsx", "src/lib/use-log-feed.ts", "src/lib/log-buffer.ts", "src/components/log-settings.tsx", "src/components/app-shell.tsx", "src/components/workspace-sidebar.tsx", "src/lib/logs.ts", "src/logs.css", "src/routes/logs.tsx", "src/routes/projects.$projectSlug.logs.tsx"]
+related_targets:
+  [
+    "src/components/log-stream.tsx",
+    "src/lib/use-log-feed.ts",
+    "src/lib/log-buffer.ts",
+    "src/components/log-settings.tsx",
+    "src/components/app-shell.tsx",
+    "src/components/workspace-sidebar.tsx",
+    "src/lib/logs.ts",
+    "src/logs.css",
+    "src/routes/logs.tsx",
+    "src/routes/projects.$projectSlug.logs.tsx",
+  ]
 ---
 
 # Highkey Logs

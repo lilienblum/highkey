@@ -284,7 +284,7 @@ export function OpenSavedView<D extends ViewDocument>({
   const version = patch && stored?.updated_at;
   // Only a version that just finished loading applies, never a cached copy that is revalidating.
   const settled = !view.isFetching;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: applies each readable version once
+  // Apply each readable version once.
   useEffect(() => {
     if (settled && stored && patch) void show(slug, stored, patch);
   }, [version, settled]);
@@ -572,7 +572,7 @@ export function ViewActions<D extends ViewDocument>({
       resetScroll: false,
     });
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: acts once per stored version
+  // Act once per stored version.
   useEffect(() => {
     if (!latest) return;
     if (sync === "bump") mark(latest);

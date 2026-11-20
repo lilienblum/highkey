@@ -308,9 +308,9 @@ p {
   --button-deep: color-mix(in oklab, var(--destructive) 92%, #000);
 }
 :is([data-slot="button"], [data-slot$="-trigger"]):is(
-  [data-variant="default"],
-  [data-variant="destructive"]
-):hover {
+    [data-variant="default"],
+    [data-variant="destructive"]
+  ):hover {
   --button-face: linear-gradient(
     180deg,
     color-mix(in oklab, var(--button-lit) 60%, #fff) 0%,
@@ -319,9 +319,9 @@ p {
   );
 }
 :is([data-slot="button"], [data-slot$="-trigger"]):is(
-  [data-variant="default"],
-  [data-variant="destructive"]
-):active {
+    [data-variant="default"],
+    [data-variant="destructive"]
+  ):active {
   --button-face: linear-gradient(180deg, var(--button-deep) 0%, var(--button-base) 100%);
   --button-bevel: inset 0 1px 3px rgb(0 0 0 / 30%), inset 0 0 0 1px rgb(0 0 0 / 12%);
   --button-tone: var(--tone-25);
@@ -488,8 +488,7 @@ p {
   flex: 1;
   min-width: 12px;
   height: 2px;
-  background:
-    linear-gradient(
+  background: linear-gradient(
       90deg,
       color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
       transparent 0
@@ -595,8 +594,7 @@ p {
 :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
   height: 2px;
   margin: 6px 12px;
-  background:
-    linear-gradient(
+  background: linear-gradient(
       90deg,
       color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
       transparent 0
@@ -1281,7 +1279,6 @@ p {
   margin-left: auto;
   color: var(--primary);
 }
-/* biome-ignore lint/style/noDescendingSpecificity: these selectors target disjoint component regions. */
 .insight-note svg {
   width: 11px;
   height: 11px;
@@ -1451,7 +1448,6 @@ p {
   font-size: 12px;
   color: var(--muted-foreground);
 }
-/* biome-ignore lint/style/noDescendingSpecificity: these selectors target disjoint component regions. */
 .key-row svg {
   color: var(--muted-foreground);
 }
@@ -1633,9 +1629,7 @@ p {
   *,
   ::before,
   ::after {
-    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component animations. */
     animation: none !important;
-    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component transitions. */
     transition: none !important;
     scroll-behavior: auto;
   }
@@ -2475,8 +2469,7 @@ p {
   content: "";
   flex: 1;
   height: 2px;
-  background:
-    linear-gradient(
+  background: linear-gradient(
       90deg,
       color-mix(in oklab, var(--border) 60%, var(--muted-foreground)) 2px,
       transparent 0
@@ -2870,7 +2863,7 @@ html:has([data-page="new-project"]) {
   background: color-mix(in oklab, var(--border) 84%, var(--muted-foreground));
   mask:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M0 0h2v2H0zM4 0h2v2H4zM0 4h2v2H0zM4 4h2v2H4zM0 8h2v2H0zM4 8h2v2H4z'/%3E%3C/svg%3E")
-    0 0 / 10px 10px repeat-x,
+      0 0 / 10px 10px repeat-x,
     linear-gradient(90deg, #000 min(120px, 50%), transparent);
   mask-composite: intersect;
 }

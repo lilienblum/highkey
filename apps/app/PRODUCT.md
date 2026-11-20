@@ -52,7 +52,6 @@ Working sample website and CLI datasets; functional ingestion/query examples; au
 
 Preserve keyboard access, semantic controls, visible focus, reduced-motion support, readable contrast, and narrow-screen layouts. These are implementation commitments inferred from the existing product requirements.
 
-
 ## Logs
 
 Events and logs are separate signals, as in PostHog: product events feed Overview and Events; application logs from services feed Logs. Logs use a dense timestamp/severity/service/message stream, a shallow volume histogram, explicit Search for drafts, shareable applied filters, and a right-hand inspector for context, attributes, and raw JSON. Follow visible/online newest results every five seconds while keeping an inspector stable. Log keys are server secrets scoped to a project/source, separate from public analytics keys. Logs default to seven-day retention independently of event retention. App-provided log content is not automatically redacted.

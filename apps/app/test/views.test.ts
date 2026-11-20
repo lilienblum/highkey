@@ -10,7 +10,6 @@ beforeEach(async () => {
 
 afterEach(() => ctx?.cleanup());
 
-// biome-ignore lint/suspicious/noExplicitAny: view documents in tests are free-form JSON.
 type Json = any;
 
 function eventView(name: string): Json {

@@ -199,14 +199,14 @@ function LogExplorer() {
     : undefined;
   const hasFilters = Boolean(
     search.logq ||
-      search.level ||
-      search.minLevel ||
-      search.logSource ||
-      moreFilters.length ||
-      search.service ||
-      search.attribute ||
-      search.environment ||
-      search.trace,
+    search.level ||
+    search.minLevel ||
+    search.logSource ||
+    moreFilters.length ||
+    search.service ||
+    search.attribute ||
+    search.environment ||
+    search.trace,
   );
   return (
     <>
@@ -231,7 +231,7 @@ function LogExplorer() {
         )}
       </PageHeader>
       <section className="logs-workspace" aria-label="Project logs">
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static design provenance, with no dynamic or user content. */}
+        {/* Static design provenance, with no dynamic or user content. */}
         <span hidden dangerouslySetInnerHTML={{ __html: `<!-- ${direction} -->` }} />
         <form className="logs-querybar" onSubmit={submit}>
           <div className="logs-search">

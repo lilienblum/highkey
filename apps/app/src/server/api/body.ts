@@ -19,14 +19,7 @@ export async function readJson(request: Request, limit = MAX_BODY_BYTES): Promis
 }
 
 export type FieldType =
-  | "string"
-  | "string?"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "string[]"
-  | "string[]?"
-  | "unknown";
+  "string" | "string?" | "number" | "integer" | "boolean" | "string[]" | "string[]?" | "unknown";
 
 type Typed<T extends Record<string, FieldType>> = {
   [K in keyof T]: T[K] extends "string"

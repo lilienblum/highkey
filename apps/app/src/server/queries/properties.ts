@@ -118,7 +118,7 @@ export function bucketGrid(from: Date, to: Date, bucket: Bucket): number[] {
     if (bucket === "month") start.setUTCDate(1);
   }
   const times: number[] = [];
-  for (const time = start; time.getTime() < to.getTime(); ) {
+  for (const time = start; time.getTime() < to.getTime();) {
     times.push(time.getTime());
     if (bucket === "hour") time.setUTCHours(time.getUTCHours() + 1);
     else if (bucket === "day") time.setUTCDate(time.getUTCDate() + 1);

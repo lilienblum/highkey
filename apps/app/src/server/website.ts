@@ -142,9 +142,10 @@ function download(
 async function fetchFrom(website: string): Promise<Uint8Array | null> {
   const url = new URL(website);
   const port = url.port || (url.protocol === "https:" ? "443" : "80");
-  if (
-    !((url.protocol === "https:" && port === "443") || (url.protocol === "http:" && port === "80"))
-  )
+  if (!(
+    (url.protocol === "https:" && port === "443") ||
+    (url.protocol === "http:" && port === "80")
+  ))
     return null;
   const host = url.hostname.replace(/^\[|\]$/g, "");
   let addresses: { address: string; family: number }[];

@@ -11,7 +11,6 @@ import type { Issue } from "../dashboards/validate";
 import { products, resolveProduct } from "../db/products";
 import { listSources, resolveSource } from "../db/sources";
 
-// biome-ignore lint/suspicious/noExplicitAny: tool arguments are checked against their schema.
 export type Args = Record<string, any>;
 export type Tool = (ctx: ApiContext, args: Args) => Promise<unknown>;
 

@@ -1,15 +1,7 @@
 // The `highkey.dashboard/v1` document, as parsed (schema defaults filled in).
 
 export type ViewKind =
-  | "stat"
-  | "line"
-  | "area"
-  | "bar"
-  | "ranking"
-  | "events"
-  | "logs"
-  | "text"
-  | "table";
+  "stat" | "line" | "area" | "bar" | "ranking" | "events" | "logs" | "text" | "table";
 export type Unit = "number" | "percent" | "ratio" | "ms" | "seconds" | "bytes";
 export type Color = "yellow" | "violet" | "aqua" | "green" | "red" | "neutral";
 

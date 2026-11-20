@@ -54,6 +54,7 @@ A single wide **Activity over time** chart follows. Choose events, identified ac
 Chart grouping is automatic in Overview and Events: ranges up to two days use hourly points; up to 31 days use daily points; up to 180 days use weekly points; longer ranges use monthly points. A note states the grouping and any partial buckets. Buckets and labels are UTC; weeks start Monday and months follow calendar boundaries. No separate interval choice is required.
 
 Distinct identities are counted within each bucket; summing bucket counts does not give a period's distinct count. Missing durations remain gaps, not zero-duration commands. Missing measurements are explained. Changing a chart measure or breakdown only loads that region. Automatic refresh retains existing values and mounted plots; errors offer a local Retry. Skullet placeholders occupy affected regions for new scopes. The chart and Breakdown retain their positions while source discovery completes. All aggregation and filtering remain server-side; duration summaries reuse the main response.
+
 ## Breakdown dimensions
 
 The **Breakdown** selector offers Top events, Sources, Clients, Pages, Commands, Referrers, Campaign sources, Campaigns, Screens, Versions, OS, and Architecture for every source. Property dimensions include all matching events; they do not silently restrict the event name. Missing values remain informational. Use Events to explicitly filter an event, inspect typed properties, or choose other groupings.
@@ -107,7 +108,6 @@ Run query indicates request activity and prevents duplicate submissions. Setting
 A newly created key remains available to copy if refreshing the key list fails. Retrying the list does not create another key. If product creation succeeds but refreshing the product selector fails, Retry loading product fetches the catalog without submitting another creation request.
 
 Placeholders use the fixed Kanagawa palette and respect reduced-motion preferences. Route placeholders have no minimum display duration, so a ready page is shown immediately.
-
 
 ## Interface icons
 

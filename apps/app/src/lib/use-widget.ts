@@ -133,7 +133,7 @@ export function useWidgetRun(
   if (attempts.current.request !== `${keyText}:${request}`)
     attempts.current = { request: `${keyText}:${request}`, count: 0 };
   // Each failed attempt schedules at most one retry; the key and request identify the series.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey is derived from keyText.
+  // queryKey is derived from keyText.
   useEffect(() => {
     if (!failure?.transient || attempts.current.count >= 3) return;
     const timer = setTimeout(

@@ -8,9 +8,8 @@
     "dev": "bun scripts/dev.ts",
     "build": "bun run build:sdk && bun run --cwd apps/app build && bun typecheck",
     "build:sdk": "bun run --cwd sdk/typescript build",
-    "fmt": "bun node_modules/@biomejs/biome/bin/biome format --write . && cargo fmt --all",
-    "fmt:check": "bun node_modules/@biomejs/biome/bin/biome format . && cargo fmt --all --check",
-    "lint": "bun node_modules/@biomejs/biome/bin/biome lint .",
+    "fmt": "bun fmt && cargo fmt --all",
+    "fmt:check": "bun fmt --no-script --check && cargo fmt --all --check",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test ./sdk ./scripts ./apps/app/test",
     "test:e2e": "bun scripts/e2e.ts",
@@ -24,7 +23,6 @@
     "dev:standalone": "bun scripts/dev-standalone.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.0",
     "@playwright/test": "^1.58.0",
     "@tailwindcss/vite": "^4.1.0",
     "@types/bun": "latest",

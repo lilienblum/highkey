@@ -66,7 +66,6 @@ export async function testContext(
 
 export interface Reply {
   status: number;
-  // biome-ignore lint/suspicious/noExplicitAny: tests read arbitrary JSON responses.
   json: any;
   headers: Headers;
   bytes: Uint8Array;

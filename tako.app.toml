@@ -13,7 +13,17 @@ install = "bun install --frozen-lockfile"
 run = "bun run build"
 # The workflow worker loads apps/app/src/workflows/ from source, with the server code it
 # imports and bunfig.toml's text loader for the dashboards guide.
-include = ["apps/app/dist/**", "apps/app/src/channels/**", "apps/app/src/workflows/**", "apps/app/src/server/**", "apps/app/src/lib/**", "apps/app/package.json", "package.json", "bun.lock", "bunfig.toml"]
+include = [
+  "apps/app/dist/**",
+  "apps/app/src/channels/**",
+  "apps/app/src/workflows/**",
+  "apps/app/src/server/**",
+  "apps/app/src/lib/**",
+  "apps/app/package.json",
+  "package.json",
+  "bun.lock",
+  "bunfig.toml",
+]
 
 [envs.development]
 # Highkey's management state: Tako serves it from .tako/data/databases/highkey.sqlite and

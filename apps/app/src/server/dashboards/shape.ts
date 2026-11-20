@@ -2,7 +2,6 @@
 // serde would: a JSON Pointer path and a message such as "unknown field `colour`". The schema
 // file is the single source of which fields exist, so the validator cannot drift from it.
 
-// biome-ignore lint/suspicious/noExplicitAny: JSON Schema documents are untyped.
 type Schema = any;
 
 export class ShapeError extends Error {

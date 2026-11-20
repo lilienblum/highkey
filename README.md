@@ -126,10 +126,9 @@ Highkey does not derive analytics identity from IP addresses or user-agent infor
 ## Checks
 
 ```sh
-bun run fmt
-bun fmt:check
+bun fmt
+bun run fmt:check
 bun typecheck
-bun lint
 bun scripts/clickhouse.ts test-up
 bun run test
 bun run build
@@ -137,7 +136,7 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-Use `bun run fmt`: bare `bun fmt` runs Bun's built-in formatter and reformats unrelated files. Likewise `bun run test` runs the SDK, script and dashboard server tests, while bare `bun test` scans only `sdk/` (the test root in `bunfig.toml`). The dashboard and Rust tests run against a disposable ClickHouse in Docker (`highkey-test-clickhouse`, in memory, on 127.0.0.1:18123); they start it themselves if it is not running, `bun scripts/clickhouse.ts test-up` starts it ahead of time, and `test-down` removes it. `cargo test` needs Bun and Docker for the same reason.
+`bun fmt` runs Bun's built-in formatter with the settings and exclusions in `bunfig.toml`, then formats Rust with `cargo fmt`. `bun run fmt:check` checks both without writing. `bun run test` runs the SDK, script and app server tests, while bare `bun test` scans only `sdk/` (the test root in `bunfig.toml`). The app and Rust tests run against a disposable ClickHouse in Docker (`highkey-test-clickhouse`, in memory, on 127.0.0.1:18123); they start it themselves if it is not running, `bun scripts/clickhouse.ts test-up` starts it ahead of time, and `test-down` removes it. `cargo test` needs Bun and Docker for the same reason.
 
 `bun run test:e2e` starts a dedicated ClickHouse (on 127.0.0.1:18124) and two dedicated Tako apps at `https://highkey-e2e.test` and `https://highkey-e2e-ingest.test`, runs real Chromium tests, then stops those apps and deletes their temporary data. Initialize local TLS and the notification secret once with `bun dev`; the preview need not be running during tests. No seed is needed. To run a subset, use `bun run test:e2e tests/analytics-chart.spec.ts`.
 

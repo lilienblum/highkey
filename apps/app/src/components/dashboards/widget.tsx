@@ -131,7 +131,7 @@ function TextWidget({ widget }: { widget: Widget }) {
  */
 function useStable<T>(value: T): T {
   const key = JSON.stringify(value);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the JSON is the value's identity
+  // The JSON is the value's identity.
   return useMemo(() => value, [key]);
 }
 
@@ -490,7 +490,7 @@ function DataTableBody({ widget, result, loading }: BodyProps) {
       <section
         className="dashboard-table"
         // A scrolling region has to be reachable without a pointer.
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard scrolling of the table
+        // Allow keyboard scrolling of the table.
         tabIndex={0}
         aria-label={widget.title}
       >
@@ -499,7 +499,6 @@ function DataTableBody({ widget, result, loading }: BodyProps) {
             <TableRow>
               {columns.map((column, index) => (
                 <TableHead
-                  // biome-ignore lint/suspicious/noArrayIndexKey: result columns may repeat a name
                   key={index}
                   data-kind={kinds[index]}
                   title={`${column.name} (${column.type})`}
@@ -512,11 +511,9 @@ function DataTableBody({ widget, result, loading }: BodyProps) {
           </TableHeader>
           <TableBody>
             {rows.map((row, rowIndex) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: result rows have no identity
               <TableRow key={rowIndex}>
                 {kinds.map((kind, index) => (
                   <TableCell
-                    // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
                     key={index}
                     data-kind={kind}
                     title={

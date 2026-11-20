@@ -194,7 +194,10 @@ A chart of an error rate, from logs over events, with a formula, thresholds and 
           "expr": "errors / requests * 100",
           "label": "Error rate",
           "color": "red",
-          "thresholds": [{ "at": 1, "color": "yellow" }, { "at": 5, "color": "red" }]
+          "thresholds": [
+            { "at": 1, "color": "yellow" },
+            { "at": 5, "color": "red" }
+          ]
         }
       ]
     }

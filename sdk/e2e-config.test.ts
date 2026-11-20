@@ -78,14 +78,10 @@ describe("browser test isolation", () => {
       },
     });
     const dashboard = Bun.TOML.parse(
-      e2eConfig(
-        await Bun.file(new URL("../tako.app.toml", import.meta.url)).text(),
-        setup.name,
-        {
-          HIGHKEY_DATA_DIR: setup.directory,
-          HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
-        },
-      ),
+      e2eConfig(await Bun.file(new URL("../tako.app.toml", import.meta.url)).text(), setup.name, {
+        HIGHKEY_DATA_DIR: setup.directory,
+        HIGHKEY_INGEST_URL: setup.env.HIGHKEY_INGEST_URL,
+      }),
     );
     expect(dashboard).toMatchObject({
       name: "highkey-e2e",

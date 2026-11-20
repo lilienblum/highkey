@@ -13,7 +13,6 @@ import {
   serializeDocument,
 } from "../src/server/dashboards/validate";
 
-// biome-ignore lint/suspicious/noExplicitAny: documents in tests are free-form JSON.
 type Json = any;
 
 const doc = (widgets: Json) => ({ version: 1, name: "Checkout health", widgets });

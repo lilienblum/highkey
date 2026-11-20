@@ -1,9 +1,18 @@
 ---
-
 version: 1
 slug: "src-components-overview-tsx"
 primary_target: "src/components/overview.tsx"
-related_targets: ["src/components/overview-widgets.tsx", "src/components/date-range-picker.tsx", "src/components/shared.tsx", "src/lib/date-range.ts", "src/lib/time-buckets.ts", "src/lib/workspace-search.ts", "src/lib/report-link.ts", "src/styles.css"]
+related_targets:
+  [
+    "src/components/overview-widgets.tsx",
+    "src/components/date-range-picker.tsx",
+    "src/components/shared.tsx",
+    "src/lib/date-range.ts",
+    "src/lib/time-buckets.ts",
+    "src/lib/workspace-search.ts",
+    "src/lib/report-link.ts",
+    "src/styles.css",
+  ]
 ---
 
 # Highkey Overview

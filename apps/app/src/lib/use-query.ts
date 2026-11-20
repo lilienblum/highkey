@@ -74,7 +74,7 @@ export function useQuery(
     attempts.current = 0;
   }
   // Each failed attempt schedules at most one retry; queryKey is derived from these deps.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey changes with product and scope, which also change `failed`.
+  // queryKey changes with product and scope, which also change `failed`.
   useEffect(() => {
     if (!failed?.transient || attempts.current >= 3) return;
     const timer = setTimeout(

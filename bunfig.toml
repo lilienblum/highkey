@@ -4,3 +4,18 @@ root = "./sdk"
 # The agent guide (guide.md) is served as text; Vite does the same with a plugin.
 [loader]
 ".md" = "text"
+
+[fmt]
+printWidth = 100
+ignorePatterns = [
+  ".claude/**",
+  "**/components/ui/**",
+  "**/routeTree.gen.ts",
+  "**/tako.d.ts",
+  "**/tako.exports.d.ts",
+  "**/tako.imports.ts",
+  "**/tako-schema.json",
+  "bun.lock",
+  "docs/benchmark-results.json",
+  "apps/app/DESIGN.md",
+]

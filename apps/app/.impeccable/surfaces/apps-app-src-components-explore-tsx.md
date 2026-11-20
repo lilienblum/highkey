@@ -1,9 +1,14 @@
 ---
-
 version: 1
 slug: "apps-dashboard-src-components-explore-tsx"
 primary_target: "apps/app/src/components/explore.tsx"
-related_targets: ["apps/app/src/components/overview.tsx","apps/app/src/components/settings.tsx","apps/app/src/components/app-shell.tsx","apps/app/src/styles.css"]
+related_targets:
+  [
+    "apps/app/src/components/overview.tsx",
+    "apps/app/src/components/settings.tsx",
+    "apps/app/src/components/app-shell.tsx",
+    "apps/app/src/styles.css",
+  ]
 ---
 
 # Highkey analytics workbench

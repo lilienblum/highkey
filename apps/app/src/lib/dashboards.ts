@@ -5,15 +5,7 @@ export type { DashboardLink };
 export type Color = "yellow" | "violet" | "aqua" | "green" | "red" | "neutral";
 export type Unit = "number" | "percent" | "ratio" | "ms" | "seconds" | "bytes";
 export type ViewKind =
-  | "stat"
-  | "line"
-  | "area"
-  | "bar"
-  | "ranking"
-  | "table"
-  | "events"
-  | "logs"
-  | "text";
+  "stat" | "line" | "area" | "bar" | "ranking" | "table" | "events" | "logs" | "text";
 export type Size = { w: 3 | 4 | 6 | 8 | 12; h: 1 | 2 | 3 };
 export type Threshold = { at: number; color: Color };
 
@@ -67,16 +59,7 @@ export type EventMeasure =
   | "min"
   | "max";
 export type LogMeasure =
-  | "count"
-  | "unique"
-  | "sum"
-  | "avg"
-  | "p50"
-  | "p90"
-  | "p95"
-  | "p99"
-  | "min"
-  | "max";
+  "count" | "unique" | "sum" | "avg" | "p50" | "p90" | "p95" | "p99" | "min" | "max";
 /** A filter value: a scalar, a list for in and not_in, or none for exists and not_exists. */
 export type FilterValue = string | number | boolean | (string | number | boolean)[];
 export type EventsQuery = {

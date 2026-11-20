@@ -18,7 +18,6 @@ import {
   testContext,
 } from "./helpers";
 
-// biome-ignore lint/suspicious/noExplicitAny: JSON-RPC bodies in tests are free-form JSON.
 type Json = any;
 
 let ctx: TestContext;

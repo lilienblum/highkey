@@ -69,8 +69,7 @@ export function logsLink(
   if (query.filters?.some((filter) => (filter.op ?? "eq") !== "eq" || !scalar(filter.value)))
     return;
   const filters = query.filters?.map(({ attribute, value }) => ({ attribute, value })) as
-    | LogViewQuery["filters"]
-    | undefined;
+    LogViewQuery["filters"] | undefined;
   const to = Date.parse(span.to);
   const from = Math.max(Date.parse(span.from), to - LOGS_SPAN_MS);
   const search: LogsSearch = {

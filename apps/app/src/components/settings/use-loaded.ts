@@ -5,7 +5,7 @@ export function useLoaded<T>(load: (signal: AbortSignal) => Promise<T>) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<string>();
   const [generation, setGeneration] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `load` is the page's own loader; `generation` asks for a reload.
+  // `load` is the page's own loader; `generation` asks for a reload.
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal).then(
