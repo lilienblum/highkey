@@ -261,6 +261,7 @@ test("a log view can be updated, renamed, copied and deleted from its menu", asy
   await expect.poll(() => viewParam(page)).toBeNull();
   const response = await fetch(
     `${endpoint}/api/read/products/${project.slug}/views/${created.slug}?kind=logs`,
+    { headers: apiHeaders() },
   );
   expect(response.status).toBe(404);
 });
