@@ -57,26 +57,29 @@ test("project select supports typeahead, keyboard selection, Escape and human-re
   );
 });
 
-test("nested source select closes before its dialog and restores keyboard focus", async ({
+test("nested source icon picker closes before its dialog and restores keyboard focus", async ({
   page,
 }) => {
   await page.goto("/settings");
   const opener = page.getByRole("button", { name: "Add source", exact: true });
   await opener.click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "Add a source", exact: true });
   await dialog.getByLabel("Source name").fill("iOS client");
-  const icon = dialog.getByRole("combobox", { name: "Icon", exact: true });
-  await expect(icon).toContainText("Automatic · iOS");
-  await icon.press("ArrowDown");
-  await page.keyboard.type("Website");
+  const icon = dialog.getByRole("button", { name: /^Source icon:/ });
+  await expect(icon).toHaveAccessibleName("Source icon: Automatic · iOS");
+  await icon.press("Enter");
+  const picker = page.getByRole("dialog", { name: "Source icon", exact: true });
+  await picker.getByRole("button", { name: "Website", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(icon).toContainText("Website");
-  await icon.press("ArrowDown");
+  await expect(icon).toHaveAccessibleName("Source icon: Website");
+  await icon.press("Enter");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("listbox")).not.toBeVisible();
+  await expect(picker).not.toBeVisible();
   await expect(dialog).toBeVisible();
   await expect(icon).toBeFocused();
   await dialog.getByRole("button", { name: "Close", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(icon).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByLabel("Source name")).toBeFocused();
   await page.keyboard.press("Escape");

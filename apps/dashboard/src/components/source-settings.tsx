@@ -17,7 +17,7 @@ export function SourceSettings({ product }: { product: Product }) {
   const { reload } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Source>();
-  const [draft, setDraft] = useState<{ name: string; icon: SourceIconId | null }>({
+  const [draft, setDraft] = useState<SourceDraft>({
     name: "",
     icon: null,
   });
@@ -115,30 +115,7 @@ export function SourceSettings({ product }: { product: Product }) {
           </DialogHeader>
           <form onSubmit={save} aria-busy={busy}>
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="source-name">Source name</FieldLabel>
-                <Input
-                  id="source-name"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="e.g. Website, iOS app, CLI"
-                  required
-                  maxLength={80}
-                  disabled={busy || saved}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="source-icon">Icon</FieldLabel>
-                <SourceIconPicker
-                  name={draft.name}
-                  value={draft.icon}
-                  onChange={(icon) => setDraft({ ...draft, icon })}
-                  disabled={busy || saved}
-                />
-                <FieldDescription>
-                  Automatic follows the source name. Icons only change its appearance.
-                </FieldDescription>
-              </Field>
+              <SourceFields value={draft} onChange={setDraft} disabled={busy || saved} />
             </FieldGroup>
             {error && <ErrorState message={error} />}
             <Button type="submit" className="mt-6" disabled={busy}>
@@ -155,5 +132,50 @@ export function SourceSettings({ product }: { product: Product }) {
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+export type SourceDraft = { name: string; icon: SourceIconId | null };
+
+/**
+ * A source's name and icon, as adding or editing one asks for them: the icon follows the name
+ * until one is chosen. The settings dialog and the new-project page share it.
+ */
+export function SourceFields({
+  value,
+  onChange,
+  disabled,
+  label = "Source name",
+  hint,
+}: {
+  value: SourceDraft;
+  onChange: (value: SourceDraft) => void;
+  disabled?: boolean;
+  label?: string;
+  hint?: string;
+}) {
+  return (
+    <Field data-disabled={disabled}>
+      <FieldLabel htmlFor="source-name">{label}</FieldLabel>
+      <div className="flex items-center gap-2">
+        <SourceIconPicker
+          name={value.name}
+          value={value.icon}
+          onChange={(icon) => onChange({ ...value, icon })}
+          disabled={disabled}
+        />
+        <Input
+          id="source-name"
+          value={value.name}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+          placeholder="e.g. Website, iOS app, CLI"
+          aria-describedby={hint ? "source-name-hint" : undefined}
+          required
+          maxLength={80}
+          disabled={disabled}
+        />
+      </div>
+      {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
+    </Field>
   );
 }

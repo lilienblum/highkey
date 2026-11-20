@@ -46,9 +46,9 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await expect(page.getByLabel("Project name")).toHaveValue(name);
   await page.getByRole("button", { name: "Edit source Events", exact: true }).click();
   await dialog.getByLabel("Source name").fill("Website");
-  await expect(dialog.getByRole("combobox", { name: "Icon", exact: true })).toContainText(
-    "Automatic · Website",
-  );
+  await expect(
+    dialog.getByRole("button", { name: "Source icon: Automatic · Website" }),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Save source", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.getByLabel("New key label").fill("Website key");
@@ -190,6 +190,7 @@ test("source creation retries a failed catalog refresh without creating the sour
   await dialog.getByRole("button", { name: "Create source", exact: true }).click();
   await expect(dialog.getByText(/Source saved. Could not refresh/)).toBeVisible();
   await expect(dialog.getByLabel("Source name")).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: /^Source icon:/ })).toBeDisabled();
   fail = false;
   await dialog.getByRole("button", { name: "Retry loading source", exact: true }).click();
   await expect(dialog).not.toBeVisible();
@@ -230,14 +231,26 @@ test("automatic and pinned source icons survive renames without changing analyti
   await page.goto("/settings");
   await select(page, "Select project", project.name);
   await page.getByRole("button", { name: "Add source", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  const icon = dialog.getByRole("combobox", { name: "Icon", exact: true });
+  const dialog = page.getByRole("dialog", { name: /^(Add a source|Edit source)$/ });
+  const icon = dialog.getByRole("button", { name: /^Source icon:/ });
   await dialog.getByLabel("Source name").fill("Orbit iOS");
-  await expect(icon).toContainText("Automatic · iOS");
+  await expect(icon).toHaveAccessibleName("Source icon: Automatic · iOS");
   await expect(icon.locator("[data-source-icon]")).toHaveAttribute("data-source-icon", "ios");
-  await select(page, "Icon", "Android");
+  await icon.click();
+  const picker = page.getByRole("dialog", { name: "Source icon", exact: true });
+  await expect(picker.getByRole("button", { name: "Automatic", exact: true })).toBeFocused();
+  await picker.getByRole("button", { name: "Website", exact: true }).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(picker.getByRole("button", { name: "Terminal", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(picker.getByRole("button", { name: "Android", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(picker).not.toBeVisible();
+  await expect(icon).toBeFocused();
   await dialog.getByLabel("Source name").fill("Orbit Website");
-  await expect(icon).toContainText("Android");
+  await expect(icon).toHaveAccessibleName("Source icon: Android");
   await dialog.getByRole("button", { name: "Create source", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.reload();
@@ -245,9 +258,20 @@ test("automatic and pinned source icons survive renames without changing analyti
     page.locator(".source-row").filter({ hasText: "Orbit Website" }).locator("[data-source-icon]"),
   ).toHaveAttribute("data-source-icon", "android");
   await page.getByRole("button", { name: "Edit source Orbit Website", exact: true }).click();
-  await expect(icon).toContainText("Android");
+  await expect(icon).toHaveAccessibleName("Source icon: Android");
+  await icon.click();
+  await expect(picker.getByRole("button", { name: "Android", exact: true })).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(picker.getByRole("button", { name: "Cube", exact: true })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(picker.getByRole("button", { name: "Website", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(picker).not.toBeVisible();
+  await expect(icon).toBeFocused();
+  await expect(dialog).toBeVisible();
   await dialog.getByLabel("Source name").fill("Orbit CLI");
-  await select(page, "Icon", "Automatic · Terminal");
+  await icon.click();
+  await picker.getByRole("button", { name: "Automatic", exact: true }).click();
   await dialog.getByRole("button", { name: "Save source", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.reload();
@@ -277,7 +301,7 @@ test("automatic and pinned source icons survive renames without changing analyti
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Edit source Orbit CLI", exact: true }).click();
   await dialog.getByLabel("Source name").fill("Orbit iOS");
-  await expect(icon).toContainText("Automatic · iOS");
+  await expect(icon).toHaveAccessibleName("Source icon: Automatic · iOS");
   await dialog.getByRole("button", { name: "Save source", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.getByRole("link", { name: "Overview", exact: true }).click();

@@ -359,6 +359,21 @@ h3,
 ):active {
   --button-tone: var(--tone-75);
 }
+.source-icon-trigger[data-variant] {
+  --button-face: var(--surface-inset);
+  --button-drop: 0 0 #0000;
+  --button-bevel: inset 0 1px 2px rgb(0 0 0 / 20%);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+}
+.source-icon-choice[data-variant] {
+  border-radius: var(--radius-md);
+}
+.source-icon-choice[aria-pressed="true"] {
+  --button-face: var(--selection);
+  color: var(--selection-foreground);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
 /*
  * Overlays: the one place a tone sits over translucency. A sparse 25% dot screen over a sumi dim
  * keeps the printed texture without a full-screen high-frequency checker.
