@@ -30,7 +30,7 @@ async function activeOrganization(page: import("@playwright/test").Page) {
   });
 }
 
-test("sign up and land in your own organization", async ({ page }) => {
+test("sign up and land in your own organization, ready for a first project", async ({ page }) => {
   const email = `newcomer-${Date.now()}@example.com`;
   await page.goto("/");
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
@@ -40,8 +40,9 @@ test("sign up and land in your own organization", async ({ page }) => {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(`${base}/`);
-  await expect(page.locator(".workspace-sidebar")).toBeVisible();
+  // A new organization has no projects yet: its first page creates one.
+  await expect(page).toHaveURL(`${base}/new`);
+  await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
   expect(await activeOrganization(page)).toBeTruthy();
 });
 
@@ -73,8 +74,8 @@ test("sign in with a two-factor code", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("isn’t right");
   await page.getByRole("textbox", { name: "Code" }).fill(totpCode(totpURI));
   await page.getByRole("button", { name: "Verify" }).click();
-  await expect(page).toHaveURL(`${base}/`);
-  await expect(page.locator(".workspace-sidebar")).toBeVisible();
+  await expect(page).toHaveURL(`${base}/new`);
+  await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
 });
 
 test("accept an invitation as a new person", async ({ page }) => {
@@ -84,6 +85,14 @@ test("accept an invitation as a new person", async ({ page }) => {
     extraHTTPHeaders: { origin: base },
   });
   const email = `guest-${Date.now()}@example.com`;
+  // The organization has a project, so joining opens its workspace.
+  expect(
+    (
+      await owner.post("/api/products", {
+        data: { name: `Guest view ${Date.now()}`, retention_days: 30 },
+      })
+    ).ok(),
+  ).toBe(true);
   const invited = await owner.post("/api/auth/organization/invite-member", {
     data: { email, role: "viewer" },
   });

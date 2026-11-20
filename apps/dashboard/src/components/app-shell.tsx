@@ -18,14 +18,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import {
-  Link,
-  Outlet,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearch,
-} from "@tanstack/react-router";
+import { Outlet, useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -530,7 +523,7 @@ export function NoProduct() {
             Create a project to get its own analytics and ingestion keys.
           </EmptyDescription>
         </EmptyHeader>
-        <Button nativeButton={false} role="link" render={<Link to="/settings" />}>
+        <Button nativeButton={false} role="link" render={<a href="/new" />}>
           <HugeiconsIcon
             icon={Add01Icon}
             strokeWidth={2}

@@ -14,7 +14,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { getWorkspace } from "@/server/workspace";
 import { activateOrganization, getViewer, type Viewer } from "@/server/viewer";
-import { ACCOUNT_SETTINGS, isAccountScreen, isPublicPath } from "@/lib/auth-routes";
+import {
+  ACCOUNT_SETTINGS,
+  isAccountScreen,
+  isPublicPath,
+  NEW_PROJECT,
+  needsOrganization,
+  needsProject,
+} from "@/lib/auth-routes";
 import { setPageOrganization } from "@/lib/api";
 import type { ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
@@ -62,7 +69,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       if (await activateOrganization({ data: target.id }))
         viewer = rememberViewer({ ...viewer, activeOrganizationId: target.id });
     }
-    if (!isAccountScreen(location.pathname) && location.pathname !== ACCOUNT_SETTINGS) {
+    if (needsOrganization(location.pathname)) {
       // Without an organization, the person joins or creates one first.
       if (viewer.organizations.length === 0) throw redirect({ href: "/welcome" });
       // An organization requiring two-factor codes opens once the person has turned them on.
@@ -74,17 +81,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   },
   // The project catalog renders on the server and is reused by client navigation; mutations
   // refresh it in the shell, and the workspace error screen retries it with router.invalidate().
-  // Account screens show no workspace, so they load none; account settings open without one.
+  // Account screens show no workspace, so they load none (the new-project page excepted);
+  // account settings open without one.
   loader: async ({ location }) => {
-    if (isAccountScreen(location.pathname)) return { initialProducts: [], serverNow: Date.now() };
+    const path = location.pathname;
+    if (isAccountScreen(path) && path !== NEW_PROJECT)
+      return { initialProducts: [], serverNow: Date.now() };
     const workspace = await getWorkspace();
     if ("blocked" in workspace) {
-      if (location.pathname !== ACCOUNT_SETTINGS)
+      if (path !== ACCOUNT_SETTINGS)
         throw redirect({
           href: workspace.blocked === "two_factor_required" ? ACCOUNT_SETTINGS : "/welcome",
         });
       return { initialProducts: [], serverNow: Date.now() };
     }
+    // An organization without projects starts by creating one; its settings stay open.
+    if (workspace.products.length === 0 && needsProject(path))
+      throw redirect({ href: NEW_PROJECT });
     return { initialProducts: workspace.products, serverNow: Date.now() };
   },
   staleTime: Number.POSITIVE_INFINITY,
@@ -165,19 +178,6 @@ function Shell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <template
-          data-design-contract="kanagawa-wave"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: static build-time design provenance; no dynamic or user content.
-          dangerouslySetInnerHTML={{
-            __html: `<!--
-THESIS: Highkey is a compact measurement tool with a graphic identity; evidence remains the main content.
-OWN-WORLD: One Kanagawa Wave palette: sumi-ink surfaces, warm Fuji text, Surimi Orange actions, Carp Yellow measurements, violet/aqua categories, and green outcomes. Geist, softly squared controls, inset fields, single-frame segments, and the upright three-bar mark.
-STORY: Choose project, source and dates; follow an event trend; inspect the evidence; manage collection. Identity stays optional.
-FIRST VIEWPORT: Keep the project/source rail and report controls. Overview uses six square analytical widgets; Events keeps its query, chart, breakdown and event stream; Logs keeps its query bar and volume above a virtualized log stream.
-FORM: User-selected Kanagawa Wave palette from the official rebelot/kanagawa.nvim source. One static dark theme with no selector or preference. Rebuilt shadcn Base UI defaults: semantic state tokens, 6px controls, 12px cards, warm selection, and soft overlay shadows. Preserve the approved layouts and behavior; this is an existing-world component redesign, not a new surface concept.
--->`,
-          }}
-        />
         {children}
         <Scripts />
       </body>

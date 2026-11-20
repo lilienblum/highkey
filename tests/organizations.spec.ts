@@ -160,8 +160,9 @@ test.describe("no dead ends", () => {
     await expect(page.getByRole("button", { name: "Create organization" })).toBeEnabled();
     await page.getByLabel("Organization name").fill(`Newcomer ${run}`);
     await page.getByRole("button", { name: "Create organization" }).click();
-    await expect(page).toHaveURL(new RegExp(`/newcomer-${run}`));
-    await expect(page.locator(".organization-trigger")).toContainText(`Newcomer ${run}`);
+    // The new organization has no projects yet.
+    await expect(page).toHaveURL(`${base}/new`);
+    await expect(page.getByRole("main")).toContainText(`Newcomer ${run}`);
     await context.close();
   });
 
@@ -200,6 +201,77 @@ test.describe("no dead ends", () => {
     await expect(page).toHaveURL(`${base}/settings/account`);
     await expect(page.getByText(`${home.name} requires two-factor codes`)).toBeVisible();
     await expect(page.getByRole("button", { name: "Set up two-factor codes" })).toBeVisible();
+    await context.close();
+  });
+});
+
+// An organization without projects opens on creating its first one, wherever the person goes.
+test.describe("first project", () => {
+  test("an organization without projects opens the new-project page", async ({ browser }) => {
+    const email = `first-light-${run}@example.com`;
+    const api = await signUp(email);
+    const [org] = (await (await api.get("/api/auth/organization/list")).json()) as {
+      slug: string;
+      name: string;
+    }[];
+    const context = await browser.newContext({ storageState: await api.storageState() });
+    const page = await context.newPage();
+    // Organization settings stay reachable without a project.
+    await page.goto("/settings/members");
+    await expect(page).toHaveURL(`${base}/settings/members`);
+    await page.goto("/events");
+    await expect(page).toHaveURL(`${base}/new`);
+    await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
+    await expect(page.getByRole("main")).toContainText(org?.name as string);
+    await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
+    await page.getByLabel("Project name").fill(`First light ${run}`);
+    // Its source is named on the same screen, with an icon of its own.
+    await page.getByLabel("Source", { exact: true }).fill("Website");
+    await page
+      .getByRole("button", { name: "Source icon: Automatic · Website", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Create project" }).click();
+    // The same page then shows how to connect it: the source's new key in a snippet, and the
+    // agent's MCP setup.
+    await expect(page.getByRole("heading", { name: "Connect Website" })).toBeVisible();
+    await expect(page).toHaveURL(`${base}/new`);
+    const key = (await page.getByTestId("ingestion-key").textContent()) as string;
+    expect(key).toMatch(/^pk_/);
+    await expect(page.locator(".integration-code")).toContainText(key);
+    await expect(
+      page.getByText(`claude mcp add --transport http highkey ${base}/mcp`),
+    ).toBeVisible();
+    await page.getByRole("link", { name: `Open First light ${run}` }).click();
+    await expect(page).toHaveURL(new RegExp(`/${org?.slug}/first-light-${run}`));
+    await expect(page.locator(".workspace-project")).toContainText(`First light ${run}`);
+    const sources = page.getByRole("navigation", { name: "Project sources" });
+    await expect(sources).toContainText("Website");
+    await expect(sources.locator('[data-source-icon="terminal"]')).toHaveCount(1);
+    await context.close();
+  });
+
+  test("a member is told who can create the first project", async ({ browser }) => {
+    const owner = await signUp(`empty-owner-${run}@example.com`);
+    const [org] = (await (await owner.get("/api/auth/organization/list")).json()) as {
+      id: string;
+    }[];
+    const email = `empty-member-${run}@example.com`;
+    const invitation = await invite(owner, org?.id as string, email);
+    const member = await signUp(email);
+    expect(
+      (
+        await member.post("/api/auth/organization/accept-invitation", {
+          data: { invitationId: invitation.id },
+        })
+      ).ok(),
+    ).toBe(true);
+    const context = await browser.newContext({ storageState: await member.storageState() });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page).toHaveURL(`${base}/new`);
+    await expect(page.getByText("Ask an owner or admin to create one")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create project" })).toHaveCount(0);
     await context.close();
   });
 });

@@ -20,6 +20,7 @@ import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as NewRouteImport } from './routes/new'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SelectOrganizationRouteImport } from './routes/select-organization'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -103,6 +104,11 @@ const LogsRoute = LogsRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewRoute = NewRouteImport.update({
+  id: '/new',
+  path: '/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -267,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/new': typeof NewRoute
   '/reset-password': typeof ResetPasswordRoute
   '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
@@ -308,6 +315,7 @@ export interface FileRoutesByTo {
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/new': typeof NewRoute
   '/reset-password': typeof ResetPasswordRoute
   '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
@@ -350,6 +358,7 @@ export interface FileRoutesById {
   '/llms.txt': typeof LlmsDottxtRoute
   '/logs': typeof LogsRoute
   '/mcp': typeof McpRoute
+  '/new': typeof NewRoute
   '/reset-password': typeof ResetPasswordRoute
   '/select-organization': typeof SelectOrganizationRoute
   '/settings': typeof SettingsRoute
@@ -394,6 +403,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/new'
     | '/reset-password'
     | '/select-organization'
     | '/settings'
@@ -435,6 +445,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/new'
     | '/reset-password'
     | '/select-organization'
     | '/settings'
@@ -476,6 +487,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/logs'
     | '/mcp'
+    | '/new'
     | '/reset-password'
     | '/select-organization'
     | '/settings'
@@ -519,6 +531,7 @@ export interface RootRouteChildren {
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LogsRoute: typeof LogsRoute
   McpRoute: typeof McpRoute
+  NewRoute: typeof NewRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SelectOrganizationRoute: typeof SelectOrganizationRoute
   SettingsRoute: typeof SettingsRoute
@@ -619,6 +632,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/new': {
+      id: '/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof NewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -874,6 +894,7 @@ const rootRouteChildren: RootRouteChildren = {
   LlmsDottxtRoute: LlmsDottxtRoute,
   LogsRoute: LogsRoute,
   McpRoute: McpRoute,
+  NewRoute: NewRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SelectOrganizationRoute: SelectOrganizationRoute,
   SettingsRoute: SettingsRoute,
