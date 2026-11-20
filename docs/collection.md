@@ -8,7 +8,7 @@ Identity remains optional and scoped to the project and identity kind. No person
 
 ## JavaScript and TypeScript SDK
 
-Use the [`@highkey/sdk` package](../sdk/typescript/README.md) in a website, Bun tool, or server. It ships JavaScript and TypeScript declarations with no runtime dependencies. The package guide covers local installation until registry publication. Existing source imports from `sdk/typescript/client.ts` also remain supported. Create a project and choose or add a source in Settings, then create an ingestion key for that source. Use only source-scoped ingestion keys in collectors; management access remains separate. For websites, use the browser tracker below to apply privacy signals and opt-out behavior. The generic client sends explicit calls and does not manage collection preferences.
+Use the [`@highkey/sdk` package](../sdk/typescript/README.md) in a website, Bun tool, or server. It ships JavaScript and TypeScript declarations with no runtime dependencies. The package guide covers local installation until registry publication. Existing source imports from `sdk/typescript/client.ts` also remain supported. Create a project (an organization's first project is created on `/new`, with a source and that source's ingestion key) and choose or add a source in Settings, then create an ingestion key for that source. Use only source-scoped ingestion keys in collectors; management access remains separate. For websites, use the browser tracker below to apply privacy signals and opt-out behavior. The generic client sends explicit calls and does not manage collection preferences.
 
 ```ts
 import { Highkey } from "@highkey/sdk";

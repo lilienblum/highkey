@@ -55,7 +55,7 @@ Changing identity to `none` stops using IDs but does not itself erase IDs from a
 
 ## Retention and deletion
 
-Retention is configured per project in Settings and applies to all its sources. New projects created in Settings default to one year (365 days). Changing the default for new projects does not shorten existing projects' configured retention. Each row expires at its event time plus the retention, and ClickHouse deletes expired rows during background merges, so a row can outlast its retention until the next merge; `POST /api/cleanup` forces one. Shortening retention rewrites the expiry of the project's stored rows. Deletion is not a secure disk erase. Backups and snapshots require their own retention policy.
+Retention is configured per project in Settings and applies to all its sources. New projects default to one year (365 days). Changing the default for new projects does not shorten existing projects' configured retention. Each row expires at its event time plus the retention, and ClickHouse deletes expired rows during background merges, so a row can outlast its retention until the next merge; `POST /api/cleanup` forces one. Shortening retention rewrites the expiry of the project's stored rows. Deletion is not a secure disk erase. Backups and snapshots require their own retention policy.
 
 Application logs contain the messages, trace/request IDs, and typed attributes supplied by your services or OTLP collector. Highkey does not automatically redact or anonymize them. Apply redaction and sampling in the sending application or collector, and keep `pl_` log keys in server configuration. Logs live in their own table and follow their own retention policy. Existing backups retain data until you remove them independently.
 

@@ -87,7 +87,7 @@ Dashboard settings:
 
 ## Use it
 
-1. **Settings:** create a project, then add named **sources** such as Website, iOS app, or CLI. All sources use the same analytics UI. Icons follow the source name automatically, or can be chosen from a predefined Hugeicons set; no URL is needed. Create a key for a specific source and copy it while visible. Only its SHA-256 hash and display prefix are stored.
+1. **First project:** an organization without projects opens on `/new`, which creates the project, a named **source** (such as Website, iOS app, or CLI) and that source's ingestion key, then shows the snippet to paste and how to connect your agent over MCP. **Settings:** create more projects, then add more **sources**. All sources use the same analytics UI. Icons follow the source name automatically, or can be chosen from a predefined Hugeicons set; no URL is needed. Create a key for a specific source and copy it while visible. Only its SHA-256 hash and display prefix are stored.
 2. **Overview:** select a project, source (or **All sources**), and date range. Every source has the same widgets and query choices; Overview includes all event names. A combined project shares storage and retention. Missing identity or duration is shown honestly as unavailable.
 3. **Events:** select an event, measure, grouping, and optional typed property filter. Counts, distinct actors, numeric sum/average/min/max, and p50/p95 run in ClickHouse. Charts, grouping, filtering, and event pagination are server-side. Click an event for its original typed envelope.
 4. **Logs:** search messages, filter by severity, service, and context, inspect structured records, and follow live logs. Services send structured JSON or OTLP/HTTP with separate `pl_` log keys created in Settings → Logs. Logs live in ClickHouse apart from events, with an independent seven-day default retention. See [application logs](docs/logs.md).
@@ -119,7 +119,7 @@ Both support typed properties, batches, stable event IDs across bounded retries,
 
 ## Privacy defaults
 
-Collection starts without visitor, session, or installation identifiers. The browser tracker honors DNT/GPC, leaves campaign capture off until explicitly configured, and offers pre-send filtering plus an opt-out that discards queued data. The CLI example requires an explicit opt-in. New projects created in Settings start with one-year retention (365 days). Retention is configurable per project in Settings; existing projects keep their configured value.
+Collection starts without visitor, session, or installation identifiers. The browser tracker honors DNT/GPC, leaves campaign capture off until explicitly configured, and offers pre-send filtering plus an opt-out that discards queued data. The CLI example requires an explicit opt-in. New projects start with one-year retention (365 days). Retention is configurable per project in Settings; existing projects keep their configured value.
 
 Highkey does not derive analytics identity from IP addresses or user-agent information. Paths, custom properties, and optional persistent IDs are still data you choose to collect; they are not automatically anonymized. ClickHouse is the isolation boundary between projects, so keep it upgraded. Read [the privacy model and collection controls](docs/privacy.md) before integrating private application routes.
 
