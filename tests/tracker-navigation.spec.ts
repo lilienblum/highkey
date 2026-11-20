@@ -187,3 +187,78 @@ test("titles and hash routes go through sanitizers and stop collecting on opt-ou
     await f.server.stop(true);
   }
 });
+
+test("deferred events keep bounded snapshots without identity or delivery until ready", async ({
+  page,
+}) => {
+  const f = await fixture(
+    page,
+    `defer: true, identity: 'persistent', capacity: 4, properties: {version: 'one'},
+     filter: event => {
+       if (event.name === 'throw') throw new Error('filter failed');
+       return event.name !== 'drop';
+     }`,
+  );
+  try {
+    const before = await page.evaluate(async () => {
+      window.tracker.track("early", { version: "override" });
+      const properties = { version: "two" };
+      window.tracker.setProperties(properties);
+      properties.version = "mutated";
+      window.tracker.track("later");
+      const dropped = window.tracker.track("drop");
+      const threw = window.tracker.track("throw");
+      const last = window.tracker.track("last");
+      const full = window.tracker.track("overflow");
+      await window.tracker.flush();
+      dispatchEvent(new Event("pagehide"));
+      return { dropped, threw, last, full, storage: Object.keys(localStorage) };
+    });
+    expect(before).toEqual({ dropped: false, threw: false, last: true, full: false, storage: [] });
+    expect(f.events).toEqual([]);
+    await page.evaluate(async () => {
+      window.tracker.ready();
+      await window.tracker.flush();
+      window.tracker.ready();
+      window.tracker.track("identified");
+      await window.tracker.shutdown();
+    });
+    expect(f.events.map((event) => event.properties?.version)).toEqual([
+      "one",
+      "override",
+      "two",
+      "two",
+      "two",
+    ]);
+    for (const event of f.events.slice(0, 4)) {
+      expect(event.actor_id).toBeUndefined();
+      expect(event.session_id).toBeUndefined();
+    }
+    expect(f.events[4].actor_id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(f.events[4].session_id).toMatch(/^[a-f0-9-]{36}$/);
+  } finally {
+    await f.server.stop(true);
+  }
+});
+
+for (const stop of ["optOut", "shutdown"] as const) {
+  test(`${stop} discards deferred collection without allowing ready to revive it`, async ({
+    page,
+  }) => {
+    const f = await fixture(page, "defer: true, identity: 'persistent'");
+    try {
+      const ready = await page.evaluate(async (stop) => {
+        window.tracker.track("queued");
+        await window.tracker[stop]();
+        const ready = window.tracker.ready();
+        await window.tracker.flush();
+        return ready;
+      }, stop);
+      expect(ready).toBe(false);
+      expect(f.events).toEqual([]);
+      expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+    } finally {
+      await f.server.stop(true);
+    }
+  });
+}

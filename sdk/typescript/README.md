@@ -69,4 +69,6 @@ The tracker honors DNT/GPC, collects no identity or campaign parameters by defau
 
 Opt-in click collection supports `trackOutboundLinks: true` (`link_out` events with a stripped destination URL and link text) and `trackAttributes: true` (`data-track` event names with other dataset values as string properties). Both obey the same privacy controls and leave navigation alone.
 
+Use `properties` and `tracker.setProperties()` for shared properties, and `filter` for an event predicate before `beforeSend`. `defer: true` queues in memory without delivery or identity storage until `tracker.ready()`; opting out or shutting down first discards that queue. `enabled: false` still means no collection.
+
 See [the collection guide](https://github.com/lilienblum/piko/blob/v0/docs/collection.md) for identity, lifecycle, privacy controls, and the hosted `/tracker.js` option.

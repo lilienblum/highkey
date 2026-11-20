@@ -9,6 +9,9 @@ const campaignParams = [
 export type CampaignParam = (typeof campaignParams)[number];
 export type BrowserOptions = Options & {
   enabled?: boolean;
+  defer?: boolean;
+  properties?: Properties;
+  filter?: (event: Event) => boolean;
   identity?: "none" | "persistent";
   identityScope?: string;
   campaigns?: readonly CampaignParam[];
@@ -31,6 +34,8 @@ export function startBrowserTracker(options: BrowserOptions) {
   let running: Promise<void> | undefined;
   let stopped = false;
   let optedOut = false;
+  let deferred = options.defer === true;
+  let globalProperties = { ...options.properties };
   let actor: string | undefined;
   let cleanup = () => {};
   const privacyBlocked = () =>
@@ -87,10 +92,11 @@ export function startBrowserTracker(options: BrowserOptions) {
       timestamp: new Date().toISOString(),
       name,
       source: "browser",
-      properties: { ...properties },
+      properties: { ...globalProperties, ...properties },
       ...identity(),
     };
     try {
+      if (options.filter && !options.filter(event)) return false;
       const accepted = options.beforeSend ? options.beforeSend(event) : event;
       if (!accepted || !canTrack()) return false;
       queue.push({ ...accepted, properties: { ...accepted.properties } });
@@ -131,6 +137,7 @@ export function startBrowserTracker(options: BrowserOptions) {
       optOut();
       return Promise.resolve();
     }
+    if (deferred) return Promise.resolve();
     if (running) return running;
     const batch = queue.splice(0, 20);
     if (!batch.length) return Promise.resolve();
@@ -158,8 +165,22 @@ export function startBrowserTracker(options: BrowserOptions) {
     pageView,
     flush,
     optOut,
+    setProperties(properties: Properties) {
+      if (!canTrack()) return false;
+      globalProperties = { ...properties };
+      return true;
+    },
+    ready() {
+      if (!canTrack()) return false;
+      if (!deferred) return true;
+      deferred = false;
+      initializeIdentity();
+      void flush();
+      return true;
+    },
     async shutdown() {
       stop();
+      if (deferred) queue.length = 0;
       if (optedOut || (!queue.length && !running)) return;
       // Drain accepted events without letting multiple batches extend shutdown's deadline.
       const timer = setTimeout(() => {
@@ -187,7 +208,8 @@ export function startBrowserTracker(options: BrowserOptions) {
     keepalive: true,
     signal: options.signal ? AbortSignal.any([options.signal, delivery.signal]) : delivery.signal,
   });
-  if (options.identity === "persistent") {
+  function initializeIdentity() {
+    if (options.identity !== "persistent") return;
     try {
       const stored = localStorage.getItem(`${namespace}:visitor`) ?? crypto.randomUUID();
       localStorage.setItem(`${namespace}:visitor`, stored);
@@ -196,6 +218,7 @@ export function startBrowserTracker(options: BrowserOptions) {
       /* Storage denied: anonymous events, no fingerprint fallback. */
     }
   }
+  if (!deferred) initializeIdentity();
   const navigationKey = () =>
     location.pathname + location.search + (options.trackHashChanges ? location.hash : "");
   let previous = navigationKey();

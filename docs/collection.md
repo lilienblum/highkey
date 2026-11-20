@@ -91,6 +91,14 @@ On withdrawal, call `tracker.optOut()`. It stops collection, removes hooks/timer
 
 The pending queue holds 100 events, sends batches of up to 20 (targeting 60 KiB of JSON), and flushes every two seconds. Full queues drop new events. Delivery uses keepalive fetch for bodies up to 64 KiB and ordinary fetch for larger bodies, with a short total deadline. Ordinary fetch cannot outlive page unload, and browser shutdown may lose events. `flush()` attempts one bounded batch. `shutdown()` stops collection and drains queued batches within one total `timeoutMs` deadline (800 ms by default), discarding anything still pending at the deadline. Neither guarantees delivery. `shutdown()` is a normal lifecycle flush; use **`optOut()`** for privacy withdrawal. Install only one tracker instance per page.
 
+### Shared properties and deferred delivery
+
+Set `properties: { app_version: "1.2" }` to attach reviewed properties to every event. Event-specific values override them. `tracker.setProperties({...})` replaces the shared properties for future events; queued events keep their original values. `filter: event => boolean` rejects unwanted events before `beforeSend`; a thrown filter error also drops the event.
+
+`defer: true` keeps accepted events in the same bounded, in-memory queue until `tracker.ready()` enables delivery. No visitor/session storage is read or written before `ready()`, and queued events are not retroactively identified. DNT/GPC and `enabled: false` remain absolute collection blocks. `flush()` and unload cannot send a deferred queue; shutting down or opting out before readiness discards it.
+
+Use deferred delivery only when your application's policy permits collecting in memory while waiting. For no collection before permission, keep `enabled: false` or wait to create the tracker. Calling `ready()` cannot revive an opted-out, disabled, or shut-down tracker.
+
 ## Rust SDK
 
 Use the standalone [`highkey-sdk` crate](../sdk/rust/README.md) for new Rust integrations. It uses reqwest/rustls, Tokio, serde/serde_json, uuid, and chrono; it has no dependency on Highkey's server or databases.
