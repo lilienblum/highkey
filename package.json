@@ -6,20 +6,20 @@
   "packageManager": "bun@1.4.4",
   "scripts": {
     "dev": "bun scripts/dev.ts",
-    "build": "bun run build:sdk && bun run --cwd apps/dashboard build && bun typecheck",
+    "build": "bun run build:sdk && bun run --cwd apps/app build && bun typecheck",
     "build:sdk": "bun run --cwd sdk/typescript build",
     "fmt": "bun node_modules/@biomejs/biome/bin/biome format --write . && cargo fmt --all",
     "fmt:check": "bun node_modules/@biomejs/biome/bin/biome format . && cargo fmt --all --check",
     "lint": "bun node_modules/@biomejs/biome/bin/biome lint .",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
-    "test": "bun test ./sdk ./scripts ./apps/dashboard/test",
+    "test": "bun test ./sdk ./scripts ./apps/app/test",
     "test:e2e": "bun scripts/e2e.ts",
     "test:load": "bun scripts/load-test.ts",
     "benchmark:logs": "bun scripts/benchmark-logs.ts",
     "benchmark": "bun scripts/benchmark.ts",
     "seed": "bun scripts/seed.ts",
-    "migrate": "bun apps/dashboard/src/server/clickhouse/migrate-cli.ts",
-    "dev:dashboard": "bun run --cwd apps/dashboard dev",
+    "migrate": "bun apps/app/src/server/clickhouse/migrate-cli.ts",
+    "dev:app": "bun run --cwd apps/app dev",
     "dev:stop": "bun scripts/dev.ts --stop",
     "dev:standalone": "bun scripts/dev-standalone.ts"
   },
@@ -37,7 +37,7 @@
     "vite": "^8.3.5"
   },
   "workspaces": [
-    "apps/dashboard",
+    "apps/app",
     "sdk/typescript"
   ],
   "license": "MIT",

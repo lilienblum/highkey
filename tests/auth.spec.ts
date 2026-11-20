@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { expect, request, test } from "@playwright/test";
-import { totpCode } from "../apps/dashboard/test/totp";
+import { totpCode } from "../apps/app/test/totp";
 import { E2E_STATE } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;

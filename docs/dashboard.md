@@ -111,7 +111,7 @@ Placeholders use the fixed Kanagawa palette and respect reduced-motion preferenc
 
 ## Interface icons
 
-Highkey uses the free Stroke Rounded set from [Hugeicons](https://hugeicons.com/), rendered with `@hugeicons/react`. Import named icon data from `@hugeicons/core-free-icons` and pass it directly to `HugeiconsIcon`. Navigation, metric cards, controls, and installed shadcn primitives share this set. `apps/dashboard/components.json` also selects `hugeicons` for future generated components.
+Highkey uses the free Stroke Rounded set from [Hugeicons](https://hugeicons.com/), rendered with `@hugeicons/react`. Import named icon data from `@hugeicons/core-free-icons` and pass it directly to `HugeiconsIcon`. Navigation, metric cards, controls, and installed shadcn primitives share this set. `apps/app/components.json` also selects `hugeicons` for future generated components.
 
 All sources share the same analytics interface. The optional icon is visual metadata; it does not change queries or infer identity.
 
@@ -133,7 +133,7 @@ Dashboard primitives use the official shadcn **Base UI** registry (`base-vega`) 
 
 Highkey has one fixed Kanagawa Wave theme. Sumi-ink surfaces, warm text, orange primary actions, and yellow/violet/aqua chart accents are present from the first server-rendered paint. There is no appearance menu or theme preference, and old saved Light/Dark/Auto values are ignored.
 
-The shared component theme defines foreground/background pairs, hover and pressed surfaces, selection, focus, radii, and elevation in `apps/dashboard/src/styles.css`. Component variants consume those tokens directly. Buttons, button-like triggers, compact report selects, and segmented choices are pills; fields use 6px corners and a recessed surface, and cards 12px with a faint lit top edge. Translucent tints are replaced by ordered-dither screen tones (`--tone-25`, `--tone-50`, `--tone-75`) declared next to the `--tone-ink` they use. Menus use soft shadows, dialog backdrops are a sparse dot screen over a translucent dim, and keyboard focus uses a single yellow outline. Under forced colors, controls gain a system outline and selected states use the system highlight. Preserve these defaults when adding Base UI components instead of reintroducing generated dark-mode overrides or page-specific bevel styles.
+The shared component theme defines foreground/background pairs, hover and pressed surfaces, selection, focus, radii, and elevation in `apps/app/src/styles.css`. Component variants consume those tokens directly. Buttons, button-like triggers, compact report selects, and segmented choices are pills; fields use 6px corners and a recessed surface, and cards 12px with a faint lit top edge. Translucent tints are replaced by ordered-dither screen tones (`--tone-25`, `--tone-50`, `--tone-75`) declared next to the `--tone-ink` they use. Menus use soft shadows, dialog backdrops are a sparse dot screen over a translucent dim, and keyboard focus uses a single yellow outline. Under forced colors, controls gain a system outline and selected states use the system highlight. Preserve these defaults when adding Base UI components instead of reintroducing generated dark-mode overrides or page-specific bevel styles.
 
 ## Organizations and settings
 

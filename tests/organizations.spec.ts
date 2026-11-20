@@ -1,6 +1,6 @@
 // Organizations in the address: /<organization>/<project>/…, the switcher, and old links.
 import { expect, request, test } from "@playwright/test";
-import { totpCode } from "../apps/dashboard/test/totp";
+import { totpCode } from "../apps/app/test/totp";
 import { apiHeaders } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;

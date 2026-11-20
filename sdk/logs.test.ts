@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
-import { attributeValue, validateLogsSearch } from "../apps/dashboard/src/lib/logs";
-import { appendLogPage, MAX_BUFFERED_LOGS } from "../apps/dashboard/src/lib/log-buffer";
-import type { LogResult, LogRow } from "../apps/dashboard/src/lib/logs";
+import { attributeValue, validateLogsSearch } from "../apps/app/src/lib/logs";
+import { appendLogPage, MAX_BUFFERED_LOGS } from "../apps/app/src/lib/log-buffer";
+import type { LogResult, LogRow } from "../apps/app/src/lib/logs";
 test("log URL filters preserve scalar types and reject invalid cursors and ranges", () => {
   expect(attributeValue("200", "number")).toBe(200);
   expect(attributeValue("200", "string")).toBe("200");

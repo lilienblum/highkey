@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
-import { api, queryProduct } from "../apps/dashboard/src/lib/api";
+import { api, queryProduct } from "../apps/app/src/lib/api";
 
 afterEach(() => mock.restore());
 const busy = (retryAfter?: string) =>

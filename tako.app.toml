@@ -2,21 +2,20 @@ name = "highkey"
 runtime = "bun"
 package_manager = "bun"
 preset = "tanstack-start"
-app_root = "apps/dashboard/src"
-main = "apps/dashboard/dist/server/tako-entry.mjs"
-assets = ["apps/dashboard/dist/client"]
+app_root = "apps/app/src"
+main = "apps/app/dist/server/tako-entry.mjs"
+assets = ["apps/app/dist/client"]
 # Keep the process cwd at the repository root so channel discovery uses app_root.
-dev = ["bun", "node_modules/vite/bin/vite.js", "apps/dashboard", "--config", "apps/dashboard/vite.config.ts"]
+dev = ["bun", "node_modules/vite/bin/vite.js", "apps/app", "--config", "apps/app/vite.config.ts"]
 
 [build]
 install = "bun install --frozen-lockfile"
 run = "bun run build"
-# The workflow worker loads apps/dashboard/src/workflows/ from source, with the server code it
+# The workflow worker loads apps/app/src/workflows/ from source, with the server code it
 # imports and bunfig.toml's text loader for the dashboards guide.
-include = ["apps/dashboard/dist/**", "apps/dashboard/src/channels/**", "apps/dashboard/src/workflows/**", "apps/dashboard/src/server/**", "apps/dashboard/src/lib/**", "apps/dashboard/package.json", "package.json", "bun.lock", "bunfig.toml"]
+include = ["apps/app/dist/**", "apps/app/src/channels/**", "apps/app/src/workflows/**", "apps/app/src/server/**", "apps/app/src/lib/**", "apps/app/package.json", "package.json", "bun.lock", "bunfig.toml"]
 
 [envs.development]
-route = "highkey.test"
 # Highkey's management state: Tako serves it from .tako/data/databases/highkey.sqlite and
 # applies migrations/ to it.
 databases = { main = "highkey" }

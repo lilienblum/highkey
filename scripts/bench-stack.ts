@@ -1,17 +1,17 @@
 // The stack the benchmarks measure: a ClickHouse of its own (4 GB, tmpfs), the release ingest
 // binary, and the dashboard's API served by Bun as in production. Nothing outside it is touched.
-import { type Auth, createAuth } from "../apps/dashboard/src/server/auth/auth";
-import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
-import { applyMigrations } from "../apps/dashboard/src/server/db/migrations";
+import { type Auth, createAuth } from "../apps/app/src/server/auth/auth";
+import { openBunDb } from "../apps/app/src/server/db/bun-db";
+import { applyMigrations } from "../apps/app/src/server/db/migrations";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ApiContext } from "../apps/dashboard/src/server/api/context";
-import { handleApi } from "../apps/dashboard/src/server/api/router";
-import { Readers } from "../apps/dashboard/src/server/clickhouse/access";
-import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
-import { gatesFromEnv } from "../apps/dashboard/src/server/dashboards/gates";
-import { WriteLimit } from "../apps/dashboard/src/server/dashboards/limit";
+import type { ApiContext } from "../apps/app/src/server/api/context";
+import { handleApi } from "../apps/app/src/server/api/router";
+import { Readers } from "../apps/app/src/server/clickhouse/access";
+import { ClickHouse } from "../apps/app/src/server/clickhouse/client";
+import { gatesFromEnv } from "../apps/app/src/server/dashboards/gates";
+import { WriteLimit } from "../apps/app/src/server/dashboards/limit";
 import {
   ADMIN_USER,
   CLICKHOUSE_IMAGE,

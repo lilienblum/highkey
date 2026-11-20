@@ -25,7 +25,7 @@ if (!stop) {
     await symlink(certificate, certificateLink);
   }
   // Both root configs share the encrypted secret store. List exposes names, never values.
-  const listing = Bun.spawn(["tako", "-c", "tako.dashboard.toml", "secrets", "list", "--json"], {
+  const listing = Bun.spawn(["tako", "-c", "tako.app.toml", "secrets", "list", "--json"], {
     cwd: root,
     stdout: "pipe",
     stderr: "inherit",
@@ -48,7 +48,7 @@ if (!stop) {
       [
         "tako",
         "-c",
-        "tako.dashboard.toml",
+        "tako.app.toml",
         "secrets",
         "set",
         "HIGHKEY_CHANGE_TOKEN",
@@ -84,7 +84,7 @@ if (!stop) {
   });
   if ((await sdk.exited) !== 0) throw new Error("Could not build the browser tracker");
 }
-for (const config of ["tako.ingest.toml", "tako.dashboard.toml"]) {
+for (const config of ["tako.ingest.toml", "tako.app.toml"]) {
   const command = stop
     ? ["tako", "-c", config, "dev", "stop"]
     : ["tako", "-c", config, "dev", "--background"];

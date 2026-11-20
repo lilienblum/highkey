@@ -6,7 +6,7 @@ import {
   rangeError,
   rangeFromDays,
   rangeLabel,
-} from "../apps/dashboard/src/lib/date-range";
+} from "../apps/app/src/lib/date-range";
 
 test("calendar ranges include both days and use exclusive UTC API endpoints", () => {
   expect(rangeFromDays("2026-03-08", "2026-03-08")).toEqual({
@@ -35,7 +35,7 @@ test("date inputs reject rollovers, future days, reversed and oversized ranges",
 });
 
 test("relative periods and arrows respect UTC calendar boundaries", async () => {
-  const { presetRange, shiftRange } = await import("../apps/dashboard/src/lib/date-range");
+  const { presetRange, shiftRange } = await import("../apps/app/src/lib/date-range");
   const now = Date.parse("2024-03-15T12:00:00.000Z");
   expect(presetRange("today", now)).toEqual({
     from: "2024-03-15T00:00:00.000Z",

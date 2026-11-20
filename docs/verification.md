@@ -131,7 +131,7 @@ The existing client chunk warning remains (950.13 kB, 294.10 kB gzip). API event
 
 ## Impeccable dashboard redesign
 
-Initialized the dashboard's [product context](../apps/dashboard/PRODUCT.md), [design system](../apps/dashboard/DESIGN.md), and machine-readable design sidecar. The user delegated setup answers and design choices. The resulting system replaces the blue card grid with stone surfaces, pine/citron themes, locally served Public Sans, flat analytical sections, and contained editing surfaces. The existing shadcn primitives, Hugeicons, theme persistence, typed events, and privacy behavior remain.
+Initialized the dashboard's [product context](../apps/app/PRODUCT.md), [design system](../apps/app/DESIGN.md), and machine-readable design sidecar. The user delegated setup answers and design choices. The resulting system replaces the blue card grid with stone surfaces, pine/citron themes, locally served Public Sans, flat analytical sections, and contained editing surfaces. The existing shadcn primitives, Hugeicons, theme persistence, typed events, and privacy behavior remain.
 
 Reviewed eight rendered combinations across Overview, Explore, and Settings: website and CLI products, Light and Dark, 1440px desktop widths and a 390×844px narrow viewport. No document overflow was measured. Sampled supporting text met 4.5:1 contrast; the light input stroke was adjusted to reach 3.06:1 against the workspace and 3.26:1 against white fields. This is a targeted contrast review, not a claim of a complete accessibility audit. Keyboard review verified the new skip link and existing navigation/inspection behavior.
 

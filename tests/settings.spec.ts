@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { expect, type Page, request, test } from "@playwright/test";
-import { totpCode } from "../apps/dashboard/test/totp";
+import { totpCode } from "../apps/app/test/totp";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;
 const PASSWORD = "a long enough password";

@@ -16,7 +16,7 @@ const ingest = Bun.spawn(["cargo", "run", "-p", "highkey-ingest"], {
   stderr: "inherit",
 });
 const dashboard = Bun.spawn(["bun", "run", "dev"], {
-  cwd: "apps/dashboard",
+  cwd: "apps/app",
   env: {
     ...process.env,
     HIGHKEY_CLICKHOUSE_URL: url,

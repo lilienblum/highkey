@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { displayGroups, displayValue } from "../apps/dashboard/src/lib/display-values";
+import { displayGroups, displayValue } from "../apps/app/src/lib/display-values";
 
 test("known dimension values read with their proper names; everything else is unchanged", () => {
   expect(displayValue("property:os", "macos")).toBe("macOS");

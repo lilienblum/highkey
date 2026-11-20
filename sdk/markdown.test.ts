@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 // React resolves from the dashboard workspace; the root has only its types.
 // @ts-expect-error untyped deep import
-import { createElement } from "../apps/dashboard/node_modules/react";
+import { createElement } from "../apps/app/node_modules/react";
 // @ts-expect-error untyped deep import
-import { renderToStaticMarkup } from "../apps/dashboard/node_modules/react-dom/server";
-import { Markdown } from "../apps/dashboard/src/lib/markdown";
+import { renderToStaticMarkup } from "../apps/app/node_modules/react-dom/server";
+import { Markdown } from "../apps/app/src/lib/markdown";
 
 const render = (source: string) => renderToStaticMarkup(createElement(Markdown, { source }));
 

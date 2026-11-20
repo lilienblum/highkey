@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { tokenize, type CodeLanguage } from "../apps/dashboard/src/lib/highlight";
+import { tokenize, type CodeLanguage } from "../apps/app/src/lib/highlight";
 
 const samples: [CodeLanguage, string][] = [
   [

@@ -1,6 +1,6 @@
 # Native Tako applications
 
-Highkey runs as two native Tako apps: `tako.ingest.toml` runs the ingest app as `highkey-ingest`, and `tako.dashboard.toml` runs the dashboard as `highkey`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own.
+Highkey runs as two native Tako apps: `tako.ingest.toml` runs the ingest app as `highkey-ingest`, and `tako.app.toml` runs the app as `highkey`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own.
 
 Highkey uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. Tako itself is unchanged. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. Use CLI/server release `0.0.0-9ae824f` or later with ephemeral support; the JavaScript SDK is pinned to that release.
 
@@ -109,7 +109,7 @@ HIGHKEY_TRACKER_PATH = "sdk/typescript/dist/tracker.js"
 ```
 
 ```toml
-# tako.dashboard.toml
+# tako.app.toml
 [envs.production]
 route = "highkey.example.com"
 servers = ["your-server"]
@@ -126,13 +126,13 @@ HIGHKEY_INGEST_URL = "https://highkey-ingest.example.com"
 
 The Tako database needs a network (`tako network` commands) and is created once on the server that will hold it: `tako sqlite create highkey --server your-server`. `backup.storage` names a private S3-compatible storage resource (`[storages.private_backups]`, with credentials set by `tako storages credentials private_backups --env production`) that receives the database's encrypted snapshots; without one, Tako takes no snapshots and losing the server loses the management state. Tako applies `migrations/` on every deploy, after a snapshot and before the new release starts.
 
-Set `HIGHKEY_CHANGE_TOKEN` for production through `tako -c tako.dashboard.toml secrets set HIGHKEY_CHANGE_TOKEN --env production`; the two root configs share this secret store. Set `BETTER_AUTH_SECRET` the same way, to a long random value: it signs sessions, and changing it signs everyone out. Email and social sign-in are optional secrets too: `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM`, `HIGHKEY_GITHUB_CLIENT_ID` and `HIGHKEY_GITHUB_CLIENT_SECRET`, `HIGHKEY_GOOGLE_CLIENT_ID` and `HIGHKEY_GOOGLE_CLIENT_SECRET` (see [accounts](access.md#accounts)). `HIGHKEY_READER_SECRET`, which derives each project's ClickHouse reader password, is optional and read only by the dashboard; it defaults to the admin password.
+Set `HIGHKEY_CHANGE_TOKEN` for production through `tako -c tako.app.toml secrets set HIGHKEY_CHANGE_TOKEN --env production`; the two root configs share this secret store. Set `BETTER_AUTH_SECRET` the same way, to a long random value: it signs sessions, and changing it signs everyone out. Email and social sign-in are optional secrets too: `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM`, `HIGHKEY_GITHUB_CLIENT_ID` and `HIGHKEY_GITHUB_CLIENT_SECRET`, `HIGHKEY_GOOGLE_CLIENT_ID` and `HIGHKEY_GOOGLE_CLIENT_SECRET` (see [accounts](access.md#accounts)). `HIGHKEY_READER_SECRET`, which derives each project's ClickHouse reader password, is optional and read only by the app; it defaults to the admin password.
 
 Set both ClickHouse passwords as secrets in the shared store: `HIGHKEY_CLICKHOUSE_PASSWORD` (the admin user, which only the dashboard uses) and `HIGHKEY_INGEST_CLICKHOUSE_PASSWORD` (the `highkey_ingest` user: the dashboard's migration sets it, and the ingest app reads it before the generic name):
 
 ```sh
-tako -c tako.dashboard.toml secrets set HIGHKEY_CLICKHOUSE_PASSWORD --env production
-tako -c tako.dashboard.toml secrets set HIGHKEY_INGEST_CLICKHOUSE_PASSWORD --env production
+tako -c tako.app.toml secrets set HIGHKEY_CLICKHOUSE_PASSWORD --env production
+tako -c tako.app.toml secrets set HIGHKEY_INGEST_CLICKHOUSE_PASSWORD --env production
 ```
 
 The ingest host serves only the ingest paths, `/tracker.js` and `/health`. It needs no other protection: its paths take only ingestion keys; see [the network boundary](access.md#network-boundary). Collectors can send to either host: the dashboard forwards the ingest paths to `HIGHKEY_INGEST_URL`.
@@ -143,7 +143,7 @@ To update:
 
 1. Run `bun run migrate` against the production ClickHouse from the new release. Migrations only add, so the running apps keep working.
 2. Deploy the ingest app with `tako -c tako.ingest.toml deploy --env production`. It holds no state, so Tako's normal rolling replacement works. While the old and new processes overlap, a retry that reaches the other process can be stored twice until a merge removes it (see [deduplication](api.md#deduplication)).
-3. Deploy the dashboard with `tako -c tako.dashboard.toml deploy --env production`. Tako applies any new file in `migrations/` first (they only add, so the running release keeps working), then replaces the app and its workflow worker. Old and new instances share the hosted database while they overlap.
+3. Deploy the app with `tako -c tako.app.toml deploy --env production`. Tako applies any new file in `migrations/` first (they only add, so the running release keeps working), then replaces the app and its workflow worker. Old and new instances share the hosted database while they overlap.
 
 Do not delete an app to deploy an update; deletion can remove persistent data. No production deployment is performed by local setup. After the first deploy, open the dashboard and create the first account: it administers the server.
 

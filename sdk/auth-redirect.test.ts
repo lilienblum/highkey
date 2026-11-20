@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { afterSignIn, verificationCallback } from "../apps/dashboard/src/lib/auth-client";
+import { afterSignIn, verificationCallback } from "../apps/app/src/lib/auth-client";
 
 const origin = "https://highkey.example";
 

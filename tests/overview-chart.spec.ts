@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
-import type { Product, QueryResult } from "../apps/dashboard/src/lib/api";
+import type { Product, QueryResult } from "../apps/app/src/lib/api";
 import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";

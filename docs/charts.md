@@ -1,6 +1,6 @@
 # Charts
 
-Overview and Events use **TanStack Charts 1.1.0** (`@tanstack/charts/react`). The shared adapter is `apps/dashboard/src/components/analytics-chart.tsx`. It renders the server's query buckets; it never re-aggregates or interpolates missing measurements.
+Overview and Events use **TanStack Charts 1.1.0** (`@tanstack/charts/react`). The shared adapter is `apps/app/src/components/analytics-chart.tsx`. It renders the server's query buckets; it never re-aggregates or interpolates missing measurements.
 
 - Native SVG line and area marks use straight segments and a zero baseline, including negative values. Null numeric values break the line and area; measured zero remains zero. A single valid point has a visible marker.
 - Grouping is selected automatically from the report range: hourly through two days, daily through 31 days, weekly through 180 days, monthly after that. There is one date control rather than a separate interval picker.

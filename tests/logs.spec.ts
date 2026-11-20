@@ -59,7 +59,7 @@ test("log explorer filters, inspects, paginates and restores a shared query", as
   await expect(page.locator(".logs-footer")).toContainText("Loaded 100 of");
   expect(await page.locator(".log-row").count()).toBeLessThan(60);
   await expect(page.getByText("120 records", { exact: true })).toBeVisible();
-  await page.screenshot({ path: "apps/dashboard/.impeccable/screenshots/logs-desktop.png" });
+  await page.screenshot({ path: "apps/app/.impeccable/screenshots/logs-desktop.png" });
   await scrollToEnd(page);
   await expect(page.locator(".logs-footer")).toContainText("Loaded 120 of");
   await expect(page.getByRole("button", { name: /older logs/i })).toHaveCount(0);
@@ -90,7 +90,7 @@ test("log explorer filters, inspects, paginates and restores a shared query", as
     inspector.getByRole("button", { name: "tokyo (string)", exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: "apps/dashboard/.impeccable/screenshots/logs-inspector.png",
+    path: "apps/app/.impeccable/screenshots/logs-inspector.png",
     animations: "disabled",
   });
   await inspector.getByRole("tab", { name: "Raw JSON" }).click();
@@ -244,7 +244,7 @@ test("virtual logs load every older record on scroll with bounded rows and keybo
     "false",
   );
   await expect(page.getByRole("button", { name: /older logs/i })).toHaveCount(0);
-  await page.screenshot({ path: "apps/dashboard/.impeccable/screenshots/logs-buffer-desktop.png" });
+  await page.screenshot({ path: "apps/app/.impeccable/screenshots/logs-buffer-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".log-row time").first()).toHaveCSS("font-size", "11px");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -253,7 +253,7 @@ test("virtual logs load every older record on scroll with bounded rows and keybo
     await scrollToEnd(page);
     await expect(page.locator(".logs-footer")).toBeInViewport({ ratio: 1, timeout: 500 });
   }).toPass();
-  await page.screenshot({ path: "apps/dashboard/.impeccable/screenshots/logs-buffer-mobile.png" });
+  await page.screenshot({ path: "apps/app/.impeccable/screenshots/logs-buffer-mobile.png" });
   await page.setViewportSize({ width: 1440, height: 1000 });
   // Every older page reads against the first page's time window, one cursor per page.
   expect(
@@ -370,11 +370,11 @@ test("logs fit a narrow screen", async ({ page }) => {
   await expect(page.locator(".log-row time").first()).toHaveCSS("font-size", "11px");
   expect((await page.locator(".log-row").first().boundingBox())?.height).toBeGreaterThanOrEqual(60);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: "apps/dashboard/.impeccable/screenshots/logs-mobile.png" });
+  await page.screenshot({ path: "apps/app/.impeccable/screenshots/logs-mobile.png" });
   await page.locator(".log-row").first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.screenshot({
-    path: "apps/dashboard/.impeccable/screenshots/logs-inspector-mobile.png",
+    path: "apps/app/.impeccable/screenshots/logs-inspector-mobile.png",
     animations: "disabled",
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

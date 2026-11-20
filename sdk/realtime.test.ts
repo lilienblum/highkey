@@ -3,8 +3,8 @@ import {
   matches,
   parseChangeEnvelope,
   type ChangeEnvelope,
-} from "../apps/dashboard/src/lib/change-envelope";
-import { readBoundedBody } from "../apps/dashboard/src/server/request-body";
+} from "../apps/app/src/lib/change-envelope";
+import { readBoundedBody } from "../apps/app/src/server/request-body";
 
 describe("change notification validation", () => {
   test("parses v1 as events", () => {

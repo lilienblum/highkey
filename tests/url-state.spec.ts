@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { Product } from "../apps/dashboard/src/lib/api";
+import type { Product } from "../apps/app/src/lib/api";
 import { apiHeaders } from "./auth";
 const api = process.env.HIGHKEY_API_URL;
 if (!api) throw new Error("The isolated E2E API must be configured");

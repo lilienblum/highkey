@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { growth, previousPeriodLabel, previousRange } from "../apps/dashboard/src/lib/growth";
+import { growth, previousPeriodLabel, previousRange } from "../apps/app/src/lib/growth";
 
 const DAY = 86_400_000;
 const hours = (n: number) => ({

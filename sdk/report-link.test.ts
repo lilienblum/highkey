@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { reportLink } from "../apps/dashboard/src/lib/report-link";
+import { reportLink } from "../apps/app/src/lib/report-link";
 
 test("report links only open validated page or referring-site destinations", () => {
   expect(reportLink("property:path", "/docs", "https://example.com/app")).toBe(

@@ -48,7 +48,7 @@ describe("browser test isolation", () => {
     const { env } = e2eEnvironment("/highkey", run);
     expect(env.NODE_EXTRA_CA_CERTS).toBe("/highkey/.tako/dev-ca.pem");
     const dashboard = Bun.TOML.parse(
-      await Bun.file(new URL("../tako.dashboard.toml", import.meta.url)).text(),
+      await Bun.file(new URL("../tako.app.toml", import.meta.url)).text(),
     ) as { vars: { development: Record<string, string> } };
     expect(dashboard.vars.development.NODE_EXTRA_CA_CERTS).toBe(".tako/dev-ca.pem");
   });
@@ -79,7 +79,7 @@ describe("browser test isolation", () => {
     });
     const dashboard = Bun.TOML.parse(
       e2eConfig(
-        await Bun.file(new URL("../tako.dashboard.toml", import.meta.url)).text(),
+        await Bun.file(new URL("../tako.app.toml", import.meta.url)).text(),
         setup.name,
         {
           HIGHKEY_DATA_DIR: setup.directory,

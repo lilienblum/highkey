@@ -8,19 +8,19 @@
 // every tenth batch is sent again, as a client retry. Phase 2 repeats it while eight readers loop
 // over the Overview widgets and an unbounded count over all history. It fails if any ingest
 // request fails, if the phase 2 p99 is more than twice phase 1's, or if it reaches 250 ms.
-import { openBunDb } from "../apps/dashboard/src/server/db/bun-db";
-import { applyMigrations } from "../apps/dashboard/src/server/db/migrations";
+import { openBunDb } from "../apps/app/src/server/db/bun-db";
+import { applyMigrations } from "../apps/app/src/server/db/migrations";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { overviewTemplate } from "../apps/dashboard/src/lib/dashboards";
-import type { ApiContext } from "../apps/dashboard/src/server/api/context";
-import { Readers } from "../apps/dashboard/src/server/clickhouse/access";
-import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
-import { gatesFromEnv } from "../apps/dashboard/src/server/dashboards/gates";
-import { WriteLimit } from "../apps/dashboard/src/server/dashboards/limit";
-import { runWidget } from "../apps/dashboard/src/server/dashboards/run";
-import { createEventKey, createProject } from "../apps/dashboard/src/server/operations";
+import { overviewTemplate } from "../apps/app/src/lib/dashboards";
+import type { ApiContext } from "../apps/app/src/server/api/context";
+import { Readers } from "../apps/app/src/server/clickhouse/access";
+import { ClickHouse } from "../apps/app/src/server/clickhouse/client";
+import { gatesFromEnv } from "../apps/app/src/server/dashboards/gates";
+import { WriteLimit } from "../apps/app/src/server/dashboards/limit";
+import { runWidget } from "../apps/app/src/server/dashboards/run";
+import { createEventKey, createProject } from "../apps/app/src/server/operations";
 import { ADMIN_USER, type ServerOptions, startClickHouse, stopClickHouse } from "./clickhouse";
 
 const LOAD_SERVER: ServerOptions = {

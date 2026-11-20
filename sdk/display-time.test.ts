@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { displayTimestamp, validTimeZone } from "../apps/dashboard/src/lib/display-time";
+import { displayTimestamp, validTimeZone } from "../apps/app/src/lib/display-time";
 
 test("event display converts across date boundaries without changing the instant", () => {
   const timestamp = Date.parse("2026-11-01T00:30:00Z");

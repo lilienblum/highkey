@@ -1,4 +1,4 @@
-import { displayTimestamp } from "../apps/dashboard/src/lib/display-time";
+import { displayTimestamp } from "../apps/app/src/lib/display-time";
 import { expect, test, type Page } from "@playwright/test";
 import { apiHeaders } from "./auth";
 const apiUrl = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";

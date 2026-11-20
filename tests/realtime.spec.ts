@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { Channel, type ChannelMessage } from "tako.sh/client";
-import type { ChangeEnvelope } from "../apps/dashboard/src/lib/change-envelope";
+import type { ChangeEnvelope } from "../apps/app/src/lib/change-envelope";
 import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";

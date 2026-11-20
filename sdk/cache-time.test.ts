@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { browserGcTime } from "../apps/dashboard/src/lib/cache-time";
-import { dashboardQuery } from "../apps/dashboard/src/server/dashboards";
+import { browserGcTime } from "../apps/app/src/lib/cache-time";
+import { dashboardQuery } from "../apps/app/src/server/dashboards";
 
 const scope = globalThis as { window?: unknown };
 afterEach(() => {

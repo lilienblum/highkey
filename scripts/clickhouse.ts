@@ -8,8 +8,8 @@
 //
 // `*-up` is idempotent: a running server is reused and migrated. It prints the server's URL.
 
-import { ClickHouse } from "../apps/dashboard/src/server/clickhouse/client";
-import { migrate } from "../apps/dashboard/src/server/clickhouse/migrate";
+import { ClickHouse } from "../apps/app/src/server/clickhouse/client";
+import { migrate } from "../apps/app/src/server/clickhouse/migrate";
 
 /** Pinned image: the version development and tests run, and the one production should match. */
 export const CLICKHOUSE_IMAGE = "clickhouse/clickhouse-server:26.8.37.168";

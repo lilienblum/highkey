@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { eventsLink, logsLink } from "../apps/dashboard/src/lib/widget-links";
+import { eventsLink, logsLink } from "../apps/app/src/lib/widget-links";
 
 const source = { id: "0198f0c4-4b8e-7c1d-9a52-1f2e3d4c5b6a", slug: "web" };
 const product = { sources: [{ ...source, name: "Web", icon: null }] } as never;

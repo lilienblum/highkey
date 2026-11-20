@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { QueryResult } from "../apps/dashboard/src/lib/api";
+import type { QueryResult } from "../apps/app/src/lib/api";
 import { apiHeaders } from "./auth";
 
 const api = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3001";

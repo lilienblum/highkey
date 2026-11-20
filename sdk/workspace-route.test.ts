@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { workspaceTarget, workspaceView } from "../apps/dashboard/src/lib/workspace-route";
+import { workspaceTarget, workspaceView } from "../apps/app/src/lib/workspace-route";
 
 test("views match whole path segments, so view names are also valid project slugs", () => {
   expect(workspaceView("/acme/dashboards/events")).toBe("/events");

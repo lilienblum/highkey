@@ -43,7 +43,7 @@ export function e2eApps(
     },
     {
       name: setup.name,
-      template: "tako.dashboard.toml",
+      template: "tako.app.toml",
       vars: {
         HIGHKEY_DATA_DIR: setup.directory,
         HIGHKEY_PUBLIC_URL: setup.env.HIGHKEY_DASHBOARD_URL,

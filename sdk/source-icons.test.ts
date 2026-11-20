@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { inferSourceIcon, resolveSourceIcon } from "../apps/dashboard/src/lib/source-icons";
+import { inferSourceIcon, resolveSourceIcon } from "../apps/app/src/lib/source-icons";
 
 describe("source icon inference", () => {
   test("recognizes platform names without treating ordinary words as platforms", () => {

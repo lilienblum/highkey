@@ -12,13 +12,13 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./apps/dashboard/src/*"]
+      "@/*": ["./apps/app/src/*"]
     },
     "types": ["bun", "vite/client"]
   },
   "include": [
-    "apps/dashboard/**/*.ts",
-    "apps/dashboard/**/*.tsx",
+    "apps/app/**/*.ts",
+    "apps/app/**/*.tsx",
     "sdk/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",

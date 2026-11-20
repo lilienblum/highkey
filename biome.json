@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "includes": ["apps/dashboard/DESIGN.md"],
+      "includes": ["apps/app/DESIGN.md"],
       "formatter": {
         "enabled": false
       }

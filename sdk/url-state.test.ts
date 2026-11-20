@@ -4,8 +4,8 @@ import {
   sourceParam,
   validateWorkspaceSearch,
   validateOverviewSearch,
-} from "../apps/dashboard/src/lib/workspace-search";
-import { defaultSpec, validateExploreSearch } from "../apps/dashboard/src/lib/explore-search";
+} from "../apps/app/src/lib/workspace-search";
+import { defaultSpec, validateExploreSearch } from "../apps/app/src/lib/explore-search";
 
 test("workspace links accept stable slugs and fixed UTC endpoints, and reject ambiguous scope", () => {
   const link = {

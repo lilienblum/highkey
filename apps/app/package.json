@@ -1,5 +1,5 @@
 {
-  "name": "@highkey/dashboard",
+  "name": "@highkey/app",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-const { isIngestPath, proxyIngest } = await import("../apps/dashboard/src/server/api-gateway");
+const { isIngestPath, proxyIngest } = await import("../apps/app/src/server/api-gateway");
 
 async function withUpstream(
   respond: (request: Request) => Response | Promise<Response>,

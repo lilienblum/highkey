@@ -3,8 +3,8 @@ import {
   defaultSpec,
   validateExploreSearch,
   type ExploreSpec,
-} from "../apps/dashboard/src/lib/explore-search";
-import { validateLogsSearch } from "../apps/dashboard/src/lib/logs";
+} from "../apps/app/src/lib/explore-search";
+import { validateLogsSearch } from "../apps/app/src/lib/logs";
 import {
   appliedState,
   currentLogView,
@@ -23,7 +23,7 @@ import {
   validViewSlug,
   viewErrorMessage,
   type EventViewQuery,
-} from "../apps/dashboard/src/lib/views";
+} from "../apps/app/src/lib/views";
 
 const spec = (patch: Partial<ExploreSpec>): ExploreSpec => ({ ...defaultSpec, ...patch });
 const makeSpec = spec;

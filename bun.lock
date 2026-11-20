@@ -21,8 +21,8 @@
         "vite": "^8.3.5",
       },
     },
-    "apps/dashboard": {
-      "name": "@highkey/dashboard",
+    "apps/app": {
+      "name": "@highkey/app",
       "dependencies": {
         "@base-ui/react": "^1.9.0",
         "@better-auth/api-key": "1.7.26",
@@ -159,7 +159,7 @@
 
     "@fontsource-variable/geist-pixel": ["@fontsource-variable/geist-pixel@5.3.1", "", {}, "sha512-2DA1zXUu6/F/7RJxtFGRrdsLmYWuuwhT8n/HAuCUsKLryCFHIAVSiSg6rYHsTCk7Qiu0q9D9QMpqbfOSC5Eugg=="],
 
-    "@highkey/dashboard": ["@highkey/dashboard@workspace:apps/dashboard"],
+    "@highkey/app": ["@highkey/app@workspace:apps/app"],
 
     "@highkey/sdk": ["@highkey/sdk@workspace:sdk/typescript"],
 

@@ -18,7 +18,7 @@ import {
   seriesStyle,
   thresholdColor,
   type Widget,
-} from "../apps/dashboard/src/lib/dashboards";
+} from "../apps/app/src/lib/dashboards";
 
 const ids = (doc: { widgets: Widget[] }) => doc.widgets.map((w) => w.id);
 

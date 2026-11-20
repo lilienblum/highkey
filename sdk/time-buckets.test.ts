@@ -4,7 +4,7 @@ import {
   bucketStart,
   nextBucket,
   partialBucketNote,
-} from "../apps/dashboard/src/lib/time-buckets";
+} from "../apps/app/src/lib/time-buckets";
 const time = Date.parse;
 
 describe("UTC chart calendar buckets", () => {

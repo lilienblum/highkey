@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { sourceDistribution } from "../apps/dashboard/src/lib/overview-widgets";
+import { sourceDistribution } from "../apps/app/src/lib/overview-widgets";
 
 test("source donut includes the API's unreturned tail without inflating top sources", () => {
   const slices = sourceDistribution(

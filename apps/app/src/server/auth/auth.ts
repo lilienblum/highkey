@@ -1,6 +1,6 @@
 // Accounts: Better Auth inside the dashboard, on the same management database as everything
 // else (the Tako database under Tako through libSQL, or the bun:sqlite file without it).
-// Its tables come from migrations/, generated with apps/dashboard/scripts/auth-schema.ts.
+// Its tables come from migrations/, generated with apps/app/scripts/auth-schema.ts.
 import type { Database } from "bun:sqlite";
 import { apiKey } from "@better-auth/api-key";
 import { cimd } from "@better-auth/cimd";
