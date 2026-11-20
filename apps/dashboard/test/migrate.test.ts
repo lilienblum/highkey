@@ -52,6 +52,16 @@ describe("ClickHouse migrations", () => {
       "properties JSON",
       "expires_at DateTime('UTC')",
       "dedup_version UInt64",
+      "record_type LowCardinality(String)",
+      "backfill Bool",
+      "profile_id Nullable(String)",
+      "group_type String",
+      "group_id String",
+      "group_name String",
+      "traits JSON",
+      "increments JSON",
+      "groups Map(String, String)",
+      "ai_prompt String",
     ]);
     expect(await columns("logs")).toEqual([
       "product_id UUID",

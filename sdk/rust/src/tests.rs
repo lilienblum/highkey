@@ -69,6 +69,30 @@ fn event() -> Event {
 }
 
 #[test]
+fn entity_mutations_validate_before_delivery_and_preserve_types() {
+    let events = [
+        Event::identify("server", "user-1")
+            .trait_value("paid", true)
+            .increment("credits", -2.0),
+        Event::group("server", "team", "team-1").trait_value("seats", 10_i64),
+    ];
+    let json: serde_json::Value =
+        serde_json::from_str(&event::encode_batch(&events).unwrap()).unwrap();
+    assert_eq!(json["events"][0]["record_type"], "identify");
+    assert_eq!(json["events"][0]["traits"]["paid"], true);
+    assert_eq!(json["events"][0]["increments"]["credits"], -2.0);
+    assert_eq!(json["events"][1]["traits"]["seats"], 10);
+    for invalid in [
+        Event::identify("server", ""),
+        Event::group("server", "bad type", "id"),
+        Event::identify("server", "id").increment("credits", f64::INFINITY),
+        Event::new("ordinary", "server").trait_value("private", "value"),
+    ] {
+        assert!(event::encode_batch(&[invalid]).is_err());
+    }
+}
+
+#[test]
 fn retries_preserve_bytes_and_return_durable_ack() {
     let mock = Mock::new(vec![
         response(503, "busy"),

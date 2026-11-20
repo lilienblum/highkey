@@ -7,9 +7,16 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery, runEventsQuery } from "./events";
 import { parseLogsQuery, runLogsQuery } from "./logs";
 import { readAs } from "./read";
+import { parseEntityQuery, runEntityQuery } from "./entities";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    for (const kind of ["profiles", "groups"] as const)
+      route("POST", `${prefix}/${kind}/query`, READ, async (request, ctx, { project }) => {
+        const product = await resolveProduct(ctx.db, project as string);
+        const query = parseEntityQuery(await readJson(request));
+        return json(await readAs(ctx, product.id, (reader) => runEntityQuery(reader, kind, query)));
+      });
     route("POST", `${prefix}/query`, READ, async (request, ctx, { project }) => {
       const product = await resolveProduct(ctx.db, project as string);
       const query = parseEventsQuery(await readJson(request));

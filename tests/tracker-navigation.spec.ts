@@ -55,6 +55,64 @@ async function hash(page: Page, value: string) {
   );
 }
 
+test("explicit profiles and groups are snapshotted, sanitized and reset without device storage", async ({
+  page,
+}) => {
+  const f = await fixture(
+    page,
+    "beforeSend: event => { if (event.traits) delete event.traits.email; return event; }",
+  );
+  try {
+    await page.evaluate(async () => {
+      const traits = { name: "Sam", email: "private@example.test" };
+      window.tracker.identify("user-1", traits, { credits: -2 });
+      traits.name = "changed";
+      window.tracker.group("team", "team-1", { seats: 3 }, "Team");
+      window.tracker.track("joined");
+      window.tracker.reset();
+      window.tracker.track("signed_out");
+      await window.tracker.shutdown();
+    });
+    expect(f.events[0].profile_id).toBeUndefined();
+    expect(f.events[1]).toMatchObject({
+      record_type: "identify",
+      profile_id: "user-1",
+      traits: { name: "Sam" },
+      increments: { credits: -2 },
+    });
+    expect(f.events[2]).toMatchObject({ record_type: "group", group_id: "team-1" });
+    expect(f.events[3]).toMatchObject({ profile_id: "user-1", groups: { team: "team-1" } });
+    expect(f.events[4].profile_id).toBeUndefined();
+    expect(f.events[4].groups).toBeUndefined();
+    expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+  } finally {
+    await f.server.stop(true);
+  }
+});
+
+test("deferred and stopped trackers refuse explicit identity", async ({ page }) => {
+  const f = await fixture(page, "defer: true");
+  try {
+    expect(
+      await page.evaluate(() => [
+        window.tracker.identify("private"),
+        window.tracker.group("team", "private"),
+      ]),
+    ).toEqual([false, false]);
+    await page.evaluate(() => {
+      window.tracker.ready();
+      window.tracker.identify("accepted");
+      window.tracker.optOut();
+    });
+    expect(await page.evaluate(() => window.tracker.identify("blocked"))).toBe(false);
+    expect(
+      f.events.every((event) => event.profile_id !== "private" && event.profile_id !== "blocked"),
+    ).toBe(true);
+  } finally {
+    await f.server.stop(true);
+  }
+});
+
 for (const signal of ["disabled", "dnt", "gpc"] as const) {
   test(`${signal} blocks opted-in titles and hash routes`, async ({ page }) => {
     await page.addInitScript((signal) => {

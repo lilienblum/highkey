@@ -52,7 +52,7 @@ export function runSettings(scope: RunScope): Record<string, string> {
 }
 
 const EVENT_COLUMNS =
-  "source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties";
+  "source_id, event_id, name, source, event_time, received_at, actor_id, identity_kind, session_id, properties, backfill, profile_id, groups, ai_prompt";
 const LOG_COLUMNS =
   "source_id, log_id, timestamp, received_at, level, message, service, environment, trace_id, span_id, request_id, attributes";
 
@@ -80,8 +80,25 @@ export function accessStatements(productId: string, secret: string): string[] {
   const options = `DEFAULT DATABASE ${database} SETTINGS PROFILE 'highkey_reader'`;
   return [
     `CREATE DATABASE IF NOT EXISTS ${database}`,
-    view("events", EVENT_COLUMNS, "highkey.events", `${project} AND ${scoped("event_time")}`),
-    view("all_events", EVENT_COLUMNS, "highkey.events", project),
+    view(
+      "events",
+      EVENT_COLUMNS,
+      "highkey.events",
+      `${project} AND record_type = 'event' AND ${scoped("event_time")}`,
+    ),
+    view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND record_type = 'event'`),
+    view(
+      "profile_records",
+      "source_id, event_id, event_time, received_at, profile_id, session_id, traits, increments",
+      "highkey.events",
+      `${project} AND record_type = 'identify'`,
+    ),
+    view(
+      "group_records",
+      "source_id, event_id, event_time, received_at, group_type, group_id, group_name, traits, increments",
+      "highkey.events",
+      `${project} AND record_type = 'group'`,
+    ),
     view("logs", LOG_COLUMNS, "highkey.logs", `${project} AND ${scoped("timestamp")}`),
     view("all_logs", LOG_COLUMNS, "highkey.logs", project),
     `CREATE USER IF NOT EXISTS ${user} ${identified} ${options}`,
@@ -116,12 +133,12 @@ export function accessVersion(secret: string): string {
 }
 
 /**
- * The projects (as `id32`) whose database holds all four views and whose reader exists with its
+ * The projects (as `id32`) whose database holds all views and whose reader exists with its
  * grant: everything `ensureProjectAccess` creates, read in one query.
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs') GROUP BY database HAVING count() = 4
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'group_records') GROUP BY database HAVING count() = 6
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );

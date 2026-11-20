@@ -14,6 +14,39 @@
   },
   "tools": [
     {
+      "name": "query_profiles",
+      "description": "Lists identified profiles with current typed traits after sets and increments. Filter by id or search; page_size is 1–100. Reads retained history.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "id": { "type": "string" },
+          "search": { "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "query_groups",
+      "description": "Lists groups with their current name and typed traits after sets and increments. Filter by type, id or search; page_size is 1–100. Reads retained history.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "search": { "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "connect_source",
       "description": "Connects a new source in one step: creates the source and an ingestion key bound to it, and returns {source, key: {id, prefix, secret}, setup} where setup holds ready-to-paste snippets (integration: browser, typescript, http or rust; omit for all four). The secret is shown only once.",
       "inputSchema": {

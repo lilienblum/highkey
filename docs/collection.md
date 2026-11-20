@@ -6,6 +6,38 @@ For service logs, use [structured JSON or OTLP/HTTP collection](logs.md). Logs u
 
 Identity remains optional and scoped to the project and identity kind. No person is automatically linked across web/mobile/tool sources. If you explicitly send the same opaque actor ID and identity kind from two sources, combined distinct-actor queries count it once. Use source-specific random IDs if that linkage is not intended. Visitor and installation identities remain distinct.
 
+## Profiles and groups
+
+Identity remains opt-in. Use an opaque application ID rather than an email as the profile ID:
+
+```ts
+await client.identify({
+  source: "server",
+  profile_id: "user-123",
+  traits: { plan: "pro", active: true },
+  increments: { credits: -1 },
+});
+await client.group({
+  source: "server",
+  group_type: "team",
+  group_id: "team-456",
+  group_name: "Engineering",
+  traits: { seats: 8 },
+});
+await client.send({
+  source: "server",
+  name: "build",
+  profile_id: "user-123",
+  groups: { team: "team-456" },
+});
+```
+
+The browser tracker exposes `identify(id, traits?, increments?)`, `group(type, id, traits?, name?, increments?)` and `reset()`. Accepted identify/group calls attach that profile/group to subsequent events in memory; `reset()` clears them at logout. They use the same filter and sanitizer as ordinary events. Deferred trackers reject explicit identity calls until `ready()`. Nothing is persisted to the browser unless persistent visitor identity was separately enabled.
+
+Rust uses `Event::identify("server", "user-123").trait_value("plan", "pro").increment("credits", -1.0)` and `Event::group("server", "team", "team-456")`.
+
+Traits retain scalar types. Each mutation's sets happen before its increments, and negative increments decrement. Reuse the event ID when retrying an application operation so it cannot increment twice. Profile/group records are excluded from ordinary analytics event counts.
+
 ## JavaScript and TypeScript SDK
 
 Use the [`@highkey/sdk` package](../sdk/typescript/README.md) in a website, Bun tool, or server. It ships JavaScript and TypeScript declarations with no runtime dependencies. The package guide covers local installation until registry publication. Existing source imports from `sdk/typescript/client.ts` also remain supported. Create a project (an organization's first project is created on `/new`, with a source and that source's ingestion key) and choose or add a source in Settings, then create an ingestion key for that source. Use only source-scoped ingestion keys in collectors; management access remains separate. For websites, use the browser tracker below to apply privacy signals and opt-out behavior. The generic client sends explicit calls and does not manage collection preferences.

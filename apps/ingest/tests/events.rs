@@ -143,6 +143,55 @@ async fn retention_is_product_specific_and_uses_event_time() {
 }
 
 #[tokio::test]
+async fn entity_updates_commit_once_with_typed_traits_and_clamped_timestamps() {
+    let (app, _) = app().await;
+    let (id, key) = project(90).await;
+    let before = chrono::Utc::now().timestamp_millis();
+    let future = (chrono::Utc::now() + chrono::Duration::days(3)).to_rfc3339();
+    let batch = json!({"events": [
+        {"event_id":"profile", "name":"profile_identify", "source":"server", "record_type":"identify", "profile_id":"u1",
+         "traits":{"active":true, "seats":5, "joined":"2026-01-02", "plan.name":"Pro"}, "increments":{"credits":-2}, "timestamp":future},
+        {"event_id":"group", "name":"group_update", "source":"server", "record_type":"group", "group_type":"team", "group_id":"t1", "group_name":"Team"},
+        {"event_id":"action", "name":"command", "source":"cli", "profile_id":"u1", "groups":{"team":"t1"}, "backfill":true}
+    ]});
+    let ack = ingest(&app, &key, batch.clone()).await;
+    assert_eq!(ack.status, 200, "{}", ack.text());
+    assert_eq!(
+        ingest(&app, &key, batch).await.json(),
+        json!({"accepted":0,"duplicates":3})
+    );
+    let rows = admin_query(&format!(
+        "SELECT event_id, record_type, traits, increments, groups, backfill, toUnixTimestamp64Milli(event_time) AS time FROM highkey.events WHERE product_id = '{id}' ORDER BY event_id"
+    )).await;
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0]["groups"]["team"], "t1");
+    assert_eq!(rows[0]["backfill"], true);
+    assert_eq!(
+        rows[2]["traits"],
+        json!({"active":true,"seats":5,"joined":"2026-01-02","plan.name":"Pro"})
+    );
+    assert_eq!(rows[2]["increments"]["credits"], -2);
+    assert!(rows[2]["time"].as_i64().unwrap() >= before);
+    assert!(rows[2]["time"].as_i64().unwrap() <= chrono::Utc::now().timestamp_millis());
+    for extra in [
+        json!({"record_type":"identify"}),
+        json!({"record_type":"group","group_type":"bad type","group_id":"x"}),
+        json!({"record_type":"identify","profile_id":"x","increments":{"count":"2"}}),
+        json!({"record_type":"identify","profile_id":"x","traits":{"nested":{}}}),
+        json!({"group_type":"team"}),
+        json!({"groups":{"team":""}}),
+        json!({"ai_prompt":"not an ai event"}),
+    ] {
+        let mut invalid = event("invalid", json!(1));
+        invalid
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        assert_eq!(ingest(&app, &key, invalid).await.status, 400);
+    }
+}
+
+#[tokio::test]
 async fn concurrent_ingestion_queries_and_controlled_overload() {
     let (app, _) = app_with(1, &clickhouse().url).await;
     let (id, key) = project(30).await;

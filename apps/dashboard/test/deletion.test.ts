@@ -215,7 +215,17 @@ describe("deleting", () => {
       return step();
     };
     expect(await wipeProject(ctx, second, twice)).toBe("wiped");
-    expect(steps).toEqual(["check", "events", "logs", "access", "rows", "keys", "organization"]);
+    expect(steps).toEqual([
+      "check",
+      "events",
+      "logs",
+      "profiles",
+      "groups",
+      "access",
+      "rows",
+      "keys",
+      "organization",
+    ]);
   }, 60_000);
 
   test("a_restored_project_is_never_wiped", async () => {

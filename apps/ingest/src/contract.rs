@@ -5,7 +5,7 @@ use crate::clickhouse::{ChError, ClickHouse};
 use serde::Deserialize;
 
 /// The contract this build reads and writes.
-pub const CONTRACT_VERSION: u32 = 1;
+pub const CONTRACT_VERSION: u32 = 2;
 /// The oldest ClickHouse server accepted, as (major, minor).
 pub const MIN_CLICKHOUSE: (u32, u32) = (25, 8);
 

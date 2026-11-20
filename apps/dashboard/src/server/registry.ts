@@ -95,6 +95,13 @@ export async function applyRetention(
     `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}`,
     { params: { days, product: productId }, settings: { mutations_sync: 2 } },
   );
+  if (table === "highkey.events") {
+    for (const entity of ["profiles", "groups"])
+      await ctx.admin.command(
+        `ALTER TABLE highkey.${entity} UPDATE expires_at = toDateTime(event_time) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}`,
+        { params: { days, product: productId }, settings: { mutations_sync: 2 } },
+      );
+  }
 }
 
 /** The ingest app caches a key, with its retention, for up to this long. */
@@ -250,5 +257,8 @@ export async function cleanup(ctx: ApiContext): Promise<{ removed: number; logs_
     });
     return Number(result.data[0]?.n ?? 0);
   };
-  return { removed: await expired("highkey.events"), logs_removed: await expired("highkey.logs") };
+  const removed = await expired("highkey.events");
+  const logs_removed = await expired("highkey.logs");
+  for (const table of ["profiles", "groups"]) await expired(`highkey.${table}`);
+  return { removed, logs_removed };
 }

@@ -7,6 +7,16 @@ export type Event = {
   actor_id?: string;
   identity_kind?: "visitor" | "installation" | "actor";
   session_id?: string;
+  record_type?: "event" | "identify" | "group";
+  backfill?: boolean;
+  profile_id?: string;
+  group_type?: string;
+  group_id?: string;
+  group_name?: string;
+  traits?: Properties;
+  increments?: Record<string, number>;
+  groups?: Record<string, string>;
+  ai_prompt?: string;
   properties?: Properties;
 };
 export type Ack = { accepted: number; duplicates: number };
@@ -52,17 +62,34 @@ export class Highkey {
   send(event: Event): Promise<Ack> {
     return this.sendBatch([event]);
   }
+  identify(input: Omit<Event, "name" | "record_type"> & { profile_id: string }): Promise<Ack> {
+    return this.send({ ...input, name: "profile_identify", record_type: "identify" });
+  }
+  group(
+    input: Omit<Event, "name" | "record_type"> & { group_type: string; group_id: string },
+  ): Promise<Ack> {
+    return this.send({ ...input, name: "group_update", record_type: "group" });
+  }
   async sendBatch(events: readonly Event[]): Promise<Ack> {
     if (!events.length || events.length > 100) throw new Error("Send 1–100 events");
     const eventCount = events.length;
     for (const event of events) {
-      for (const value of Object.values(event.properties ?? {})) {
+      for (const value of [
+        ...Object.values(event.properties ?? {}),
+        ...Object.values(event.traits ?? {}),
+      ]) {
         if (
           !["string", "number", "boolean"].includes(typeof value) ||
           (typeof value === "number" && !Number.isFinite(value))
         )
           throw new Error("Properties must be finite numbers, strings, or booleans");
       }
+      if (
+        Object.values(event.increments ?? {}).some(
+          (value) => typeof value !== "number" || !Number.isFinite(value),
+        )
+      )
+        throw new Error("Increments must be finite numbers");
     }
     // IDs and timestamps are materialized ONCE, before all retry attempts.
     const payload = JSON.stringify({

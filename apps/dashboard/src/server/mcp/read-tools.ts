@@ -10,6 +10,8 @@ import { logRetention } from "../db/keys";
 import { products } from "../db/products";
 import { listSources } from "../db/sources";
 import { getView, listViews } from "../views";
+import { parseEntityQuery, runEntityQuery } from "../queries/entities";
+import { readAs } from "../queries/read";
 import { type Args, badArgument, projectId, type Tool } from "./common";
 
 /** Points kept per series by run_widget; a long series is trimmed to its newest points. */
@@ -96,6 +98,16 @@ const defined = (entries: [string, unknown][]) =>
   Object.fromEntries(entries.filter(([, value]) => value != null));
 
 export const readTools: Record<string, Tool> = {
+  query_profiles: async (ctx, a) => {
+    const { project, ...query } = a;
+    const id = await projectId(ctx, project);
+    return readAs(ctx, id, (reader) => runEntityQuery(reader, "profiles", parseEntityQuery(query)));
+  },
+  query_groups: async (ctx, a) => {
+    const { project, ...query } = a;
+    const id = await projectId(ctx, project);
+    return readAs(ctx, id, (reader) => runEntityQuery(reader, "groups", parseEntityQuery(query)));
+  },
   list_projects: async (ctx) =>
     (await products(ctx.db, requireActor(ctx).orgId)).map((p) => ({
       id: p.id,

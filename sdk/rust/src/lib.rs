@@ -18,7 +18,7 @@
 //! ```
 
 mod event;
-pub use event::{Event, IdentityKind, Properties, Value};
+pub use event::{Event, IdentityKind, Properties, RecordType, Value};
 mod https;
 pub use https::HttpsTransport;
 

@@ -108,13 +108,27 @@ curl http://localhost:3001/api/ingest \
 
 Send one envelope or `{ "events": [ ... ] }` with 1–100 envelopes. The body limit is 256 KiB. `event_id`, `name`, and `source` are required strings of 1–64 ASCII letters/digits or `_ - . /`. Unknown envelope fields (including `product_id`, `source_id`, and `received_at`) are rejected. The key alone authorizes and resolves the project and managed source. The envelope `source` remains a free-form client/transport label (for example `browser`, `ios`, or `cli`); the dashboard calls it **Client**. It cannot choose or override the managed source.
 
-- `timestamp`: optional RFC3339; normalized to UTC. Omitted timestamps use receipt time. A time older than the project's retention or more than 5 minutes in the future is rejected.
+- `timestamp`: optional RFC3339; normalized to UTC. Omitted timestamps use receipt time. Times more than one minute in the future are replaced with receipt time; times older than the project's retention are rejected.
+- `backfill`: optional boolean (false by default). Historical imports retain their event time but do not establish session boundaries.
 - `actor_id`: optional 1–128 byte opaque ID. Requires `identity_kind` (`visitor`, `installation`, or `actor`), and vice versa. Distinct counts namespace actors by project and identity kind.
 - `session_id`: optional 1–128 byte ID, allowed only for visitor identity. Sessions count distinct `(actor_id, session_id)` pairs within the selected range, not globally completed sessions.
 - `properties`: up to 32 flat entries. Values must be strings (≤2048 bytes), JSON numbers, or booleans. Arrays, objects, and null are rejected. Keys use the same character rules as event names. Numeric-looking strings stay strings and are excluded from numeric measures.
+- `record_type`: `event` (default), `identify`, or `group`. Mutation records share the event deduplication namespace but are excluded from event counts and lists.
+- `profile_id`: an explicit opaque ID, 1–128 bytes. Required on `identify` and optional on ordinary events.
+- `traits`: up to 32 typed scalar properties, only on identify/group records. Sets replace the named trait; omitted traits remain unchanged.
+- `increments`: up to 32 finite numeric values, only on identify/group records. Negative amounts decrement. Sets happen before increments on the same record. A missing or nonnumeric previous value starts at zero. Mutations are applied in event-time order (event ID breaks ties), with each ID applied once.
+- `group_type`, `group_id`, `group_name`: group mutations require a valid type (event-name syntax) and a 1–128 byte ID. The optional name is at most 256 bytes; omit it to retain the previous name.
+- `groups`: up to eight type-to-ID pairs on an event, e.g. `{"team":"team-1"}`.
+- `ai_prompt`: optional, explicitly supplied text up to 32768 bytes on `ai_generation` events only, with a 30-day column TTL.
 - `received_at`: set by the server. Both timestamps are stored with millisecond precision in UTC; queries filter by event time.
 
 Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only after ClickHouse has stored the new rows. One invalid event rejects the whole HTTP batch.
+
+### Profile and group reads
+
+`POST /api/products/:project/profiles/query` and `/groups/query` return current traits from retained mutation history. Both are also available under `/api/read/products/:project` with an API key, and through MCP as `query_profiles` and `query_groups`.
+
+The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
 
 ### Deduplication
 

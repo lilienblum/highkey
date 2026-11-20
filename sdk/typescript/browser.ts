@@ -37,6 +37,8 @@ export function startBrowserTracker(options: BrowserOptions) {
   let deferred = options.defer === true;
   let globalProperties = { ...options.properties };
   let actor: string | undefined;
+  let profile: string | undefined;
+  let groups: Record<string, string> = {};
   let cleanup = () => {};
   const privacyBlocked = () =>
     options.enabled === false ||
@@ -53,6 +55,8 @@ export function startBrowserTracker(options: BrowserOptions) {
     queue.length = 0;
     delivery.abort();
     actor = undefined;
+    profile = undefined;
+    groups = {};
     try {
       localStorage.removeItem(`${namespace}:visitor`);
       localStorage.removeItem(`${namespace}:session`);
@@ -85,7 +89,7 @@ export function startBrowserTracker(options: BrowserOptions) {
       return {};
     }
   }
-  function track(name: string, properties: Properties = {}) {
+  function enqueue(name: string, properties: Properties = {}, record: Partial<Event> = {}) {
     if (!canTrack() || queue.length >= capacity) return false;
     const event: Event = {
       event_id: crypto.randomUUID(),
@@ -94,18 +98,32 @@ export function startBrowserTracker(options: BrowserOptions) {
       source: "browser",
       properties: { ...globalProperties, ...properties },
       ...identity(),
+      ...(profile ? { profile_id: profile } : {}),
+      ...(Object.keys(groups).length ? { groups: { ...groups } } : {}),
+      ...record,
     };
     try {
       if (options.filter && !options.filter(event)) return false;
       const accepted = options.beforeSend ? options.beforeSend(event) : event;
       if (!accepted || !canTrack()) return false;
-      queue.push({ ...accepted, properties: { ...accepted.properties } });
+      queue.push({
+        ...accepted,
+        properties: { ...accepted.properties },
+        ...(accepted.traits ? { traits: { ...accepted.traits } } : {}),
+        ...(accepted.increments ? { increments: { ...accepted.increments } } : {}),
+        ...(accepted.groups ? { groups: { ...accepted.groups } } : {}),
+      });
     } catch {
       return false;
     }
     if (queue.length >= 20) void flush();
     return true;
   }
+  function track(name: string, properties: Properties = {}) {
+    return enqueue(name, properties);
+  }
+  const validId = (id: string) =>
+    typeof id === "string" && id.length > 0 && new TextEncoder().encode(id).length <= 128;
   function pageView() {
     if (!canTrack()) return false;
     const url = new URL(location.href);
@@ -165,6 +183,50 @@ export function startBrowserTracker(options: BrowserOptions) {
     pageView,
     flush,
     optOut,
+    identify(id: string, traits: Properties = {}, increments: Record<string, number> = {}) {
+      if (!canTrack() || deferred || !validId(id)) return false;
+      const accepted = enqueue(
+        "profile_identify",
+        {},
+        { record_type: "identify", profile_id: id, traits, increments },
+      );
+      if (accepted) profile = id;
+      return accepted;
+    },
+    group(
+      type: string,
+      id: string,
+      traits: Properties = {},
+      name?: string,
+      increments: Record<string, number> = {},
+    ) {
+      if (
+        !canTrack() ||
+        deferred ||
+        !/^[a-zA-Z0-9_./-]{1,64}$/.test(type) ||
+        !validId(id) ||
+        (!Object.hasOwn(groups, type) && Object.keys(groups).length >= 8)
+      )
+        return false;
+      const accepted = enqueue(
+        "group_update",
+        {},
+        {
+          record_type: "group",
+          group_type: type,
+          group_id: id,
+          group_name: name,
+          traits,
+          increments,
+        },
+      );
+      if (accepted) groups = { ...groups, [type]: id };
+      return accepted;
+    },
+    reset() {
+      profile = undefined;
+      groups = {};
+    },
     setProperties(properties: Properties) {
       if (!canTrack()) return false;
       globalProperties = { ...properties };

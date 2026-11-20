@@ -4,6 +4,42 @@ const original = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = original;
 });
+test("identify and group keep typed changes and reject non-finite increments before sending", async () => {
+  const payloads: unknown[] = [];
+  globalThis.fetch = (async (_input: unknown, init: RequestInit) => {
+    payloads.push(JSON.parse(init.body as string).events[0]);
+    return Response.json({ accepted: 1, duplicates: 0 });
+  }) as typeof fetch;
+  const client = new Highkey({ endpoint: "http://localhost", key: "key" });
+  await client.identify({
+    source: "server",
+    profile_id: "u1",
+    traits: { active: true },
+    increments: { credits: -1 },
+  });
+  await client.group({
+    source: "server",
+    group_type: "team",
+    group_id: "t1",
+    traits: { seats: 3 },
+  });
+  expect(payloads[0]).toMatchObject({
+    record_type: "identify",
+    profile_id: "u1",
+    traits: { active: true },
+    increments: { credits: -1 },
+  });
+  expect(payloads[1]).toMatchObject({
+    record_type: "group",
+    group_type: "team",
+    group_id: "t1",
+    traits: { seats: 3 },
+  });
+  await expect(
+    client.identify({ source: "server", profile_id: "u1", increments: { credits: Infinity } }),
+  ).rejects.toThrow("finite");
+  expect(payloads).toHaveLength(2);
+});
 test("retries preserve event IDs, timestamps and property types", async () => {
   const payloads: string[] = [];
   globalThis.fetch = (async (_input: unknown, init: RequestInit) => {

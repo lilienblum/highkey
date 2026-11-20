@@ -50,6 +50,8 @@ Successful sends return `{ accepted, duplicates }` after the API commits. Invali
 
 ## Browser collection
 
+`highkey.identify({source, profile_id, traits?, increments?})` updates an explicit profile. `highkey.group({source, group_type, group_id, group_name?, traits?, increments?})` updates a group. Negative increments decrement; sets happen first. Ordinary events can carry `profile_id` and `groups: {team: "team-id"}`. Mutation records share event deduplication but do not count as analytics events.
+
 ```js
 import { startBrowserTracker } from "@highkey/sdk/browser";
 
@@ -71,4 +73,6 @@ Opt-in click collection supports `trackOutboundLinks: true` (`link_out` events w
 
 Use `properties` and `tracker.setProperties()` for shared properties, and `filter` for an event predicate before `beforeSend`. `defer: true` queues in memory without delivery or identity storage until `tracker.ready()`; opting out or shutting down first discards that queue. `enabled: false` still means no collection.
 
-See [the collection guide](https://github.com/lilienblum/piko/blob/v0/docs/collection.md) for identity, lifecycle, privacy controls, and the hosted `/tracker.js` option.
+Explicit `tracker.identify(id, traits?, increments?)` and `tracker.group(type, id, traits?, name?, increments?)` attach that profile/group to later events in memory. Use `tracker.reset()` at logout to clear them. These calls obey privacy signals, filtering and sanitization, and are refused while deferred. They do not enable persistent visitor storage.
+
+See [the collection guide](https://github.com/lilienblum/highkey/blob/v0/docs/collection.md) for identity, lifecycle, privacy controls, and the hosted `/tracker.js` option.

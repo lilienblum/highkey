@@ -114,6 +114,10 @@ export async function wipeProject(
   await step("logs", () =>
     ctx.admin.command("DELETE FROM highkey.logs WHERE product_id = {p:UUID}", { params }),
   );
+  for (const table of ["profiles", "groups"])
+    await step(table, () =>
+      ctx.admin.command(`DELETE FROM highkey.${table} WHERE product_id = {p:UUID}`, { params }),
+    );
   await step("access", () => dropProjectAccess(ctx.admin, project));
   const org = await step("rows", () => deleteRows(ctx.db, project));
   // After the rows: a reconcile in between would mirror the keys again.

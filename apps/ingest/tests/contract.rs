@@ -28,7 +28,7 @@ async fn refuses_an_older_contract() {
             contract,
             ContractError::ContractTooOld {
                 found: 0,
-                required: 1
+                required: 2
             }
         ),
         "{contract}"
@@ -38,7 +38,7 @@ async fn refuses_an_older_contract() {
 
 #[tokio::test]
 async fn accepts_a_newer_contract() {
-    let url = stub_clickhouse("26.8.37.168", 2).await;
+    let url = stub_clickhouse("26.8.37.168", 3).await;
     assert!(start(config(&url)).await.is_ok());
 }
 
