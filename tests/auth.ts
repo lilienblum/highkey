@@ -1,7 +1,19 @@
 // The account the browser tests run as, and how they call the API.
 import { join } from "node:path";
+import { E2E_ENV } from "../scripts/e2e-config";
 
 export const E2E_OWNER = { email: "owner@highkey-e2e.test", password: "browser tests password" };
+
+/** The main config's isolated Tako database, including its real migrations. */
+export const E2E_DATABASE = join(
+  process.cwd(),
+  ".tako",
+  "data",
+  "envs",
+  E2E_ENV,
+  "databases",
+  "highkey-test-e2e.sqlite",
+);
 
 /** The owner's signed-in browser state, written by setup.ts. */
 export const E2E_STATE = join(

@@ -2,10 +2,9 @@
 // invitation, and connecting an agent with read-only access.
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
-import { join } from "node:path";
 import { expect, request, test } from "@playwright/test";
 import { totpCode } from "../apps/app/test/totp";
-import { E2E_STATE } from "./auth";
+import { E2E_DATABASE, E2E_STATE } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;
 const PASSWORD = "a long enough password";
@@ -122,9 +121,7 @@ test("connect an agent with read-only access", async ({ browser }) => {
   const clientId = `highkey-e2e-agent-${Date.now()}`;
   const redirect = "http://127.0.0.1:33418/callback";
   const resource = `${base}/mcp`;
-  const db = new Database(
-    join(process.cwd(), ".tako", "e2e", process.env.HIGHKEY_E2E_RUN as string, "state.sqlite"),
-  );
+  const db = new Database(E2E_DATABASE, { create: false });
   const now = new Date().toISOString();
   db.run(
     `INSERT INTO "oauthClient" (id, "clientId", disabled, scopes, "clientCredentialsScopes", "createdAt", "updatedAt", name, "redirectUris", "tokenEndpointAuthMethod", "grantTypes", "responseTypes", "dpopBoundAccessTokens")

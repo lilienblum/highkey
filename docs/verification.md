@@ -1,6 +1,6 @@
 # Verification record
 
-Entries dated before 16 November 2026 verified the earlier architecture: one Rust API (`apps/api`) on DuckDB, run natively with `tako.api.toml` at `highkey-api.test`. They are kept as history. Their commands and hosts, such as `cargo build --release -p highkey` and `highkey-e2e-api.test`, no longer describe the current stack, and their counts and measurements apply to that architecture only. The [newest entry](#clickhouse-and-the-ingest-app--2026-11-16), at the end, lists the current checks.
+Entries dated before 16 November 2026 verified the earlier architecture: one Rust API (`apps/api`) on DuckDB, run natively with `tako.api.toml` at `highkey-api.test`. They are kept as history. Their commands and hosts, such as `cargo build --release -p highkey` and `highkey-e2e-api.test`, no longer describe the current stack, and their counts and measurements apply to that architecture only. The [newest entry](#main-config-e2e-environments--2026-11-21), at the end, lists the current checks.
 
 ## 2 November 2026: compact overview and reporting periods
 
@@ -397,3 +397,15 @@ Highkey gained its own sign-in on Better Auth: accounts in organizations with ro
 Verified with `bun run test` (377 pass: the role table for every route and role, another organization's projects answering 404, cross-site writes and foreign hosts refused, removal and demotion taking effect on the next request, keys capped by role and rate limited, the full OAuth flow with a stub metadata transport, revocation and departure stopping an agent's token at once, the metadata fetch refusing private addresses, redirects and oversized bodies, live-stream routing and subscription checks, email, two-factor and social sign-in, the server admin, and deletion, restore and idempotent wipes), `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `bun typecheck`, `bun lint`, `bun run build`, `bun run test:e2e` (217 of 218 pass, including signing up, two-factor sign-in, joining by invitation, connecting an agent with read-only access, switching organizations, old project links, and the settings flows) and `bun run test:load` (p99 159.2 ms alone, 106.3 ms with eight readers).
 
 Not verified here: email delivered through Resend (tested against a recorded request), GitHub and Google sign-in against the real providers, agent sign-in from Claude Code or Codex against a deployment, the hosted Tako database and workflow worker in production, and a deploy. One browser test fails: `tests/log-views.spec.ts` "a log view can be updated, renamed, copied and deleted from its menu" expects the same stream row across a view update, and the Logs page's 5-second live refresh can replace it in between.
+
+## Main-config E2E environments — 2026-11-21
+
+The browser runner now uses `tako.ingest.toml` and `tako.app.toml` with `dev --env test-e2e`. Their test sections select separate routes, ClickHouse credentials, and a real Tako database with the production migrations. Each run creates fresh test secrets and removes `.tako/data/envs/test-e2e/` after stopping both apps. The generated-config path and its SQLite fallback are gone; OAuth fixtures open the test environment's hosted database.
+
+Verified against the local build from [Tako PR #244](https://github.com/tako-sh/tako/pull/244), through commit `7e7883a1`, because the installed `0.0.0-392d2db` release lacks `dev --env`:
+
+- `bun fmt`, `bun run fmt:check`, and `bun typecheck`: pass.
+- Isolation tests: 3 pass, 31 assertions covering main-config routes, credentials, notifications, CA trust, and the database fixture path.
+- Full Chromium run: 231 passed; one OAuth fixture still used the old database path, and editing its shared module during the run caused one Settings import failure and four unrun cases.
+- After fixing the fixtures, a clean run of `tests/auth.spec.ts` and `tests/settings.spec.ts` passed all 10 cases. All 237 browser cases passed across the two runs, including the previously failing log-view test, realtime channels, tracker privacy, shell geometry, and URL state.
+- Teardown removed the isolated databases and ClickHouse; `tako dev list --env test-e2e --json` returned no apps.

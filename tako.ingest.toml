@@ -19,3 +19,13 @@ HIGHKEY_CHANGE_URL = "https://highkey.test/_highkey/changes"
 HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
 HIGHKEY_INGEST_CLICKHOUSE_PASSWORD = "highkey-ingest-dev"
 HIGHKEY_TRACKER_PATH = "sdk/typescript/dist/tracker.js"
+
+[envs.test-e2e]
+route = "highkey-ingest-test-e2e.test"
+
+[vars.test-e2e]
+SSL_CERT_FILE = ".tako/dev-ca.pem"
+HIGHKEY_CHANGE_URL = "https://highkey-test-e2e.test/_highkey/changes"
+HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:18124"
+HIGHKEY_INGEST_CLICKHOUSE_PASSWORD = "highkey-ingest-e2e"
+HIGHKEY_TRACKER_PATH = "sdk/typescript/dist/tracker.js"

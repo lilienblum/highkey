@@ -1,9 +1,9 @@
 // Settings for people, keys, agents and accounts, and the server admin's page.
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
-import { join } from "node:path";
 import { expect, type Page, request, test } from "@playwright/test";
 import { totpCode } from "../apps/app/test/totp";
+import { E2E_DATABASE } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;
 const PASSWORD = "a long enough password";
@@ -82,9 +82,7 @@ test("revoke an agent connection", async ({ page }) => {
   const clientId = `settings-agent-${run}`;
   const redirect = "http://127.0.0.1:33419/callback";
   const resource = `${base}/mcp`;
-  const db = new Database(
-    join(process.cwd(), ".tako", "e2e", process.env.HIGHKEY_E2E_RUN as string, "state.sqlite"),
-  );
+  const db = new Database(E2E_DATABASE, { create: false });
   const now = new Date().toISOString();
   db.run(
     `INSERT INTO "oauthClient" (id, "clientId", disabled, scopes, "clientCredentialsScopes", "createdAt", "updatedAt", name, "redirectUris", "tokenEndpointAuthMethod", "grantTypes", "responseTypes", "dpopBoundAccessTokens")
