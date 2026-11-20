@@ -1,26 +1,28 @@
 # Privacy model
 
-Highkey is built to minimize collection by default. It does not add IP addresses, user-agent strings, geolocation, device fingerprints, page titles, form values, command output, or account information to analytics events. It does not send analytics to a Highkey-operated service. Data goes to the collector you configure and remains in your self-hosted storage: your own ClickHouse server and the dashboard's SQLite file.
+Highkey is built to minimize collection by default. It does not automatically add IP addresses, user-agent strings, geolocation, device fingerprints, form values, command output, or account information to analytics events. Page titles and URL fragments require explicit tracker options. It does not send analytics to a Highkey-operated service. Data goes to the collector you configure and remains in your self-hosted storage: your own ClickHouse server and the dashboard's SQLite file.
 
 ## Defaults and explicit choices
 
-| Surface               | Default                                      | Explicit choice                                        |
-| --------------------- | -------------------------------------------- | ------------------------------------------------------ |
-| Browser identity      | No visitor/session IDs or identifier storage | Persistent random IDs, scoped to the product           |
-| Browser page metadata | Pathname and referrer hostname only          | Omit or canonicalize paths; disable referrers          |
-| Campaigns             | No campaign parameters                       | Allowlist individual UTM names                         |
-| Privacy signals       | DNT/GPC stop collection                      | No override; absence is not consent                    |
-| Custom events         | Only caller-supplied scalar properties       | Filter or drop with `beforeSend`                       |
-| CLI example           | Telemetry off; no installation ID            | `HIGHKEY_TELEMETRY=1`; optional random installation ID |
-| CLI opt-out           | `DO_NOT_TRACK=1` takes precedence            | Host application owns its persistent preference        |
-| Retention             | New Settings projects start at 365 days      | Set a project-specific window between 1 and 3650 days  |
-| Log retention         | Seven days, independently of events          | Set 1–365 days in Settings → Logs                      |
+| Surface               | Default                                      | Explicit choice                                                                 |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| Browser identity      | No visitor/session IDs or identifier storage | Persistent random IDs, scoped to the product                                    |
+| Browser page metadata | Pathname and referrer hostname only          | Omit or canonicalize paths; disable referrers; opt in to titles and hash routes |
+| Campaigns             | No campaign parameters                       | Allowlist individual UTM names                                                  |
+| Privacy signals       | DNT/GPC stop collection                      | No override; absence is not consent                                             |
+| Custom events         | Only caller-supplied scalar properties       | Filter or drop with `beforeSend`                                                |
+| CLI example           | Telemetry off; no installation ID            | `HIGHKEY_TELEMETRY=1`; optional random installation ID                          |
+| CLI opt-out           | `DO_NOT_TRACK=1` takes precedence            | Host application owns its persistent preference                                 |
+| Retention             | New Settings projects start at 365 days      | Set a project-specific window between 1 and 3650 days                           |
+| Log retention         | Seven days, independently of events          | Set 1–365 days in Settings → Logs                                               |
 
 Persistent random IDs are pseudonymous, not anonymous. Highkey separates visitor/session identities from CLI installations, and all identities are scoped to a product in queries. Do not use emails, account names, machine names, or credentials as IDs or properties.
 
 ## Collection controls
 
 Choose a collection policy before loading the tracker. `enabled: false` starts inert; `sanitizePath` can map private URLs to route patterns or omit the path; `collectReferrer: false` removes the referrer; and `beforeSend` can sanitize or drop any event. Exceptions from sanitizers drop the event. See [the collection guide](collection.md) for examples.
+
+`collectTitle: true` adds the current page title, and `trackHashChanges: true` appends the fragment to the collected path and counts hash navigation. Both are off by default. Titles and fragments can contain account names or tokens; use `beforeSend` to review titles and `sanitizePath` to review the whole opted-in route.
 
 Use `optOut()` for withdrawal. It stops future collection, discards the pending queue, aborts delivery, and clears that tracker's stored identity. Persist the user's choice in your application and honor it on subsequent loads. An abort cannot retract an event the collector has already received. Normal `shutdown()` attempts queued batches within one total deadline and is not an opt-out.
 

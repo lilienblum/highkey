@@ -13,6 +13,8 @@ export type BrowserOptions = Options & {
   identityScope?: string;
   campaigns?: readonly CampaignParam[];
   collectReferrer?: boolean;
+  collectTitle?: boolean;
+  trackHashChanges?: boolean;
   sanitizePath?: (path: string) => string | null;
   beforeSend?: (event: Event) => Event | null;
   capacity?: number;
@@ -101,11 +103,13 @@ export function startBrowserTracker(options: BrowserOptions) {
     const url = new URL(location.href);
     const properties: Properties = {};
     try {
-      const path = options.sanitizePath ? options.sanitizePath(url.pathname) : url.pathname;
+      const route = url.pathname + (options.trackHashChanges ? url.hash : "");
+      const path = options.sanitizePath ? options.sanitizePath(route) : route;
       if (path !== null) properties.path = path;
     } catch {
       return false;
     }
+    if (options.collectTitle) properties.title = document.title.slice(0, 512);
     if (options.collectReferrer !== false) {
       try {
         properties.referrer = document.referrer ? new URL(document.referrer).hostname : "Direct";
@@ -190,9 +194,11 @@ export function startBrowserTracker(options: BrowserOptions) {
       /* Storage denied: anonymous events, no fingerprint fallback. */
     }
   }
-  let previous = location.pathname + location.search;
+  const navigationKey = () =>
+    location.pathname + location.search + (options.trackHashChanges ? location.hash : "");
+  let previous = navigationKey();
   const navigation = () => {
-    const next = location.pathname + location.search;
+    const next = navigationKey();
     if (next !== previous) {
       previous = next;
       pageView();
@@ -215,6 +221,7 @@ export function startBrowserTracker(options: BrowserOptions) {
   cleanup = () => {
     clearInterval(timer);
     removeEventListener("popstate", navigation);
+    if (options.trackHashChanges) removeEventListener("hashchange", navigation);
     removeEventListener("pagehide", pageHide);
     options.signal?.removeEventListener("abort", optOut);
     if (history.pushState === wrappedPush) history.pushState = push;
@@ -223,6 +230,7 @@ export function startBrowserTracker(options: BrowserOptions) {
   history.pushState = wrappedPush;
   history.replaceState = wrappedReplace;
   addEventListener("popstate", navigation);
+  if (options.trackHashChanges) addEventListener("hashchange", navigation);
   addEventListener("pagehide", pageHide);
   options.signal?.addEventListener("abort", optOut, { once: true });
   pageView();
