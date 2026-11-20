@@ -5,7 +5,7 @@
     "": {
       "name": "highkey",
       "dependencies": {
-        "tako.sh": "0.0.0-392d2db",
+        "tako.sh": "0.0.0-77be09d",
       },
       "devDependencies": {
         "@playwright/test": "^1.58.0",
@@ -578,7 +578,7 @@
 
     "tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
 
-    "tako.sh": ["tako.sh@0.0.0-392d2db", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1", "@sinclair/typebox": "^0.34.52", "typescript": "^6.0.3" }, "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "tako.sh": "dist/cli.mjs", "tako-worker": "dist/entrypoints/bun-worker.mjs", "tako-sh-gen-store-types": "dist/gen-store-types.mjs", "tako-sh-gen-channel-types": "dist/gen-channel-types.mjs", "tako-sh-gen-network-types": "dist/gen-network-types.mjs" } }, "sha512-hiO3CS1CFvDhyKYK5IMcIPCAwsVErTcISLDhfW1XPtXiQBPld3/JmsSTpgVmTQwY4cp0LjYvcRMhG41hJg5WkA=="],
+    "tako.sh": ["tako.sh@0.0.0-77be09d", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1", "@sinclair/typebox": "^0.34.52", "typescript": "^6.0.3" }, "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "tako.sh": "dist/cli.mjs", "tako-worker": "dist/entrypoints/bun-worker.mjs", "tako-gen-store-types": "dist/gen-store-types.mjs", "tako-gen-channel-types": "dist/gen-channel-types.mjs", "tako-gen-network-types": "dist/gen-network-types.mjs" } }, "sha512-1nVkfxkctREccpPGraeRPUECXcYF35h4+z0oW9tW5WCm4+/qffgExYMFY8Qa4dvriQccaAlPI0dQJ6UbgQj2ew=="],
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 

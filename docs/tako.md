@@ -2,7 +2,7 @@
 
 Highkey runs as two native Tako apps: `tako.ingest.toml` runs the ingest app as `highkey-ingest`, and `tako.app.toml` runs the app as `highkey`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own.
 
-Highkey uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. Tako itself is unchanged. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. Use CLI/server release `0.0.0-9ae824f` or later with ephemeral support; the JavaScript SDK is pinned to that release.
+Highkey uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. The JavaScript SDK is pinned to `0.0.0-77be09d`; use the matching CLI for ordinary local development. The main-config browser test runner also needs `tako dev --env`, which is not in this release.
 
 ## Local development
 
@@ -24,6 +24,8 @@ bun scripts/clickhouse.ts dev-down
 4. It starts the ingest app at `https://highkey-ingest.test` (`cargo run -p highkey-ingest`) and the dashboard at `https://highkey.test`.
 
 The development ClickHouse passwords are fixed in each config's `[vars.development]`; they protect nothing but the local server. The dashboard forwards the ingest paths and `/tracker.js` to `HIGHKEY_INGEST_URL` (`https://highkey-ingest.test`), so collectors and `bun seed` can use `https://highkey.test` alone.
+
+If the checkout moved and Docker cannot mount `deploy/clickhouse/.../highkey.xml`, run `bun scripts/clickhouse.ts dev-down`, then `bun dev`. This replaces the container and its obsolete bind mounts while reusing the named `highkey-dev-clickhouse` data volume.
 
 After upgrading Tako, restart any existing dev daemon as well as the apps. An app-only `tako dev --restart` does not replace an older daemon. Stop Highkey's apps before restarting it.
 
