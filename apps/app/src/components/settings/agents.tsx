@@ -4,7 +4,7 @@ import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import {
   Table,
   TableBody,
@@ -71,7 +71,7 @@ export function Agents() {
             {connections.error ? (
               <ErrorState message={connections.error} retry={connections.reload} />
             ) : !connections.data ? (
-              <Skeleton className="h-16 w-full" />
+              <PageLoading label="Loading connected agents" />
             ) : connections.data.length === 0 ? (
               <p className="settings-muted">No agents are connected.</p>
             ) : (

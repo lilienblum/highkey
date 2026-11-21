@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -96,7 +96,7 @@ export function ApiKeys() {
             {keys.error ? (
               <ErrorState message={keys.error} retry={keys.reload} />
             ) : !keys.data ? (
-              <Skeleton className="h-16 w-full" />
+              <PageLoading label="Loading API keys" />
             ) : keys.data.length === 0 ? (
               <p className="settings-muted">No API keys yet.</p>
             ) : (

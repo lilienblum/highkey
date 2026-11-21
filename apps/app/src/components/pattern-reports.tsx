@@ -16,7 +16,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ValueSelect } from "./value-select";
-import { Skeleton } from "./ui/skeleton";
+import { PageLoading } from "./loading";
 
 type Result = Awaited<ReturnType<typeof patterns>>;
 type Metric = "visitors" | "sessions" | "bounce_rate" | "duration_ms";
@@ -257,7 +257,7 @@ export function PatternReports({ filters }: { filters: Record<string, unknown> }
             )}
             {query.error && <ErrorState message={query.error} retry={refresh} />}
             {query.loading ? (
-              <Skeleton className="h-52 w-full" />
+              <PageLoading label="Loading report" />
             ) : data?.mode === "weekly" ? (
               <Heatmap data={data} metric={metric} />
             ) : data?.mode === "flow" ? (

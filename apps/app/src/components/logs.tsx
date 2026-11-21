@@ -36,7 +36,7 @@ import { useDisplayPreferences } from "./display-preferences";
 import { Button } from "./ui/button";
 import { CopyButton } from "./ui/copy-button";
 import { Input } from "./ui/input";
-import { Skeleton } from "./ui/skeleton";
+import { PageLoading } from "./loading";
 import { Field, FieldLabel } from "./ui/field";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "./ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
@@ -62,11 +62,7 @@ export function Logs() {
         page={logViews}
         product={product}
         slug={view}
-        loading={
-          <div className="logs-viewport" aria-hidden="true">
-            <Skeleton className="h-3 w-full" />
-          </div>
-        }
+        loading={<PageLoading label="Loading log view" />}
       />
     );
   // Only the project remounts the explorer: a source switch keeps the stream, histogram and
@@ -409,9 +405,7 @@ function LogExplorer() {
             data ? `${number(data.total)} logs in the selected time range` : "Loading log volume"
           }
         >
-          {!data && pending ? (
-            <Skeleton className="h-full w-full" />
-          ) : (
+          {data && (
             // HTML columns rather than a stretched SVG, so the dither tone keeps square 2px pixels.
             // Dragging across them (or clicking one) narrows the query to those buckets.
             <div
@@ -491,13 +485,7 @@ function LogExplorer() {
             <span>Message</span>
           </div>
           {!data && pending ? (
-            <div className="logs-viewport">
-              {["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"].map((id) => (
-                <div className="logs-placeholder" key={id}>
-                  <Skeleton className="h-3 w-full" />
-                </div>
-              ))}
-            </div>
+            <PageLoading label="Loading logs" />
           ) : data?.logs.length ? (
             <LogStream
               key={viewKey}

@@ -1,6 +1,4 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { Skeleton as MeasuredSkeleton } from "skullet/react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { Growth } from "@/lib/growth";
 
@@ -68,10 +66,8 @@ export function WidgetValue({
 }) {
   return (
     <div className="widget-measurement">
-      <div className="widget-value">
-        <MeasuredSkeleton loading={loading}>
-          <span>{loading ? "12,345" : value}</span>
-        </MeasuredSkeleton>
+      <div className="widget-value" aria-busy={loading}>
+        {loading ? null : value}
       </div>
       {growth && <GrowthLine growth={growth} loading={growthLoading} compact={compactGrowth} />}
       <span className="widget-measure-label">{label}</span>
@@ -98,29 +94,19 @@ export function GrowthLine({
       data-compact={compact || undefined}
       title={loading ? undefined : none ? "No previous data" : compact ? growth.text : undefined}
     >
-      <MeasuredSkeleton loading={loading}>
-        <span>
-          {loading ? (
-            compact ? (
-              "+12% vs prior 30d"
-            ) : (
-              "+12% vs previous 30 days"
-            )
-          ) : none ? (
-            <>
-              <span aria-hidden="true">{growth.text}</span>
-              <span className="sr-only">no previous data</span>
-            </>
-          ) : compact ? (
-            <>
-              <span aria-hidden="true">{growth.short}</span>
-              <span className="sr-only">{growth.text}</span>
-            </>
-          ) : (
-            growth.text
-          )}
-        </span>
-      </MeasuredSkeleton>
+      {loading ? null : none ? (
+        <>
+          <span aria-hidden="true">{growth.text}</span>
+          <span className="sr-only">no previous data</span>
+        </>
+      ) : compact ? (
+        <>
+          <span aria-hidden="true">{growth.short}</span>
+          <span className="sr-only">{growth.text}</span>
+        </>
+      ) : (
+        growth.text
+      )}
     </span>
   );
 }
@@ -138,8 +124,7 @@ export function WidgetContent({
 }) {
   if (loading)
     return (
-      <div className="widget-placeholder" role="status" aria-label={`Loading ${label}`}>
-        <Skeleton className="h-full w-full" />
+      <div className="min-h-0 w-full flex-1" role="status" aria-label={`Loading ${label}`}>
         <span className="sr-only">Loading {label}…</span>
       </div>
     );

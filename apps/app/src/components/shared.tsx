@@ -1,5 +1,4 @@
 import { useWorkspaceTarget } from "@/lib/workspace-route";
-import { Skeleton } from "@/components/ui/skeleton";
 import { bucketLabels, partialBucketNote, type TimeBucket } from "@/lib/time-buckets";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -134,12 +133,7 @@ export function SeriesChart({
       <CardContent>
         <div className="chart-plot" aria-busy={pending}>
           {pending ? (
-            <div
-              className="series-chart chart-placeholder"
-              role="status"
-              aria-label="Loading chart"
-            >
-              <Skeleton className="h-full w-full" aria-hidden="true" />
+            <div className="series-chart" role="status" aria-label="Loading chart">
               <span className="sr-only">Loading chart</span>
             </div>
           ) : !data || emptyMessage ? (

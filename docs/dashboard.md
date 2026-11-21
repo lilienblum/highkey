@@ -53,7 +53,7 @@ A single wide **Activity over time** chart follows. Choose events, identified ac
 
 Chart grouping is automatic in Overview and Events: ranges up to two days use hourly points; up to 31 days use daily points; up to 180 days use weekly points; longer ranges use monthly points. A note states the grouping and any partial buckets. Buckets and labels are UTC; weeks start Monday and months follow calendar boundaries. No separate interval choice is required.
 
-Distinct identities are counted within each bucket; summing bucket counts does not give a period's distinct count. Missing durations remain gaps, not zero-duration commands. Missing measurements are explained. Changing a chart measure or breakdown only loads that region. Automatic refresh retains existing values and mounted plots; errors offer a local Retry. Skullet placeholders occupy affected regions for new scopes. The chart and Breakdown retain their positions while source discovery completes. All aggregation and filtering remain server-side; duration summaries reuse the main response.
+Distinct identities are counted within each bucket; summing bucket counts does not give a period's distinct count. Missing durations remain gaps, not zero-duration commands. Missing measurements are explained. Changing a chart measure or breakdown only loads that region. Automatic refresh retains existing values and mounted plots; errors offer a local Retry. For a new scope, measurements stay blank until the results arrive. The chart and Breakdown retain their positions while source discovery completes. All aggregation and filtering remain server-side; duration summaries reuse the main response.
 
 ## Breakdown dimensions
 

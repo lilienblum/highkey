@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -114,7 +114,7 @@ export function Members() {
             {org.error ? (
               <ErrorState message={org.error} retry={org.reload} />
             ) : !org.data ? (
-              <Skeleton className="h-24 w-full" />
+              <PageLoading label="Loading members" />
             ) : (
               <Table>
                 <TableHeader>

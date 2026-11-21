@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ValueSelect } from "@/components/value-select";
@@ -64,7 +64,7 @@ export function OrganizationSettings() {
         {org.error ? (
           <ErrorState message={org.error} retry={org.reload} />
         ) : !org.data ? (
-          <Skeleton className="h-40 w-full" />
+          <PageLoading label="Loading organization" />
         ) : (
           <>
             <General org={org.data} editable={oversees(role)} />

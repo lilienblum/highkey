@@ -269,12 +269,6 @@
   text-overflow: ellipsis;
   white-space: pre;
 }
-.logs-placeholder {
-  height: 35px;
-  display: flex;
-  align-items: center;
-  padding-inline: 12px;
-}
 .logs-empty {
   min-height: 0;
   display: flex;

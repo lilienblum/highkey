@@ -4,7 +4,7 @@ import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -73,7 +73,7 @@ export function DeletedProjects({ organizationSlug }: { organizationSlug: string
         {deleted.error ? (
           <ErrorState message={deleted.error} retry={deleted.reload} />
         ) : !deleted.data ? (
-          <Skeleton className="h-16 w-full" />
+          <PageLoading label="Loading deleted projects" />
         ) : deleted.data.length === 0 ? (
           <p className="settings-muted">No deleted projects.</p>
         ) : (

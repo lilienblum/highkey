@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -407,7 +407,7 @@ function Sessions() {
         {sessions.error ? (
           <ErrorState message={sessions.error} retry={sessions.reload} />
         ) : !sessions.data ? (
-          <Skeleton className="h-16 w-full" />
+          <PageLoading label="Loading sessions" />
         ) : (
           <>
             <Table>

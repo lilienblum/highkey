@@ -1,4 +1,3 @@
-import { SkulletProvider } from "skullet/react";
 import { DisplayPreferencesProvider } from "@/components/display-preferences";
 import {
   createRootRouteWithContext,
@@ -137,22 +136,11 @@ function Root() {
   return (
     <QueryClientProvider client={queryClient}>
       <DisplayPreferencesProvider>
-        <SkulletProvider
-          theme={{
-            light: { base: "var(--skeleton-base)", highlight: "var(--skeleton-highlight)" },
-            dark: { base: "var(--skeleton-base)", highlight: "var(--skeleton-highlight)" },
-            radius: "3px",
-            animation: "shimmer",
-            speed: "slow",
-          }}
-          reveal={{ order: "together", duration: 120, hold: 150 }}
-        >
-          {accountScreen ? (
-            <Outlet />
-          ) : (
-            <AppShell initialProducts={initialProducts} serverNow={serverNow} />
-          )}
-        </SkulletProvider>
+        {accountScreen ? (
+          <Outlet />
+        ) : (
+          <AppShell initialProducts={initialProducts} serverNow={serverNow} />
+        )}
       </DisplayPreferencesProvider>
     </QueryClientProvider>
   );
@@ -190,7 +178,7 @@ function WorkspaceError({ error }: { error: unknown }) {
 }
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark" data-plain-loading="" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <ScriptOnce>{sidebarScript}</ScriptOnce>
         <HeadContent />

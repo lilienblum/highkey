@@ -62,6 +62,6 @@ Supported page/referrer rows expose a separate external-link icon on hover or ke
 
 ## States and verification
 
-Keep shell, chart, reports, and unchanged-scope results mounted during refresh. Use installed Skullet text/box placeholders only within pending regions; changed scope must not relabel old data. Errors remain local with Retry, and empty ranges retain meaningful controls and explanations. Preserve keyboard chart inspection, focus, touch scrolling, and reduced-motion behavior. Active now is a live identified-actor measure, not an estimate inferred from IP or user agent.
+Keep shell, chart, reports, and unchanged-scope results mounted during refresh. Leave pending measurements blank; changed scope must not relabel old data. Errors remain local with Retry, and empty ranges retain meaningful controls and explanations. Preserve keyboard chart inspection, focus, touch scrolling, and reduced-motion behavior. Active now is a live identified-actor measure, not an estimate inferred from IP or user agent.
 
 Reference screenshots: `/tmp/highkey-overview-1440.png` and `/tmp/highkey-overview-390.png`, captured with synthetic fixtures. Review confirmed reference fidelity and required Breakdown's stable first position during source resolution; that correction is implemented. Screenshots are validation artifacts, not product assets or customer evidence. Explore and Settings keep their established compositions; no new collection or backend feature is implied.

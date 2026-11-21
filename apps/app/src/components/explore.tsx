@@ -52,7 +52,7 @@ const loadOptions = (id: string, body: Record<string, unknown>, signal: AbortSig
   );
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
 import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared";
-import { ExploreLoading } from "./loading";
+import { PageLoading } from "./loading";
 import { Spinner } from "@/components/ui/spinner";
 export function Explore() {
   const workspaceTarget = useWorkspaceTarget();
@@ -92,7 +92,7 @@ export function Explore() {
         page={eventViews}
         product={product}
         slug={view}
-        loading={<ExploreLoading />}
+        loading={<PageLoading label="Loading query results" />}
       />
     );
   return product ? (
@@ -621,7 +621,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
       {query.error && !data ? (
         <ErrorState message={query.error} retry={retry} />
       ) : !data ? (
-        <ExploreLoading />
+        <PageLoading label="Loading query results" />
       ) : (
         data && (
           <>

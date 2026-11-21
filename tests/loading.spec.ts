@@ -95,10 +95,7 @@ test("date changes leave measurements blank and breakdown loading stays local", 
     await expect(pending).toHaveAttribute("aria-busy", "true");
     await expect(pending).toBeVisible();
     await expect(pending.locator(".overview-widget")).toHaveCount(5);
-    await expect(pending.locator(".widget-value").getByText("12,345").first()).toBeHidden();
-    await expect(
-      pending.locator('[skullet-bar]:visible, [data-slot="skeleton"]:visible'),
-    ).toHaveCount(0);
+    await expect(pending.locator(".activity-widget .widget-value")).toBeEmpty();
     await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "true");
     const pendingChart = await pending.locator(".activity-widget").boundingBox();
     const pendingMetric = await pending.locator(".overview-widget").first().boundingBox();

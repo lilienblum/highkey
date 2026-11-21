@@ -446,7 +446,7 @@ test("dragging across the log volume histogram narrows the query to those bucket
   );
 });
 
-test("switching sources keeps the logs stream mounted and never flashes a skeleton", async ({
+test("switching sources keeps the logs stream mounted without flashing a loading or empty state", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -501,7 +501,7 @@ test("switching sources keeps the logs stream mounted and never flashes a skelet
     new MutationObserver(() => {
       if (
         document.querySelector(
-          ".logs-placeholder, .logs-empty, .logs-volume .skeleton, .logs-volume [data-slot=skeleton]",
+          '.logs-empty, .logs-stream [role="status"][aria-label="Loading logs"]',
         )
       )
         w.__flashes = (w.__flashes as number) + 1;

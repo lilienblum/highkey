@@ -25,6 +25,6 @@ Theme refinement: reduce glare on large Light surfaces; keep Dark surfaces and t
 
 Chart implementation: official Bklit UI area charts now power Overview and Explore. Retain Kanagawa Wave tokens, the linear analytical treatment, UTC formatting, numeric gaps, keyboard inspection, and stable refresh geometry.
 
-Loading refinement: use the installed Skullet package for measured text and component placeholders, with existing results retained during refresh. Navigation and controls remain server-rendered and stable.
+Loading refinement: show a short text status until query results arrive. Keep existing results during refresh. Navigation and controls remain server-rendered and stable.
 
 Automatic freshness: Overview and Explore reconcile live hints, reconnects, tab returns, and a 30-second visible-tab interval. There is no routine refresh control. Existing content stays mounted, drafts and page selection persist, and an open event inspector retains its captured page while the newest-first table updates.

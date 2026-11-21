@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { ErrorState } from "@/components/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "../loading";
 import { Switch } from "@/components/ui/switch";
 import { oversees, useOrganizationRole } from "./settings-nav";
 import { useLoaded } from "./use-loaded";
@@ -31,7 +31,7 @@ export function RevenueSettings({ projectId }: { projectId: string }) {
         {settings.error ? (
           <ErrorState message={settings.error} retry={settings.reload} />
         ) : !settings.data ? (
-          <Skeleton className="h-16 w-full" />
+          <PageLoading label="Loading revenue settings" />
         ) : (
           <Field orientation="horizontal">
             <div>

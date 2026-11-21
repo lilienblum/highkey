@@ -1088,8 +1088,7 @@ p {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.metric-card p,
-.metric-placeholder-detail {
+.metric-card p {
   min-height: 35px;
   font-size: 12px;
   line-height: 1.45;
@@ -1293,25 +1292,6 @@ p {
   min-height: 32px;
   color: var(--muted-foreground);
   font-size: 13px;
-}
-.chart-placeholder {
-  position: relative;
-}
-.chart-placeholder-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--card);
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.chart-placeholder-axis {
-  position: absolute;
-  inset: auto 0 -17px;
-  display: flex;
-  justify-content: space-between;
 }
 .query-builder {
   margin-bottom: 0;
@@ -1639,8 +1619,7 @@ details[open] > .install-summary > svg {
   .metric-value {
     font-size: 26px;
   }
-  .metric-card p,
-  .metric-placeholder-detail {
+  .metric-card p {
     font-size: 11px;
   }
   .integration-card .card-heading {
@@ -2180,8 +2159,7 @@ details[open] > .install-summary > svg {
     font-size: 13px;
   }
   .metric-label,
-  .metric-card p,
-  .metric-placeholder-detail {
+  .metric-card p {
     font-size: 12px;
   }
   .stream-mobile-time {
@@ -2668,10 +2646,6 @@ html:has([data-page="new-project"]) {
 }
 
 /* Report controls share the content grid; there is no separate application bar. */
-:root {
-  --skeleton-base: color-mix(in oklab, var(--foreground) 10%, transparent);
-  --skeleton-highlight: color-mix(in oklab, var(--foreground) 8%, transparent);
-}
 .page-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2827,40 +2801,6 @@ html:has([data-page="new-project"]) {
   }
 }
 
-/* Fixed-size Skullet boxes wait too, so fast responses never flash a placeholder. */
-@keyframes placeholder-wait {
-  from,
-  to {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  [data-slot="skeleton"] {
-    animation: placeholder-wait 150ms step-end;
-  }
-}
-
-/* Temporary plain-loading preview. Remove the attribute on <html> to compare with skeletons. */
-html[data-plain-loading] {
-  :is(
-    [data-slot="skeleton"],
-    [skullet-loading],
-    [skullet-bar],
-    [skullet-layer],
-    [skullet-snapshot]
-  ) {
-    visibility: hidden;
-  }
-  [data-loading-layout] > :not(.sr-only),
-  .logs-placeholder,
-  .stream-table tr[aria-hidden="true"]:has([data-slot="skeleton"]) {
-    display: none;
-  }
-  [data-loading-layout] > .sr-only {
-    @apply not-sr-only text-sm text-muted-foreground;
-  }
-}
-
 /* Overview: measurement widgets with one shared date range. */
 .overview-dashboard {
   container-type: inline-size;
@@ -2989,6 +2929,7 @@ html[data-plain-loading] {
   min-width: 0;
 }
 .widget-value {
+  min-height: 1lh;
   color: var(--heading);
   font-family: var(--font-pixel);
   font-size: 32px;
@@ -3051,11 +2992,6 @@ html[data-plain-loading] {
   height: 100%;
   width: 100%;
   min-height: 0;
-}
-.widget-placeholder {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
 }
 .widget-empty {
   flex: 1;

@@ -776,16 +776,8 @@
       }
     ],
     "loading": {
-      "library": "skullet",
-      "base": "color-mix(in oklab, var(--foreground) 10%, transparent)",
-      "highlight": "color-mix(in oklab, var(--foreground) 8%, transparent)",
-      "radius": "3px",
-      "animation": "shimmer",
-      "speed": "slow",
-      "reveal": "together",
-      "durationMs": 120,
-      "holdMs": 150,
-      "refresh": "Retain current data; placeholders only for incoming regions."
+      "initial": "Use a local text status and leave unavailable measurements blank.",
+      "refresh": "Retain current data for the same scope."
     },
     "focus": {
       "value": "2px solid var(--ring)",

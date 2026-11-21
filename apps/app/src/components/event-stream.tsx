@@ -35,7 +35,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -314,10 +313,6 @@ export function EventStream({
   const pageCount = Math.max(1, Math.min(10001, Math.ceil(total / pageSize)));
   const start = events.length ? page * pageSize + 1 : 0;
   const end = page * pageSize + events.length;
-  const pendingRows = Array.from(
-    { length: Math.min(pageSize, Math.max(1, total - page * pageSize)) },
-    (_, offset) => page * pageSize + offset,
-  );
   return (
     <>
       <Card
@@ -375,28 +370,19 @@ export function EventStream({
                 ))}
               </TableHeader>
               <TableBody>
-                {loading
-                  ? pendingRows.map((position) => (
-                      <TableRow key={position} aria-hidden="true">
-                        {columns.map((column) => (
-                          <TableCell key={column.id} className={`stream-column-${column.id}`}>
-                            <Skeleton className="h-8 w-full" />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  : table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={selectedId === row.id ? "selected" : undefined}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className={`stream-column-${cell.column.id}`}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
+                {!loading &&
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      data-state={selectedId === row.id ? "selected" : undefined}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className={`stream-column-${cell.column.id}`}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
                 {!loading && !events.length && (
                   <TableRow>
                     <TableCell colSpan={columns.length}>

@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Spinner } from "@/components/ui/spinner";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoading } from "./loading";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -435,18 +435,7 @@ function ProductSettings({ product }: { product: Product }) {
             )}
             <div className="key-list" aria-busy={keyState.status === "loading"}>
               {keyState.status === "loading" ? (
-                <div data-loading-layout="" role="status" aria-label="Loading ingestion keys">
-                  <span className="sr-only">Loading ingestion keys…</span>
-                  {[1, 2].map((n) => (
-                    <div key={n} className="key-row" aria-hidden="true">
-                      <div className="flex flex-col gap-2">
-                        <Skeleton className="h-3 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                      <Skeleton className="size-8" />
-                    </div>
-                  ))}
-                </div>
+                <PageLoading label="Loading ingestion keys" />
               ) : keyState.status === "error" ? (
                 <ErrorState message={keyState.message} retry={() => void loadKeys()} />
               ) : keyState.keys.length ? (
