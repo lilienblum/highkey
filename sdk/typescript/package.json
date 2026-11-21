@@ -20,6 +20,10 @@
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js"
     },
+    "./consent": {
+      "types": "./dist/consent.d.ts",
+      "import": "./dist/consent.js"
+    },
     "./ai": {
       "types": "./dist/ai.d.ts",
       "import": "./dist/ai.js"
@@ -32,7 +36,7 @@
   ],
   "scripts": {
     "build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.build.json && bun run build:tracker",
-    "build:tracker": "bun build ./browser.ts --target=browser --format=esm --minify --outfile=dist/tracker.js",
+    "build:tracker": "bun build ./hosted.ts --target=browser --format=esm --minify --outfile=dist/tracker.js",
     "prepack": "bun run build"
   },
   "publishConfig": {

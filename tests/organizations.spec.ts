@@ -289,6 +289,13 @@ test.describe("first project", () => {
     await page.setViewportSize({ width: 1280, height: 844 });
     await icon.click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByLabel("Visitor counting").click();
+    await page.getByRole("option", { name: "Returning visitors" }).click();
+    await page.getByLabel("Layout", { exact: true }).click();
+    await page.getByRole("option", { name: "Corner card" }).click();
+    await page.getByLabel("Theme", { exact: true }).click();
+    await page.getByRole("option", { name: "Light", exact: true }).click();
+    await expect(page.getByText("Prompt preview")).toBeVisible();
     await page.getByRole("button", { name: "Create project" }).click();
     // The same page then shows how to connect it: the source's new key in a snippet, and the
     // agent's MCP setup.
@@ -301,6 +308,10 @@ test.describe("first project", () => {
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
     expect(key).toMatch(/^pk_/);
     await expect(page.locator(".integration-code")).toContainText(key);
+    await expect(page.locator(".integration-code")).toContainText("registerAnalyticsConsent");
+    await expect(page.locator(".integration-code")).toContainText(
+      'layout: "corner", theme: "light"',
+    );
     const activation = page.getByRole("region", { name: "Activation checklist" });
     await expect(page.getByText("Waiting for first event", { exact: false })).toBeVisible();
     await page.getByRole("combobox", { name: "Install framework" }).click();

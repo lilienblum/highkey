@@ -3,6 +3,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { highlight } from "@/lib/highlight";
 import { ValueSelect } from "./value-select";
+import type { Source } from "@/lib/api";
 
 /** The ways a source sends events: the hosted browser tracker, the SDKs, or plain HTTP. */
 export type Integration = "browser" | "typescript" | "rust" | "http";
@@ -94,12 +95,16 @@ export function IntegrationTabs({
   onValueChange,
   ingestionKey,
   visitorMode,
+  consentPrompt = "site",
+  consentTheme = "auto",
   onCopyError,
 }: {
   value: Integration;
   onValueChange: (value: Integration) => void;
   ingestionKey?: string;
   visitorMode?: "off" | "cookieless" | "persistent";
+  consentPrompt?: Source["consent_prompt"];
+  consentTheme?: Source["consent_theme"];
   onCopyError: () => void;
 }) {
   const origin = useOrigin();
@@ -107,14 +112,14 @@ export function IntegrationTabs({
   const server = ingestionKey?.startsWith("sk_");
   if (server && (value === "browser" || value === "rust")) value = "typescript";
   const key = ingestionKey || "YOUR_INGESTION_KEY";
+  const builtIn = visitorMode === "persistent" && consentPrompt !== "site";
   let raw = integrationSnippet(value, origin, key);
   if (value === "browser" && visitorMode && visitorMode !== "off") {
     raw = raw.replace('identity: "none"', `identity: "${visitorMode}"`);
-    if (visitorMode === "persistent")
-      raw = raw.replace(
-        "  const tracker",
-        "  // Run only after your application has obtained analytics consent.\n  const tracker",
-      );
+    if (builtIn)
+      raw = `<script type="module" referrerpolicy="no-referrer">\n  import { registerAnalyticsConsent } from "${origin}/tracker.js";\n\n  const consent = registerAnalyticsConsent({\n    endpoint: "${origin}",\n    key: "${key}",\n    appearance: { layout: "${consentPrompt}", theme: "${consentTheme}" },\n  });\n  // In your footer: <button type="button" data-highkey-privacy>Privacy preferences</button>\n</script>`;
+    else if (visitorMode === "persistent")
+      raw = `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${origin}/tracker.js";\n\n  let tracker;\n  // Call this from your existing consent manager on load and when consent changes.\n  function analyticsConsentChanged(allowed) {\n    if (allowed) {\n      tracker ??= startBrowserTracker({ endpoint: "${origin}", key: "${key}", identity: "persistent" });\n    } else {\n      tracker?.optOut();\n      tracker = undefined;\n    }\n  }\n</script>`;
   }
   const snippet =
     value !== "browser"
@@ -129,7 +134,15 @@ export function IntegrationTabs({
           ? raw.replace("<script ", "<script is:inline ")
           : raw;
   const curl = `EVENT_ID="$(uuidgen)"\ncurl --fail-with-body '${origin}/api/ingest' \\\n  -H 'Authorization: Bearer ${key}' \\\n  -H 'Content-Type: application/json' \\\n  --data "{\\"event_id\\":\\"$EVENT_ID\\",\\"name\\":\\"setup_check\\",\\"source\\":\\"http\\"}"`;
-  const prompt = `Install Highkey analytics in this ${value === "browser" ? placements[framework][0] : value} project using ${origin} as the endpoint. ${server ? "Read HIGHKEY_SERVER_KEY only from the backend environment." : "Read the source's public ingestion key from the project's configuration."} Inspect the existing framework and install once. Keep anonymous collection and DNT/GPC defaults; exclude private routes, secrets and personal data. Do not enable identity, campaign capture or prompts. Send one setup_check event and verify the acknowledgment and source in Highkey.`;
+  const identityInstruction =
+    value === "browser" && visitorMode === "persistent"
+      ? builtIn
+        ? `Use registerAnalyticsConsent with the ${consentPrompt} layout and ${consentTheme} theme, and add a data-highkey-privacy button to the footer. Do not start a second tracker.`
+        : "Start persistent tracking only from the site's existing analytics consent handler; opt out when consent is withdrawn."
+      : value === "browser" && visitorMode === "cookieless"
+        ? "Use cookieless daily visitor counting."
+        : "Keep anonymous collection; do not enable identity.";
+  const prompt = `Install Highkey analytics in this ${value === "browser" ? placements[framework][0] : value} project using ${origin} as the endpoint. ${server ? "Read HIGHKEY_SERVER_KEY only from the backend environment." : "Read the source's public ingestion key from the project's configuration."} Inspect the existing framework and install once. ${identityInstruction} Honor DNT/GPC, exclude private routes, secrets and personal data, and keep campaign capture off. Send one setup_check event and verify the acknowledgment and source in Highkey.`;
   return (
     <Tabs value={value} onValueChange={(next) => onValueChange(next as Integration)}>
       <TabsList
@@ -185,7 +198,9 @@ export function IntegrationTabs({
           {server
             ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
             : value === "browser" && visitorMode === "persistent"
-              ? "Requires consent. The tracker checks the source policy before using local storage."
+              ? builtIn
+                ? "Highkey asks before counting visits. Add a Privacy preferences button to your footer so visitors can change their choice."
+                : "Connect this function to your site's analytics consent manager."
               : value === "browser" && visitorMode === "cookieless"
                 ? "No device storage. Anonymous visitor hashes expire at UTC midnight."
                 : NOTE[value]}

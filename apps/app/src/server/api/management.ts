@@ -35,7 +35,13 @@ const PRODUCT = {
   website_url: "string?",
   website_urls: "string[]?",
 } as const;
-const SOURCE = { name: "string", icon: "string?", visitor_mode: "string?" } as const;
+const SOURCE = {
+  name: "string",
+  icon: "string?",
+  visitor_mode: "string?",
+  consent_prompt: "string?",
+  consent_theme: "string?",
+} as const;
 
 export function registerManagement(): void {
   route(

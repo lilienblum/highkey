@@ -27,9 +27,34 @@ export type BrowserOptions = Options & {
   beforeSend?: (event: Event) => Event | null;
   capacity?: number;
 };
-/** No identity or campaign values by default. The host application owns consent. */
+/** Shared by direct tracking and the optional consent prompt. */
+export function browserPrivacyBlocked(options: BrowserOptions) {
+  return (
+    options.enabled === false ||
+    options.signal?.aborted === true ||
+    navigator.doNotTrack === "1" ||
+    (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true
+  );
+}
+
+export function browserNamespace(options: BrowserOptions) {
+  return `highkey:${new URL(options.endpoint, location.href).origin}:${options.identityScope ?? options.key}`;
+}
+
+export async function persistentSource(options: BrowserOptions, signal: AbortSignal) {
+  const response = await fetch(`${options.endpoint.replace(/\/$/, "")}/api/ingest`, {
+    headers: { authorization: `Bearer ${options.key}` },
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    redirect: "error",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(options.timeoutMs ?? 800)]),
+  });
+  return response.ok && (await response.json()).visitor_mode === "persistent";
+}
+
+/** No identity or campaign values by default. For a managed opt-in, use registerAnalyticsConsent. */
 export function startBrowserTracker(options: BrowserOptions) {
-  const namespace = `highkey:${new URL(options.endpoint, location.href).origin}:${options.identityScope ?? options.key}`;
+  const namespace = browserNamespace(options);
   const capacity = options.capacity ?? 100;
   const campaignKeys = campaignParams.filter((key) => options.campaigns?.includes(key));
   const queue: Event[] = [];
@@ -47,11 +72,7 @@ export function startBrowserTracker(options: BrowserOptions) {
   let groups: Record<string, string> = {};
   let checkoutEventId: string | undefined;
   let cleanup = () => {};
-  const privacyBlocked = () =>
-    options.enabled === false ||
-    options.signal?.aborted === true ||
-    navigator.doNotTrack === "1" ||
-    (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
+  const privacyBlocked = () => browserPrivacyBlocked(options);
   function stop() {
     stopped = true;
     cleanup();
@@ -379,14 +400,7 @@ export function startBrowserTracker(options: BrowserOptions) {
     const temporary = (provisional = crypto.randomUUID());
     policy = (async () => {
       try {
-        const r = await fetch(`${options.endpoint.replace(/\/$/, "")}/api/ingest`, {
-          headers: { authorization: `Bearer ${options.key}` },
-          credentials: "omit",
-          referrerPolicy: "no-referrer",
-          redirect: "error",
-          signal: AbortSignal.any([delivery.signal, AbortSignal.timeout(options.timeoutMs ?? 800)]),
-        });
-        if (r.ok && (await r.json()).visitor_mode === "persistent" && canTrack()) {
+        if ((await persistentSource(options, delivery.signal)) && canTrack()) {
           const stored = localStorage.getItem(`${namespace}:visitor`) ?? temporary;
           localStorage.setItem(`${namespace}:visitor`, stored);
           actor = stored;

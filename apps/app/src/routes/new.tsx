@@ -66,6 +66,8 @@ function NewProject() {
         name: sourceName,
         icon: sourceDraft.icon,
         visitor_mode: sourceDraft.visitor_mode,
+        consent_prompt: sourceDraft.consent_prompt,
+        consent_theme: sourceDraft.consent_theme,
       });
       const key = await api<{ key: string }>(`/products/${made.id}/keys`, "POST", {
         label: source.current.name,
@@ -298,6 +300,8 @@ function Connect({ organization, created }: { organization: string; created: Cre
           onValueChange={setIntegration}
           ingestionKey={key}
           visitorMode={source.visitor_mode}
+          consentPrompt={source.consent_prompt}
+          consentTheme={source.consent_theme}
           onCopyError={() => setCopyFailed(true)}
         />
       </section>

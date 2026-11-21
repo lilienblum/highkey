@@ -6,6 +6,8 @@ import { newId, now } from "./ids";
 
 export interface Source {
   visitor_mode: "off" | "persistent" | "cookieless";
+  consent_prompt: "site" | "bar" | "corner";
+  consent_theme: "auto" | "light" | "dark";
   icon: string | null;
   id: string;
   product_id: string;
@@ -51,7 +53,8 @@ function suffixed(base: string, suffix: number): string {
   return `${base.slice(0, 64 - tail.length).replace(/-+$/, "")}${tail}`;
 }
 
-const COLUMNS = "id, product_id, name, icon, created_at, slug, visitor_mode";
+const COLUMNS =
+  "id, product_id, name, icon, created_at, slug, visitor_mode, consent_prompt, consent_theme";
 
 export function listSources(db: Db, productId: string): Promise<Source[]> {
   return all<Source>(
@@ -106,11 +109,17 @@ export function keySource(sources: Source[], productId: string, id?: string | nu
 
 export interface SourceInput {
   visitor_mode?: string | null;
+  consent_prompt?: string | null;
+  consent_theme?: string | null;
   name: string;
   icon?: string | null;
 }
 
 export function validateSource(input: SourceInput): void {
+  if (input.consent_prompt != null && !["site", "bar", "corner"].includes(input.consent_prompt))
+    throw bad("Choose a supported analytics consent prompt");
+  if (input.consent_theme != null && !["auto", "light", "dark"].includes(input.consent_theme))
+    throw bad("Choose a supported analytics consent theme");
   if (
     input.visitor_mode != null &&
     !["off", "cookieless", "persistent"].includes(input.visitor_mode)
@@ -148,7 +157,7 @@ export async function saveSource(
     // Renames keep the slug, so workspace links stay valid.
     try {
       await db.execute(
-        "UPDATE sources SET name = ?3, icon = CASE WHEN ?4 THEN ?5 ELSE icon END, visitor_mode=coalesce(?6,visitor_mode) WHERE product_id = ?1 AND id = ?2",
+        "UPDATE sources SET name = ?3, icon = CASE WHEN ?4 THEN ?5 ELSE icon END, visitor_mode=coalesce(?6,visitor_mode),consent_prompt=coalesce(?7,consent_prompt),consent_theme=coalesce(?8,consent_theme) WHERE product_id = ?1 AND id = ?2",
         [
           productId,
           id,
@@ -156,6 +165,8 @@ export async function saveSource(
           Number(input.icon !== undefined),
           input.icon ?? null,
           input.visitor_mode ?? null,
+          input.consent_prompt ?? null,
+          input.consent_theme ?? null,
         ],
       );
     } catch (error) {
@@ -172,8 +183,18 @@ export async function saveSource(
       try {
         inserted = await changes(
           db,
-          "INSERT INTO sources(id, product_id, name, icon, created_at, slug,visitor_mode) VALUES (?, ?, ?, ?, ?, ?,?) ON CONFLICT(product_id, slug) DO NOTHING",
-          [sourceId, productId, name, input.icon ?? null, now(), slug, input.visitor_mode ?? "off"],
+          "INSERT INTO sources(id, product_id, name, icon, created_at, slug,visitor_mode,consent_prompt,consent_theme) VALUES (?, ?, ?, ?, ?, ?,?,?,?) ON CONFLICT(product_id, slug) DO NOTHING",
+          [
+            sourceId,
+            productId,
+            name,
+            input.icon ?? null,
+            now(),
+            slug,
+            input.visitor_mode ?? "off",
+            input.consent_prompt ?? "site",
+            input.consent_theme ?? "auto",
+          ],
         );
       } catch (error) {
         duplicateName(error);

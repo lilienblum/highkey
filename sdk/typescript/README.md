@@ -77,6 +77,42 @@ tracker.optOut();
 
 The tracker honors DNT/GPC, collects no identity or campaign parameters by default, and has a bounded queue. It tracks the initial page and SPA history navigation. Optional `collectTitle: true` adds the current page title (at most 512 UTF-16 code units); `trackHashChanges: true` includes the fragment in `path` and tracks hash navigation. Both are off by default. Configure `sanitizePath` (which receives the fragment too when enabled) and `beforeSend` to exclude sensitive data. `optOut()` discards queued data and aborts delivery; `shutdown()` attempts to drain within one deadline. `flush()` attempts one batch and is best effort. The generic `Highkey` client sends explicit calls and does not manage consent.
 
+### Ask before counting returning visitors
+
+Set the source to **Returning visitors → Ask with Highkey**. Install once on the client, after your page mounts. Use this **instead of** starting a separate tracker:
+
+```js
+import { registerAnalyticsConsent } from "@highkey/sdk/consent";
+
+const consent = registerAnalyticsConsent({
+  endpoint: "https://highkey.example.com",
+  key: "pk_YOUR_WEBSITE_SOURCE_KEY",
+  appearance: { layout: "bar", theme: "auto" },
+});
+
+// Optional custom events. Before Allow, tracker is undefined; nothing is buffered.
+// Call from your actual signup handler:
+// consent.tracker?.track("signup");
+```
+
+The same function is exported by the hosted `/tracker.js`. Add `<button type="button" data-highkey-privacy>Privacy preferences</button>` to your footer, or call `consent.openPreferences()` from an existing button. In React, register in a client effect and return `() => { void consent.destroy(); }` from it. Importing the module alone does nothing.
+
+Highkey first checks the source policy with a read-only request. An Off or Daily source, failed check, disabled tracker, DNT or GPC does not open the prompt or start tracking. On an eligible source it remembers only **allow** or **decline** in a scoped preference on the site's origin. No analytics events, visitor IDs or pre-consent queue are created before Allow. Declining later stops collection, discards pending events, and removes the tracker's visitor/session and checkout IDs. The decision synchronizes across tabs on that origin. If storage is unavailable, the choice lasts for the current page. `await consent.ready` waits for the initial policy check, not for a visitor decision. `destroy()` unmounts the UI and shuts down the tracker without changing the preference. A site that already manages consent can continue to call `startBrowserTracker` after opt-in and `tracker.optOut()` on withdrawal.
+
+**Styling:** `layout` is `"bar"` (default) or `"corner"`. `theme` is `"auto"` (default), `"light"` or `"dark"`. The prompt inherits your font, uses the system color preference and site theme, and reads modern shadcn `--card`, `--card-foreground`, `--muted-foreground`, `--border`, `--accent`, `--ring` and `--radius` tokens. It's ordinary HTML, with no Shadow DOM, React or Tailwind dependency. Both buttons get the same styling. Override with a normal stylesheet:
+
+```css
+.hk-consent {
+  --hk-consent-radius: 0.75rem;
+  --hk-consent-z-index: 60;
+}
+.hk-consent-button {
+  font-weight: 600;
+}
+```
+
+You can also set `--hk-consent-bg`, `--hk-consent-fg`, `--hk-consent-muted`, `--hk-consent-border`, `--hk-consent-hover` and `--hk-consent-ring`. For older shadcn themes with bare HSL channels, supply complete colors, e.g. `--hk-consent-bg: hsl(var(--card))`. Pass `appearance: { unstyled: true }` for entirely custom CSS, or `appearance.nonce` for a CSP-approved inline stylesheet.
+
 Opt-in click collection supports `trackOutboundLinks: true` (`link_out` events with a stripped destination URL and link text) and `trackAttributes: true` (`data-track` event names with other dataset values as string properties). Both obey the same privacy controls and leave navigation alone.
 
 Use `properties` and `tracker.setProperties()` for shared properties, and `filter` for an event predicate before `beforeSend`. `defer: true` queues in memory without delivery or identity storage until `tracker.ready()`; opting out or shutting down first discards that queue. `enabled: false` still means no collection.

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { mountConsentPrompt } from "../../../../sdk/typescript/consent-ui";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { api, type Product, type Source } from "@/lib/api";
@@ -29,7 +30,13 @@ export function SourceSettings({ product }: { product: Product }) {
     setEditing(source);
     setDraft(
       source
-        ? { name: source.name, icon: source.icon, visitor_mode: source.visitor_mode }
+        ? {
+            name: source.name,
+            icon: source.icon,
+            visitor_mode: source.visitor_mode,
+            consent_prompt: source.consent_prompt,
+            consent_theme: source.consent_theme,
+          }
         : { name: "", icon: null },
     );
     setSaved(false);
@@ -144,6 +151,8 @@ export type SourceDraft = {
   name: string;
   icon: SourceIconId | null;
   visitor_mode?: Source["visitor_mode"];
+  consent_prompt?: Source["consent_prompt"];
+  consent_theme?: Source["consent_theme"];
 };
 
 /**
@@ -194,22 +203,112 @@ export function SourceFields({
         <ValueSelect
           id="visitor-mode"
           value={value.visitor_mode ?? "off"}
-          onValueChange={(v) => onChange({ ...value, visitor_mode: v as Source["visitor_mode"] })}
+          onValueChange={(v) =>
+            onChange({
+              ...value,
+              visitor_mode: v as Source["visitor_mode"],
+              consent_prompt: value.consent_prompt ?? (v === "persistent" ? "bar" : undefined),
+            })
+          }
           disabled={disabled}
           options={[
             ["off", "Off"],
-            ["cookieless", "Cookieless · daily visitors"],
-            ["persistent", "Persistent · consent required"],
+            ["cookieless", "Daily visitors"],
+            ["persistent", "Returning visitors"],
           ]}
         />
         <FieldDescription>
           {value.visitor_mode === "persistent"
-            ? "Recognizes returning visitors across days. Ask for consent first."
+            ? "Recognizes the same browser on later visits, with permission."
             : value.visitor_mode === "cookieless"
               ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
               : "Counts events without counting visitors."}
         </FieldDescription>
       </Field>
+      {value.visitor_mode === "persistent" && (
+        <>
+          <Field>
+            <FieldLabel htmlFor="source-consent">Who asks for permission?</FieldLabel>
+            <ValueSelect
+              id="source-consent"
+              value={value.consent_prompt === "site" ? "site" : "highkey"}
+              disabled={disabled}
+              options={[
+                ["highkey", "Ask with Highkey"],
+                ["site", "My site already asks"],
+              ]}
+              onValueChange={(v) =>
+                onChange({ ...value, consent_prompt: v === "site" ? "site" : "bar" })
+              }
+            />
+            <FieldDescription>
+              {value.consent_prompt === "site"
+                ? "Start the tracker only after your visitor agrees."
+                : "Visitors can decline and keep using your site. Copy the updated browser snippet to use this prompt."}
+            </FieldDescription>
+          </Field>
+          {value.consent_prompt !== "site" && (
+            <div className="grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="source-consent-layout">Layout</FieldLabel>
+                  <ValueSelect
+                    id="source-consent-layout"
+                    disabled={disabled}
+                    value={value.consent_prompt ?? "bar"}
+                    options={[
+                      ["bar", "Bottom bar"],
+                      ["corner", "Corner card"],
+                    ]}
+                    onValueChange={(v) =>
+                      onChange({ ...value, consent_prompt: v as Source["consent_prompt"] })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="source-consent-theme">Theme</FieldLabel>
+                  <ValueSelect
+                    id="source-consent-theme"
+                    disabled={disabled}
+                    value={value.consent_theme ?? "auto"}
+                    options={[
+                      ["auto", "Match site"],
+                      ["light", "Light"],
+                      ["dark", "Dark"],
+                    ]}
+                    onValueChange={(v) =>
+                      onChange({ ...value, consent_theme: v as Source["consent_theme"] })
+                    }
+                  />
+                </Field>
+              </div>
+              <ConsentPreview
+                layout={value.consent_prompt ?? "bar"}
+                theme={value.consent_theme ?? "auto"}
+              />
+            </div>
+          )}
+        </>
+      )}
     </>
+  );
+}
+function ConsentPreview({
+  layout,
+  theme,
+}: {
+  layout: "bar" | "corner";
+  theme: "auto" | "light" | "dark";
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const panel = mountConsentPrompt(ref.current!, { layout, theme }, () => {}, null, true);
+    return () => panel.remove();
+  }, [layout, theme]);
+  return (
+    <figure>
+      <figcaption className="mb-2 text-xs text-muted-foreground">Prompt preview</figcaption>
+      <div ref={ref} />
+    </figure>
   );
 }
