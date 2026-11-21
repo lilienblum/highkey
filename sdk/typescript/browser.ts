@@ -5,6 +5,7 @@ const campaignParams = [
   "utm_campaign",
   "utm_term",
   "utm_content",
+  "ref",
 ] as const;
 export type CampaignParam = (typeof campaignParams)[number];
 export type BrowserOptions = Options & {

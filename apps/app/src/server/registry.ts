@@ -140,7 +140,7 @@ export async function applyRetention(
 ): Promise<void> {
   const time = table === "highkey.events" ? "event_time" : "timestamp";
   await ctx.admin.command(
-    `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}`,
+    `ALTER TABLE ${table} UPDATE expires_at = toDateTime(${time}) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}${table === "highkey.events" ? " AND record_type!='excluded'" : ""}`,
     { params: { days, product: productId }, settings: { mutations_sync: 2 } },
   );
   if (table === "highkey.events") {
@@ -280,6 +280,7 @@ export async function reconcileOnce(
   );
   const full = stored?.value !== current;
   const result = await reconcile(ctx, { full });
+  await mirrorExclusions(ctx);
   await refreshDueCohorts(ctx);
   if (full && result.failed === 0)
     await ctx.db.execute(
@@ -317,3 +318,4 @@ export async function cleanup(ctx: ApiContext): Promise<{ removed: number; logs_
   return { removed, logs_removed };
 }
 import { refreshDueCohorts } from "./cohorts";
+import { mirrorExclusions } from "./exclusions";

@@ -25,8 +25,9 @@ pub enum KeyKind {
     Logs,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KeyRecord {
+    pub exclusions: Arc<crate::exclusions::Exclusions>,
     pub visitor_mode: String,
     pub product_id: Uuid,
     pub source_id: Uuid,
@@ -38,6 +39,7 @@ pub struct KeyRecord {
 
 #[derive(Deserialize)]
 struct Row {
+    policy: String,
     visitor_mode: String,
     kind: KeyKind,
     product_id: Uuid,
@@ -87,24 +89,32 @@ impl Keys {
         let rows = self
             .clickhouse
             .select_json::<Row>(
-                "SELECT k.kind AS kind, k.product_id AS product_id, k.source_id AS source_id, k.allowed_origins AS allowed_origins, k.retention_days AS retention_days, k.revoked AS revoked, ifNull(p.server_key, 0) AS server_key, ifNull(p.allow_browser_revenue, 0) AS allow_browser_revenue, ifNull(nullIf(v.mode,''),'off') AS visitor_mode FROM highkey.ingest_keys k LEFT JOIN (SELECT * FROM highkey.ingest_key_policies WHERE hash = {hash:String}) p USING (hash, product_id) LEFT JOIN (SELECT * FROM highkey.visitor_policies WHERE hash={hash:String}) v USING(hash,product_id) WHERE k.hash = {hash:String}",
+                "SELECT k.kind AS kind, k.product_id AS product_id, k.source_id AS source_id, k.allowed_origins AS allowed_origins, k.retention_days AS retention_days, k.revoked AS revoked, ifNull(p.server_key, 0) AS server_key, ifNull(p.allow_browser_revenue, 0) AS allow_browser_revenue, ifNull(nullIf(v.mode,''),'off') AS visitor_mode,ifNull(x.policy,'') AS policy FROM highkey.ingest_keys k LEFT JOIN (SELECT * FROM highkey.ingest_key_policies WHERE hash = {hash:String}) p USING (hash, product_id) LEFT JOIN (SELECT * FROM highkey.visitor_policies WHERE hash={hash:String}) v USING(hash,product_id) LEFT ANY JOIN highkey.collection_exclusions x ON k.product_id=x.product_id WHERE k.hash = {hash:String}",
                 &[("hash", hash.to_string())],
             )
             .await?;
-        Ok(rows.into_iter().find(|row| row.revoked == 0).map(|row| {
-            (
-                row.kind,
-                KeyRecord {
-                    visitor_mode: row.visitor_mode,
-                    product_id: row.product_id,
-                    source_id: row.source_id,
-                    allowed_origins: row.allowed_origins,
-                    retention_days: row.retention_days,
-                    server_key: row.server_key != 0,
-                    allow_browser_revenue: row.allow_browser_revenue != 0,
-                },
-            )
-        }))
+        rows.into_iter()
+            .find(|row| row.revoked == 0)
+            .map(|row| {
+                Ok((
+                    row.kind,
+                    KeyRecord {
+                        exclusions: Arc::new(if row.policy.is_empty() {
+                            Default::default()
+                        } else {
+                            serde_json::from_str(&row.policy).map_err(|_| ApiError::database())?
+                        }),
+                        visitor_mode: row.visitor_mode,
+                        product_id: row.product_id,
+                        source_id: row.source_id,
+                        allowed_origins: row.allowed_origins,
+                        retention_days: row.retention_days,
+                        server_key: row.server_key != 0,
+                        allow_browser_revenue: row.allow_browser_revenue != 0,
+                    },
+                ))
+            })
+            .transpose()
     }
 
     /// The key's record, if it exists, is not revoked, and is a key of `kind`.

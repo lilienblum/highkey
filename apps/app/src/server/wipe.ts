@@ -137,6 +137,11 @@ export async function wipeProject(
     }),
   );
   await step("organization", () => removeEmptyOrganization(ctx.db, org));
+  await step("exclusions", () =>
+    ctx.admin.command("DELETE FROM highkey.collection_exclusions WHERE product_id={p:UUID}", {
+      params,
+    }),
+  );
   await step("visitor-policies", () =>
     ctx.admin.command("DELETE FROM highkey.visitor_policies WHERE product_id={p:UUID}", { params }),
   );

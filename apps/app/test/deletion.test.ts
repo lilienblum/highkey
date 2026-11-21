@@ -236,6 +236,7 @@ describe("deleting", () => {
       "keys",
       "key-policies",
       "organization",
+      "exclusions",
       "visitor-policies",
     ]);
   }, 60_000);

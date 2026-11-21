@@ -7,6 +7,7 @@ pub mod config;
 pub mod contract;
 pub mod dedup;
 pub mod error;
+pub mod exclusions;
 pub mod keys;
 pub mod logs;
 pub mod model;
@@ -39,6 +40,7 @@ const STARTUP_WAIT: Duration = Duration::from_secs(60);
 pub struct AppState {
     day_salt: Arc<std::sync::Mutex<(chrono::NaiveDate, String)>>,
     pub gateway_secret: Option<Arc<str>>,
+    pub trust_proxy_ip: bool,
     pub clickhouse: ClickHouse,
     pub keys: Keys,
     pub changes: changes::Changes,
@@ -75,6 +77,7 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
             uuid::Uuid::new_v4().to_string(),
         ))),
         gateway_secret: None,
+        trust_proxy_ip: std::env::var("HIGHKEY_TRUST_PROXY_IP").as_deref() == Ok("1"),
         keys: Keys::new(clickhouse.clone()),
         events: writer::Writer::spawn(clickhouse.clone(), config.queue_capacity, changes.clone()),
         logs: writer::Writer::spawn(clickhouse.clone(), logs::LOG_QUEUE, changes.clone()),
@@ -147,7 +150,7 @@ async fn ingest_events(
         })
         .unwrap_or("http");
     let gateway = headers.contains_key("x-highkey-forwarded");
-    let trusted = std::env::var("HIGHKEY_TRUST_PROXY_IP").as_deref() == Ok("1");
+    let trusted = state.trust_proxy_ip;
     let ip = if gateway {
         use hmac::{Hmac, Mac};
         (|| {
@@ -210,6 +213,7 @@ async fn ingest_events(
     } else {
         None
     };
+    let excluded_network = record.exclusions.network(ip);
     for (i, event) in events.iter_mut().enumerate() {
         event.sdk = sdk;
         event.request_context = request_context.clone();
@@ -224,6 +228,10 @@ async fn ingest_events(
         event
             .validate(now, i64::from(record.retention_days))
             .map_err(|e| ApiError::bad(format!("events[{i}]: {}", e.1)))?;
+        if excluded_network || record.exclusions.matches(event) {
+            event.excluded = true;
+            continue;
+        }
         if sdk == "browser"
             || (event.source == "browser"
                 && headers.contains_key(header::ORIGIN)

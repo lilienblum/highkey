@@ -250,6 +250,8 @@ Supply `Authorization: Bearer pk_...` and `Content-Type: application/json`. Repl
 
 ## Coarse request context
 
+**Exclusions.** Project Settings → Collection exclusions accepts CIDR networks (IPv4/IPv6), exact profile IDs and raw event/property rules. Any matching rule discards the incoming payload before storage; an event name and a property predicate within a rule must both match. A 24-hour deduplication receipt keeps the project, source, event ID and receipt time so a retried blocked payload cannot become an analytics event. No original name, identity, properties, traits, prompt or network address is retained in that receipt. IP matching needs a verified client address. Exclusions do not change old rows or log collection.
+
 ### Visitor counting
 
 Choose Off (the default), Cookieless or Persistent when adding or editing a source. The source's browser snippet reflects that choice. `identity: "cookieless"` uses no device storage. With a verified client address, ClickHouse derives a source/project-scoped visitor hash using a random salt discarded at UTC midnight (and on collector restart). The nonce for a cookieless visit stays in page memory, expires after 30 minutes of inactivity and is hashed before storage; reloading the document starts a new visit. Unknown client addresses produce no visitor. For persistent tracking, run the snippet only after consent: even with `identity: "persistent"` the SDK checks the source policy before touching local storage. Disabled tracking, DNT and GPC never start the tracker. Server-supplied business profiles and explicit native identities remain independent.

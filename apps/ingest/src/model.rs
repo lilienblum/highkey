@@ -16,6 +16,8 @@ pub enum RecordType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
+    #[serde(skip)]
+    pub excluded: bool,
     pub visit_nonce: Option<String>,
     #[serde(skip)]
     pub day_salt: String,
@@ -299,6 +301,13 @@ impl crate::writer::Row for Event {
     fn json(&self, context: &crate::writer::RowContext) -> Value {
         use crate::clickhouse::{datetime, datetime64};
         let time = self.timestamp.unwrap_or(context.received_at);
+        if self.excluded {
+            // Keep only what the normal 24-hour first-copy-wins check needs. No payload, identity,
+            // original timestamp or request context reaches ClickHouse, even transiently.
+            return serde_json::json!({"product_id":context.product,"source_id":context.source,"event_id":self.event_id,
+                "record_type":"excluded","name":"","source":"","event_time":datetime64(context.received_at),
+                "received_at":datetime64(context.received_at),"expires_at":datetime(context.received_at+chrono::Duration::days(1)),"properties":{}});
+        }
         serde_json::json!({
             "product_id": context.product,
             "source_id": context.source,

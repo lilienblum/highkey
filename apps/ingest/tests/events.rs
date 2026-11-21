@@ -102,6 +102,80 @@ async fn durable_deduplicated_scoped_typed_queries() {
 }
 
 #[tokio::test]
+async fn exclusions_drop_payloads_but_acknowledge_and_deduplicate_the_first_copy() {
+    let (app, _) = app().await;
+    let (id, key) = project(30).await;
+    let policy = json!({"networks":["2001:db8::/32"],"profiles":["staff"],"rules":[{"event":"","property":"path","op":"contains","value":"/admin"}]});
+    admin_query(&format!(
+        "INSERT INTO highkey.collection_exclusions VALUES ('{id}','{policy}')"
+    ))
+    .await;
+    let events = json!({"events":[{"event_id":"redact","name":"view","source":"cli","properties":{"path":"/admin/secret"}},
+        {"event_id":"staff","name":"mutation","source":"cli","record_type":"identify","profile_id":"staff","traits":{"email":"private"}},
+        {"event_id":"ordinary","name":"view","source":"cli","properties":{"path":"/home"}}]});
+    assert_eq!(
+        ingest(&app, &key, events.clone()).await.json()["accepted"],
+        3
+    );
+    assert_eq!(ingest(&app, &key, events).await.json()["duplicates"], 3);
+    let rows=admin_query(&format!("SELECT record_type,name,actor_id,profile_id,toJSONString(properties) AS props,toJSONString(traits) AS info,expires_at-toDateTime(received_at) AS ttl FROM highkey.events WHERE product_id='{id}' AND record_type='excluded'")).await;
+    assert_eq!(rows.len(), 2);
+    for row in rows {
+        assert_eq!(row["name"], "");
+        assert_eq!(row["props"], "{}");
+        assert_eq!(row["info"], "{}");
+        assert!(row["profile_id"].is_null());
+        assert_eq!(row["ttl"], 86400);
+    }
+}
+
+#[tokio::test]
+async fn only_verified_gateway_ips_support_ipv6_cookieless_identity_and_network_exclusions() {
+    use axum::{body::Body, http::Request};
+    use hmac::{Hmac, Mac};
+    use tower::ServiceExt;
+    let (_, mut state) = app().await;
+    let (id, key) = project(30).await;
+    admin_query(&format!(
+        "INSERT INTO highkey.visitor_policies VALUES ('{}','{id}','cookieless')",
+        common::hash(&key)
+    ))
+    .await;
+    admin_query(&format!(r#"INSERT INTO highkey.collection_exclusions VALUES ('{id}','{{"networks":["2001:db8:ffff::/48"],"profiles":[],"rules":[]}}')"#)).await;
+    state.gateway_secret = Some("unit-secret".into());
+    for (event_id, ip, trust, valid) in [
+        ("disabled", "2001:db8::1", false, true),
+        ("invalid", "2001:db8::1", true, false),
+        ("first", "2001:db8::1", true, true),
+        ("same", "2001:db8::1", true, true),
+        ("omit", "2001:db8:ffff::1", true, true),
+    ] {
+        state.trust_proxy_ip = trust;
+        let mut mac = Hmac::<sha2::Sha256>::new_from_slice(b"unit-secret").unwrap();
+        mac.update(format!("highkey-ip:{ip}").as_bytes());
+        let proof = if valid {
+            format!("{:x}", mac.finalize().into_bytes())
+        } else {
+            "0".repeat(64)
+        };
+        let request=Request::builder().method("POST").uri("/api/ingest").header("content-type","application/json; highkey-sdk=browser").header("authorization",format!("Bearer {key}")).header("user-agent","Mozilla/5.0 Firefox/123.0").header("sec-fetch-mode","cors").header("x-highkey-forwarded","1").header("x-highkey-source-ip",ip).header("x-highkey-source-proof",proof).body(Body::from(json!({"name":"page_view","event_id":event_id,"source":"browser","visit_nonce":"page"}).to_string())).unwrap();
+        assert_eq!(
+            router(state.clone())
+                .oneshot(request)
+                .await
+                .unwrap()
+                .status(),
+            200
+        );
+    }
+    let rows=admin_query(&format!("SELECT event_id,actor_id,record_type FROM highkey.events WHERE product_id='{id}' ORDER BY event_id")).await;
+    assert!(rows[0]["actor_id"].is_null() && rows[2]["actor_id"].is_null());
+    assert_eq!(rows[1]["actor_id"].as_str().unwrap().len(), 64);
+    assert_eq!(rows[4]["actor_id"], rows[1]["actor_id"]);
+    assert_eq!(rows[3]["record_type"], "excluded");
+}
+
+#[tokio::test]
 async fn invalid_batch_is_atomic_and_keys_are_revocable() {
     let (app, _) = app().await;
     let (id, key) = project(30).await;
