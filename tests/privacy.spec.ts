@@ -86,8 +86,9 @@ test("opted-in external referrer paths exclude the query, credentials, fragment 
       referrer: "source.example",
       referrer_url: "https://source.example/docs/install",
     });
-    await open(page, f.server.url, new URL("private/internal", f.server.url).href);
-    await page.evaluate(() => window.tracker.flush());
+    const internal = await page.context().newPage();
+    await open(internal, f.server.url, new URL("private/internal", f.server.url).href);
+    await internal.evaluate(() => window.tracker.flush());
     expect(f.requests.at(-1)!.events[0].properties).toEqual({
       path: "/account",
       referrer: "Direct",
