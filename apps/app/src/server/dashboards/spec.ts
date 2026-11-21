@@ -31,6 +31,11 @@ export type FilterOp =
   | "not_in"
   | "contains"
   | "not_contains"
+  | "starts_with"
+  | "ends_with"
+  | "regex"
+  | "empty"
+  | "not_empty"
   | "exists"
   | "not_exists";
 
@@ -97,7 +102,8 @@ export interface FunnelQuery {
   signal: "funnel";
   steps: Step[];
   window: string;
-  by: "actor" | "session";
+  by: "actor" | "session" | "group";
+  group_type?: string | null;
   source_id?: string | null;
 }
 

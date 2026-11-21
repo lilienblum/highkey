@@ -89,6 +89,12 @@ export function accessStatements(productId: string, secret: string): string[] {
       `${project} AND ${ordinary} AND ${scoped("event_time")}`,
     ),
     view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND ${ordinary}`),
+    view(
+      "event_facets",
+      "source_id,day,name,property,samples",
+      "highkey.event_facets",
+      `${project} AND ${SOURCE_SCOPE} AND expires_at>now() AND day>=toDate(${RANGE_FROM}) AND day<=toDate(${RANGE_TO}-INTERVAL 1 MILLISECOND)`,
+    ),
     // Profile attribution is a read-time join. Ordinary event aggregations stay on the narrow view.
     `CREATE OR REPLACE VIEW ${database}.profile_events DEFINER = highkey_definer SQL SECURITY DEFINER AS
       SELECT e.source_id AS source_id,e.event_id AS event_id,e.name AS name,e.source AS source,e.event_time AS event_time,e.received_at AS received_at,
@@ -156,7 +162,7 @@ export function accessVersion(secret: string): string {
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions') GROUP BY database HAVING count() = 8
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions','event_facets') GROUP BY database HAVING count() = 9
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );

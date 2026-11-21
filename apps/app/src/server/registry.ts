@@ -144,6 +144,10 @@ export async function applyRetention(
     { params: { days, product: productId }, settings: { mutations_sync: 2 } },
   );
   if (table === "highkey.events") {
+    await ctx.admin.command(
+      "ALTER TABLE highkey.event_facets UPDATE expires_at=toDateTime(day,'UTC')+toIntervalDay({days:UInt16}) WHERE product_id={product:UUID}",
+      { params: { product: productId, days }, settings: { mutations_sync: 2 } },
+    );
     for (const entity of ["profiles", "groups", "session_events", "session_profiles"])
       await ctx.admin.command(
         `ALTER TABLE highkey.${entity} UPDATE expires_at = toDateTime(event_time) + toIntervalDay({days:UInt16}) WHERE product_id = {product:UUID}`,
@@ -307,7 +311,7 @@ export async function cleanup(ctx: ApiContext): Promise<{ removed: number; logs_
   };
   const removed = await expired("highkey.events");
   const logs_removed = await expired("highkey.logs");
-  for (const table of ["profiles", "groups", "session_events", "session_profiles"])
+  for (const table of ["profiles", "groups", "session_events", "session_profiles", "event_facets"])
     await expired(`highkey.${table}`);
   return { removed, logs_removed };
 }

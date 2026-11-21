@@ -120,6 +120,7 @@ export interface EventRow {
   identity_kind?: string | null;
   session_id?: string | null;
   profile_id?: string | null;
+  groups?: Record<string, string>;
   properties?: Record<string, unknown>;
 }
 
@@ -140,6 +141,7 @@ export async function seedEvents(productId: string, rows: EventRow[]): Promise<v
       identity_kind: row.identity_kind ?? null,
       session_id: row.session_id ?? null,
       profile_id: row.profile_id ?? null,
+      groups: row.groups ?? {},
       properties: row.properties ?? {},
       expires_at: stamp(new Date(now.getTime() + 400 * 86_400_000)).slice(0, 19),
     })),

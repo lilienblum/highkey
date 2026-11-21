@@ -12,7 +12,7 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
     tab?: string;
     page?: number;
   } => ({
-    kind: s.kind === "anonymous" || s.kind === "power" ? s.kind : undefined,
+    kind: s.kind === "anonymous" || s.kind === "power" || s.kind === "groups" ? s.kind : undefined,
     find: typeof s.find === "string" && s.find.length <= 256 ? s.find : undefined,
     person:
       typeof s.person === "string" && s.person && new TextEncoder().encode(s.person).length <= 128

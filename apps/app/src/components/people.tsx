@@ -14,6 +14,7 @@ import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useReportQuery } from "@/lib/use-query";
 import { DAY_MS } from "@/lib/date-range";
 import type { peopleList, personDetail } from "@/server/queries/people";
+import { GroupDirectory } from "./group-directory";
 
 const route = "/$orgSlug/$projectSlug/people";
 type Detail = Awaited<ReturnType<typeof personDetail>>;
@@ -30,9 +31,14 @@ const kinds = [
   ["identified", "Identified"],
   ["anonymous", "Anonymous"],
   ["power", "Power users"],
+  ["groups", "Groups"],
 ] as const;
 const size = 25;
 export function People() {
+  const { kind } = useSearch({ from: route });
+  return kind === "groups" ? <GroupDirectory /> : <ProfileDirectory />;
+}
+function ProfileDirectory() {
   const { product, sourceId, range, refresh, refreshKey } = useWorkspace();
   const s = useSearch({ from: route }),
     navigate = useNavigate({ from: route });
@@ -371,7 +377,10 @@ function Profile({
           <ul>
             {d.groups.map(([type, id]) => (
               <li key={JSON.stringify([type, id])}>
-                <Link {...target("/people", slug)} search={{ groupType: type, groupId: id }}>
+                <Link
+                  {...target("/people", slug)}
+                  search={{ kind: "groups", groupType: type, groupId: id }}
+                >
                   {type}: {id}
                 </Link>
               </li>

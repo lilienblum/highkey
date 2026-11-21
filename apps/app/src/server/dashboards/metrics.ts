@@ -67,7 +67,7 @@ const atBucket = (measure: string, time: string) =>
 /** The range's events, each with its actor's first matching event in all retained history. */
 function withFirstSeen(where: string): string {
   const firsts = `SELECT ifNull(identity_kind, '') AS kind, actor_id AS actor, min(event_time) AS first_seen FROM all_events WHERE actor_id IS NOT NULL AND ${SOURCE_SCOPE} AND ${where} GROUP BY kind, actor`;
-  return `(SELECT event_time, name, source, source_id, identity_kind, actor_id, session_id, properties, f.first_seen AS first_seen FROM events INNER JOIN (${firsts}) AS f ON ifNull(identity_kind, '') = f.kind AND actor_id = f.actor)`;
+  return `(SELECT e.*,f.first_seen AS first_seen FROM events AS e INNER JOIN (${firsts}) AS f ON ifNull(e.identity_kind, '') = f.kind AND e.actor_id = f.actor)`;
 }
 
 /** A label expression that yields the group's value as JSON text, as `JSON.stringify` writes it. */

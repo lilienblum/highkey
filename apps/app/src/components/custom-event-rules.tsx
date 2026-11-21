@@ -3,27 +3,14 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ValueSelect } from "./value-select";
 
-const ops = [
-  ["eq", "is"],
-  ["ne", "is not"],
-  ["gt", "greater than"],
-  ["gte", "at least"],
-  ["lt", "less than"],
-  ["lte", "at most"],
-  ["contains", "contains"],
-  ["not_contains", "doesn't contain"],
-  ["starts_with", "starts with"],
-  ["ends_with", "ends with"],
-  ["exists", "is present"],
-  ["not_exists", "is absent"],
-] as const;
-const unary = (op: string) => op === "exists" || op === "not_exists";
+import { filterOps as ops, unaryFilter as unary, textFilter } from "@/lib/filter-ops";
 export function typedRules(rules: CustomClause[]): CustomClause[] {
   return rules.map((rule) => ({
     ...rule,
     filters: rule.filters.map(({ property, op, value }) => {
       if (unary(op)) return { property, op };
       const text = String(value ?? "");
+      if (textFilter(op)) return { property, op, value: text };
       let scalar = value ?? "";
       try {
         const parsed: unknown = JSON.parse(text);

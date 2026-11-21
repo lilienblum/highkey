@@ -68,13 +68,18 @@
         "not_in",
         "contains",
         "not_contains",
+        "starts_with",
+        "ends_with",
+        "regex",
+        "empty",
+        "not_empty",
         "exists",
         "not_exists"
       ],
       "type": "string"
     },
     "FunnelBy": {
-      "enum": ["actor", "session"],
+      "enum": ["actor", "session", "group"],
       "type": "string"
     },
     "LogFilter": {
@@ -200,6 +205,7 @@
               "$ref": "#/$defs/FunnelBy",
               "default": "actor"
             },
+            "group_type": { "type": ["string", "null"] },
             "signal": {
               "const": "funnel",
               "type": "string"

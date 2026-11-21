@@ -420,6 +420,8 @@ The session foundation passed 397 Bun tests (3,889 assertions), the production b
 
 # Released CLI — profiles and live event inspection (2026-11-21)
 
+`4cc8db2` passed the full Bun suite (410 tests) and production build. The reference journey verified a deploy marker, adding a note by keyboard, finding it in Settings and opening the point’s profile range at mobile width. `97c9b21` verified whole-visit comparisons, revenue bars, and an Off-source explanation (3/3 focused browser cases, including the corrected query-count assertion). The Realtime wall and native channel regression suite then passed 13/13 through `21ef88d`, including TV mode, reconnecting and missed-hint reconciliation.
+
 `dd35070` passed 408 Bun tests (4,197 assertions), Rust tests, Clippy and 26 isolated browser cases including a stale persistent snippet on an Off source. The 10M-event test initially exceeded its 250 ms limit (311.8 ms under eight readers while browser work was running). The isolated rerun of the same writer passed at 153.9/140.2 ms p99 alone/with eight readers; 120 reads succeeded and 151 were refused or timed out. At `faf0b62` the breakdown report’s typed SQL and the real Overview → page table → side panel → applied page filter passed. Teardown left ordinary ingest healthy and the sign-in page returned 200.
 
 Contract 5 (`2e94941`): 407 Bun tests, the Rust suite and Clippy passed. Tested known and suspected traffic handling, ephemeral request columns and source-scoped analytics; the labeled headless tracker and report navigation passed all four isolated browser cases. A fresh 10M-event load run passed at 166.7 ms ingest p99 alone and 134.8 ms with eight readers (127 successful reader queries and 26 refused or timed out).

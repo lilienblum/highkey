@@ -1,4 +1,5 @@
 import { validKey, validDate, validViewAt, validViewSlug } from "./workspace-search";
+import { supportedOp, unaryFilter, textFilter } from "./filter-ops";
 export type ExploreDrilldown = {
   productId?: string;
   from: string;
@@ -81,7 +82,7 @@ function validateDrilldown(search: Record<string, unknown>): ExploreSearch {
 }
 
 /** A filter beyond the one the query builder edits; the page shows it as a removable chip. */
-export type ExploreFilter = { property: string; op: string; value: string | number | boolean };
+export type ExploreFilter = { property: string; op: string; value?: string | number | boolean };
 export type ExploreSpec = {
   event: string;
   source: string;
@@ -143,14 +144,14 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
   if (
     (spec.event && !validKey(spec.event.replace(/^@/, ""))) ||
     (spec.source && !validKey(spec.source)) ||
-    !["count", "actors", "sum", "avg", "p50", "p95", "min", "max"].includes(spec.measure) ||
+    !["count", "actors", "sum", "avg", "p50", "p95", "p99", "min", "max"].includes(spec.measure) ||
     !validKey(spec.property) ||
     !(
       ["name", "source", "source_id", "identity_kind"].includes(spec.group) ||
       (spec.group.startsWith("property:") && validKey(spec.group.slice(9)))
     ) ||
     (spec.filterProperty && !validKey(spec.filterProperty)) ||
-    !["eq", "ne", "gt", "gte", "lt", "lte"].includes(spec.filterOp) ||
+    !supportedOp(spec.filterOp) ||
     new TextEncoder().encode(spec.filterValue).length > 2048
   )
     return { ...result, invalidQuery: true };
@@ -175,17 +176,26 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
         typeof f !== "object" ||
         !validKey(f.property) ||
         typeof f.op !== "string" ||
-        !["eq", "ne", "gt", "gte", "lt", "lte"].includes(f.op) ||
+        !supportedOp(f.op) ||
         !(
+          (unaryFilter(f.op) && f.value === undefined) ||
           typeof f.value === "boolean" ||
           (typeof f.value === "number" && Number.isFinite(f.value)) ||
           (typeof f.value === "string" && new TextEncoder().encode(f.value).length <= 2048)
         ) ||
         // The API orders only numbers.
-        (typeof f.value !== "number" && !["eq", "ne"].includes(f.op))
+        (unaryFilter(f.op)
+          ? f.value !== undefined
+          : textFilter(f.op)
+            ? typeof f.value !== "string"
+            : typeof f.value !== "number" && !["eq", "ne"].includes(f.op))
       )
         return { ...result, invalidQuery: true };
-      more.push({ property: f.property, op: f.op, value: f.value });
+      more.push({
+        property: f.property,
+        op: f.op,
+        ...(f.value !== undefined ? { value: f.value } : {}),
+      });
     }
     if (more.length) spec.moreFilters = more;
   }

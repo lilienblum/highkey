@@ -473,6 +473,8 @@ function checkStep(step: Step, p: string, r: Report) {
 }
 
 export function checkFunnel(q: FunnelQuery, p: string, r: Report): void {
+  if (q.by === "group" ? !q.group_type || !validKey(q.group_type) : !!q.group_type)
+    r.error(`${p}/group_type`, "Set a valid group type only when counting per group");
   if (q.steps.length < Limits.MIN_FUNNEL_STEPS || q.steps.length > Limits.MAX_FUNNEL_STEPS)
     r.error(`${p}/steps`, "A funnel needs 2–8 steps");
   q.steps.forEach((step, i) => {
@@ -546,7 +548,7 @@ function checkFilterValue(f: { op?: string | null; value?: unknown }, fp: string
     typeof v === "string"
       ? bytes(v) <= Limits.MAX_SEARCH_BYTES
       : typeof v === "number" || typeof v === "boolean";
-  if (op === "exists" || op === "not_exists") {
+  if (unaryFilter(op)) {
     if (present) r.error(`${fp}/value`, `${op} takes no value`, "Remove value");
     return;
   }
@@ -568,9 +570,11 @@ function checkFilterValue(f: { op?: string | null; value?: unknown }, fp: string
       );
     return;
   }
-  if (op === "contains" || op === "not_contains") {
+  if (textFilter(op)) {
     if (typeof f.value !== "string" || f.value.length === 0 || !scalar(f.value))
       r.error(`${fp}/value`, `${op} needs text of 1–${Limits.MAX_SEARCH_BYTES} bytes`);
+    else if (op === "regex" && !validRegex(f.value))
+      r.error(`${fp}/value`, "Use a regex of up to 256 bytes without lookaround or backreferences");
     return;
   }
   if (typeof f.value === "number") return;
@@ -647,3 +651,4 @@ function checkMeasure(
       `${name} is only used by unique, sum, avg, p50, p90, p95, p99, min and max`,
     );
 }
+import { unaryFilter, textFilter, validRegex } from "../../lib/filter-ops";

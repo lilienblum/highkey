@@ -2,6 +2,7 @@
 // event names, all over the project's `events` view. Behaviour matches the Rust API's query.rs.
 import { bad } from "../api/errors";
 import { fields } from "../api/body";
+import { filterOps } from "../../lib/filter-ops";
 import { type Bucket, runSettings } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
 import { anyNamedEvent, namedEvent, type Rules, validEvent } from "./custom";
@@ -43,11 +44,11 @@ export interface EventsQuery {
 
 const LIMITS =
   "Use minute/hour/day/week/month buckets, a positive range ≤366 days (per minute ≤1 hour, hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters";
-const NUMERIC = ["sum", "avg", "p50", "p95", "min", "max"];
+const NUMERIC = ["sum", "avg", "p50", "p95", "p99", "min", "max"];
 /** The measures the Events page runs. */
 export const MEASURES = ["count", "actors", ...NUMERIC];
 /** The filter ops the Events page runs. */
-export const EVENTS_PAGE_OPS = ["eq", "ne", "gt", "gte", "lt", "lte"];
+export const EVENTS_PAGE_OPS: string[] = filterOps.map(([op]) => op);
 const DAY = 86_400_000;
 
 function time(value: string, name: string): Date {
@@ -156,7 +157,7 @@ export function measure(q: { measure: string; property?: string | null }): strin
     case "unique":
       return distinctValues(path("properties", q.property as string));
     case "sessions":
-      return "uniqExactIf(session_id, session_id IS NOT NULL)";
+      return "uniqExactIf((source_id,identity_kind,actor_id,session_id), session_id IS NOT NULL)";
     default:
       return "count()";
   }

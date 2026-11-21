@@ -3,6 +3,7 @@ import { bad } from "../api/errors";
 import { all, type Db } from "../db/db";
 import type { CustomClause } from "../../lib/event-catalog";
 import { filterCondition, Params, path, validKey } from "./properties";
+import { supportedOp, unaryFilter } from "../../lib/filter-ops";
 export type Rules = Map<string, CustomClause[]>;
 export const validEvent = (name: string) => validKey(name.startsWith("@") ? name.slice(1) : name);
 export function parseRules(input: unknown): CustomClause[] {
@@ -25,21 +26,8 @@ export function parseRules(input: unknown): CustomClause[] {
           value: "unknown",
         });
         if (
-          ![
-            "eq",
-            "ne",
-            "gt",
-            "gte",
-            "lt",
-            "lte",
-            "contains",
-            "not_contains",
-            "starts_with",
-            "ends_with",
-            "exists",
-            "not_exists",
-          ].includes(op) ||
-          ((op === "exists" || op === "not_exists") && value !== undefined) ||
+          !supportedOp(op) ||
+          (unaryFilter(op) && value !== undefined) ||
           (value !== undefined && !["string", "boolean", "number"].includes(typeof value)) ||
           (typeof value === "string" && value.length > 512)
         )

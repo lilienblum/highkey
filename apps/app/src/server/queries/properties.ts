@@ -3,6 +3,7 @@
 import type { Bucket } from "../clickhouse/access";
 import { bad } from "../api/errors";
 import { contextColumn } from "../../lib/event-context";
+import { validRegex } from "../../lib/filter-ops";
 import { bucketStart, nextBucket } from "../../lib/time-buckets";
 
 const KEY = /^[A-Za-z0-9_\-./]{1,64}$/;
@@ -16,6 +17,12 @@ export function path(column: "properties" | "attributes", key: string): string {
   if (!validKey(key)) throw bad("Invalid property key");
   const derived = column === "properties" ? contextColumn(key) : undefined;
   if (derived) return `CAST(nullIf(${derived},''),'Dynamic')`;
+  if (column === "properties") {
+    if (key === "profile.id" || key === "session.id")
+      return `CAST(${key === "profile.id" ? "profile_id" : "session_id"},'Dynamic')`;
+    if (key.startsWith("group.") && validKey(key.slice(6)))
+      return `CAST(nullIf(groups['${key.slice(6)}'],''),'Dynamic')`;
+  }
   return `${column}.\`${key.replaceAll(".", "%2E")}\``;
 }
 
@@ -71,6 +78,17 @@ export function filterCondition(
       return `(${present})`;
     case "not_exists":
       return `(dynamicType(${expression}) = 'None')`;
+    case "empty":
+    case "not_empty": {
+      const empty = `(NOT (${present}) OR (dynamicType(${expression})='String' AND dynamicElement(${expression},'String')=''))`;
+      return op === "empty" ? empty : `NOT ${empty}`;
+    }
+    case "regex":
+      if (typeof value !== "string" || !validRegex(value))
+        throw bad(
+          "Use a regular expression of up to 256 bytes without lookaround or backreferences",
+        );
+      return `(dynamicType(${expression})='String' AND match(dynamicElement(${expression},'String'),${params.add("String", value)}))`;
     case "eq":
       return scalarEquals(expression, value, params);
     case "ne":

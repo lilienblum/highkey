@@ -94,7 +94,8 @@ export type FunnelQuery = {
   signal: "funnel";
   steps: Step[];
   window?: string;
-  by?: "actor" | "session";
+  by?: "actor" | "session" | "group";
+  group_type?: string;
   source_id?: string;
 };
 export type RetentionQuery = {

@@ -35,11 +35,17 @@ export async function measureFunnel(
   const conditions = q.steps.map((step) => stepCondition(step, params, run.rules));
   const windowMs = (rangeHours(q.window) ?? 168) * 3_600_000;
   const key =
-    q.by === "session"
-      ? "ifNull(identity_kind, ''), actor_id, session_id"
-      : "ifNull(identity_kind, ''), actor_id";
+    q.by === "group"
+      ? `groups[${params.add("String", q.group_type ?? "")}]`
+      : q.by === "session"
+        ? "source_id, ifNull(identity_kind, ''), actor_id, session_id"
+        : "ifNull(identity_kind, ''), actor_id";
   const present =
-    q.by === "session" ? "actor_id IS NOT NULL AND session_id IS NOT NULL" : "actor_id IS NOT NULL";
+    q.by === "group"
+      ? `${key}!=''`
+      : q.by === "session"
+        ? "actor_id IS NOT NULL AND session_id IS NOT NULL"
+        : "actor_id IS NOT NULL";
   const sql = `SELECT level, count() AS n FROM (SELECT windowFunnel(${windowMs})(toUInt64(toUnixTimestamp64Milli(event_time)), ${conditions.join(", ")}) AS level FROM events WHERE ${present} AND ((${conditions.join(") OR (")})) GROUP BY ${key}) WHERE level > 0 GROUP BY level`;
   const result = await run.reader.query<{ level: number; n: number }>(
     sql,

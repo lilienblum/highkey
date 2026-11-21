@@ -1,4 +1,5 @@
 import { displayMinute } from "@/lib/display-time";
+import { filterOps, unaryFilter, textFilter } from "@/lib/filter-ops";
 import { displayGroups } from "@/lib/display-values";
 import { reportLink } from "@/lib/report-link";
 import { automaticBucket } from "@/lib/time-buckets";
@@ -35,7 +36,16 @@ import { EventStream } from "./event-stream";
 import { EventCatalog } from "./event-catalog";
 import { PatternReports } from "./pattern-reports";
 import { useEventCatalog } from "@/lib/use-event-catalog";
-import { useQuery } from "@/lib/use-query";
+import { useQuery, useReportQuery } from "@/lib/use-query";
+import { queryReadOnly } from "@/lib/api";
+import { eventContext } from "@/lib/event-context";
+import type { eventOptions } from "@/server/queries/event-options";
+const loadOptions = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
+  queryReadOnly<Awaited<ReturnType<typeof eventOptions>>>(
+    `/products/${id}/event-options`,
+    body,
+    signal,
+  );
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
 import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared";
 import { ExploreLoading } from "./loading";
@@ -127,6 +137,27 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   // Choices made in the builder and not run yet are the reader's own, as much as a run query.
   const draftPending = JSON.stringify(draft) !== appliedKey;
   const [showFilter, setShowFilter] = useState(!!applied.filterProperty);
+  const options = useReportQuery(
+    loadOptions,
+    "event-options",
+    product?.id,
+    {
+      ...range,
+      source_id: draft.sourceId ?? sourceId,
+      event: draft.event.startsWith("@") ? "" : draft.event,
+      property:
+        showFilter && /^[A-Za-z0-9_./-]{1,64}$/.test(draft.filterProperty)
+          ? draft.filterProperty
+          : undefined,
+    },
+    refreshKey,
+  );
+  const properties = [
+    ...new Set([
+      ...(options.data?.keys ?? []),
+      ...Object.keys(eventContext).map((k) => `context.${k}`),
+    ]),
+  ];
   useEffect(() => {
     const applied: Spec = JSON.parse(appliedKey);
     setDraft(applied);
@@ -161,6 +192,12 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const retry = () => setRetryKey((key) => key + 1);
   const filters = useMemo(() => {
     if (!applied.filterProperty) return [];
+    if (unaryFilter(applied.filterOp))
+      return [{ property: applied.filterProperty, op: applied.filterOp }];
+    if (textFilter(applied.filterOp))
+      return [
+        { property: applied.filterProperty, op: applied.filterOp, value: applied.filterValue },
+      ];
     let value: unknown = applied.filterValue;
     try {
       value = JSON.parse(applied.filterValue);
@@ -204,6 +241,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
     avg: "Numeric average",
     p50: "Duration p50",
     p95: "Duration p95",
+    p99: "Duration p99",
     min: "Numeric minimum",
     max: "Numeric maximum",
   };
@@ -317,7 +355,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             onSubmit={(e) => {
               e.preventDefault();
               setValidation("");
-              if (draft.filterProperty && !draft.filterValue) {
+              if (draft.filterProperty && !unaryFilter(draft.filterOp) && !draft.filterValue) {
                 setValidation("Enter a filter value. Use true, 42, or a string.");
                 return;
               }
@@ -325,6 +363,16 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
               refresh();
             }}
           >
+            <datalist id="observed-properties">
+              {properties.map((v) => (
+                <option key={v} value={v} />
+              ))}
+            </datalist>
+            <datalist id="observed-values">
+              {options.data?.values.map((v) => (
+                <option key={v} value={textFilter(draft.filterOp) ? String(JSON.parse(v)) : v} />
+              ))}
+            </datalist>
             <Collapsible open={showFilter} onOpenChange={setShowFilter}>
               <FieldGroup className="query-controls">
                 <Field>
@@ -338,6 +386,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                       ...Array.from(
                         new Set([
                           ...(data?.event_names ?? []),
+                          ...(options.data?.names ?? []),
                           ...(catalog.data ?? []).filter((d) => d.rules).map((d) => d.name),
                           ...(draft.event ? [draft.event] : []),
                         ]),
@@ -362,6 +411,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                     <FieldLabel htmlFor="measure-property">Numeric property</FieldLabel>
                     <Input
                       id="measure-property"
+                      list="observed-properties"
                       value={draft.property}
                       onChange={(e) => update("property", e.target.value)}
                       required
@@ -388,6 +438,22 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                       ["property:version", "Version"],
                       ["property:arch", "Architecture"],
                       ["property:success", "Success"],
+                      ...properties
+                        .filter(
+                          (k) =>
+                            ![
+                              "path",
+                              "referrer",
+                              "utm_source",
+                              "utm_campaign",
+                              "command",
+                              "os",
+                              "version",
+                              "arch",
+                              "success",
+                            ].includes(k),
+                        )
+                        .map((k): [string, string] => [`property:${k}`, k]),
                     ]}
                   />
                 </Field>
@@ -432,6 +498,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                     <FieldLabel htmlFor="filter-property">Property</FieldLabel>
                     <Input
                       id="filter-property"
+                      list="observed-properties"
                       placeholder="e.g. success"
                       value={draft.filterProperty}
                       onChange={(e) => update("filterProperty", e.target.value)}
@@ -443,20 +510,15 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                       id="filter-op"
                       value={draft.filterOp}
                       onValueChange={(value) => update("filterOp", value)}
-                      options={[
-                        ["eq", "equals"],
-                        ["ne", "does not equal"],
-                        ["gt", "greater than"],
-                        ["gte", "at least"],
-                        ["lt", "less than"],
-                        ["lte", "at most"],
-                      ]}
+                      options={filterOps}
                     />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="filter-value">Typed value</FieldLabel>
                     <Input
                       id="filter-value"
+                      list="observed-values"
+                      disabled={unaryFilter(draft.filterOp)}
                       placeholder={'true, 42, or "build"'}
                       value={draft.filterValue}
                       onChange={(e) => update("filterValue", e.target.value)}

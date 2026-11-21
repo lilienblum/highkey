@@ -1,4 +1,5 @@
 import { api, type ViewLink } from "./api";
+import { textFilter, unaryFilter } from "./filter-ops";
 import { defaultSpec, validateExploreSearch, type ExploreSpec } from "./explore-search";
 import {
   attributeValue,
@@ -22,7 +23,7 @@ export type EventViewQuery = {
   identity_kind?: string;
   measure: EventMeasure;
   property?: string;
-  filters?: { property: string; op: string; value: Scalar }[];
+  filters?: { property: string; op: string; value?: Scalar }[];
   group_by?: string;
 };
 export type EventViewDocument = {
@@ -105,7 +106,7 @@ export function viewErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-const numericMeasures = ["sum", "avg", "p50", "p95", "min", "max"];
+const numericMeasures = ["sum", "avg", "p50", "p95", "p99", "min", "max"];
 
 /** A filter value as the query builder reads it: JSON when it parses as a scalar, else text. */
 function typedValue(text: string): Scalar {
@@ -136,11 +137,13 @@ export function specToQuery(spec: ExploreSpec): EventViewQuery {
   if (spec.identityKind) query.identity_kind = spec.identityKind;
   if (numericMeasures.includes(spec.measure)) query.property = spec.property;
   const filters: NonNullable<EventViewQuery["filters"]> = [];
-  if (spec.filterProperty && spec.filterValue)
+  if (spec.filterProperty && (unaryFilter(spec.filterOp) || spec.filterValue))
     filters.push({
       property: spec.filterProperty,
       op: spec.filterOp,
-      value: typedValue(spec.filterValue),
+      ...(unaryFilter(spec.filterOp)
+        ? {}
+        : { value: textFilter(spec.filterOp) ? spec.filterValue : typedValue(spec.filterValue) }),
     });
   filters.push(...(spec.moreFilters ?? []));
   if (filters.length) query.filters = filters;
@@ -161,7 +164,16 @@ export function queryToSpec(query: EventViewQuery): ExploreSpec {
     property: query.property ?? defaultSpec.property,
     group: query.group_by ?? defaultSpec.group,
     ...(first
-      ? { filterProperty: first.property, filterOp: first.op, filterValue: valueText(first.value) }
+      ? {
+          filterProperty: first.property,
+          filterOp: first.op,
+          filterValue:
+            first.value === undefined
+              ? ""
+              : textFilter(first.op)
+                ? String(first.value)
+                : valueText(first.value),
+        }
       : {}),
     ...(query.identity_kind ? { identityKind: query.identity_kind } : {}),
     ...(query.source_id ? { sourceId: query.source_id } : {}),
