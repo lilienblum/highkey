@@ -49,6 +49,7 @@ import { Activation } from "./activation";
 import { ErrorState } from "./shared";
 import { ReferenceSettings } from "./chart-references";
 import { CollectionExclusions } from "./collection-exclusions";
+import { ExportSettings } from "./export-settings";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
 import { LogSettings } from "./log-settings";
@@ -251,6 +252,7 @@ export function Settings() {
           <ProductSettings key={product.id} product={product} />
           <ReferenceSettings key={`references-${product.id}`} />
           <CollectionExclusions key={`exclusions-${product.id}`} id={product.id} />
+          <ExportSettings key={`export-${product.id}`} id={product.id} />
           <Activation
             key={`activation-${product.id}`}
             id={product.id}

@@ -2,6 +2,7 @@
 // `reconcile` Tako workflow runs every minute under Tako, on an in-process timer instead.
 import type { ApiContext } from "./api/context";
 import { reconcileOnce } from "./registry";
+import { exportTick } from "./export";
 
 export const RECONCILE_EVERY_MS = 60_000;
 
@@ -17,6 +18,7 @@ export function startJobs(ctx: ApiContext): () => void {
     running = true;
     try {
       await reconcileOnce(ctx);
+      await exportTick(ctx);
     } catch (error) {
       console.warn("Reconcile failed; retrying in a minute", error);
     } finally {
