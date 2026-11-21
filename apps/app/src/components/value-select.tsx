@@ -4,6 +4,7 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -21,6 +22,7 @@ export function ValueSelect({
   className,
   contentClassName,
   icon,
+  action,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -32,15 +34,20 @@ export function ValueSelect({
   className?: string;
   contentClassName?: string;
   icon?: ReactNode;
+  action?: { label: string; icon: ReactNode; onSelect: () => void };
 }) {
   return (
     <Select
       // A value picker must not remove the page scrollbar. Enclosing dialogs own their scroll lock.
       modal={false}
-      items={options.map(([value, label]) => ({ value, label }))}
+      items={[
+        ...options.map(([value, label]) => ({ value, label })),
+        ...(action ? [{ value: ":action", label: action.label }] : []),
+      ]}
       value={options.some(([key]) => key === value) ? value : null}
       onValueChange={(next) => {
-        if (next !== null) onValueChange(next);
+        if (action && next === ":action") action.onSelect();
+        else if (next !== null) onValueChange(next);
       }}
       disabled={disabled}
     >
@@ -63,6 +70,17 @@ export function ValueSelect({
             </SelectItem>
           ))}
         </SelectGroup>
+        {action && (
+          <>
+            {options.length > 0 && <SelectSeparator />}
+            <SelectItem value=":action">
+              <span className="flex items-center gap-2">
+                {action.icon}
+                {action.label}
+              </span>
+            </SelectItem>
+          </>
+        )}
       </SelectContent>
     </Select>
   );

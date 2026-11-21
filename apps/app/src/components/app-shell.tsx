@@ -23,6 +23,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ValueSelect } from "./value-select";
+import { oversees, useOrganizationRole } from "./settings/settings-nav";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
@@ -77,6 +78,7 @@ export function AppShell({
   serverNow: number;
 }) {
   const workspaceTarget = useWorkspaceTarget();
+  const canCreate = oversees(useOrganizationRole());
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [analyticsPending, setAnalyticsPending] = useState(false);
@@ -312,13 +314,22 @@ export function AppShell({
     <ValueSelect
       label="Select project"
       value={product?.id ?? ""}
-      disabled={!products.length}
+      disabled={!products.length && !canCreate}
       placeholder={
         drilldown || requestedProject || selectionError ? "Project unavailable" : "No projects yet"
       }
       className="product-select"
       contentClassName="min-w-56 max-w-[calc(100vw-32px)]"
       icon={<ProjectIcon product={product} />}
+      action={
+        canCreate
+          ? {
+              label: "New project",
+              icon: <HugeiconsIcon icon={Add01Icon} aria-hidden="true" />,
+              onSelect: () => window.location.assign("/new"),
+            }
+          : undefined
+      }
       onValueChange={(value) => {
         const project = products.find((p) => p.id === value);
         if (project) void selectProject(project);
