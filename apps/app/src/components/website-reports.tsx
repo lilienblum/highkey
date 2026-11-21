@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useNearViewport } from "@/lib/use-widget";
 import { useReportQuery } from "@/lib/use-query";
@@ -65,11 +65,15 @@ function Report({
   filters: Record<string, unknown>;
   goals: string[];
 }) {
-  const { product, range, sourceId, refreshKey, refresh } = useWorkspace(),
+  const { product, range, rangeScope, sourceId, refreshKey, refresh } = useWorkspace(),
     ref = useRef<HTMLDivElement>(null),
     near = useNearViewport(ref),
+    [visited, setVisited] = useState(false),
     [index, select] = useState(0),
     nav = useNavigate({ from: "/$orgSlug/$projectSlug/" });
+  useEffect(() => {
+    if (near) setVisited(true);
+  }, [near]);
   const [tab, key] = tabs[index],
     field = key === "name" ? "name" : `property:${key}`,
     emptyGoals = tab === "Conversions" && !goals.length;
@@ -84,15 +88,16 @@ function Report({
   const result = useReportQuery(
     loadBreakdown,
     "website-report",
-    near && !emptyGoals ? product?.id : undefined,
+    (near || visited) && !emptyGoals ? product?.id : undefined,
     {
       ...range,
       source_id: sourceId,
       ...ctx,
       dimension: field,
-      page_size: tab === "Map" ? 100 : 10,
+      page_size: tab === "Map" ? 250 : 10,
     },
     refreshKey,
+    JSON.stringify([rangeScope, sourceId, name, tab, ctx]),
   );
   const rows = result.data?.rows ?? [];
   return (

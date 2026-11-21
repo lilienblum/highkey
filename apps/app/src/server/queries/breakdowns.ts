@@ -47,7 +47,7 @@ export async function breakdownReport(ctx: ApiContext, id: string, body: unknown
     q.page < 1 ||
     q.page > 10000 ||
     q.page_size < 1 ||
-    q.page_size > 100 ||
+    q.page_size > (q.dimension === "property:context.country" ? 250 : 100) ||
     q.search.length > 512
   )
     throw bad("Invalid breakdown search, page or sort");
