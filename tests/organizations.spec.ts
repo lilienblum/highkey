@@ -102,13 +102,19 @@ test.describe("organizations", () => {
     const account = footer.getByRole("button", { name: /^Account and organization:/ });
     await expect(account).toBeInViewport({ ratio: 1 });
     await account.click();
-    await page.screenshot({ path: test.info().outputPath("desktop-account.png") });
+    await page.screenshot({
+      path: test.info().outputPath("desktop-account.png"),
+      animations: "disabled",
+    });
     await page.keyboard.press("Escape");
     await expect(account).toBeFocused();
     await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
     await account.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
-    await page.screenshot({ path: test.info().outputPath("rail-account.png") });
+    await page.screenshot({
+      path: test.info().outputPath("rail-account.png"),
+      animations: "disabled",
+    });
     await page.getByRole("menuitem", { name: new RegExp(second.name) }).click();
     await expect(page).toHaveURL(new RegExp(`/${second.slug}/${sideProject.slug}`));
     await expect(page.locator(".workspace-project")).toContainText(sideProject.name);
@@ -123,7 +129,10 @@ test.describe("organizations", () => {
     await account.click();
     const settings = page.getByRole("menuitem", { name: "Account settings" });
     await expect(settings).toBeInViewport({ ratio: 1 });
-    await page.screenshot({ path: test.info().outputPath("drawer-account.png") });
+    await page.screenshot({
+      path: test.info().outputPath("drawer-account.png"),
+      animations: "disabled",
+    });
     await settings.click();
     await expect(page).toHaveURL(/\/settings\/account$/);
     await expect(page.getByRole("dialog", { name: "Sidebar", exact: true })).toBeHidden();
