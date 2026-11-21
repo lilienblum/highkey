@@ -46,7 +46,8 @@ describe("management API", () => {
     const first = await project(ctx, "Same Name");
     const second = await project(ctx, "Same Name");
     expect(first.slug).toBe("same-name");
-    expect(second.slug).toBe("same-name-2");
+    expect(second.slug).toBe("same-name-1");
+    expect((await project(ctx, "Same Name")).slug).toBe("same-name-2");
     for (const body of [
       { name: "", retention_days: 30 },
       { name: "x", retention_days: 0 },

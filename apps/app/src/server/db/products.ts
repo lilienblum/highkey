@@ -156,7 +156,7 @@ export async function saveProduct(
     } else {
       const base = projectSlug(input.name);
       let slug = base;
-      for (let suffix = 2; ; suffix++) {
+      for (let suffix = 1; ; suffix++) {
         // Slugs are unique within an organization; there, the unique index arbitrates.
         const inserted = await changes(
           tx,
@@ -198,7 +198,7 @@ export async function moveProduct(db: Db, id: string, orgId: string): Promise<Pr
     if (!row) throw projectMissing();
     if (row.org_id === orgId) return;
     const base = projectSlug(row.name);
-    for (let suffix = 2, slug = row.slug; ; slug = `${base}-${suffix++}`) {
+    for (let suffix = 1, slug = row.slug; ; slug = `${base}-${suffix++}`) {
       const moved = await changes(
         tx,
         "UPDATE OR IGNORE products SET org_id = ?2, slug = ?3 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM products WHERE slug = ?3 AND org_id = ?2)",

@@ -205,10 +205,10 @@ describe("access", () => {
     });
     const moved = await move();
     expect(moved.status).toBe(200);
-    expect(moved.json).toMatchObject({ id: moving.id, slug: "moving-2" });
+    expect(moved.json).toMatchObject({ id: moving.id, slug: "moving-1" });
     // The old organization no longer finds it; the new one has its dashboards and keys.
     expect((await call(ctx, "GET", `${path}/keys`)).status).toBe(404);
-    const boards = await call(ctx, "GET", `/api/read/products/moving-2/dashboards`, undefined, {
+    const boards = await call(ctx, "GET", `/api/read/products/moving-1/dashboards`, undefined, {
       ...as(target),
     });
     expect(boards.json.map((d: { name: string }) => d.name)).toEqual(["Board"]);

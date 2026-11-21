@@ -154,7 +154,7 @@ describe("organizations", () => {
     const input = { name: "Shop", retention_days: 30 };
     expect((await saveProduct(ctx.db, null, input, a?.id)).slug).toBe("shop");
     expect((await saveProduct(ctx.db, null, input, b?.id)).slug).toBe("shop");
-    expect((await saveProduct(ctx.db, null, input, a?.id)).slug).toBe("shop-2");
+    expect((await saveProduct(ctx.db, null, input, a?.id)).slug).toBe("shop-1");
   });
 
   test("existing_projects_join_the_first_accounts_organization", async () => {

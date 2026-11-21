@@ -84,9 +84,9 @@ Application logs use separate source-scoped keys, ingestion endpoints, queries, 
 
 Keys cannot move between sources or projects. Foreign-project source IDs are rejected. Source deletion and merging are not supported; revoke a source's keys to stop new authorized intake.
 
-Slugs are allocated from the project name on creation, with numeric suffixes for collisions. Renaming keeps the slug unchanged. Slugs are identifiers, not credentials.
+Project slugs use the first available address in the organization: `shop`, then `shop-1`, `shop-2`, and so on. Renaming keeps the slug unchanged. Slugs are identifiers, not credentials.
 
-Sources get slugs the same way, unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. `all` is reserved for the combined view, so a source named All becomes `all-2`. Dashboard URLs name the source by slug (`?source=web-app`); links with a source ID still open and are rewritten to the slug.
+Source slugs are unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. `all` is reserved for the combined view, so a source named All becomes `all-2`. Dashboard URLs name the source by slug (`?source=web-app`); links with a source ID still open and are rewritten to the slug.
 
 ## Ingestion
 
