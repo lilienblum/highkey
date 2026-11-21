@@ -165,7 +165,7 @@ function WorkspaceError() {
     <main className="workspace-error">
       <img src="/favicon.svg?v=7" width="40" height="40" alt="Highkey" />
       <h1>Couldn’t open your workspace</h1>
-      <p>Check that the API is running, then try again. Your projects and data haven’t changed.</p>
+      <p>Please try again in a moment.</p>
       <Button onClick={() => void router.invalidate()}>Try again</Button>
     </main>
   );
