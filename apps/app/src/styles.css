@@ -2396,12 +2396,12 @@ p {
   height: 32px;
 }
 [data-collapsible="icon"] .workspace-sources {
-  min-height: 0;
+  min-height: 80px;
   padding-inline: 4px;
 }
 [data-collapsible="icon"].workspace-sidebar [data-slot="sidebar-content"],
 [data-collapsible="icon"] .workspace-sidebar [data-slot="sidebar-content"] {
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 /*
  * Named dashboards nest under Overview on the dotted rail. Rows are quieter than destinations;
