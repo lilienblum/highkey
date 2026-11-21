@@ -114,7 +114,7 @@ export async function wipeProject(
   await step("logs", () =>
     ctx.admin.command("DELETE FROM highkey.logs WHERE product_id = {p:UUID}", { params }),
   );
-  for (const table of ["profiles", "groups", "session_events"])
+  for (const table of ["profiles", "groups", "session_events", "session_profiles"])
     await step(table, () =>
       ctx.admin.command(`DELETE FROM highkey.${table} WHERE product_id = {p:UUID}`, { params }),
     );

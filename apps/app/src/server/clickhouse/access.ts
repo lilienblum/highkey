@@ -88,6 +88,16 @@ export function accessStatements(productId: string, secret: string): string[] {
       `${project} AND record_type = 'event' AND ${scoped("event_time")}`,
     ),
     view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND record_type = 'event'`),
+    // Profile attribution is a read-time join. Ordinary event aggregations stay on the narrow view.
+    `CREATE OR REPLACE VIEW ${database}.profile_events DEFINER = highkey_definer SQL SECURITY DEFINER AS
+      SELECT e.source_id AS source_id,e.event_id AS event_id,e.name AS name,e.source AS source,e.event_time AS event_time,e.received_at AS received_at,
+        e.actor_id AS actor_id,e.identity_kind AS identity_kind,e.session_id AS session_id,e.properties AS properties,e.groups AS groups,e.backfill AS backfill,
+        coalesce(e.profile_id,if(m.at <= e.event_time + INTERVAL 6 HOUR AND e.identity_kind='visitor',nullIf(m.profile,''),NULL)) AS profile_id
+      FROM (SELECT * FROM highkey.events WHERE ${project} AND record_type='event' AND ${scoped("event_time")}) e
+      ASOF LEFT JOIN (SELECT source_id,actor_id,session_id,event_time AS at,argMin(profile_id,event_id) AS profile FROM highkey.session_profiles FINAL
+        WHERE ${project} AND ${SOURCE_SCOPE} AND event_time >= ${RANGE_FROM} AND event_time < ${RANGE_TO} + INTERVAL 6 HOUR AND expires_at > now()
+        GROUP BY source_id,actor_id,session_id,at) m
+      ON e.source_id=m.source_id AND ifNull(e.actor_id,'')=m.actor_id AND ifNull(e.session_id,'')=m.session_id AND e.event_time<=m.at`,
     view(
       "profile_records",
       "source_id, event_id, event_time, received_at, profile_id, session_id, traits, increments",
@@ -145,7 +155,7 @@ export function accessVersion(secret: string): string {
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'group_records','sessions') GROUP BY database HAVING count() = 7
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions') GROUP BY database HAVING count() = 8
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );

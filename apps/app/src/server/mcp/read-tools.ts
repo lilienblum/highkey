@@ -13,6 +13,7 @@ import { getView, listViews } from "../views";
 import { parseEntityQuery, runEntityQuery } from "../queries/entities";
 import { readAs } from "../queries/read";
 import { revenueReport } from "../queries/revenue";
+import { personDetail, peopleList } from "../queries/people";
 import { sessionList, sessionDetail } from "../queries/sessions";
 import { type Args, badArgument, projectId, type Tool } from "./common";
 
@@ -100,13 +101,15 @@ const defined = (entries: [string, unknown][]) =>
   Object.fromEntries(entries.filter(([, value]) => value != null));
 
 const report =
-  (run: typeof revenueReport | typeof sessionDetail | typeof sessionList): Tool =>
+  (run: (ctx: ApiContext, id: string, body: unknown) => Promise<unknown>): Tool =>
   async (ctx, a) => {
     const { project, from, to, ...query } = a;
     return run(ctx, await projectId(ctx, project), { ...query, ...range(from, to) });
   };
 
 export const readTools: Record<string, Tool> = {
+  list_people: report(peopleList),
+  get_profile: report(personDetail),
   query_sessions: report(sessionList),
   get_session: report(sessionDetail),
   query_revenue: report(revenueReport),

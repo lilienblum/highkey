@@ -121,15 +121,18 @@ test("visitor chart excludes installation identities without shrinking overview 
 }) => {
   const queries: unknown[] = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("/query")) queries.push(request.postDataJSON());
+    if (request.url().endsWith("/query") || request.url().endsWith("/activity"))
+      queries.push(request.postDataJSON());
   });
   await page.goto("/");
   await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("6");
   // Four distinct queries, each with its own job: the range summary and chart, the source
-  // breakdown, the equal-length previous period (for the growth line) and the last five minutes
-  // (active visitors).
+  // breakdown, the equal-length previous period (for the growth line) and live activity.
   expect(new Set(queries.map((query) => JSON.stringify(query))).size).toBe(4);
+  await expect(
+    page.getByRole("img", { name: /Active actors per minute over the last 30 minutes/ }),
+  ).toBeVisible();
   const visitors = chartResponse(page, "actors");
   await select(page, "Chart metric", "Unique visitors");
   const daily = await result(visitors);

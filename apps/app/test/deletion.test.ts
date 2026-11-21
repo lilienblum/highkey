@@ -228,6 +228,7 @@ describe("deleting", () => {
       "profiles",
       "groups",
       "session_events",
+      "session_profiles",
       "access",
       "rows",
       "keys",

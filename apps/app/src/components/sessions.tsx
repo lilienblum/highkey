@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { NoProduct, PageHeader, useWorkspace, useAnalyticsPending } from "./app-shell";
 import { ErrorState, BreakdownRows } from "./shared";
 import { PageLoading } from "./loading";
@@ -334,13 +335,22 @@ export function Sessions() {
   );
 }
 function VisitDetails({ d, p }: { d: Detail; p: Product }) {
+  const target = useWorkspaceTarget();
   return (
     <>
       <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {columns.map((key) => (
           <div className="min-w-0" key={key}>
             <dt className="text-xs text-muted-foreground">{labels[key]}</dt>
-            <dd className="break-words">{format(d.session, key, p)}</dd>
+            <dd className="break-words">
+              {key === "profile_id" && d.session.profile_id ? (
+                <Link {...target("/people", p.slug)} search={{ person: d.session.profile_id }}>
+                  {d.session.profile_id}
+                </Link>
+              ) : (
+                format(d.session, key, p)
+              )}
+            </dd>
           </div>
         ))}
       </dl>

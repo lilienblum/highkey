@@ -88,6 +88,13 @@ test("sessions remember columns and open a visit with its events, AI calls and c
     "Related payment log",
   );
   await page.screenshot({ path: test.info().outputPath("session-desktop.png"), fullPage: true });
+  await page.getByRole("link", { name: "buyer", exact: true }).click();
+  const profile = page.getByRole("region", { name: "Profile detail" });
+  await expect(profile).toContainText("Revenue (cents)");
+  await expect(profile).toContainText("250");
+  await profile.getByRole("tab", { name: "Sessions", exact: true }).click();
+  await profile.getByRole("link", { name: /visit-1/ }).click();
+  await expect(page.getByRole("heading", { name: "Session detail" })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath("session-mobile.png"), fullPage: true });

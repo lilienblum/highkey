@@ -140,6 +140,10 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
 
+The **Profiles** directory uses `POST /api/products/:project/people/query` (`list_people` on MCP). Supply `from`, `to` and optionally `source_id`, `kind` (`identified`, `anonymous`, `power`), `search`, a `group_type`/`group_id` pair and one-based pagination. Power users rank by event count in the preceding 90 days. Anonymous rows require an explicitly supplied visitor ID; events without one never form a profile. `POST /api/products/:project/people/detail` (`get_profile`) takes the same range and an `id`, optionally `anonymous:true`. It returns metrics, a year of daily activity, popular pages, traits, groups, and pages of events and sessions. Both endpoints have `/api/read` counterparts.
+
+A visitor's explicit identify can attribute up to six hours of earlier profile-less events to that profile at query time, including revenue. Project, source, visitor and session must all match. The earliest subsequent identify wins, explicit event profiles are retained, and the original event records are never rewritten.
+
 ### Live activity
 
 `POST /api/products/:project/activity` returns `{active, events, minutes}` for the instant `to` (RFC 3339). `active` is the number of distinct identified actors in the last five minutes, `events` counts all matching events in that window, and `minutes` contains thirty one-minute distinct actor counts, oldest first. The source, event, and typed property filters work as in the events query. The same endpoint is available under `/api/read`.

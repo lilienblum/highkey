@@ -165,6 +165,8 @@ async function registered(secret: string) {
 
 /** Every tool the read path may list, as a deliberate read-only decision. */
 const READ_TOOLS = [
+  "list_people",
+  "get_profile",
   "query_sessions",
   "get_session",
   "query_revenue",

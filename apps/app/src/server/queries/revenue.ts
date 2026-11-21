@@ -56,7 +56,7 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
     }>(
       `WITH attributed AS (
       SELECT ${dimension} AS label, coalesce(toInt128(dynamicElement(properties.revenue, 'Int64')), toInt128(dynamicElement(properties.revenue, 'UInt64'))) AS amount
-      FROM events WHERE (${where}) AND amount BETWEEN -9007199254740991 AND 9007199254740991
+      FROM ${q.group_by === "profile" ? "profile_events" : "events"} WHERE (${where}) AND amount BETWEEN -9007199254740991 AND 9007199254740991
     ), grouped AS (
       SELECT label, grouping(label) AS is_total, sum(amount) AS net, count() AS n
       FROM attributed GROUP BY GROUPING SETS ((label), ())

@@ -10,10 +10,18 @@ import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
 import { liveActivity } from "./activity";
+import { peopleList, personDetail } from "./people";
 import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    for (const [path, run] of [
+      ["query", peopleList],
+      ["detail", personDetail],
+    ] as const)
+      route("POST", `${prefix}/people/${path}`, READ, async (req, ctx, { project }) =>
+        json(await run(ctx, project as string, await readJson(req))),
+      );
     route("POST", `${prefix}/activity`, READ, async (request, ctx, { project }) =>
       json(await liveActivity(ctx, project as string, await readJson(request))),
     );

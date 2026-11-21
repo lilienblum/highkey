@@ -1,6 +1,46 @@
 {
   "tools": [
     {
+      "name": "list_people",
+      "description": "Find identified profiles, anonymous visitor IDs, or power users (90 days). Search by name, email or ID. Anonymous events without a visitor ID never form a person.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "kind": { "type": "string", "enum": ["identified", "anonymous", "power"] },
+          "search": { "type": "string" },
+          "group_type": { "type": "string" },
+          "group_id": { "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "get_profile",
+      "description": "Inspect a person's metrics, activity calendar, traits, groups, top pages and recent events and visits. Set anonymous=true for an explicitly collected visitor ID.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "id": { "type": "string" },
+          "anonymous": { "type": "boolean" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project", "id"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "query_sessions",
       "description": "List visits starting in the given range (default last seven days), newest first. Search visited paths or first referrer. Use the returned session, actor and source IDs for get_session.",
       "inputSchema": {
