@@ -14,6 +14,50 @@
   },
   "tools": [
     {
+      "name": "query_insights",
+      "description": "Read nightly project trends, their comparison windows, severity and referrer spike markers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": ["project"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "notification_history",
+      "description": "Read 50 fired notifications with delivery status and related event/profile IDs, newest first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "before": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": ["project"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
       "name": "run_analysis",
       "description": "Run a funnel, retention, conversion or breakdown analysis. spec.steps contains event names including @custom names. spec.returns lists retention return events. Optional step and drop inspect reached or dropped actors.",
       "inputSchema": {

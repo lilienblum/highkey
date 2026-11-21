@@ -31,6 +31,7 @@ import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
 import { PatternReports } from "./pattern-reports";
+import { ProjectInsights } from "./insights";
 import { BreakdownReport } from "./breakdown-report";
 import { useWebMetrics, WebChart, WebTiles } from "./web-metrics";
 import { webMetric, type WebMetric } from "@/lib/web-metrics";
@@ -325,6 +326,7 @@ function ProductOverview() {
         description="Usage, reach, and performance at a glance."
       >
         <PatternReports filters={eventFilters} />
+        <ProjectInsights />
         <OverviewActions />
       </PageHeader>
       {selectedFilter && (

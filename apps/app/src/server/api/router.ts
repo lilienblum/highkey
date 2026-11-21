@@ -46,6 +46,7 @@ async function ensureRoutes(): Promise<void> {
   const { registerCohorts } = await import("../cohorts");
   const { registerExclusions } = await import("../exclusions");
   const { registerExports } = await import("../export");
+  const { registerNotifications } = await import("../notifications");
   const { registerAnalysisViews } = await import("../analysis-views");
   const { registerDashboards } = await import("../dashboards/routes");
   const { registerViews } = await import("../views");
@@ -67,6 +68,8 @@ async function ensureRoutes(): Promise<void> {
   registerCohorts();
   registerExclusions();
   registerExports();
+  registerNotifications();
+  (await import("../insights")).registerInsights();
   registerAnalysisViews();
   registerDashboards();
   registerViews();

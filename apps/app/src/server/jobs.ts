@@ -3,6 +3,8 @@
 import type { ApiContext } from "./api/context";
 import { reconcileOnce } from "./registry";
 import { exportTick } from "./export";
+import { notifyTick } from "./notifications";
+import { nightlyTick } from "./insights";
 
 export const RECONCILE_EVERY_MS = 60_000;
 
@@ -19,6 +21,7 @@ export function startJobs(ctx: ApiContext): () => void {
     try {
       await reconcileOnce(ctx);
       await exportTick(ctx);
+      await nightlyTick(ctx);
     } catch (error) {
       console.warn("Reconcile failed; retrying in a minute", error);
     } finally {
@@ -27,5 +30,20 @@ export function startJobs(ctx: ApiContext): () => void {
   };
   void tick();
   const timer = setInterval(tick, RECONCILE_EVERY_MS);
-  return () => clearInterval(timer);
+  let sending = false;
+  const notifications = setInterval(async () => {
+    if (sending) return;
+    sending = true;
+    try {
+      await notifyTick(ctx);
+    } catch {
+      console.warn("Notification sweep will retry");
+    } finally {
+      sending = false;
+    }
+  }, 5000);
+  return () => {
+    clearInterval(timer);
+    clearInterval(notifications);
+  };
 }

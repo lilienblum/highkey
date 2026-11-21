@@ -8,13 +8,14 @@ import { throttle } from "./dashboards/routes";
 import { readAs } from "./queries/read";
 import { parseEventsQuery } from "./queries/events";
 import { runSettings } from "./clickhouse/access";
+import { insights } from "./insights";
 
 export interface ChartReference {
   id: string;
   title: string;
   description: string;
   at: number;
-  kind: "note" | "deploy" | "version";
+  kind: "note" | "deploy" | "version" | "insight";
 }
 export async function createReference(ctx: ApiContext, project: string, body: unknown) {
   const q = fields(
@@ -74,7 +75,16 @@ export async function listReferences(ctx: ApiContext, project: string, body: unk
       },
     ),
   );
-  const rows = [...notes, ...auto.data].sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+  const markers = (await insights(ctx, project, q)).map((t) => ({
+    id: JSON.stringify([t.at, t.dimension, t.days, t.label]),
+    at: t.at,
+    title: t.title,
+    description: `${t.severity} · ${t.description}`,
+    kind: "insight" as const,
+  }));
+  const rows = [...notes, ...auto.data, ...markers].sort(
+    (a, b) => b.at - a.at || a.id.localeCompare(b.id),
+  );
   return { rows: rows.slice(0, limit), truncated: rows.length > limit };
 }
 export function registerReferences() {

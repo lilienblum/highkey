@@ -18,6 +18,7 @@ export function path(column: "properties" | "attributes", key: string): string {
   const derived = column === "properties" ? contextColumn(key) : undefined;
   if (derived) return `CAST(nullIf(${derived},''),'Dynamic')`;
   if (column === "properties") {
+    if (key === "event.id") return "CAST(event_id,'Dynamic')";
     if (/^cohort\.[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(key))
       return `CAST(toBool(event_id IN (SELECT event_id FROM profile_events WHERE profile_id IN (SELECT profile_id FROM cohort_members WHERE cohort_id=toUUID('${key.slice(7)}')))),'Dynamic')`;
     if (key === "profile.id" || key === "session.id")

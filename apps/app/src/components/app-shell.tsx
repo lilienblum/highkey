@@ -32,6 +32,7 @@ import { findSource, sourceParam } from "@/lib/workspace-search";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { LiveUpdates } from "./live-updates";
+import { NotificationToast } from "./notifications";
 import type { Signal } from "@/lib/change-envelope";
 
 type Context = {
@@ -453,6 +454,9 @@ export function AppShell({
               </div>
             )}
             {error && <ErrorState message={error} retry={refresh} />}
+            {product && !resolvingProject && !selectionError && !isOrganizationPage(path) && (
+              <NotificationToast key={product.id} project={product.id} />
+            )}
             {resolvingProject ? (
               <>
                 <PageHeader title={label} description="Your project analytics" />

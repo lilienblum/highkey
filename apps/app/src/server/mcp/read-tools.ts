@@ -19,6 +19,8 @@ import { breakdownReport } from "../queries/breakdowns";
 import { analysis } from "../queries/analysis";
 import { groupActivity } from "../queries/group-activity";
 import { listCohorts } from "../cohorts";
+import { insights } from "../insights";
+import { notificationHistory } from "../notifications";
 import { realtime } from "../queries/realtime";
 import { generations } from "../queries/generations";
 import { personDetail, peopleList } from "../queries/people";
@@ -116,6 +118,9 @@ const report =
   };
 
 export const readTools: Record<string, Tool> = {
+  query_insights: report(insights),
+  notification_history: async (ctx, { project, before }) =>
+    notificationHistory(ctx, await projectId(ctx, project), before),
   run_analysis: report(analysis),
   group_activity: report(groupActivity),
   list_cohorts: async (ctx, { project }) => listCohorts(ctx, await projectId(ctx, project)),

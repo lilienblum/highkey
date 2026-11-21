@@ -71,7 +71,13 @@ async function deleteRows(db: Db, project: string): Promise<string | null> {
       [project],
     );
     // Dashboards, their revisions, views and retention changes go by cascade.
-    for (const table of ["ingestion_keys", "log_keys", "log_settings", "sources"])
+    for (const table of [
+      "notification_rules",
+      "ingestion_keys",
+      "log_keys",
+      "log_settings",
+      "sources",
+    ])
       await tx.execute(`DELETE FROM ${table} WHERE product_id = ?`, [project]);
     await tx.execute("DELETE FROM products WHERE id = ?", [project]);
     return row?.org_id ?? null;

@@ -165,6 +165,8 @@ async function registered(secret: string) {
 
 /** Every tool the read path may list, as a deliberate read-only decision. */
 const READ_TOOLS = [
+  "notification_history",
+  "query_insights",
   "run_analysis",
   "group_activity",
   "list_cohorts",
