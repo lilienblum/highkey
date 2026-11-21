@@ -93,7 +93,9 @@ test("the old Explore paths redirect to Events and keep their search", async ({ 
     }),
   );
   await page.goto(`/owner/${project.slug}/explore?source=all&days=30&query=${query}`);
-  await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}/events\\?`));
+  await expect(page).toHaveURL(
+    (url) => url.pathname === `/owner/${project.slug}/events` && !url.searchParams.has("source"),
+  );
   const params = new URL(page.url()).searchParams;
   expect(params.get("days")).toBe("30");
   expect(params.has("source")).toBe(false);

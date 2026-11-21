@@ -116,10 +116,10 @@ test("workspace links carry only the filters their destination uses", async ({ p
   await page.goto(`${path}?source=${source}&days=30`);
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   for (const [name, suffix, expected] of [
-    ["Events", "/events", { source, days: "30" }],
-    ["Logs", "/logs", { source }],
-    ["Realtime", "/realtime", { source }],
-    ["Profiles", "/people", { source }],
+    ["Events", "/events", { days: "30" }],
+    ["Logs", "/logs", {}],
+    ["Realtime", "/realtime", {}],
+    ["Profiles", "/people", {}],
     ["Project settings", "/settings", {}],
   ] as const) {
     const href = await nav.getByRole("link", { name, exact: true }).getAttribute("href");
@@ -151,13 +151,12 @@ test("workspace links carry only the filters their destination uses", async ({ p
     (url) =>
       url.pathname === path &&
       url.searchParams.get("days") === "30" &&
-      url.searchParams.get("source") === source,
+      !url.searchParams.has("source"),
   );
+  await expect(page.locator(".workspace-source-name")).toHaveText(project.sources[0].name);
   // Old bookmarks shed report dates without breaking a source-specific guide or log filters.
   await page.goto(`${path}/settings?source=${source}&days=30#install-guide`);
-  await expect(page).toHaveURL(
-    (url) => url.search === `?source=${source}` && url.hash === "#install-guide",
-  );
+  await expect(page).toHaveURL((url) => !url.search && url.hash === "#install-guide");
   await page.goto(`${path}/logs?source=all&days=7&logWindow=24h`);
   await expect(page).toHaveURL((url) => url.search === "?logWindow=24h");
   await page.goto("/settings/account?source=all&days=7");
@@ -231,10 +230,13 @@ test("source links remain scoped and invalid selections never query a fallback p
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("31");
   await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 31 matching events")).toBeVisible();
-  expect(params(page).get("source")).toBe(project.sources[0].slug);
+  expect(params(page).has("source")).toBe(false);
+  await expect(page.locator(".workspace-source-name")).toHaveText(project.sources[0].name);
 });
 
-test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
+test("a source bookmark sets the project preference and navigation stays clean", async ({
+  page,
+}) => {
   const legacy = await post("/products", {
     name: `Legacy source link ${Date.now()}`,
     retention_days: 365,
@@ -242,7 +244,7 @@ test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
   const source = await post(`/products/${legacy.id}/sources`, { name: "Web App" });
   expect(source.slug).toBe("web-app");
   await page.goto(`/owner/${legacy.slug}/events?source=${source.id}&days=30`);
-  await expect.poll(() => params(page).get("source")).toBe("web-app");
+  await expect.poll(() => params(page).has("source")).toBe(false);
   expect(new URL(page.url()).pathname).toBe(`/owner/${legacy.slug}/events`);
   expect(params(page).get("days")).toBe("30");
   await expect(
@@ -251,13 +253,30 @@ test("legacy source ids in URLs canonicalize to slugs", async ({ page }) => {
       .getByRole("button", { name: "Web App", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".workspace-source-name")).toHaveText("Web App");
-  // Choosing another source writes its slug too.
+  // The shared URL carries dates; the browser remembers source choices separately for each project.
+  const clean = page.url();
+  await select(page, "Select project", other.name);
+  await expect(page.locator(".workspace-source-name")).toHaveText("All sources");
+  await select(page, "Select project", legacy.name);
+  await expect(page.locator(".workspace-source-name")).toHaveText("Web App");
+  const scopes: (string | undefined)[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith(`/products/${legacy.id}/query`)) scopes.push(r.postDataJSON().source_id);
+  });
+  await page.goto(clean);
+  await expect(page.locator(".workspace-source-name")).toHaveText("Web App");
+  await expect.poll(() => scopes.length).toBeGreaterThan(0);
+  expect([...new Set(scopes)]).toEqual([source.id]);
   await page
     .getByRole("navigation", { name: "Project sources" })
     .getByRole("button", { name: "Events", exact: true })
     .click();
-  await expect.poll(() => params(page).get("source")).toBe("events");
+  await expect(page).toHaveURL(clean);
   await expect(page.locator(".workspace-source-name")).toHaveText("Events");
+  await page.goto(`${clean}&source=all`);
+  await expect(page).toHaveURL(clean);
+  await page.reload();
+  await expect(page.locator(".workspace-source-name")).toHaveText("All sources");
 });
 
 test("automatic refresh changes neither the current URL nor browser history", async ({ page }) => {

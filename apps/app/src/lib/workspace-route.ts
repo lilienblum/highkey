@@ -49,7 +49,7 @@ declare module "@tanstack/react-router" {
     /** Resume this project's filters when leaving a page that doesn't show them. */
     reportScope?: {
       project: string;
-      filters: Omit<WorkspaceSearch, "project" | "invalidWorkspace">;
+      filters: Pick<WorkspaceSearch, "days" | "period" | "from" | "to" | "snapshot">;
     };
   }
 }
@@ -117,7 +117,7 @@ export function useWorkspaceTarget() {
     params: { projectSlug: currentProject },
     search,
   } = useWorkspaceMatch();
-  const { source, days, period, from, to, snapshot } = search;
+  const { days, period, from, to, snapshot } = search;
   const reportScope = useLocation({ select: (location) => location.state.reportScope });
   const here = workspaceView(pathname);
   const usesDates = hasReportDates(here, search);
@@ -128,29 +128,15 @@ export function useWorkspaceTarget() {
       const parked = reportScope?.project === project ? reportScope.filters : undefined;
       if (!projectSlug || (currentProject !== projectSlug && !parked))
         return { ...target, search: undefined, state: undefined };
-      const filters = usesDates
-        ? { source, days, period, from, to, snapshot }
-        : { ...parked, source: here === "/settings" ? (source ?? parked?.source) : source };
+      const filters = usesDates ? { days, period, from, to, snapshot } : parked;
       return {
         ...target,
         // Date-less pages remember the report in this history entry, never in their address.
-        state: hasReportDates(view) ? undefined : { reportScope: { project, filters } },
+        state: hasReportDates(view) || !filters ? undefined : { reportScope: { project, filters } },
         search: view === "/settings" || usesDates ? undefined : filters,
       };
     },
-    [
-      orgSlug,
-      currentProject,
-      here,
-      usesDates,
-      reportScope,
-      source,
-      days,
-      period,
-      from,
-      to,
-      snapshot,
-    ],
+    [orgSlug, currentProject, usesDates, reportScope, days, period, from, to, snapshot],
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useContext, useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -46,6 +46,7 @@ import { ErrorState, PinChips, QueryDraftNotice } from "./shared";
 import { OpenSavedView, SaveLogViewButton, ViewActions, type SavedViewPage } from "./saved-views";
 import { LogStream } from "./log-stream";
 import { useLogFeed } from "@/lib/use-log-feed";
+import { SourceScopeReady } from "@/lib/use-query";
 import { MAX_BUFFERED_LOGS } from "@/lib/log-buffer";
 
 const direction =
@@ -85,6 +86,7 @@ const logViews: SavedViewPage<LogViewDocument> = {
 function LogExplorer() {
   const workspaceTarget = useWorkspaceTarget();
   const { product, sourceId, now: workspaceNow } = useWorkspace();
+  const sourceReady = useContext(SourceScopeReady);
   const { timeZone } = useDisplayPreferences();
   const search = validateLogsSearch(useSearch({ strict: false }));
   const navigate = useNavigate();
@@ -136,7 +138,7 @@ function LogExplorer() {
     {
       windowMs: search.logBefore || search.logFrom ? undefined : logWindows[window],
       follow,
-      enabled: !search.invalidLogs,
+      enabled: sourceReady && !search.invalidLogs,
     },
   );
   const { data, error, pending } = query;

@@ -96,7 +96,7 @@ Everyone signs in. After signup, you can wait for an invitation or create your o
 
 Click an Overview breakdown row to filter the dashboard in place; **View matching events** opens the filtered event stream. Page and referrer rows offer a separate external-link action on hover or keyboard focus. See [the dashboard guide](docs/dashboard.md) for drilldowns, typed filters, and date behavior.
 
-Project, source, range, chart choices, applied Events queries, and Logs filters live in the URL. For example, `/acme/orbit?source=all&period=month` (organization, then project). One date picker provides presets, custom calendar dates, and previous/next navigation for calendar periods and fixed ranges. Custom dates use inclusive UTC days as explicit `from` / `to` timestamps (the API end is exclusive); they do not archive results. Chart grouping adjusts automatically to the chosen range. Reload, sharing, and browser history restore the view.
+Project, range, chart choices, applied Events queries, and Logs filters live in the URL. For example, `/acme/orbit?period=month` opens the month to date. The sidebar source is a browser preference for that project; a colleague opening the same address uses their own selection. One date picker provides presets, custom calendar dates, and previous/next navigation for calendar periods and fixed ranges. Custom dates use inclusive UTC days as explicit `from` / `to` timestamps (the API end is exclusive); they do not archive results. Chart grouping adjusts automatically to the chosen range.
 
 ## Dashboards and MCP
 

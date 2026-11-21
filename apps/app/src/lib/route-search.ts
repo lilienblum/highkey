@@ -6,8 +6,7 @@ import {
 import { validateWorkspaceSearch, type WorkspaceSearch } from "./workspace-search";
 
 const dates = ["days", "period", "snapshot", "from", "to"] as const;
-const keepReport = retainSearchParams<WorkspaceSearch>(["source", ...dates]);
-const keepSource = retainSearchParams<WorkspaceSearch>(["source"]);
+const keepReport = retainSearchParams<WorkspaceSearch>([...dates]);
 const dropDates = stripSearchParams<WorkspaceSearch>([...dates]);
 
 type ProfileContext = { person?: string; audience?: string; kind?: string };
@@ -24,7 +23,7 @@ const directoryDates: SearchMiddleware<WorkspaceSearch & ProfileContext> = ({ se
 
 /** Only project paths have deterministic defaults. A bare entry can still override browser preferences. */
 export const projectSearch = {
-  middlewares: [stripSearchParams<WorkspaceSearch>({ source: "all", days: 7 })],
+  middlewares: [stripSearchParams<WorkspaceSearch>({ days: 7 })],
 };
 export const managementSearch = {
   middlewares: [
@@ -44,9 +43,7 @@ export function workspaceSearch<T extends object = {}>(
           ? [directoryDates, keepReport]
           : scope === "report"
             ? [keepReport]
-            : scope === "source"
-              ? [keepSource, dropDates]
-              : [dropDates],
+            : [dropDates],
     },
     validateSearch: (raw: Record<string, unknown>) => ({
       ...validateWorkspaceSearch(

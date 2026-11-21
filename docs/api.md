@@ -86,7 +86,7 @@ Keys cannot move between sources or projects. Foreign-project source IDs are rej
 
 Project slugs use the first available address in the organization: `shop`, then `shop-1`, `shop-2`, and so on. Renaming keeps the slug unchanged. Slugs are identifiers, not credentials.
 
-Source slugs are unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. `all` is reserved for the combined view, so a source named All becomes `all-2`. Dashboard URLs name the source by slug (`?source=web-app`); links with a source ID still open and are rewritten to the slug.
+Source slugs are unique within their project and at most 64 characters; a name without ASCII letters or digits becomes `source`. The initial source is `events`. `all` is reserved for the combined view, so a source named All becomes `all-2`. The dashboard remembers the sidebar selection locally per project. A link with `?source=web-app`, a source ID, or `?source=all` sets that selection and then opens the clean address.
 
 ## Ingestion
 

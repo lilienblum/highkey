@@ -28,7 +28,7 @@ async function ingest(key: string, name: string, amount: number) {
   expect(response.status).toBe(200);
 }
 
-test("one project combines website and mobile sources with scoped keys, queries, and shared links", async ({
+test("one project combines website and mobile sources with scoped keys, queries, and a local source selection", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -83,13 +83,12 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await expect(sources.locator("[data-chart-kind='donut']")).toHaveCount(0);
   await expect(sources).toHaveCount(0);
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1");
-  // Renaming the initial Events source kept its slug.
-  expect(new URL(page.url()).searchParams.get("source")).toBe("events");
+  expect(new URL(page.url()).searchParams.has("source")).toBe(false);
   await select(page, "Select source", "All sources");
   await expect(sources).toBeVisible();
   await page.getByRole("link", { name: "Filter by iOS app", exact: true }).click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1");
-  expect(new URL(page.url()).searchParams.get("source")).toBe("ios-app");
+  await expect(page).toHaveURL((url) => !url.searchParams.has("source"));
   await page.getByRole("link", { name: "Events", exact: true }).click();
   await expect(page.getByText("across 1 matching events")).toBeVisible();
   const linked = page.url();
@@ -115,7 +114,7 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await page.reload();
   await expect(page.locator(".workspace-source-name")).toContainText("Website");
   await page.goto(linked);
-  await expect(page.locator(".workspace-source-name")).toContainText("iOS app");
+  await expect(page.locator(".workspace-source-name")).toContainText("Website");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await select(page, "Select source", "All sources");

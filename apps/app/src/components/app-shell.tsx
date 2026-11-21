@@ -35,7 +35,8 @@ import { WorkspaceSidebar } from "./workspace-sidebar";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { api, type Product, type Source } from "@/lib/api";
 import { readPreference, savePreference } from "@/lib/preferences";
-import { findSource, sourceParam } from "@/lib/workspace-search";
+import { findSource } from "@/lib/workspace-search";
+import { SourceScopeReady } from "@/lib/use-query";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { LiveUpdates } from "./live-updates";
@@ -119,11 +120,6 @@ export function AppShell({
     setSelected(readPreference("highkey:product") ?? "");
     const saved = Number(readPreference("highkey:days"));
     if ([7, 30, 90].includes(saved)) setSavedDays(saved as 7 | 30 | 90);
-    setPreferencesReady(true);
-  }, []);
-  // The catalog arrives with the server render and later refreshes through reload(); only the
-  // browser-saved source choices need restoring here. A workspace retry remounts the shell.
-  useEffect(() => {
     setSourceSelection(
       Object.fromEntries(
         initialProducts.map((product) => [
@@ -132,6 +128,7 @@ export function AppShell({
         ]),
       ),
     );
+    setPreferencesReady(true);
   }, [initialProducts]);
   useLayoutEffect(() => {
     if (preferencesReady) delete document.documentElement.dataset.sidebarInitial;
@@ -140,7 +137,7 @@ export function AppShell({
     return navigate({
       ...workspaceTarget(view, project.slug),
       search: {
-        source: "all",
+        source: undefined,
         days: 7,
         // Switching projects clears the previous report's dates.
         period: undefined,
@@ -169,17 +166,18 @@ export function AppShell({
       : drilldown?.productId
         ? products.find((p) => p.id === drilldown.productId)
         : (products.find((p) => p.id === selected) ?? products[0]);
-  const requestedSource = drilldown
-    ? (drilldown.sourceId ?? "all")
-    : (search.source ??
-      (requestedProject || view === "/settings"
-        ? "all"
-        : (sourceSelection[product?.id ?? ""] ?? "all")));
-  // URLs name sources by slug; IDs come from older links, drilldowns and saved choices.
-  const source = findSource(product?.sources, requestedSource);
+  // Explicit links are scoped inputs; ordinary navigation uses the project's saved source ID.
+  const requestedSource = drilldown ? (drilldown.sourceId ?? "all") : search.source;
+  const source = requestedSource
+    ? findSource(product?.sources, requestedSource)
+    : product?.sources.find((s) => s.id === sourceSelection[product.id]);
   const sourceId = source?.id;
-  const sourceValue = sourceParam(product?.sources, sourceId);
-  const urlSource = sourceValue === "all" ? undefined : sourceValue;
+  const rememberSource = useCallback((projectId: string, id: string) => {
+    setSourceSelection((saved) =>
+      saved[projectId] === id ? saved : { ...saved, [projectId]: id },
+    );
+    savePreference(`highkey:source:${projectId}`, id);
+  }, []);
   const urlDays = reportDates && days !== 7 ? days : undefined;
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
@@ -207,11 +205,11 @@ export function AppShell({
     setSelected(product.id);
     savePreference("highkey:product", product.id);
     if (reportDates) savePreference("highkey:days", String(days));
-    if (view !== "/settings") savePreference(`highkey:source:${product.id}`, sourceId ?? "");
+    if (search.source !== undefined) rememberSource(product.id, sourceId ?? "");
     if (
       projectSlug !== product.slug ||
       search.project !== undefined ||
-      search.source !== urlSource ||
+      search.source !== undefined ||
       search.days !== urlDays
     )
       void navigate({
@@ -219,7 +217,7 @@ export function AppShell({
         search: (previous) => ({
           ...previous,
           project: undefined,
-          source: urlSource,
+          source: undefined,
           days: urlDays,
         }),
         hash: true,
@@ -234,7 +232,7 @@ export function AppShell({
     missingSource,
     days,
     sourceId,
-    urlSource,
+    rememberSource,
     urlDays,
     reportDates,
     projectSlug,
@@ -398,6 +396,7 @@ export function AppShell({
           navigationReady={preferencesReady}
           onSourceChange={(id) => {
             if (!product) return;
+            rememberSource(product.id, id);
             const target = workspaceTarget(
               view === "/settings" ? "/" : view,
               product.slug,
@@ -412,7 +411,7 @@ export function AppShell({
                 ...(view === "/events" ? eventFilters(search) : {}),
                 ...(view === "/logs" ? logFilters(search) : {}),
                 project: undefined,
-                source: sourceParam(product.sources, id),
+                source: undefined,
               },
               resetScroll: false,
             });
@@ -521,7 +520,13 @@ export function AppShell({
                 </Button>
               </>
             ) : (
-              (!error || products.length > 0) && <Outlet />
+              (!error || products.length > 0) && (
+                <SourceScopeReady.Provider
+                  value={preferencesReady || requestedSource !== undefined}
+                >
+                  <Outlet />
+                </SourceScopeReady.Provider>
+              )
             )}
           </div>
         </SidebarInset>

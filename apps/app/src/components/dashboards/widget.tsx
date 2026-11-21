@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useContext, useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { SourceScopeReady } from "@/lib/use-query";
 import { Link } from "@tanstack/react-router";
 import { WorldMap } from "../world-map";
 import { ChartAudience } from "@/lib/chart-audience";
@@ -144,7 +145,16 @@ function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange
   const sources = useStable(product.sources);
   const ref = useRef<HTMLElement>(null);
   const near = useNearViewport(ref);
-  const run = useWidgetRun(product.id, widget, range, rangeScope, sourceId, refreshKey, near);
+  const sourceReady = useContext(SourceScopeReady);
+  const run = useWidgetRun(
+    product.id,
+    widget,
+    range,
+    rangeScope,
+    sourceId,
+    refreshKey,
+    near && sourceReady,
+  );
   const pending = near && (run.loading || run.refreshing);
   useEffect(() => {
     onPendingChange?.(widget.id, pending);

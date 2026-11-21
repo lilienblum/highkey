@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 import { useQuery as useCachedQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, queryProduct, type QueryResult } from "./api";
 import { browserGcTime } from "./cache-time";
+
+// Render report structure on the server; wait for the local source before fetching measurements.
+export const SourceScopeReady = createContext(true);
 
 /** A cached result remembers the exact request that produced it. */
 type Cached<T> = { request: string; data: T };
@@ -45,8 +48,10 @@ export function useReportQuery<T>(
   body: Record<string, unknown>,
   refreshKey: string | number,
   backgroundScope?: string,
-  enabled = true,
+  active = true,
 ) {
+  const ready = useContext(SourceScopeReady);
+  const enabled = ready && active;
   const bodyKey = JSON.stringify(body);
   const request = `${refreshKey}:${bodyKey}`;
   const queryKey = [kind, product, backgroundScope ?? bodyKey];

@@ -200,7 +200,7 @@ export function Settings() {
       </PageHeader>
       {product ? (
         <>
-          <ProductSettings key={product.id} product={product} />
+          <ProductSettings key={`${product.id}:${sourceId ?? ""}`} product={product} />
           <ReferenceSettings key={`references-${product.id}`} />
           <CollectionExclusions key={`exclusions-${product.id}`} id={product.id} />
           <ExportSettings key={`export-${product.id}`} id={product.id} />
@@ -212,7 +212,11 @@ export function Settings() {
             website={site ?? product.website_url}
             websiteSource={site ? sourceId : undefined}
           />
-          <LogSettings key={`logs-${product.id}`} product={product} sourceId={sourceId} />
+          <LogSettings
+            key={`logs-${product.id}:${sourceId ?? ""}`}
+            product={product}
+            sourceId={sourceId}
+          />
           <ProjectLifecycle key={`lifecycle-${product.id}`} product={product} />
         </>
       ) : (
