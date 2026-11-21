@@ -84,11 +84,14 @@ export function WorkspaceSidebar({
   };
   const logViews = (product?.views ?? []).filter((view) => view.kind === "logs");
   const collapsedRail = useCollapsedRail();
+  const eventsTarget = workspaceTarget("/events", product?.slug);
+  const logsTarget = workspaceTarget("/logs", product?.slug);
   const eventViewLink: ViewLinkRenderer = (view, props) => (
     <Link
-      {...workspaceTarget("/events", product?.slug)}
+      {...eventsTarget}
       search={(previous) => ({
         ...previous,
+        ...eventsTarget.search,
         view: view.slug,
         viewAt: undefined,
         query: undefined,
@@ -103,9 +106,10 @@ export function WorkspaceSidebar({
   );
   const logViewLink: ViewLinkRenderer = (view, props) => (
     <Link
-      {...workspaceTarget("/logs", product?.slug)}
+      {...logsTarget}
       search={(previous) => ({
         ...previous,
+        ...logsTarget.search,
         ...clearedLogs,
         view: view.slug,
       })}

@@ -76,7 +76,9 @@ export function Realtime() {
         <CohortPicker
           project={product.id}
           value={s.cohort}
-          change={(cohort) => void nav({ search: (v) => ({ ...v, cohort }), resetScroll: false })}
+          change={(cohort) =>
+            void nav({ search: (v) => ({ ...v, cohort }), state: true, resetScroll: false })
+          }
         />
       )}
       {result.error && <ErrorState message={result.error} retry={refresh} />}

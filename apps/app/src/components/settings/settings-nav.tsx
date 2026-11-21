@@ -23,6 +23,7 @@ export function SettingsNav() {
         <Link
           key={to}
           to={to}
+          state={true}
           className={cn("settings-nav-link", active && "is-active")}
           aria-current={active ? "page" : undefined}
         >

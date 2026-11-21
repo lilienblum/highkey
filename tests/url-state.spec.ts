@@ -126,6 +126,20 @@ test("workspace links carry only the filters their destination uses", async ({ p
     expect(url.pathname).toBe(path + suffix);
     expect(Object.fromEntries(url.searchParams)).toEqual(expected);
   }
+  await nav.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.reload();
+  await page
+    .getByRole("navigation", { name: "Settings", exact: true })
+    .getByRole("link", { name: "Members" })
+    .click();
+  await expect(page).toHaveURL((url) => url.pathname === "/settings/members" && !url.search);
+  await nav.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === path &&
+      url.searchParams.get("days") === "30" &&
+      url.searchParams.get("source") === source,
+  );
   // Old bookmarks shed report dates without breaking a source-specific guide or log filters.
   await page.goto(`${path}/settings?source=${source}&days=30#install-guide`);
   await expect(page).toHaveURL(

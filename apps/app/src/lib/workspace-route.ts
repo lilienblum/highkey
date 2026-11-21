@@ -1,5 +1,6 @@
-import { useParams, useRouteContext } from "@tanstack/react-router";
+import { useLocation, useParams, useRouteContext, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
+import type { WorkspaceSearch } from "./workspace-search";
 
 export type WorkspaceView =
   | "/"
@@ -25,6 +26,20 @@ const routes = {
 } as const;
 export const projectRoute = "/$orgSlug/$projectSlug";
 export const dashboardRoute = "/$orgSlug/$projectSlug/dashboards/$dashboardSlug";
+
+export function hasReportDates(view: WorkspaceView) {
+  return view !== "/settings" && view !== "/logs" && view !== "/realtime";
+}
+
+declare module "@tanstack/react-router" {
+  interface HistoryState {
+    /** Resume this project's filters when leaving a page that doesn't show them. */
+    reportScope?: {
+      project: string;
+      filters: Omit<WorkspaceSearch, "project" | "invalidWorkspace">;
+    };
+  }
+}
 
 /**
  * The canonical route for a workspace view: `/<organization>/<project>/…`. A dashboard needs its
@@ -68,10 +83,28 @@ export function useOrganizationSlug(): string | undefined {
 /** `workspaceTarget` for the organization the page shows. */
 export function useWorkspaceTarget() {
   const orgSlug = useOrganizationSlug();
+  const currentProject = useParams({ strict: false }).projectSlug;
+  const { pathname, state } = useLocation();
+  const here = workspaceView(pathname);
+  const { source, days, period, from, to, snapshot } = useSearch({ strict: false });
   return useCallback(
-    (view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) =>
-      workspaceTarget(orgSlug, view, projectSlug, dashboardSlug),
-    [orgSlug],
+    (view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) => {
+      const target = workspaceTarget(orgSlug, view, projectSlug, dashboardSlug);
+      const project = `${orgSlug}/${projectSlug}`;
+      const parked = state.reportScope?.project === project ? state.reportScope.filters : undefined;
+      if (!projectSlug || (currentProject !== projectSlug && !parked))
+        return { ...target, search: undefined };
+      const filters = hasReportDates(here)
+        ? { source, days, period, from, to, snapshot }
+        : { ...parked, source: here === "/settings" ? (source ?? parked?.source) : source };
+      return {
+        ...target,
+        // Date-less pages remember the report in this history entry, never in their address.
+        state: hasReportDates(view) ? undefined : { reportScope: { project, filters } },
+        search: view === "/settings" || hasReportDates(here) ? undefined : filters,
+      };
+    },
+    [orgSlug, currentProject, here, state.reportScope, source, days, period, from, to, snapshot],
   );
 }
 

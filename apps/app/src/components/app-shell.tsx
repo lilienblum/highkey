@@ -3,7 +3,12 @@ import { validateExploreSearch } from "@/lib/explore-search";
 import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
-import { isOrganizationPage, useWorkspaceTarget, workspaceView } from "@/lib/workspace-route";
+import {
+  hasReportDates,
+  isOrganizationPage,
+  useWorkspaceTarget,
+  workspaceView,
+} from "@/lib/workspace-route";
 import { dashboardQueries } from "@/server/dashboards";
 import { viewQueries } from "@/lib/views";
 import { ProjectIcon } from "./project-icon";
@@ -103,7 +108,7 @@ export function AppShell({
   const queryClient = useQueryClient();
   const search = useSearch({ strict: false });
   const drilldown = view === "/events" ? search.drilldown : undefined;
-  const hasReportDates = view !== "/settings" && view !== "/logs" && view !== "/realtime";
+  const reportDates = hasReportDates(view);
   const requestedProject = projectSlug ?? search.project;
   const days = search.days ?? (requestedProject ? 7 : savedDays);
   useEffect(() => {
@@ -172,7 +177,7 @@ export function AppShell({
   const sourceId = source?.id;
   const sourceValue = sourceParam(product?.sources, sourceId);
   const urlSource = sourceValue === "all" ? undefined : sourceValue;
-  const urlDays = hasReportDates && days !== 7 ? days : undefined;
+  const urlDays = reportDates && days !== 7 ? days : undefined;
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
     search.invalidWorkspace ||
@@ -196,8 +201,9 @@ export function AppShell({
       (drilldown && missingSource)
     )
       return;
+    setSelected(product.id);
     savePreference("highkey:product", product.id);
-    if (hasReportDates) savePreference("highkey:days", String(days));
+    if (reportDates) savePreference("highkey:days", String(days));
     if (view !== "/settings") savePreference(`highkey:source:${product.id}`, sourceId ?? "");
     if (
       projectSlug !== product.slug ||
@@ -227,7 +233,7 @@ export function AppShell({
     sourceId,
     urlSource,
     urlDays,
-    hasReportDates,
+    reportDates,
     projectSlug,
     dashboardSlug,
     view,
@@ -389,20 +395,21 @@ export function AppShell({
           navigationReady={preferencesReady}
           onSourceChange={(id) => {
             if (!product) return;
+            const target = workspaceTarget(
+              view === "/settings" ? "/" : view,
+              product.slug,
+              dashboardSlug,
+            );
             void navigate({
-              ...workspaceTarget(view === "/settings" ? "/" : view, product.slug, dashboardSlug),
+              ...target,
               search: {
+                ...target.search,
                 // The Events query and open view, or the log filters, carry over to the new
                 // source; a page number or log cursor does not.
                 ...(view === "/events" ? eventFilters(search) : {}),
                 ...(view === "/logs" ? logFilters(search) : {}),
                 project: undefined,
                 source: sourceParam(product.sources, id),
-                days,
-                period: search.period,
-                snapshot: search.snapshot,
-                from: search.from,
-                to: search.to,
               },
               resetScroll: false,
             });
@@ -440,7 +447,7 @@ export function AppShell({
               <div className="mobile-project-picker">{projectPicker}</div>
               <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
             </div>
-            {hasReportDates && (
+            {reportDates && (
               <div className="workspace-toolbar">
                 <div className="workspace-toolbar-actions">
                   <DateRangePicker
