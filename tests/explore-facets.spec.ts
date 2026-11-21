@@ -45,13 +45,17 @@ test("filter suggestions keep dotted keys and typed values; an empty filter need
   );
   await page.getByRole("button", { name: "Run query" }).click();
   expect((await (await result).json()).summary.total).toBe(1);
-  await page.goto(`/owner/${p.slug}/people`);
+  await page.goto(`/owner/${p.slug}/people?days=30`);
+  await expect(page).toHaveURL((url) => url.pathname.endsWith("/people") && !url.search);
+  await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Groups", exact: true }).click();
   await page.getByRole("link", { name: "orbit", exact: true }).click();
   await expect(page.getByRole("heading", { name: "New members over time" })).toBeVisible();
   await page.getByRole("link", { name: "ada", exact: true }).click();
   await expect(page.getByRole("heading", { name: "ada", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose date range" })).toBeVisible();
   await page.getByRole("button", { name: "Back to profiles" }).click();
+  await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
   await page.getByRole("button", { name: "Cohorts", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "New cohort" }).click();

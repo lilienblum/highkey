@@ -111,7 +111,7 @@ export function AppShell({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const drilldown = view === "/events" ? search.drilldown : undefined;
-  const reportDates = hasReportDates(view);
+  const reportDates = hasReportDates(view, search);
   const requestedProject = projectSlug ?? search.project;
   const days = search.days ?? (requestedProject ? 7 : savedDays);
   useEffect(() => {

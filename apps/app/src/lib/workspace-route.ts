@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useCallback } from "react";
 import type { WorkspaceSearch } from "./workspace-search";
+import { profileUsesDates } from "./route-search";
 
 export type WorkspaceView =
   | "/"
@@ -34,7 +35,11 @@ const routes = {
 export const projectRoute = "/$orgSlug/$projectSlug";
 export const dashboardRoute = "/$orgSlug/$projectSlug/dashboards/$dashboardSlug";
 
-export function hasReportDates(view: WorkspaceView) {
+export function hasReportDates(
+  view: WorkspaceView,
+  search: Parameters<typeof profileUsesDates>[0] = {},
+) {
+  if (view === "/people") return profileUsesDates(search);
   return view !== "/settings" && view !== "/logs" && view !== "/realtime";
 }
 
@@ -109,10 +114,12 @@ export function useWorkspaceTarget() {
   const {
     pathname,
     params: { projectSlug: currentProject },
-    search: { source, days, period, from, to, snapshot },
+    search,
   } = useWorkspaceMatch();
+  const { source, days, period, from, to, snapshot } = search;
   const reportScope = useLocation({ select: (location) => location.state.reportScope });
   const here = workspaceView(pathname);
+  const usesDates = hasReportDates(here, search);
   return useCallback(
     (view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) => {
       const target = workspaceTarget(orgSlug, view, projectSlug, dashboardSlug);
@@ -120,17 +127,29 @@ export function useWorkspaceTarget() {
       const parked = reportScope?.project === project ? reportScope.filters : undefined;
       if (!projectSlug || (currentProject !== projectSlug && !parked))
         return { ...target, search: undefined };
-      const filters = hasReportDates(here)
+      const filters = usesDates
         ? { source, days, period, from, to, snapshot }
         : { ...parked, source: here === "/settings" ? (source ?? parked?.source) : source };
       return {
         ...target,
         // Date-less pages remember the report in this history entry, never in their address.
         state: hasReportDates(view) ? undefined : { reportScope: { project, filters } },
-        search: view === "/settings" || hasReportDates(here) ? undefined : filters,
+        search: view === "/settings" || usesDates ? undefined : filters,
       };
     },
-    [orgSlug, currentProject, here, reportScope, source, days, period, from, to, snapshot],
+    [
+      orgSlug,
+      currentProject,
+      here,
+      usesDates,
+      reportScope,
+      source,
+      days,
+      period,
+      from,
+      to,
+      snapshot,
+    ],
   );
 }
 

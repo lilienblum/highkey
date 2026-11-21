@@ -109,3 +109,31 @@ test("map measures and entity filters count typed memberships and whole visits",
     ctx.cleanup();
   }
 }, 30000);
+
+test("the profile directory finds retained activity beyond report ranges", async () => {
+  const ctx = await testContext();
+  try {
+    const p = await project(ctx, "Long-lived directory", 730);
+    const day = 86_400_000,
+      now = Date.now();
+    await seedEvents(p.id, [
+      { event_id: "old-person", time: new Date(now - 400 * day), profile_id: "ada" },
+      {
+        event_id: "old-visitor",
+        time: new Date(now - 12 * day),
+        identity_kind: "visitor",
+        actor_id: "visitor",
+      },
+    ]);
+    const list = (body: object) => call(ctx, "POST", `/api/products/${p.id}/people/query`, body);
+    expect((await list({ search: "ada" })).json.rows).toMatchObject([{ id: "ada", events: 1 }]);
+    expect((await list({ kind: "anonymous" })).json.rows).toMatchObject([{ id: "visitor" }]);
+    expect((await list({ kind: "power" })).json.rows).toEqual([]);
+    const to = new Date(now).toISOString();
+    expect((await list({ from: new Date(now - 7 * day).toISOString(), to })).json.rows).toEqual([]);
+    expect((await list({ to })).status).toBe(422);
+    expect((await list({ audience: "[]" })).status).toBe(422);
+  } finally {
+    ctx.cleanup();
+  }
+});

@@ -61,4 +61,8 @@ test("chart point notes persist across Settings and Overview; viewers can follow
   const profiles = page.getByRole("table", { name: "Profiles" });
   await expect(profiles.getByRole("link", { name: "release-manager", exact: true })).toBeVisible();
   await expect(profiles.getByRole("link", { name: "other-profile", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose date range" })).toBeVisible();
+  await page.getByRole("button", { name: "Clear chart-point filter" }).click();
+  await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
+  await expect(profiles.getByRole("link", { name: "other-profile", exact: true })).toBeVisible();
 });

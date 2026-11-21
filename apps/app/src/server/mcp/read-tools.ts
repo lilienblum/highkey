@@ -132,7 +132,11 @@ export const readTools: Record<string, Tool> = {
     breakdownReport(ctx, await projectId(ctx, project), { ...range(from, to), ...options }),
   query_generations: report(generations),
   query_patterns: report(patterns),
-  list_people: report(peopleList),
+  list_people: async (ctx, { project, from, to, ...query }) =>
+    peopleList(ctx, await projectId(ctx, project), {
+      ...query,
+      ...(from == null && to == null ? {} : range(from, to)),
+    }),
   get_profile: report(personDetail),
   query_sessions: report(sessionList),
   get_session: report(sessionDetail),

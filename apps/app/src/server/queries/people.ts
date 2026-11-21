@@ -23,8 +23,8 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
   const q = fields(
     body,
     {
-      from: "string",
-      to: "string",
+      from: "string?",
+      to: "string?",
       source_id: "string?",
       kind: "string",
       search: "string",
@@ -37,7 +37,11 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
     },
     { kind: "identified", search: "", page: 1, page_size: 25 },
   );
-  const { from, to } = parseEventsQuery({ from: q.from, to: q.to });
+  // The directory covers retained data. A report or chart-point lookup supplies both bounds.
+  const { from, to } =
+    q.from == null && q.to == null && q.audience == null
+      ? { from: new Date(0), to: new Date() }
+      : parseEventsQuery({ from: q.from, to: q.to });
   if (
     !["identified", "anonymous", "power"].includes(q.kind) ||
     q.search.length > 256 ||

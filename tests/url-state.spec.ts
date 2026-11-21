@@ -119,6 +119,7 @@ test("workspace links carry only the filters their destination uses", async ({ p
     ["Events", "/events", { source, days: "30" }],
     ["Logs", "/logs", { source }],
     ["Realtime", "/realtime", { source }],
+    ["Profiles", "/people", { source }],
     ["Settings", "/settings", {}],
   ] as const) {
     const href = await nav.getByRole("link", { name, exact: true }).getAttribute("href");

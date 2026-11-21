@@ -68,7 +68,7 @@ function ProfileDirectory() {
     "people",
     s.person ? undefined : product?.id,
     {
-      ...range,
+      ...(s.audience ? range : {}),
       kind,
       source_id: sourceId,
       search: s.find,
@@ -100,7 +100,7 @@ function ProfileDirectory() {
   const active = s.person ? detail : list;
   useAnalyticsPending(!!product && active.refreshing);
   const update = (patch: Partial<typeof s>) =>
-    void navigate({ search: (prev) => ({ ...prev, ...patch }), resetScroll: false });
+    void navigate({ search: (prev) => ({ ...prev, ...patch }), state: true, resetScroll: false });
   if (!product) return <NoProduct />;
   const title = detail.data?.traits.name;
   const more = s.person
@@ -181,7 +181,9 @@ function ProfileDirectory() {
             )}
             {kind === "power" && (
               <p className="text-muted-foreground">
-                Ranked by events in the 90 days ending at the selected range end.
+                {s.audience
+                  ? "Ranked by events in the 90 days ending at the selected range end."
+                  : "Ranked by events in the last 90 days."}
               </p>
             )}
             <form
@@ -255,7 +257,16 @@ function ProfileDirectory() {
                         <Link
                           from={route}
                           to={route}
-                          search={(prev) => ({ ...prev, person: r.id, page: undefined })}
+                          state={true}
+                          search={(prev) => ({
+                            ...prev,
+                            // An inactive person's first activity view should include their last visit.
+                            ...(!s.audience && r.last_seen < Date.parse(range.from)
+                              ? { snapshot: new Date(Number(r.last_seen) + 1).toISOString() }
+                              : {}),
+                            person: r.id,
+                            page: undefined,
+                          })}
                         >
                           {r.name || r.id}
                         </Link>

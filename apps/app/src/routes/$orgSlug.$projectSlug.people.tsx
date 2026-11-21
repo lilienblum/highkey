@@ -3,7 +3,7 @@ import { workspaceSearch } from "@/lib/route-search";
 import { People } from "@/components/people";
 export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
   ...workspaceSearch(
-    "report",
+    "profiles",
     (
       s: Record<string, unknown>,
     ): {
