@@ -21,6 +21,7 @@ export type WorkspaceView =
   | "/realtime"
   | "/sessions"
   | "/people"
+  | "/groups"
   | "/ai";
 const routes = {
   "/": "/$orgSlug/$projectSlug",
@@ -30,6 +31,7 @@ const routes = {
   "/realtime": "/$orgSlug/$projectSlug/realtime",
   "/sessions": "/$orgSlug/$projectSlug/sessions",
   "/people": "/$orgSlug/$projectSlug/people",
+  "/groups": "/$orgSlug/$projectSlug/groups",
   "/ai": "/$orgSlug/$projectSlug/ai",
   "/settings": "/$orgSlug/$projectSlug/settings",
 } as const;
@@ -78,6 +80,7 @@ export function workspaceTarget(
           view === "/realtime" ||
           view === "/sessions" ||
           view === "/people" ||
+          view === "/groups" ||
           view === "/ai"
             ? "/"
             : view,
@@ -152,6 +155,7 @@ export function workspaceView(path: string): WorkspaceView {
   if (/^\/[^/]+\/[^/]+\/revenue\/?$/.test(path)) return "/revenue";
   if (/^\/[^/]+\/[^/]+\/sessions\/?$/.test(path)) return "/sessions";
   if (/^\/[^/]+\/[^/]+\/people\/?$/.test(path)) return "/people";
+  if (/^\/[^/]+\/[^/]+\/groups\/?$/.test(path)) return "/groups";
   const view = /^(?:\/[^/]+\/[^/]+)?\/(events|logs|settings)\/?$/.exec(path)?.[1];
   if (view) return `/${view}` as WorkspaceView;
   if (/^\/[^/]+\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";

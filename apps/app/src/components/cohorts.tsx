@@ -135,7 +135,8 @@ export function Cohorts({ id, select }: { id: string; select: (id: string) => vo
             {edit === undefined ? "Cohorts" : edit ? "Edit cohort" : "New cohort"}
           </DialogTitle>
           <DialogDescription>
-            Fixed lists of profiles, or rules recalculated every 30 minutes.
+            Save a set of profiles by ID, or use event and profile rules to update membership every
+            30 minutes.
           </DialogDescription>
         </DialogHeader>
         {edit === undefined ? (

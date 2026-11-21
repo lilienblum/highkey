@@ -12,6 +12,12 @@ Events shows the linked interval and applied filters. Use its query controls to 
 
 **Saved log views.** Logs has the same: **Save view** under Logs in the sidebar names the current filters and time window. A view stores the severity (an exact level or **Warn/Error/Fatal and above**), service, environment, source, message search, attribute filters and the window (15m, 1h, 6h, 24h or 7d); a trace ID, a selected range and the workspace source are not saved. Opening one applies every stored field with `view=<slug>` in the URL: the first attribute filter fills the Filters panel, further filters and a pinned source show as removable chips, and a view that names no window opens on the last hour. The open view's menu offers **Update view with current filters**, **Rename**, **Copy JSON**, **Edit with your agent** and **Delete**. A view the page cannot run says so and offers the agent guide or **Clear view**. Event and log views may share a name and slug; they are listed separately.
 
+## Profiles, groups and cohorts
+
+**Profiles** shows people. **Groups**, the next item in the project sidebar, shows the teams, companies or workspaces your app identifies on events. Open a group to see its activity for the selected dates, then select a member to see their profile.
+
+**Cohorts** are saved audiences of profiles. For example, _Acme_ can be a group, while _people who signed up this week_ can be a cohort that spans many companies. Create cohorts from **Profiles → Cohorts** using a list of profile IDs or membership rules. Applying a cohort on the Groups page limits the report to activity from those profiles.
+
 ## Dashboards
 
 Custom dashboards sit under **Overview** in the sidebar (and in its collapsed menu), one entry per dashboard, at `/<organization>/<project>/dashboards/<dashboard>`. They are JSON documents that an agent writes over MCP; see [custom dashboards](dashboards.md). Dashboards use the same project, source and date controls as Overview, and a widget with its own `range` ignores the date picker.

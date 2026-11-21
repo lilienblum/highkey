@@ -306,6 +306,7 @@ export function AppShell({
       "/sessions": "Sessions",
       "/realtime": "Realtime",
       "/people": "Profiles",
+      "/groups": "Groups",
       "/ai": "AI costs",
       "/logs": "Logs",
       "/settings": "Settings",

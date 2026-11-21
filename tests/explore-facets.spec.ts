@@ -48,11 +48,20 @@ test("filter suggestions keep dotted keys and typed values; an empty filter need
   await page.goto(`/owner/${p.slug}/people?days=30`);
   await expect(page).toHaveURL((url) => url.pathname.endsWith("/people") && !url.search);
   await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Groups", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Groups", exact: true })).toHaveCount(0);
+  const groups = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Groups", exact: true });
+  await groups.click();
+  await expect(page).toHaveURL((url) => url.pathname === `/owner/${p.slug}/groups` && !url.search);
+  await expect(groups).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Choose date range" })).toBeVisible();
   await page.getByRole("link", { name: "orbit", exact: true }).click();
   await expect(page.getByRole("heading", { name: "New members over time" })).toBeVisible();
   await page.getByRole("link", { name: "ada", exact: true }).click();
   await expect(page.getByRole("heading", { name: "ada", exact: true })).toBeVisible();
+  const membership = page.getByRole("link", { name: "team: orbit", exact: true });
+  await expect(membership).toHaveAttribute("href", /\/groups\?.*groupId=orbit/);
   await expect(page.getByRole("button", { name: "Choose date range" })).toBeVisible();
   await page.getByRole("button", { name: "Back to profiles" }).click();
   await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
@@ -70,4 +79,14 @@ test("filter suggestions keep dotted keys and typed values; an empty filter need
   await page.getByLabel("Report cohort").click();
   await page.getByRole("option", { name: "Launchers" }).click();
   await expect(page.getByText("1 event in the last 30 minutes", { exact: true })).toBeVisible();
+  await page.goto(`/owner/${p.slug}/people?kind=groups&groupType=team&groupId=orbit&days=30`);
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname.endsWith("/groups") &&
+      url.searchParams.get("days") === "30" &&
+      !url.searchParams.has("kind"),
+  );
+  await expect(page.getByRole("link", { name: "ada", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "All groups", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Groups", exact: true })).toBeVisible();
 });

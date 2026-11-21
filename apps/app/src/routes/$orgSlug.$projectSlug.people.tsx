@@ -1,4 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { groupSearch } from "@/lib/group-search";
+import { validateWorkspaceSearch } from "@/lib/workspace-search";
 import { workspaceSearch } from "@/lib/route-search";
 import { People } from "@/components/people";
 export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
@@ -25,24 +27,23 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
             : "invalid",
       kind:
         s.kind === "anonymous" || s.kind === "power" || s.kind === "groups" ? s.kind : undefined,
-      find: typeof s.find === "string" && s.find.length <= 256 ? s.find : undefined,
+      ...groupSearch(s),
       person:
         typeof s.person === "string" && s.person && new TextEncoder().encode(s.person).length <= 128
           ? s.person
           : undefined,
-      groupType:
-        typeof s.groupType === "string" && /^[a-zA-Z0-9_./-]{1,64}$/.test(s.groupType)
-          ? s.groupType
-          : undefined,
-      groupId: typeof s.groupId === "string" && s.groupId.length <= 128 ? s.groupId : undefined,
-      cohort:
-        typeof s.cohort === "string" && /^[0-9a-f-]{36}$/.test(s.cohort) ? s.cohort : undefined,
       tab: s.tab === "sessions" ? s.tab : undefined,
-      page:
-        typeof s.page === "number" && Number.isInteger(s.page) && s.page > 1 && s.page <= 10000
-          ? s.page
-          : undefined,
     }),
   ),
+  beforeLoad: ({ params, search }) => {
+    if (search.kind === "groups")
+      throw redirect({
+        to: "/$orgSlug/$projectSlug/groups",
+        params,
+        search: { ...validateWorkspaceSearch(search), ...groupSearch(search) },
+        replace: true,
+      });
+  },
+  head: () => ({ meta: [{ title: "Profiles · Highkey" }] }),
   component: People,
 });

@@ -25,6 +25,7 @@ const REFRESH_VIEWS = [
   "/revenue",
   "/sessions",
   "/people",
+  "/groups",
   "/ai",
   "/realtime",
 ];

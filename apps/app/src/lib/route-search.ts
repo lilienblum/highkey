@@ -11,6 +11,7 @@ const dropDates = stripSearchParams<WorkspaceSearch>([...dates]);
 
 type ProfileContext = { person?: string; audience?: string; kind?: string };
 export function profileUsesDates(s: ProfileContext) {
+  // Old Groups bookmarks retain their dates while redirecting to the Groups report.
   return Boolean(s.person || s.audience || s.kind === "groups");
 }
 const directoryDates: SearchMiddleware<WorkspaceSearch & ProfileContext> = ({ search, next }) => {

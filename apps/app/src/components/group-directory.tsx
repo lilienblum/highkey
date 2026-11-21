@@ -10,7 +10,7 @@ import { ErrorState } from "./shared";
 import { TypedValue } from "@/lib/highlight";
 import { PageLoading } from "./loading";
 import { Table, TableBody, TableRow, TableHeader, TableHead, TableCell } from "./ui/table";
-const route = "/$orgSlug/$projectSlug/people";
+const route = "/$orgSlug/$projectSlug/groups";
 const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Awaited<ReturnType<typeof groupActivity>>>(
     `/products/${id}/groups/activity`,
@@ -50,23 +50,19 @@ export function GroupDirectory() {
         description={
           s.groupId
             ? `${s.groupType} · ${s.groupId}`
-            : "Explore the teams, workspaces and companies on recorded events."
+            : "See activity by team, workspace or company, using the group IDs your app sends."
         }
       >
-        <Button
-          variant="outline"
-          onClick={() =>
-            update({
-              kind: s.groupId ? "groups" : undefined,
-              groupId: undefined,
-              groupType: undefined,
-              page: undefined,
-              find: undefined,
-            })
-          }
-        >
-          {s.groupId ? "All groups" : "Back to profiles"}
-        </Button>
+        {s.groupId && (
+          <Button
+            variant="outline"
+            nativeButton={false}
+            role="link"
+            render={<Link from={route} to={route} search={{ cohort: s.cohort }} />}
+          >
+            All groups
+          </Button>
+        )}
       </PageHeader>
       {product && (
         <CohortPicker
@@ -118,7 +114,6 @@ export function GroupDirectory() {
                     to={route}
                     search={(v) => ({
                       ...v,
-                      kind: "groups",
                       groupType: g.type,
                       groupId: g.id,
                       page: undefined,
@@ -174,12 +169,17 @@ export function GroupDirectory() {
                   <li key={m.id}>
                     <Link
                       from={route}
-                      to={route}
-                      search={(v) => ({ ...v, kind: undefined, person: m.id, page: undefined })}
+                      to="/$orgSlug/$projectSlug/people"
+                      search={{
+                        person: m.id,
+                        groupType: s.groupType,
+                        groupId: s.groupId,
+                        cohort: s.cohort,
+                      }}
                     >
                       {m.id}
                     </Link>{" "}
-                    · {m.events} events
+                    · {number(m.events)} {m.events === 1 ? "event" : "events"}
                   </li>
                 ))}
               </ul>
