@@ -34,7 +34,9 @@ test("Realtime uses its rolling window, shows new activity, and can leave TV mod
     },
     { authorization: `Bearer ${key}`, "content-type": "application/json" },
   );
-  await expect(page.getByText("1 events in the last 30 minutes")).toBeVisible({ timeout: 45000 });
+  await expect(
+    page.getByRole("heading", { name: "1 event in the last 30 minutes", exact: true }),
+  ).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole("link", { name: /live-demo.*1 views/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose date range" })).toHaveCount(0);
   await page.getByRole("button", { name: "TV mode", exact: true }).click();
