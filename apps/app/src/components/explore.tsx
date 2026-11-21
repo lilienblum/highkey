@@ -33,6 +33,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
 import { EventCatalog } from "./event-catalog";
+import { PatternReports } from "./pattern-reports";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { useQuery } from "@/lib/use-query";
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
@@ -236,6 +237,17 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
         )}
         {product && !openView && <SaveEventViewButton product={product} spec={applied} />}
         {product && <EventCatalog id={product.id} observed={data?.event_names ?? []} />}
+        {product && (
+          <PatternReports
+            filters={{
+              source_id: applied.sourceId ?? sourceId,
+              identity_kind: applied.identityKind,
+              event: applied.event || undefined,
+              source: applied.source || undefined,
+              filters: allFilters,
+            }}
+          />
+        )}
       </PageHeader>
       {drilldown && (
         <section className="drilldown-context" aria-label="Overview selection">

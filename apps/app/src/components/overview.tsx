@@ -29,6 +29,7 @@ import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
+import { PatternReports } from "./pattern-reports";
 
 type ChartChoice = {
   id: string;
@@ -310,6 +311,7 @@ function ProductOverview() {
         title={source ? `${product.name} / ${source.name}` : product.name}
         description="Usage, reach, and performance at a glance."
       >
+        <PatternReports filters={eventFilters} />
         <OverviewActions />
       </PageHeader>
       {selectedFilter && (

@@ -14,6 +14,29 @@
   },
   "tools": [
     {
+      "name": "query_patterns",
+      "description": "Report weekly activity (UTC weekday and hour), flows of 2–10 pages before, after or between paths, or an event-count distribution by identified actor. Defaults to the past seven days.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "mode": { "enum": ["weekly", "flow", "distribution"], "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "source": { "type": "string" },
+          "event": { "type": "string" },
+          "filters": { "type": "array", "items": { "type": "object" } },
+          "identity_kind": { "type": "string" },
+          "steps": { "type": "integer", "minimum": 2, "maximum": 10 },
+          "start_path": { "type": "string" },
+          "end_path": { "type": "string" }
+        },
+        "required": ["project", "mode"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "list_people",
       "description": "Find identified profiles, anonymous visitor IDs, or power users (90 days). Search by name, email or ID. Anonymous events without a visitor ID never form a person.",
       "inputSchema": {

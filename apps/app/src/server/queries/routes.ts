@@ -10,12 +10,16 @@ import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
 import { liveActivity } from "./activity";
+import { patterns } from "./patterns";
 import { customRules } from "./custom";
 import { peopleList, personDetail } from "./people";
 import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/patterns`, READ, async (request, ctx, { project }) =>
+      json(await patterns(ctx, project as string, await readJson(request))),
+    );
     for (const [path, run] of [
       ["query", peopleList],
       ["detail", personDetail],

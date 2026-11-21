@@ -2315,6 +2315,35 @@ p {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.pattern-grid {
+  width: 100%;
+  min-width: 36rem;
+  table-layout: fixed;
+  border-spacing: 2px;
+  border-collapse: separate;
+}
+.pattern-grid caption {
+  text-align: left;
+  padding-bottom: 0.5rem;
+}
+.pattern-grid th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.pattern-grid td {
+  height: 1.25rem;
+  background: var(--surface-inset);
+}
+.pattern-grid td[data-level="2"] {
+  background: color-mix(in srgb, var(--data-tertiary) 38%, var(--surface-inset));
+}
+.pattern-grid td[data-level="3"] {
+  background: color-mix(in srgb, var(--data-tertiary) 68%, var(--surface-inset));
+}
+.pattern-grid td[data-level="4"] {
+  background: var(--data-tertiary);
+}
 .event-ink-neutral {
   color: var(--foreground);
 }
