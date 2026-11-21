@@ -146,6 +146,8 @@ A visitor's explicit identify can attribute up to six hours of earlier profile-l
 
 ### Live activity
 
+**Groups and cohorts.** `POST /api/products/:project/groups/activity` lists groups; pass `type` and `id` to get members, first-seen members by UTC day, events, traits and metrics. **Profiles → Cohorts** creates static member lists or dynamic event-count and trait rules (`all`/`any`). `GET` and `POST /api/products/:project/cohorts` list and save definitions; `DELETE …/cohorts/:cohort` removes one. Dynamic cohorts refresh at least every 30 minutes while the scheduler and storage are healthy. A report, funnel step or custom-event filter can test the boolean property `cohort.<id>`. The profile directory accepts `cohort`; individual profiles list their memberships. Read endpoints also work under `/api/read`.
+
 **Property suggestions.** `POST /api/products/:project/event-options` (also under `/api/read`) takes `from`, `to`, optional `source_id`, raw `event` name and `property`. It reads a daily aggregate and returns up to 200 names and keys and 32 sampled values as typed JSON literals. Suggestions cover the UTC days intersecting the range; the query itself uses exact timestamps. Oversize values are not sampled. The aggregate follows event retention and is removed when the project is wiped.
 
 **Realtime.** `POST /api/products/:project/realtime` (also under `/api/read`) accepts optional `source_id` and always looks back 30 minutes from the server clock. It returns 30 event-count bins, the latest 20 events and active visits, and counts by country, page and project source. No location is inferred for unknown countries. The dashboard's Realtime page refreshes from native change hints with visible-tab polling as a fallback and supports fullscreen TV mode.

@@ -51,4 +51,15 @@ test("filter suggestions keep dotted keys and typed values; an empty filter need
   await expect(page.getByRole("heading", { name: "New members over time" })).toBeVisible();
   await page.getByRole("link", { name: "ada", exact: true }).click();
   await expect(page.getByRole("heading", { name: "ada", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to profiles" }).click();
+  await page.getByRole("button", { name: "Cohorts", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "New cohort" }).click();
+  await dialog.getByLabel("Name", { exact: true }).fill("Launchers");
+  await dialog.getByLabel("Event name").fill("launch");
+  await dialog.getByRole("button", { name: "Save cohort" }).click();
+  await dialog.getByRole("button", { name: "Launchers", exact: true }).click();
+  await expect(
+    page.getByRole("table", { name: "Profiles" }).getByRole("link", { name: "ada" }),
+  ).toBeVisible();
 });

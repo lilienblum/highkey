@@ -230,6 +230,7 @@ describe("deleting", () => {
       "session_events",
       "session_profiles",
       "event_facets",
+      "cohort_snapshots",
       "access",
       "rows",
       "keys",

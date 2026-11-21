@@ -43,6 +43,7 @@ async function ensureRoutes(): Promise<void> {
   const { registerQueries } = await import("../queries/routes");
   const { registerEventCatalog } = await import("../event-catalog");
   const { registerReferences } = await import("../references");
+  const { registerCohorts } = await import("../cohorts");
   const { registerDashboards } = await import("../dashboards/routes");
   const { registerViews } = await import("../views");
   const { registerMcp } = await import("../mcp/server");
@@ -60,6 +61,7 @@ async function ensureRoutes(): Promise<void> {
   registerQueries();
   registerEventCatalog();
   registerReferences();
+  registerCohorts();
   registerDashboards();
   registerViews();
   registerMcp();

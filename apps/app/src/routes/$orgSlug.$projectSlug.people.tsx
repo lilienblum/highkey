@@ -9,6 +9,7 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
     person?: string;
     groupType?: string;
     groupId?: string;
+    cohort?: string;
     tab?: string;
     page?: number;
   } => ({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
         ? s.groupType
         : undefined,
     groupId: typeof s.groupId === "string" && s.groupId.length <= 128 ? s.groupId : undefined,
+    cohort: typeof s.cohort === "string" && /^[0-9a-f-]{36}$/.test(s.cohort) ? s.cohort : undefined,
     tab: s.tab === "sessions" ? s.tab : undefined,
     page:
       typeof s.page === "number" && Number.isInteger(s.page) && s.page > 1 && s.page <= 10000

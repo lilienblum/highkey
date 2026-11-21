@@ -15,6 +15,8 @@ import { useReportQuery } from "@/lib/use-query";
 import { DAY_MS } from "@/lib/date-range";
 import type { peopleList, personDetail } from "@/server/queries/people";
 import { GroupDirectory } from "./group-directory";
+import { Cohorts, useCohorts } from "./cohorts";
+import { ValueSelect } from "./value-select";
 
 const route = "/$orgSlug/$projectSlug/people";
 type Detail = Awaited<ReturnType<typeof personDetail>>;
@@ -44,6 +46,7 @@ function ProfileDirectory() {
     navigate = useNavigate({ from: route });
   const kind = s.kind ?? "identified",
     page = s.page ?? 1;
+  const cohorts = useCohorts(product?.id);
   const scope = JSON.stringify([
     sourceId,
     s.from,
@@ -55,6 +58,7 @@ function ProfileDirectory() {
     s.find,
     s.groupType,
     s.groupId,
+    s.cohort,
     s.person,
     page,
   ]);
@@ -69,6 +73,7 @@ function ProfileDirectory() {
       search: s.find,
       group_id: s.groupId,
       group_type: s.groupType,
+      cohort: s.cohort,
       page,
       page_size: size,
     },
@@ -110,6 +115,12 @@ function ProfileDirectory() {
             : "Find identified people and visitors across your project."
         }
       >
+        {product && !s.person && (
+          <Cohorts
+            id={product.id}
+            select={(cohort) => update({ kind: undefined, cohort, page: undefined })}
+          />
+        )}
         {s.person && (
           <Button
             variant="outline"
@@ -130,6 +141,7 @@ function ProfileDirectory() {
               onValueChange={(kind) =>
                 update({
                   kind: kind === "identified" ? undefined : (kind as string),
+                  cohort: kind === "anonymous" || kind === "groups" ? undefined : s.cohort,
                   page: undefined,
                 })
               }
@@ -142,6 +154,20 @@ function ProfileDirectory() {
                 ))}
               </TabsList>
             </Tabs>
+            {kind !== "anonymous" && !!cohorts.data?.length && (
+              <ValueSelect
+                label="Cohort"
+                className="max-w-xs"
+                value={s.cohort ?? "*"}
+                onValueChange={(v) =>
+                  update({ cohort: v === "*" ? undefined : v, page: undefined })
+                }
+                options={[
+                  ["*", "All cohorts"],
+                  ...cohorts.data.map((c): [string, string] => [c.id, c.name]),
+                ]}
+              />
+            )}
             {kind === "power" && (
               <p className="text-muted-foreground">
                 Ranked by events in the 90 days ending at the selected range end.
@@ -388,6 +414,26 @@ function Profile({
           </ul>
         ) : (
           <p>No group memberships on these events.</p>
+        )}
+      </section>
+      <section>
+        <h2>Cohorts</h2>
+        {d.cohorts.length ? (
+          <ul>
+            {d.cohorts.map((c) => (
+              <li key={c.id}>
+                <Link
+                  from={route}
+                  to={route}
+                  search={(v) => ({ ...v, person: undefined, cohort: c.id, page: undefined })}
+                >
+                  {c.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No cohort memberships.</p>
         )}
       </section>
       <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>

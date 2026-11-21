@@ -36,6 +36,7 @@ import { EventStream } from "./event-stream";
 import { EventCatalog } from "./event-catalog";
 import { PatternReports } from "./pattern-reports";
 import { useEventCatalog } from "@/lib/use-event-catalog";
+import { useCohorts } from "./cohorts";
 import { useQuery, useReportQuery } from "@/lib/use-query";
 import { queryReadOnly } from "@/lib/api";
 import { eventContext } from "@/lib/event-context";
@@ -129,6 +130,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const workspaceTarget = useWorkspaceTarget();
   const { product, source, sourceId, range, refresh, refreshKey } = useWorkspace();
   const catalog = useEventCatalog(product?.id);
+  const cohorts = useCohorts(product?.id);
   const search = useSearch({ strict: false });
   const navigate = useNavigate({ from: "/$orgSlug/$projectSlug/events" });
   const applied: Spec = appliedSpec({ query: search.query, drilldown });
@@ -493,6 +495,29 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                 </div>
               </FieldGroup>
               <CollapsibleContent>
+                {!!cohorts.data?.length && (
+                  <ValueSelect
+                    label="Filter by cohort"
+                    className="max-w-xs"
+                    value={
+                      draft.filterProperty.startsWith("cohort.")
+                        ? draft.filterProperty.slice(7)
+                        : "*"
+                    }
+                    onValueChange={(v) =>
+                      setDraft((d) => ({
+                        ...d,
+                        filterProperty: v === "*" ? "" : `cohort.${v}`,
+                        filterOp: "eq",
+                        filterValue: v === "*" ? "" : "true",
+                      }))
+                    }
+                    options={[
+                      ["*", "Choose a cohort"],
+                      ...cohorts.data.map((c): [string, string] => [c.id, c.name]),
+                    ]}
+                  />
+                )}
                 <FieldGroup className="filter-controls">
                   <Field>
                     <FieldLabel htmlFor="filter-property">Property</FieldLabel>

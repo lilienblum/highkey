@@ -6,7 +6,7 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery } from "./events";
 import { runEntityQuery, parseEntityQuery } from "./entities";
 import { readAs } from "./read";
-import { all } from "../db/db";
+import { all, one } from "../db/db";
 import { customRules, anyNamedEvent } from "./custom";
 import { Params } from "./properties";
 
@@ -30,6 +30,7 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
       search: "string",
       group_type: "string?",
       group_id: "string?",
+      cohort: "string?",
       page: "integer",
       page_size: "integer",
     },
@@ -49,13 +50,18 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
   )
     throw bad("Invalid profile filter or page");
   if (q.source_id != null) await requireSource(ctx.db, id, q.source_id);
+  if (
+    q.cohort &&
+    !(await one(ctx.db, "SELECT 1 FROM cohorts WHERE product_id=? AND id=?", [id, q.cohort]))
+  )
+    throw bad("Unknown cohort");
   const anonymous = q.kind === "anonymous",
     key = anonymous ? "actor_id" : "profile_id";
   const start = q.kind === "power" ? new Date(+to - 90 * 86400000) : from;
   const members = q.group_type ? " AND groups[{type:String}]={group:String}" : "";
   const stats = `SELECT assumeNotNull(${key}) AS id,count() AS n,max(event_time) AS seen FROM profile_events
     WHERE ${anonymous ? "profile_id IS NULL AND identity_kind='visitor' AND actor_id IS NOT NULL" : "profile_id IS NOT NULL"}${members} GROUP BY ${key}`;
-  const identified = `SELECT if(a.id='',t.id,a.id) AS id,t.name,t.email,ifNull(a.n,0) AS events,greatest(a.seen,t.last_identify) AS seen
+  const identified = `SELECT coalesce(nullIf(a.id,''),t.id) AS id,t.name,t.email,ifNull(a.n,0) AS events,greatest(a.seen,t.last_identify) AS seen
     FROM (${stats}) a ${q.kind === "power" || members ? "LEFT" : "FULL OUTER"} JOIN (${names}) t USING(id)`;
   const result = await readAs(ctx, id, (r) =>
     r.query<{
@@ -67,12 +73,13 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
     }>(
       `SELECT id,name,email,events,toUnixTimestamp64Milli(seen) AS last_seen FROM (
       ${anonymous ? `SELECT id,NULL AS name,NULL AS email,n AS events,seen FROM (${stats})` : identified}
-    ) WHERE seen>=fromUnixTimestamp64Milli({start:Int64}) AND positionCaseInsensitiveUTF8(concat(id,' ',ifNull(name,''),' ',ifNull(email,'')),{search:String})>0
+    ) WHERE seen>=fromUnixTimestamp64Milli({start:Int64}) ${q.cohort ? (anonymous ? " AND 0" : " AND id IN (SELECT profile_id FROM cohort_members WHERE cohort_id={cohort:UUID})") : ""} AND positionCaseInsensitiveUTF8(concat(id,' ',ifNull(name,''),' ',ifNull(email,'')),{search:String})>0
     ORDER BY ${q.kind === "power" ? "events DESC," : ""} seen DESC,id LIMIT {size:UInt32}+1 OFFSET {offset:UInt32}`,
       {
         settings: runSettings({ from: start, to, source: q.source_id ?? null, bucket: "day" }),
         params: {
           start: +start,
+          cohort: q.cohort ?? "",
           end: +to,
           src: q.source_id ?? "",
           search: q.search,
@@ -224,6 +231,23 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
     ).data;
     return {
       id: q.id,
+      cohorts: q.anonymous
+        ? []
+        : await all<{ id: string; name: string }>(
+            ctx.db,
+            "SELECT id,name FROM cohorts WHERE product_id=? AND id IN (SELECT value FROM json_each(?)) ORDER BY name",
+            [
+              id,
+              JSON.stringify(
+                (
+                  await r.query<{ id: string }>(
+                    "SELECT cohort_id AS id FROM cohort_members WHERE profile_id={id:String}",
+                    options,
+                  )
+                ).data.map((v) => v.id),
+              ),
+            ],
+          ),
       traits: entity?.traits ?? {},
       ...s,
       ...stats,

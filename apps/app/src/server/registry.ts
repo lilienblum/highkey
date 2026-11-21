@@ -280,6 +280,7 @@ export async function reconcileOnce(
   );
   const full = stored?.value !== current;
   const result = await reconcile(ctx, { full });
+  await refreshDueCohorts(ctx);
   if (full && result.failed === 0)
     await ctx.db.execute(
       "INSERT INTO settings(key, value) VALUES ('access_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -315,3 +316,4 @@ export async function cleanup(ctx: ApiContext): Promise<{ removed: number; logs_
     await expired(`highkey.${table}`);
   return { removed, logs_removed };
 }
+import { refreshDueCohorts } from "./cohorts";

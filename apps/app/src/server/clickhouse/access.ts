@@ -90,6 +90,12 @@ export function accessStatements(productId: string, secret: string): string[] {
     ),
     view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND ${ordinary}`),
     view(
+      "cohort_members",
+      "cohort_id,arrayJoin(members) AS profile_id",
+      "highkey.cohort_snapshots FINAL",
+      project,
+    ),
+    view(
       "event_facets",
       "source_id,day,name,property,samples",
       "highkey.event_facets",
@@ -162,7 +168,7 @@ export function accessVersion(secret: string): string {
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions','event_facets') GROUP BY database HAVING count() = 9
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions','event_facets','cohort_members') GROUP BY database HAVING count() = 10
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );
