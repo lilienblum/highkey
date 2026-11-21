@@ -1,4 +1,6 @@
 import { readBoundedBody } from "./request-body";
+import { createHmac } from "node:crypto";
+import { tako } from "tako.sh";
 
 // The dashboard serves every /api path itself except ingestion, which belongs to the ingest app.
 // Routes that cannot reach the ingest app directly (native development, a single-route tunnel)
@@ -33,6 +35,25 @@ export async function proxyIngest(request: Request): Promise<Response> {
   );
   // Only what ingestion reads travels on: never cookies, Access identities or client addresses.
   const headers = new Headers();
+  if (url.pathname === "/api/ingest") {
+    headers.set("x-highkey-forwarded", "1");
+    // Only a deployment behind a proxy that replaces X-Forwarded-For may opt into IP forwarding.
+    if (process.env.HIGHKEY_TRUST_PROXY_IP === "1") {
+      const ip = request.headers.get("x-forwarded-for");
+      const secret = tako.secrets.HIGHKEY_CHANGE_TOKEN ?? process.env.HIGHKEY_CHANGE_TOKEN;
+      if (secret && ip && /^[a-f0-9.:]{1,45}$/i.test(ip)) {
+        headers.set("x-highkey-source-ip", ip);
+        headers.set(
+          "x-highkey-source-proof",
+          createHmac("sha256", secret).update(`highkey-ip:${ip}`).digest("hex"),
+        );
+      }
+    }
+    for (const name of ["user-agent", "sec-fetch-mode"]) {
+      const v = request.headers.get(name);
+      if (v) headers.set(name, v.slice(0, 512));
+    }
+  }
   for (const name of [
     "accept",
     "content-type",

@@ -29,6 +29,7 @@ import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
+import { eventContext } from "@/lib/event-context";
 import { PatternReports } from "./pattern-reports";
 
 type ChartChoice = {
@@ -77,6 +78,12 @@ const dimensions = [
   ["property:referrer", "Referrers"],
   ["property:utm_source", "Campaign sources"],
   ["property:utm_campaign", "Campaigns"],
+  ["property:utm_medium", "Campaign mediums"],
+  ["property:utm_term", "Campaign terms"],
+  ["property:utm_content", "Campaign content"],
+  ...Object.entries(eventContext)
+    .filter(([k]) => k !== "bot")
+    .map(([key, label]) => [`property:context.${key}`, label] as const),
   ["property:screen", "Screens"],
   ["property:version", "Versions"],
   ["property:os", "OS"],

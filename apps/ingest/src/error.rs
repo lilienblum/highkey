@@ -50,10 +50,10 @@ impl From<ChError> for ApiError {
     /// rejects is a bug in what the ingest app sent.
     fn from(e: ChError) -> Self {
         if e.transient {
-            tracing::warn!(error = %e.message, "ClickHouse unavailable");
+            tracing::warn!(code = ?e.code, "ClickHouse unavailable");
             Self::busy()
         } else {
-            tracing::error!(error = %e.message, code = ?e.code, "Database operation failed");
+            tracing::error!(code = ?e.code, "Database operation failed");
             Self::database()
         }
     }

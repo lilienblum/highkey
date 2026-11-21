@@ -55,6 +55,7 @@ import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { defaultSpec } from "@/lib/explore-search";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventSentence } from "@/lib/event-catalog";
+import { eventContext } from "@/lib/event-context";
 import { SourceIcon } from "./source-icon";
 import { queryReadOnly } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
@@ -772,6 +773,11 @@ function EventInspector({
             ],
             ["Source ID", event.source_id ?? "Not provided"],
             ["Client", event.source],
+            ...Object.entries(eventContext).flatMap(([k, label]) =>
+              event[k as keyof typeof eventContext]
+                ? [[label, event[k as keyof typeof eventContext]]]
+                : [],
+            ),
             [`Event time (${timeZone})`, displayTimestamp(event.timestamp, timeZone)],
             [`Received at (${timeZone})`, displayTimestamp(event.received_at, timeZone)],
             ["Identity kind", event.identity_kind ?? "Not provided"],

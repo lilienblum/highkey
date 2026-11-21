@@ -100,7 +100,8 @@ test("gateway forwards ingestion with its key and strips browser identity and co
         "x-custom-identity",
       ])
         expect(request.headers.has(name)).toBe(false);
-      expect(request.headers.get("user-agent")).not.toBe("Private browser fingerprint");
+      expect(request.headers.get("user-agent")).toBe("Private browser fingerprint");
+      expect(request.headers.has("x-highkey-source-ip")).toBe(false);
       await proxyIngest(
         new Request("https://dashboard.example/api/ingest", {
           method: "OPTIONS",

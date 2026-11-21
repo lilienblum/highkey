@@ -66,6 +66,8 @@ Use `/projects/<slug>`, `/projects/<slug>/events`, `/projects/<slug>/logs`, and 
 
 ## Overview reporting
 
+Browser and OS families and versions, device type, country/region and referrer categories can be derived at insertion. Never store a visitor IP, raw user agent or city. Unknown locations stay unknown without an operator-installed network lookup. Automated traffic remains inspectable, labeled separately and excluded from ordinary reports.
+
 The project’s Revenue report shows exact net cents grouped by source, page, profile or session, including refunds and unattributed payments. Sessions lists explicitly identified visits with selectable columns, path/referrer search, duration, page-view and bounce filters. Opening a visit shows its entry and exit, acquisition, revenue, chronological event and AI activity, and related request/trace logs. Backfills contribute activity but never establish a session boundary.
 
 Choose the reporting period in one grouped shadcn Base UI menu with visible keycaps and a custom-range calendar; applicable previous/next arrows navigate calendar periods or fixed ranges. Chart buckets follow the range automatically. Active now counts opt-in identified actors over the last five minutes, independently of the selected reporting period, while respecting project, source, and applied filter. Visitors and installations retain distinct meanings; anonymous events still count as activity.

@@ -271,6 +271,14 @@ function Profile({
   return (
     <>
       <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div>
+          <dt>Location</dt>
+          <dd>{d.context.slice(0, 2).filter(Boolean).join(" · ") || "Unknown"}</dd>
+        </div>
+        <div>
+          <dt>Device</dt>
+          <dd>{d.context.slice(2).filter(Boolean).join(" · ") || "Unknown"}</dd>
+        </div>
         {Object.entries({
           Events: number(d.events),
           Sessions: number(d.sessions),

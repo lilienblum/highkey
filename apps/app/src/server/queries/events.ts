@@ -23,6 +23,7 @@ export interface Filter {
 }
 
 export interface EventsQuery {
+  include_bots?: boolean;
   names?: string[];
   order?: string;
   from: Date;
@@ -75,6 +76,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       bucket: "string",
       event: "string?",
       names: "string[]",
+      include_bots: "boolean",
       source: "string?",
       source_id: "string?",
       identity_kind: "string?",
@@ -85,7 +87,15 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       page: "integer",
       page_size: "integer",
     },
-    { bucket: "day", measure: "count", page: 0, page_size: 25, order: "newest", names: [] },
+    {
+      bucket: "day",
+      measure: "count",
+      page: 0,
+      page_size: 25,
+      order: "newest",
+      names: [],
+      include_bots: false,
+    },
   );
   const query: EventsQuery = {
     ...input,
@@ -211,12 +221,15 @@ export async function runEventsQuery(
   const success = path("properties", "success");
   const options = {
     params: params.values,
-    settings: runSettings({
-      from: q.from,
-      to: q.to,
-      source: q.source_id ?? null,
-      bucket: q.bucket,
-    }),
+    settings: {
+      ...runSettings({
+        from: q.from,
+        to: q.to,
+        source: q.source_id ?? null,
+        bucket: q.bucket,
+      }),
+      SQL_highkey_include_bots: q.include_bots ? "1" : "0",
+    },
   };
   // One at a time: each project's reader may run only a few queries at once.
   const summary = await reader.query<Record<string, number | null>>(
@@ -238,7 +251,7 @@ export async function runEventsQuery(
   );
   const direction = q.order === "oldest" ? "ASC" : "DESC";
   const events = await reader.query<Record<string, unknown>>(
-    `SELECT toString(source_id) AS source_id, event_id, name, source, toUnixTimestamp64Milli(event_time) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, actor_id, identity_kind, session_id, profile_id, groups, backfill, properties FROM events WHERE ${where} ORDER BY event_time ${direction}, event_id ${direction} LIMIT ${q.page_size} OFFSET ${q.page * q.page_size}`,
+    `SELECT toString(source_id) AS source_id, event_id, name, source, toUnixTimestamp64Milli(event_time) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, actor_id, identity_kind, session_id, profile_id, groups, backfill, properties, country,region,device,browser,browser_version,os_family,os_version,referrer_name,referrer_type,bot FROM events WHERE ${where} ORDER BY event_time ${direction}, event_id ${direction} LIMIT ${q.page_size} OFFSET ${q.page * q.page_size}`,
     options,
   );
   const names = await reader.query<{ name: string }>(

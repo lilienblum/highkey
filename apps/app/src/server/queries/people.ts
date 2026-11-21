@@ -144,10 +144,12 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
         conversions: number;
         revenue_cents: string;
         groups: [string, string][];
+        context: [string, string, string, string, string, string, string];
       }>(
         `SELECT count() AS events,countIf(name='page_view') AS page_views,uniqExact(toDate(event_time)) AS days_active,countIf(${conversionPredicate}) AS conversions,
        toString(sumIf(cents,abs(cents)<=9007199254740991)) AS revenue_cents,
-       groupUniqArrayArray(100)(arrayZip(mapKeys(groups),mapValues(groups))) AS groups
+       groupUniqArrayArray(100)(arrayZip(mapKeys(groups),mapValues(groups))) AS groups,
+       argMax(tuple(country,region,device,browser,browser_version,os_family,os_version),tuple(event_time,event_id)) AS context
        FROM (SELECT *,coalesce(toInt128(properties.revenue.:Int64),toInt128(properties.revenue.:UInt64),0) AS cents FROM profile_events WHERE ${where})`,
         options,
       )

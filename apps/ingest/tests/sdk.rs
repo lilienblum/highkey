@@ -90,7 +90,10 @@ async fn sdk_transport_refuses_redirects_and_omits_browser_credentials() {
         "/api/ingest",
         post(move |headers: HeaderMap| async move {
             assert_eq!(headers["authorization"], "Bearer pk_test");
-            assert_eq!(headers["content-type"], "application/json; highkey-sdk=rust");
+            assert_eq!(
+                headers["content-type"],
+                "application/json; highkey-sdk=rust"
+            );
             assert!(!headers.contains_key("cookie"));
             assert!(!headers.contains_key("referer"));
             (

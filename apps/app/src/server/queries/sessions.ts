@@ -8,6 +8,14 @@ import { Params } from "./properties";
 import { readAs } from "./read";
 
 type Session = {
+  country: string;
+  region: string;
+  device: string;
+  browser: string;
+  browser_version: string;
+  os_family: string;
+  os_version: string;
+  referrer_type: string;
   source_id: string;
   session_id: string;
   actor_id: string;
@@ -27,7 +35,7 @@ type Session = {
 
 const columns = `source_id, session_id, actor_id, profile_id, toUnixTimestamp64Milli(started_at) AS start,
   toUnixTimestamp64Milli(ended_at) AS end, duration_ms, events, page_views, toBool(bounced) AS bounced,
-  entry_page, exit_page, referrer, campaign, revenue_cents`;
+  entry_page, exit_page, referrer, campaign, revenue_cents,country,region,device,browser,browser_version,os_family,os_version,referrer_type`;
 
 function pageBounds(page: number, size: number) {
   if (page < 1 || page > 10000 || size < 1 || size > 100)

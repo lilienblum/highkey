@@ -31,6 +31,14 @@ const loadList = (id: string, q: Record<string, unknown>, signal: AbortSignal) =
 const loadDetail = (id: string, q: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Detail>(`/products/${id}/sessions/detail`, q, signal);
 const labels = {
+  country: "Country",
+  region: "Region",
+  device: "Device",
+  browser: "Browser",
+  browser_version: "Browser version",
+  os_family: "OS",
+  os_version: "OS version",
+  referrer_type: "Referrer type",
   start: "Start (UTC)",
   end: "End (UTC)",
   source_id: "Source",
@@ -77,7 +85,7 @@ function format(row: Row, key: Column, p: Product) {
     case "revenue_cents":
       return BigInt(row.revenue_cents).toLocaleString("en-US");
     default:
-      return row[key] ?? "—";
+      return row[key] || "—";
   }
 }
 function Columns({ visible, set }: { visible: Column[]; set: (c: Column[]) => void }) {

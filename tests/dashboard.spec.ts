@@ -235,7 +235,8 @@ test("browser tracker sends page/SPA/custom events, preserves identity, and reta
       tracker.track("checkout", { amount: 12.5, paid: true, plan: "pro" });
       await tracker.flush();
     });
-    let result = await admin(`/products/${p.id}/query`, { ...range() });
+    // This real headless browser is labeled as automation by ingestion.
+    let result = await admin(`/products/${p.id}/query`, { ...range(), include_bots: true });
     expect(result.summary.total).toBe(3);
     expect(result.summary.visitors).toBe(1);
     expect(result.summary.sessions).toBe(1);
@@ -251,7 +252,8 @@ test("browser tracker sends page/SPA/custom events, preserves identity, and reta
       async () =>
         await (window as unknown as { tracker: { flush: () => Promise<void> } }).tracker.flush(),
     );
-    result = await admin(`/products/${p.id}/query`, range());
+    expect(custom.bot).toBe("known");
+    result = await admin(`/products/${p.id}/query`, { ...range(), include_bots: true });
     expect(result.summary.total).toBe(4);
     expect(result.summary.visitors).toBe(1);
     expect(result.summary.sessions).toBe(1);

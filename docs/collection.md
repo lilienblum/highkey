@@ -248,6 +248,14 @@ Supply `Authorization: Bearer pk_...` and `Content-Type: application/json`. Repl
 
 # Verify a new source
 
+## Coarse request context
+
+Contract 5 derives device, browser, OS and their versions, country and region, and a traffic-source name and type. Raw user agent and IP are insert-only `EPHEMERAL` inputs, never report fields. Unknown devices and locations remain unknown. SDK and native server requests do not become visitor IDs. Referrer classification uses explicitly collected campaign and referrer fields; `utm_source` or `ref` wins over the external referrer, and same-site referrals are ignored. Known and suspected automated traffic is labeled and excluded from ordinary analytics. Pass `include_bots: true` in an Events query to inspect it.
+
+Coordinate trusted client addresses at the ingress: a directly listening ingest app uses its socket peer. Behind a proxy, set `HIGHKEY_TRUST_PROXY_IP=1` **only** if it replaces `X-Forwarded-For` with one verified address and direct access to the app is restricted. For ingestion through the app gateway, configure this on both apps and set their shared `HIGHKEY_CHANGE_TOKEN`; the gateway authenticates the forwarded address. Otherwise proxied location remains unknown. Never log request bodies or incoming client headers at the proxy.
+
+Load a licensed country/subdivision network dataset with `bun scripts/import-geo.ts networks.tsv` using the same ClickHouse admin settings as migrations. Each tab-separated line contains `CIDR`, ISO country code, optional subdivision code, and an optional `0`/`1` hosting-network flag. Supply only network ranges, never visitor IPs or city records. The installer stages and validates the file before swapping the active network table. Empty installations report unknown locations. Network updates affect newly received events.
+
 The connect step and project settings show the first retained event for the selected source, with its event name, client and sending SDK. SDKs send a bounded `highkey-sdk` parameter on their JSON content type (`browser`, `typescript`, or `rust`); other current clients appear as `http`, and older records as “Unknown SDK”. No user agent is needed for this check. The checklist uses commit hints and visible-tab reconciliation, and also shows a project MCP connection, an agent-authored dashboard and an organization invitation.
 
 The browser integration offers instructions for plain HTML, React/Vite, Vue/Vite, Next.js, SvelteKit and Astro. “Install with AI” copies a framework-specific prompt without your key. “Test with curl” provides a terminal command. The website checker reads only the initial HTML of the configured public home page, with bounded size and time and no redirects. A dynamically bundled tracker might be working even if it is not visible there; use the received event as confirmation.

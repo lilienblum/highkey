@@ -45,7 +45,10 @@ async fn run(managed: bool) -> anyhow::Result<()> {
         config.clickhouse.password =
             highkey_ingest::config::ingest_password(|name| secret(managed, name));
     }
-    let state = start(config).await?;
+    let mut state = start(config).await?;
+    state.gateway_secret = secret(managed, "HIGHKEY_CHANGE_TOKEN")
+        .filter(|s| !s.is_empty())
+        .map(Into::into);
     let notifications = delivery
         .map(|delivery| state.changes.start_delivery(delivery))
         .transpose()?;
@@ -62,9 +65,12 @@ async fn run(managed: bool) -> anyhow::Result<()> {
     } else {
         app
     };
-    let result = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown())
-        .await;
+    let result = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await;
     if let Some(notifications) = notifications {
         notifications.abort();
     }

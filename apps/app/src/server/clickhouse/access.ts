@@ -53,7 +53,7 @@ export function runSettings(scope: RunScope): Record<string, string> {
 }
 
 const EVENT_COLUMNS =
-  "source_id, event_id, name, source, sdk, event_time, received_at, actor_id, identity_kind, session_id, properties, backfill, profile_id, groups, if(event_time + INTERVAL 30 DAY > now(), ai_prompt, '') AS ai_prompt";
+  "source_id, event_id, name, source, sdk, event_time, received_at, actor_id, identity_kind, session_id, properties, backfill, profile_id, groups, geo.1 AS country,geo.2 AS region,device,browser,browser_version,os_family,os_version,referrer_name,referrer_type,bot, if(event_time + INTERVAL 30 DAY > now(), ai_prompt, '') AS ai_prompt";
 const LOG_COLUMNS =
   "source_id, log_id, timestamp, received_at, level, message, service, environment, trace_id, span_id, request_id, attributes";
 
@@ -75,6 +75,7 @@ export function accessStatements(productId: string, secret: string): string[] {
   const database = projectDatabase(productId);
   const user = readerUser(productId);
   const project = `product_id = '${productId.toLowerCase()}'`;
+  const ordinary = `record_type='event' AND (bot='' OR toString(getSettingOrDefault('SQL_highkey_include_bots','0'))='1')`;
   const view = (name: string, columns: string, table: string, where: string) =>
     `CREATE OR REPLACE VIEW ${database}.${name} DEFINER = highkey_definer SQL SECURITY DEFINER AS SELECT ${columns} FROM ${table} WHERE ${where}`;
   const identified = `IDENTIFIED WITH sha256_password BY '${readerPassword(productId, secret)}'`;
@@ -85,15 +86,15 @@ export function accessStatements(productId: string, secret: string): string[] {
       "events",
       EVENT_COLUMNS,
       "highkey.events",
-      `${project} AND record_type = 'event' AND ${scoped("event_time")}`,
+      `${project} AND ${ordinary} AND ${scoped("event_time")}`,
     ),
-    view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND record_type = 'event'`),
+    view("all_events", EVENT_COLUMNS, "highkey.events", `${project} AND ${ordinary}`),
     // Profile attribution is a read-time join. Ordinary event aggregations stay on the narrow view.
     `CREATE OR REPLACE VIEW ${database}.profile_events DEFINER = highkey_definer SQL SECURITY DEFINER AS
       SELECT e.source_id AS source_id,e.event_id AS event_id,e.name AS name,e.source AS source,e.event_time AS event_time,e.received_at AS received_at,
-        e.actor_id AS actor_id,e.identity_kind AS identity_kind,e.session_id AS session_id,e.properties AS properties,e.groups AS groups,e.backfill AS backfill,
+        e.actor_id AS actor_id,e.identity_kind AS identity_kind,e.session_id AS session_id,e.properties AS properties,e.groups AS groups,e.backfill AS backfill,e.geo.1 AS country,e.geo.2 AS region,e.device AS device,e.browser AS browser,e.browser_version AS browser_version,e.os_family AS os_family,e.os_version AS os_version,e.referrer_name AS referrer_name,e.referrer_type AS referrer_type,e.bot AS bot,
         coalesce(e.profile_id,if(m.at <= e.event_time + INTERVAL 6 HOUR AND e.identity_kind='visitor',nullIf(m.profile,''),NULL)) AS profile_id
-      FROM (SELECT * FROM highkey.events WHERE ${project} AND record_type='event' AND ${scoped("event_time")}) e
+      FROM (SELECT *,geo,device,browser,browser_version,os_family,os_version,referrer_name,referrer_type,bot FROM highkey.events WHERE ${project} AND ${ordinary} AND ${scoped("event_time")}) e
       ASOF LEFT JOIN (SELECT source_id,actor_id,session_id,event_time AS at,argMin(profile_id,event_id) AS profile FROM highkey.session_profiles FINAL
         WHERE ${project} AND ${SOURCE_SCOPE} AND event_time >= ${RANGE_FROM} AND event_time < ${RANGE_TO} + INTERVAL 6 HOUR AND expires_at > now()
         GROUP BY source_id,actor_id,session_id,at) m
@@ -114,7 +115,7 @@ export function accessStatements(productId: string, secret: string): string[] {
     view("all_logs", LOG_COLUMNS, "highkey.logs", project),
     view(
       "sessions",
-      "source_id, actor_id, session_id, started_at, ended_at, entry_page, exit_page, events, page_views, duration_ms, bounced, first_referrer AS referrer, first_campaign AS campaign, profile AS profile_id, toString(net_cents) AS revenue_cents",
+      "source_id, actor_id, session_id, started_at, ended_at, entry_page, exit_page, events, page_views, duration_ms, bounced, first_referrer AS referrer, first_campaign AS campaign, profile AS profile_id, toString(net_cents) AS revenue_cents,context.1 AS country,context.2 AS region,context.3 AS device,context.4 AS browser,context.5 AS browser_version,context.6 AS os_family,context.7 AS os_version,context.8 AS referrer_type",
       "highkey.sessions",
       `${project} AND ${scoped("started_at")}`,
     ),

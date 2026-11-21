@@ -63,6 +63,22 @@ describe("ClickHouse migrations", () => {
       "groups Map(String, String)",
       "ai_prompt String",
       "sdk LowCardinality(String)",
+      "request_ip String",
+      "request_ua String",
+      "request_site String",
+      "request_web UInt8",
+      "request_fetch UInt8",
+      "geo Tuple(String, String, UInt8)",
+      ...[
+        "browser",
+        "browser_version",
+        "os_family",
+        "os_version",
+        "device",
+        "bot",
+        "referrer_name",
+        "referrer_type",
+      ].map((k) => `${k} LowCardinality(String)`),
     ]);
     expect(await columns("logs")).toEqual([
       "product_id UUID",

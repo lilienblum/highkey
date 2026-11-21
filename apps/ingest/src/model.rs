@@ -17,6 +17,8 @@ pub enum RecordType {
 #[serde(deny_unknown_fields)]
 pub struct Event {
     #[serde(skip)]
+    pub request_context: std::sync::Arc<RequestContext>,
+    #[serde(skip)]
     pub sdk: &'static str,
     pub event_id: String,
     pub name: String,
@@ -42,6 +44,20 @@ pub struct Event {
     pub ai_prompt: Option<String>,
     #[serde(default)]
     pub properties: Map<String, Value>,
+}
+#[derive(Default, Clone)]
+pub struct RequestContext {
+    pub ip: String,
+    pub ua: String,
+    pub site: String,
+    pub web: bool,
+    pub fetch: bool,
+}
+// The transient inputs are never part of debug output.
+impl std::fmt::Debug for RequestContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RequestContext")
+    }
 }
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -242,6 +258,11 @@ impl crate::writer::Row for Event {
         "name",
         "source",
         "sdk",
+        "request_ip",
+        "request_ua",
+        "request_site",
+        "request_web",
+        "request_fetch",
         "event_time",
         "received_at",
         "actor_id",
@@ -277,6 +298,8 @@ impl crate::writer::Row for Event {
             "name": self.name,
             "source": self.source,
             "sdk": self.sdk,
+            "request_ip": self.request_context.ip,"request_ua": self.request_context.ua,
+            "request_site":self.request_context.site,"request_web":u8::from(self.request_context.web),"request_fetch":u8::from(self.request_context.fetch),
             "event_time": datetime64(time),
             "received_at": datetime64(context.received_at),
             "actor_id": self.actor_id,

@@ -2,6 +2,7 @@
 // their JSON type: a number filter matches only numbers, a string filter only strings.
 import type { Bucket } from "../clickhouse/access";
 import { bad } from "../api/errors";
+import { contextColumn } from "../../lib/event-context";
 import { bucketStart, nextBucket } from "../../lib/time-buckets";
 
 const KEY = /^[A-Za-z0-9_\-./]{1,64}$/;
@@ -13,6 +14,8 @@ export function validKey(key: string): boolean {
 /** The ClickHouse path of a JSON key. Dots are stored escaped, so `a.b` is one key. */
 export function path(column: "properties" | "attributes", key: string): string {
   if (!validKey(key)) throw bad("Invalid property key");
+  const derived = column === "properties" ? contextColumn(key) : undefined;
+  if (derived) return `CAST(nullIf(${derived},''),'Dynamic')`;
   return `${column}.\`${key.replaceAll(".", "%2E")}\``;
 }
 

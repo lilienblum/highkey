@@ -1,4 +1,5 @@
 import { DAY_MS, MAX_RANGE_DAYS, periodLabels, type DatePeriod } from "./date-range";
+import { eventContext } from "./event-context";
 export type WorkspaceSearch = {
   /** Legacy entry input only; canonical URLs use /projects/$projectSlug. */
   project?: string;
@@ -142,6 +143,10 @@ export function validateOverviewSearch(s: Record<string, unknown>): OverviewSear
       "property:referrer",
       "property:utm_source",
       "property:utm_campaign",
+      "property:utm_medium",
+      "property:utm_term",
+      "property:utm_content",
+      ...Object.keys(eventContext).map((k) => `property:context.${k}`),
       "property:screen",
       "property:version",
       "property:os",

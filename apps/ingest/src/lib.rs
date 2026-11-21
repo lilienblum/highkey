@@ -37,6 +37,7 @@ const STARTUP_WAIT: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct AppState {
+    pub gateway_secret: Option<Arc<str>>,
     pub clickhouse: ClickHouse,
     pub keys: Keys,
     pub changes: changes::Changes,
@@ -68,6 +69,7 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
     }
     let changes = changes::Changes::default();
     Ok(AppState {
+        gateway_secret: None,
         keys: Keys::new(clickhouse.clone()),
         events: writer::Writer::spawn(clickhouse.clone(), config.queue_capacity, changes.clone()),
         logs: writer::Writer::spawn(clickhouse.clone(), logs::LOG_QUEUE, changes.clone()),
@@ -115,6 +117,7 @@ pub(crate) async fn authorize(
 
 async fn ingest_events(
     State(state): State<AppState>,
+    peer: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     headers: HeaderMap,
     payload: Result<Json<model::IngestPayload>, axum::extract::rejection::JsonRejection>,
 ) -> ApiResult<Json<model::Ack>> {
@@ -138,8 +141,57 @@ async fn ingest_events(
             })
         })
         .unwrap_or("http");
+    let gateway = headers.contains_key("x-highkey-forwarded");
+    let trusted = std::env::var("HIGHKEY_TRUST_PROXY_IP").as_deref() == Ok("1");
+    let ip = if gateway {
+        use hmac::{Hmac, Mac};
+        (|| {
+            let ip = headers.get("x-highkey-source-ip")?.to_str().ok()?;
+            let proof = headers.get("x-highkey-source-proof")?.to_str().ok()?;
+            if !trusted || proof.len() != 64 || !proof.is_ascii() {
+                return None;
+            }
+            let mut bytes = [0; 32];
+            for (i, b) in bytes.iter_mut().enumerate() {
+                *b = u8::from_str_radix(&proof[i * 2..i * 2 + 2], 16).ok()?;
+            }
+            let mut mac =
+                Hmac::<sha2::Sha256>::new_from_slice(state.gateway_secret.as_ref()?.as_bytes())
+                    .ok()?;
+            mac.update(b"highkey-ip:");
+            mac.update(ip.as_bytes());
+            mac.verify_slice(&bytes).ok()?;
+            ip.parse().ok()
+        })()
+    } else if trusted {
+        headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<std::net::IpAddr>().ok())
+    } else {
+        peer.map(|v| v.0.0.ip())
+    };
+    let request_context = Arc::new(model::RequestContext {
+        ip: ip
+            .filter(|ip| !ip.is_loopback() && !ip.is_unspecified())
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        ua: headers
+            .get(header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.get(..v.len().min(512)))
+            .unwrap_or("")
+            .to_owned(),
+        site: origin(&headers)
+            .and_then(|v| reqwest::Url::parse(v).ok())
+            .and_then(|u| u.host_str().map(str::to_owned))
+            .unwrap_or_default(),
+        web: sdk == "browser",
+        fetch: headers.contains_key("sec-fetch-mode"),
+    });
     for (i, event) in events.iter_mut().enumerate() {
         event.sdk = sdk;
+        event.request_context = request_context.clone();
         if event.properties.contains_key("revenue")
             && !record.server_key
             && !record.allow_browser_revenue

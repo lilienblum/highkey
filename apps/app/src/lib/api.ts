@@ -28,6 +28,16 @@ export type Product = {
 };
 export type Properties = Record<string, string | number | boolean>;
 export type EventRow = {
+  country?: string;
+  region?: string;
+  device?: string;
+  browser?: string;
+  browser_version?: string;
+  os_family?: string;
+  os_version?: string;
+  referrer_name?: string;
+  referrer_type?: string;
+  bot?: string;
   event_id: string;
   name: string;
   source: string;
