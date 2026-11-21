@@ -12,7 +12,7 @@ import { OverviewWidget, WidgetContent } from "./overview-widgets";
 const reports = {
   Acquisition: [
     ["Referrers", "context.referrer_name"],
-    ["URLs", "referrer"],
+    ["URLs", "referrer_url"],
     ["Types", "context.referrer_type"],
     ["Source", "utm_source"],
     ["Medium", "utm_medium"],

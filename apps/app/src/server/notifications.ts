@@ -128,15 +128,30 @@ async function ruleBatch(ctx: ApiContext, rule: Rule) {
   );
   const names = spec.steps.map((n) => namedEvent(n, p, rules));
   const cursor = "(ms,origin)>({cursor:Int64},{key:String}) AND ms<{end:Int64}";
+  const body = await destinationBody(ctx, rule);
+  const email = /\{\{\s*profile\.email\s*\}\}/.test(rule.template + JSON.stringify(body ?? null));
+  const contact = email
+    ? "LEFT JOIN (SELECT profile_id,argMaxIf(traits.email.:String,tuple(event_time,event_id),isNotNull(traits.email.:String)) AS email FROM profile_records GROUP BY profile_id) p ON p.profile_id=e.profile_id"
+    : "";
+  const cols = `e.event_id AS event_id,e.profile_id AS profile_id,e.source_id AS source_id,toUnixTimestamp64Milli(e.event_time) AS event_ms,e.name AS name,e.country AS country,e.properties AS properties,${email ? "p.email" : "''"} AS email`;
+  // One path per visit: its earliest matching first step, then the nearest strictly later
+  // match for each next step. A later unrelated event is never the linked completion.
+  const last = `s${names.length - 1}`;
   const query = funnel
     ? `WITH closed AS (SELECT source_id,actor_id,session_id,toUnixTimestamp64Milli(ended_at) AS ms,toJSONString(tuple(source_id,actor_id,session_id)) AS origin FROM sessions WHERE ${cursor}),
- matched AS (SELECT e.source_id,c.ms,c.origin,argMax(e.event_id,tuple(e.event_time,e.event_id)) AS event_id,argMax(e.profile_id,tuple(e.event_time,e.event_id)) AS profile_id,max(e.event_time) AS last,
- windowFunnel(31536000000,'strict_increase')(toUInt64(toUnixTimestamp64Milli(e.event_time)),${names.map((n) => `(${n})`).join(",")}) AS lvl
- FROM all_events e INNER JOIN closed c ON c.source_id=e.source_id AND c.actor_id=e.actor_id AND c.session_id=e.session_id WHERE NOT e.backfill AND ${base} GROUP BY e.source_id,c.origin,c.ms HAVING lvl=${names.length})
- SELECT ms,origin,event_id,profile_id,source_id,toUnixTimestamp64Milli(last) AS event_ms,'Session completed funnel' AS name,'' AS country,CAST('{}','JSON') AS properties,'' AS email FROM matched ORDER BY ms,origin LIMIT 100`
-    : `SELECT toUnixTimestamp64Milli(e.received_at) AS ms,e.event_id AS origin,e.event_id AS event_id,e.profile_id AS profile_id,e.source_id AS source_id,toUnixTimestamp64Milli(e.event_time) AS event_ms,e.name AS name,e.country AS country,e.properties AS properties,${rule.template.includes("profile.email") || rule.destination ? "p.email" : "''"} AS email FROM all_events e
- ${rule.template.includes("profile.email") || rule.destination ? "LEFT JOIN (SELECT profile_id,argMaxIf(traits.email.:String,tuple(event_time,event_id),isNotNull(traits.email.:String)) AS email FROM profile_records GROUP BY profile_id) p ON p.profile_id=e.profile_id" : ""}
- WHERE ${cursor} AND (${names[0]}) AND ${base} ORDER BY ms,origin LIMIT 100`;
+    candidates AS (SELECT c.origin AS visit,c.ms AS closed_ms,e.event_id AS eid,row_number() OVER (PARTITION BY visit ORDER BY e.event_time,e.event_id) AS pos,${names.map((n, i) => `(${n}) AS step${i}`).join(",")}
+    FROM all_events e INNER JOIN closed c ON c.source_id=e.source_id AND c.actor_id=e.actor_id AND c.session_id=e.session_id WHERE NOT e.backfill AND ${base}),
+    starts AS (SELECT visit,closed_ms,min(pos) AS pos FROM candidates WHERE step0 GROUP BY visit,closed_ms)
+    SELECT s0.closed_ms AS ms,s0.visit AS origin,${cols} FROM starts s0
+    ${names
+      .slice(1)
+      .map(
+        (_, i) =>
+          `ASOF INNER JOIN (SELECT visit,pos,eid FROM candidates WHERE step${i + 1}) s${i + 1} ON s${i}.visit=s${i + 1}.visit AND s${i}.pos<s${i + 1}.pos`,
+      )
+      .join(" ")}
+    INNER JOIN all_events e ON ${last}.eid=e.event_id ${contact} ORDER BY ms,origin LIMIT 100`
+    : `SELECT toUnixTimestamp64Milli(e.received_at) AS ms,e.event_id AS origin,${cols} FROM all_events e ${contact} WHERE ${cursor} AND (${names[0]}) AND ${base} ORDER BY ms,origin LIMIT 100`;
   const rows = (
     await readAs(ctx, rule.product_id, (r) =>
       r.query<Notice>(query, {
@@ -145,7 +160,6 @@ async function ruleBatch(ctx: ApiContext, rule: Rule) {
       }),
     )
   ).data;
-  const body = await destinationBody(ctx, rule);
   const n = await ctx.db.transaction(async (tx) => {
     const last = rows.at(-1),
       full = rows.length === 100;

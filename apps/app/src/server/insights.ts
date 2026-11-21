@@ -38,7 +38,9 @@ const labels: Record<string, string> = {
 export const trendTitle = (v: Trend) =>
   `${v.spike ? "Referrer spike" : (labels[v.dimension] ?? v.dimension)}: ${v.label}`;
 export const trendText = (v: Trend) =>
-  `${v.current} vs ${v.prior} in the prior ${v.days === 1 ? "day" : `${v.days} days`}`;
+  v.spike
+    ? `${v.current} sessions vs ${Number(v.prior.toFixed(1))} per day over the previous seven days`
+    : `${v.current} vs ${v.prior} in the prior ${v.days === 1 ? "day" : `${v.days} days`}`;
 export async function insights(ctx: ApiContext, id: string, body: unknown) {
   const { from, to } = parseEventsQuery(fields(body, { from: "string", to: "string" }));
   const reports = await all<{ day_ms: number; report: string }>(
@@ -210,7 +212,10 @@ export async function nightlyProject(ctx: ApiContext, id: string) {
       [id],
     );
     const cutoff = now - Math.min(366, project!.retention_days) * day;
-    await tx.execute("DELETE FROM daily_insights WHERE product_id=? AND day_ms<?", [id, cutoff]);
+    await tx.execute("DELETE FROM daily_insights WHERE product_id=? AND day_ms+86400000<=?", [
+      id,
+      cutoff,
+    ]);
     await tx.execute("DELETE FROM notification_history WHERE product_id=? AND at_ms<?", [
       id,
       cutoff,

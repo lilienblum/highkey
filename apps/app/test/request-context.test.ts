@@ -60,6 +60,10 @@ test("request inputs are ephemeral, bots excluded by default, and a visit retain
       },
     ]);
     expect((await query({ include_bots: true })).json.summary.total).toBe(2);
+    expect(
+      (await query({ filters: [{ property: "context.device", op: "eq", value: "Desktop" }] })).json
+        .summary.total,
+    ).toBe(1);
     expect((await query({ group_by: "property:context.browser" })).json.groups).toEqual([
       { count: 1, label: "Chrome", value: 1 },
     ]);

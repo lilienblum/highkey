@@ -250,6 +250,8 @@ Supply `Authorization: Bearer pk_...` and `Content-Type: application/json`. Repl
 
 ## Coarse request context
 
+Highkey derives browser and OS families locally at insert time. Additional known families use an embedded, bounded subset of ua-parser patterns ([upstream license](licenses/uap-core.txt)); no UA service is contacted. The browser normally sends only the external referrer hostname, or Direct on same-site traffic. Setting `collectReferrerPath: true` adds `referrer_url` for the Acquisition → URLs tab, limited to an external HTTP(S) origin and path (512 characters); `collectReferrer: false` disables both. The browser's referrer policy may supply only an origin.
+
 **Exclusions.** Project Settings → Collection exclusions accepts CIDR networks (IPv4/IPv6), exact profile IDs and raw event/property rules. Any matching rule discards the incoming payload before storage; an event name and a property predicate within a rule must both match. A 24-hour deduplication receipt keeps the project, source, event ID and receipt time so a retried blocked payload cannot become an analytics event. No original name, identity, properties, traits, prompt or network address is retained in that receipt. IP matching needs a verified client address. Exclusions do not change old rows or log collection.
 
 ### Visitor counting

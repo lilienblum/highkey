@@ -17,7 +17,7 @@ export function validKey(key: string): boolean {
 export function path(column: "properties" | "attributes", key: string): string {
   if (!validKey(key)) throw bad("Invalid property key");
   const derived = column === "properties" ? contextColumn(key) : undefined;
-  if (derived) return `CAST(nullIf(${derived},''),'Dynamic')`;
+  if (derived) return `CAST(nullIf(CAST(${derived} AS String),''),'Dynamic')`;
   if (column === "properties") {
     if (key === "outbound.url")
       return "CAST(if(name='link_out',properties.url.:String,NULL),'Dynamic')";

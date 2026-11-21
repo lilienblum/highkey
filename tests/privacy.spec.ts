@@ -75,6 +75,28 @@ async function open(page: Page, url: URL, referer?: string) {
   await page.waitForFunction(() => !!window.tracker);
 }
 
+test("opted-in external referrer paths exclude the query, credentials, fragment and same-site navigation", async ({
+  page,
+}) => {
+  const f = await fixture("collectReferrerPath:true");
+  try {
+    await open(page, f.server.url, "https://source.example/docs/install?private=hidden#fragment");
+    await page.evaluate(() => window.tracker.flush());
+    expect(f.requests[0].events[0].properties).toMatchObject({
+      referrer: "source.example",
+      referrer_url: "https://source.example/docs/install",
+    });
+    await open(page, f.server.url, new URL("private/internal", f.server.url).href);
+    await page.evaluate(() => window.tracker.flush());
+    expect(f.requests.at(-1)!.events[0].properties).toEqual({
+      path: "/account",
+      referrer: "Direct",
+    });
+  } finally {
+    await f.server.stop(true);
+  }
+});
+
 test("default browser collection has no IDs, campaigns, cookies, or Referer headers", async ({
   page,
 }) => {

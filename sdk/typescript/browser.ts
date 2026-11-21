@@ -17,6 +17,8 @@ export type BrowserOptions = Options & {
   identityScope?: string;
   campaigns?: readonly CampaignParam[];
   collectReferrer?: boolean;
+  /** Include the external HTTP(S) referrer path when the browser supplies it. */
+  collectReferrerPath?: boolean;
   collectTitle?: boolean;
   trackHashChanges?: boolean;
   trackOutboundLinks?: boolean;
@@ -193,7 +195,12 @@ export function startBrowserTracker(options: BrowserOptions) {
     if (options.collectTitle) properties.title = document.title.slice(0, 512);
     if (options.collectReferrer !== false) {
       try {
-        properties.referrer = document.referrer ? new URL(document.referrer).hostname : "Direct";
+        const ref = document.referrer ? new URL(document.referrer) : null;
+        if (ref && ["http:", "https:"].includes(ref.protocol) && ref.hostname !== url.hostname) {
+          properties.referrer = ref.hostname;
+          if (options.collectReferrerPath)
+            properties.referrer_url = (ref.origin + ref.pathname).slice(0, 512);
+        } else properties.referrer = "Direct";
       } catch {
         properties.referrer = "Direct";
       }

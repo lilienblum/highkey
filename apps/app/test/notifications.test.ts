@@ -45,10 +45,10 @@ test("custom event notices render structured payloads, hide secrets, checkpoint 
     ).toBe(200);
     await seedEvents(
       p.id,
-      ["start", "finish"].map((name, i) => ({
+      ["start", "finish", "unrelated"].map((name, i) => ({
         event_id: `e${i}`,
         name,
-        time: new Date(start + 1000 + i),
+        time: new Date(start + 1000 + Math.max(0, i - 1)),
         identity_kind: "visitor",
         actor_id: "v",
         session_id: "s",
@@ -84,6 +84,10 @@ test("custom event notices render structured payloads, hide secrets, checkpoint 
     expect(sent).toEqual([{ text: "finish: pro" }, { text: "finish: pro" }]);
     const history = (await call(ctx, "GET", root + "/history")).json;
     expect(history.length).toBe(2);
+    expect(history.find((r: { rule_name: string }) => r.rule_name === "Visit")).toMatchObject({
+      event_id: "e1",
+      message: "finish",
+    });
     expect(history.find((r: { rule_name: string }) => r.rule_name === "Activation")).toMatchObject({
       status: "sent",
       event_id: "e1",
