@@ -74,6 +74,13 @@ test("request inputs are ephemeral, bots excluded by default, and a visit retain
     ).data;
     expect(columns.length).toBeGreaterThanOrEqual(5);
     expect(columns.every((c) => c.default_kind === "EPHEMERAL")).toBe(true);
+    expect(
+      (
+        await ctx.admin.query(
+          "SELECT highkey_browser('Mozilla Chrome/123.0 SamsungBrowser/24.1') AS b,highkey_browser_version('SamsungBrowser/24.1','Samsung Internet') AS v,highkey_os('Linux Ubuntu/24.04') AS os,highkey_os_version('Linux Ubuntu/24.04','Ubuntu') AS ov",
+        )
+      ).data,
+    ).toEqual([{ b: "Samsung Internet", v: "24.1", os: "Ubuntu", ov: "24.04" }]);
     const additions = [
       {
         event_id: "hosting",

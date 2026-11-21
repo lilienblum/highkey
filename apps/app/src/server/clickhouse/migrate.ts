@@ -47,6 +47,7 @@ async function ensureIngestUser(admin: ClickHouse, password: string): Promise<vo
   await admin.command("GRANT SELECT ON highkey.collection_exclusions TO highkey_ingest");
   await admin.command("GRANT SELECT ON highkey.ingest_contract TO highkey_ingest");
   await admin.command("GRANT dictGet ON highkey.geo_lookup TO highkey_ingest");
+  await admin.command("GRANT dictGet ON highkey.ua_lookup TO highkey_ingest");
 }
 
 export async function migrate(
