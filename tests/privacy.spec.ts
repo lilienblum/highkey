@@ -40,6 +40,7 @@ async function fixture(options = "", hold = false, redirect?: string) {
         return new Response(source, { headers: { "content-type": "application/javascript" } });
       }
       if (path === "/api/ingest") {
+        if (request.method === "GET") return Response.json({ visitor_mode: "persistent" });
         const body = await request.arrayBuffer();
         if (body.byteLength > 262_144) return new Response("Body too large", { status: 413 });
         const { events } = JSON.parse(new TextDecoder().decode(body));
