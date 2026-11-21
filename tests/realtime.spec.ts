@@ -109,6 +109,7 @@ test("Explore updates CLI results automatically while preserving pagination, dra
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Page 2 of 3")).toBeVisible();
   await expect(page.locator(".event-card")).toHaveAttribute("aria-busy", "false");
+  const visibleRows = await page.locator(".event-card tbody").innerText();
   await page.getByRole("button", { name: "Filter", exact: true }).click();
   await page.getByLabel("Property", { exact: true }).fill("success");
   await page.getByLabel("Typed value").fill("true");
@@ -127,7 +128,11 @@ test("Explore updates CLI results automatically while preserving pagination, dra
   await expect(details).toContainText("Event 2 of 15 on this page");
   await page.keyboard.press("Escape");
   await expect(details).toBeHidden();
-  await expect(page.locator(".stream-inspect").first()).toBeFocused();
+  await expect(page.locator(".stream-inspect").nth(1)).toBeFocused();
+  expect(await page.locator(".event-card tbody").innerText()).toBe(visibleRows);
+  await page.getByRole("button", { name: "20 new events" }).click();
+  await expect(page.getByText("Page 1 of 4")).toBeVisible();
+  await expect(page.getByRole("button", { name: "20 new events" })).toHaveCount(0);
   await expect(page.getByLabel("Typed value")).toHaveValue("true");
   await expect(page.getByRole("button", { name: /Refresh results|Refresh analytics/ })).toHaveCount(
     0,

@@ -602,7 +602,7 @@ test("only validated Explore search can change the workspace context", async ({ 
 
 async function inspectorJson(page: Page) {
   const inspector = page.getByRole("dialog");
-  await inspector.getByRole("tab", { name: "JSON", exact: true }).click();
+  await inspector.getByRole("tab", { name: "Raw JSON", exact: true }).click();
   return JSON.parse((await inspector.getByRole("tabpanel").locator("pre").textContent()) ?? "null");
 }
 
@@ -650,7 +650,7 @@ test("event inspector exposes context, metadata and JSON with keyboard and clipb
   expect(older.timestamp).toBeLessThan(event.timestamp);
   await inspector.getByRole("button", { name: "Newer event", exact: true }).click();
   expect((await inspectorJson(page)).event_id).toBe(event.event_id);
-  await inspector.getByRole("tab", { name: "Properties", exact: true }).click();
+  await inspector.getByRole("tab", { name: "Pretty", exact: true }).click();
   await page.screenshot({ path: test.info().outputPath("event-inspector-website.png") });
 });
 
@@ -820,7 +820,7 @@ test("clipboard failures are visible and inspector scope ends when the product c
     .first()
     .click();
   const inspector = page.getByRole("dialog");
-  await inspector.getByRole("tab", { name: "JSON", exact: true }).click();
+  await inspector.getByRole("tab", { name: "Raw JSON", exact: true }).click();
   await inspector.getByRole("button", { name: "Copy JSON", exact: true }).click();
   await expect(inspector.getByRole("alert")).toContainText(/copy|clipboard/i);
   await page.keyboard.press("Escape");

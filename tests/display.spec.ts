@@ -54,7 +54,7 @@ test("event timezone persists across reload, changes event inspection, and leave
   await details.getByRole("tab", { name: "Metadata", exact: true }).click();
   await expect(details).toContainText("Event time (Asia/Tokyo)");
   await expect(details).toContainText("09:30:00");
-  await details.getByRole("tab", { name: "JSON", exact: true }).click();
+  await details.getByRole("tab", { name: "Raw JSON", exact: true }).click();
   await expect(details.locator("pre")).toContainText(String(timestamp.getTime()));
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -38,14 +38,14 @@ test("sessions remember columns and open a visit with its events, AI calls and c
     "ingest",
     {
       events: [
-        event(0, "page_view", { path: "/docs", referrer: "example.test" }),
+        event(0, "page_view", { path: "/docs", referrer: "example.test", order_id: 7 }),
         event(1000, "ai_generation", {
           model: "session-test",
           cost: 0.02,
           currency: "USD",
           trace_id: trace,
         }),
-        event(1500, "purchase", { revenue: 250 }),
+        event(1500, "purchase", { revenue: 250, order_id: 7, request_id: "payment-7" }),
       ],
     },
     headers(key),
@@ -61,6 +61,7 @@ test("sessions remember columns and open a visit with its events, AI calls and c
           level: "info",
           message: "Related payment log",
           trace_id: trace,
+          request_id: "payment-7",
         },
       ],
     },
@@ -93,4 +94,19 @@ test("sessions remember columns and open a visit with its events, AI calls and c
   await page.getByRole("button", { name: "Back to sessions" }).click();
   await expect(table).toContainText("visit-1");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto(`/projects/${p.slug}/events`);
+  await page.getByRole("button", { name: "Inspect purchase", exact: true }).click();
+  let inspector = page.getByRole("dialog");
+  await expect(inspector.getByRole("link", { name: /1 page view · 3 events/ })).toBeVisible();
+  await inspector.getByRole("button", { name: "Follow order_id", exact: true }).click();
+  const stream = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: "Event", exact: true }) });
+  await expect(stream.getByRole("row").nth(1)).toContainText("page_view");
+  await expect(stream.getByRole("row").nth(2)).toContainText("purchase");
+  await page.getByRole("button", { name: "Inspect purchase", exact: true }).click();
+  inspector = page.getByRole("dialog");
+  await inspector.getByRole("link", { name: "Logs for this request" }).click();
+  await expect(page.getByLabel("Request ID", { exact: true })).toHaveValue("payment-7");
+  await expect(page.locator(".log-row")).toContainText("Related payment log");
 });

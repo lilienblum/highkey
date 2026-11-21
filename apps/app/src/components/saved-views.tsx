@@ -456,6 +456,7 @@ export function SaveLogViewDialog({
   // A trace ID and a selected range narrow this page only; a view keeps its window instead.
   const unsaved = [
     search.trace ? "The trace ID filter isn’t saved." : "",
+    search.requestId ? "The request ID filter isn’t saved." : "",
     search.logFrom ? "The selected range isn’t saved; the view keeps the time window." : "",
   ]
     .filter(Boolean)

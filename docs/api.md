@@ -138,9 +138,13 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 `POST /api/products/:project/profiles/query` and `/groups/query` return current traits from retained mutation history. Both are also available under `/api/read/products/:project` with an API key, and through MCP as `query_profiles` and `query_groups`.
 
-### Sessions
+The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
+
+### Live activity
 
 `POST /api/products/:project/activity` returns `{active, events, minutes}` for the instant `to` (RFC 3339). `active` is the number of distinct identified actors in the last five minutes, `events` counts all matching events in that window, and `minutes` contains thirty one-minute distinct actor counts, oldest first. The source, event, and typed property filters work as in the events query. The same endpoint is available under `/api/read`.
+
+### Sessions
 
 `POST /api/products/:project/sessions/query` returns `{ rows, page, page_size, has_more }`, newest first. `from` and `to` select sessions **starting** in the half-open UTC range; a session ending outside it still shows its full retained activity. Optional filters: `source_id`, `profile_id`, `search` (visited path or first referrer), `bounced` (boolean), `min_duration_ms`, `min_page_views`. Page numbers start at 1; page size is 1–100.
 
@@ -150,7 +154,7 @@ Only events with an explicit visitor and session ID contribute. Project, source,
 
 Agents can call `query_sessions` and `get_session` on either MCP endpoint. The default date range is the last seven days. Pass the list's range when inspecting a historical visit.
 
-The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
+`POST /api/products/:project/sessions/summary` (also under `/api/read`) takes `source_id`, `actor_id`, and `session_id`. It returns counts, duration and the start time of the retained visit or `null`, even when the event being inspected falls in a different reporting window.
 
 ### Deduplication
 
@@ -193,7 +197,9 @@ Each new row expires at its event time plus the key's current retention. Changin
 }
 ```
 
-Ranges are **[from, to)**, UTC. `bucket` accepts `hour`, `day` (default), `week`, or `month`. Hours and days align to UTC boundaries; calendar weeks start Monday at 00:00 UTC, and calendar months start on the first day at 00:00 UTC. Edge buckets include only events inside the selected range. Weeks and months aggregate the underlying events directly, preserving distinct counts and percentiles. Ranges are limited to 366 days, or 31 days for hourly queries. Missing count/actor/sum buckets are zero; other measures' buckets are null. Numeric measures require a property and include only JSON numeric values. Empty aggregate averages/sums/percentiles are null. Percentiles interpolate between values (ClickHouse's `quantileExactInclusive`). Success rate includes only boolean `success` values. Overview duration includes numeric `duration_ms` only. Unknown identities do not count as a distinct actor.
+Ranges are **[from, to)**, UTC. `bucket` accepts `minute`, `hour`, `day` (default), `week`, or `month`. Minutes, hours and days align to UTC boundaries; calendar weeks start Monday at 00:00 UTC, and calendar months start on the first day at 00:00 UTC. Edge buckets include only events inside the selected range. Weeks and months aggregate the underlying events directly, preserving distinct counts and percentiles. Ranges are limited to 366 days, 31 days for hourly queries or one hour for minute buckets. Missing count/actor/sum buckets are zero; other measures' buckets are null. Numeric measures require a property and include only JSON numeric values. Empty aggregate averages/sums/percentiles are null. Percentiles interpolate between values (ClickHouse's `quantileExactInclusive`). Success rate includes only boolean `success` values. Overview duration includes numeric `duration_ms` only. Unknown identities do not count as a distinct actor.
+
+`order` is `newest` (default) or `oldest` for event rows, with event ID breaking timestamp ties. In the inspector, **Follow** opens a chronological query for that typed property value. Request and trace links open Logs filtered by that exact ID for the day before and after the selected event; other services can contribute matching records.
 
 Measures: `count`, `actors`, `sum`, `avg`, `min`, `max`, `p50`, `p95`. Group by `name`, `source_id` (managed source), `source` (client label), `identity_kind`, or `property:<key>`. Numeric and boolean group labels retain their JSON types. Filters use `eq`, `ne`, `gt`, `gte`, `lt`, `lte`; ordered comparisons require numeric filter values and numeric properties. Missing properties do not satisfy comparisons, including `ne`. Strings and booleans are type-sensitive. Up to 8 filters, pages 0–10,000, and page sizes 1–100.
 

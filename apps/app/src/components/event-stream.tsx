@@ -50,6 +50,11 @@ import { highlight, TypedValue } from "@/lib/highlight";
 import { ErrorState } from "./shared";
 import { ValueSelect } from "./value-select";
 import { useWorkspace } from "./app-shell";
+import { Link } from "@tanstack/react-router";
+import { useWorkspaceTarget } from "@/lib/workspace-route";
+import { defaultSpec } from "@/lib/explore-search";
+import { queryReadOnly } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
 type EventStreamProps = {
   events: EventRow[];
@@ -61,6 +66,9 @@ type EventStreamProps = {
   error?: string;
   onRetry: () => void;
   onPageChange: (page: number) => void;
+  oldest: boolean;
+  onOrderChange: () => void;
+  onFollow: (property: string, value: Properties[string]) => void;
   onPageSizeChange: (size: number) => void;
   onFilterProperty: (property: string, value: Properties[string]) => void;
 };
@@ -111,7 +119,7 @@ function EventContext({ event }: { event: EventRow }) {
 }
 
 export function EventStream({
-  events,
+  events: latest,
   total,
   page,
   pageSize,
@@ -122,10 +130,19 @@ export function EventStream({
   onPageChange,
   onPageSizeChange,
   onFilterProperty,
+  oldest,
+  onOrderChange,
+  onFollow,
 }: EventStreamProps) {
   const { product } = useWorkspace();
   const { timeZone } = useDisplayPreferences();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<{ rows: EventRow[]; total: number }>();
+  const incoming = snapshot ? Math.max(0, total - snapshot.total) : 0;
+  const events = incoming && snapshot ? snapshot.rows : latest;
+  useEffect(() => {
+    if (!loading && !error && !incoming) setSnapshot({ rows: latest, total });
+  }, [latest, loading, error, incoming, total]);
   // The inspector owns the page it opened from. Incoming events can update the
   // table without changing its record, adjacent-event navigation, or property search.
   const inspectionEvents = useRef<EventRow[]>([]);
@@ -296,9 +313,31 @@ export function EventStream({
           <div className="card-heading">
             <div>
               <CardTitle>Event stream</CardTitle>
-              <CardDescription>Newest first</CardDescription>
+              <CardDescription>
+                <Button
+                  size="sm"
+                  variant="link"
+                  onClick={onOrderChange}
+                  aria-label={`Sort events ${oldest ? "newest" : "oldest"} first`}
+                >
+                  {oldest ? "Oldest first" : "Newest first"}
+                </Button>
+              </CardDescription>
             </div>
-            <Badge variant="outline">{number(total)} events</Badge>
+            {incoming ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSnapshot({ rows: latest, total });
+                  if (page) onPageChange(0);
+                }}
+              >
+                {number(incoming)} new {incoming === 1 ? "event" : "events"}
+              </Button>
+            ) : (
+              <Badge variant="outline">{number(total)} events</Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -469,7 +508,7 @@ export function EventStream({
                   <Button
                     variant="outline"
                     size="icon-sm"
-                    aria-label="Newer event"
+                    aria-label={oldest ? "Older event" : "Newer event"}
                     disabled={selectedIndex === 0}
                     onClick={() => selectAdjacent(selectedIndex - 1)}
                   >
@@ -478,7 +517,7 @@ export function EventStream({
                   <Button
                     variant="outline"
                     size="icon-sm"
-                    aria-label="Older event"
+                    aria-label={oldest ? "Newer event" : "Older event"}
                     disabled={selectedIndex + 1 === inspectionEvents.current.length}
                     onClick={() => selectAdjacent(selectedIndex + 1)}
                   >
@@ -489,6 +528,15 @@ export function EventStream({
               <EventInspector
                 key={selected.event_id}
                 event={selected}
+                onFollow={(key, value) => {
+                  restoreFocus.current = false;
+                  setSelectedId(null);
+                  onFollow(key, value);
+                }}
+                onNavigate={() => {
+                  restoreFocus.current = false;
+                  setSelectedId(null);
+                }}
                 onFilter={(property, value) => {
                   restoreFocus.current = false;
                   setSelectedId(null);
@@ -506,11 +554,33 @@ export function EventStream({
 function EventInspector({
   event,
   onFilter,
+  onNavigate,
+  onFollow,
 }: {
   event: EventRow;
   onFilter: EventStreamProps["onFilterProperty"];
+  onNavigate: () => void;
+  onFollow: EventStreamProps["onFollow"];
 }) {
   const { product } = useWorkspace();
+  const workspaceTarget = useWorkspaceTarget();
+  const visit =
+    event.session_id && event.actor_id && event.identity_kind === "visitor"
+      ? { source_id: event.source_id, actor_id: event.actor_id, session_id: event.session_id }
+      : undefined;
+  const summary = useQuery({
+    queryKey: ["inspector-session", product?.id, visit],
+    enabled: !!visit && !!product,
+    queryFn: ({ signal }) =>
+      queryReadOnly<{
+        page_views: number;
+        events: number;
+        duration_ms: number;
+        start: number;
+      } | null>(`/products/${product!.id}/sessions/summary`, { ...visit }, signal),
+    staleTime: 15000,
+    retry: false,
+  });
   const { timeZone } = useDisplayPreferences();
   const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState<{ error: boolean; message: string }>();
@@ -532,12 +602,64 @@ function EventInspector({
   return (
     <Tabs defaultValue="properties" className="inspector-tabs">
       <TabsList aria-label="Event details">
-        <TabsTrigger value="properties" aria-label="Properties">
-          Properties <Badge variant="secondary">{properties.length}</Badge>
+        <TabsTrigger value="properties" aria-label="Pretty">
+          Pretty <Badge variant="secondary">{properties.length}</Badge>
         </TabsTrigger>
         <TabsTrigger value="metadata">Metadata</TabsTrigger>
-        <TabsTrigger value="json">JSON</TabsTrigger>
+        <TabsTrigger value="json">Raw JSON</TabsTrigger>
       </TabsList>
+      <div className="flex flex-wrap items-center gap-2 px-4">
+        <Link
+          {...workspaceTarget("/events", product?.slug)}
+          search={(prev) => ({
+            ...prev,
+            query: { ...defaultSpec, event: event.name },
+            page: undefined,
+            view: undefined,
+            viewAt: undefined,
+          })}
+          onClick={onNavigate}
+        >
+          All events like this
+        </Link>
+        {(["request_id", "trace_id"] as const).map((key) => {
+          const value = event.properties[key];
+          if (typeof value !== "string" || !value || new TextEncoder().encode(value).length > 128)
+            return null;
+          return (
+            <Link
+              key={key}
+              {...workspaceTarget("/logs", product?.slug)}
+              search={{
+                source: "all",
+                [key === "trace_id" ? "trace" : "requestId"]: value,
+                logFrom: new Date(Math.max(0, event.timestamp - 86400000)).toISOString(),
+                logTo: new Date(event.timestamp + 86400000).toISOString(),
+              }}
+            >
+              Logs for this {key === "trace_id" ? "trace" : "request"}
+            </Link>
+          );
+        })}
+        {visit && summary.data && (
+          <Link
+            {...workspaceTarget("/sessions", product?.slug)}
+            search={{
+              visit,
+              from: new Date(summary.data.start).toISOString(),
+              to: new Date(summary.data.start + 1).toISOString(),
+              period: undefined,
+              snapshot: undefined,
+            }}
+          >
+            {number(summary.data.page_views)}{" "}
+            {summary.data.page_views === 1 ? "page view" : "page views"} ·{" "}
+            {number(summary.data.events)} {summary.data.events === 1 ? "event" : "events"} ·{" "}
+            {Math.floor(summary.data.duration_ms / 60000)}m{" "}
+            {Math.floor(summary.data.duration_ms / 1000) % 60}s
+          </Link>
+        )}
+      </div>
       {feedback && (
         <p
           className={feedback.error ? "form-error inspector-feedback" : "inspector-feedback"}
@@ -570,6 +692,14 @@ function EventInspector({
                   <code>{key}</code>
                   <Badge variant="outline">{typeof value}</Badge>
                   <div className="inspector-property-actions">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Follow ${key}`}
+                      onClick={() => onFollow(key, value)}
+                    >
+                      Follow
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"

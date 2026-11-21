@@ -57,6 +57,7 @@ export type LogsSearch = {
   service?: string;
   environment?: string;
   trace?: string;
+  requestId?: string;
   logWindow?: keyof typeof logWindows;
   attribute?: string;
   attributeValue?: string;
@@ -106,6 +107,7 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     !text("service", 128) ||
     !text("environment", 128) ||
     !text("trace", 128) ||
+    !text("requestId", 128) ||
     !text("attribute", 128) ||
     !text("attributeValue", 512) ||
     (s.level !== undefined && !logLevels.includes(s.level as LogLevel)) ||
@@ -146,6 +148,7 @@ export function validateLogsSearch(s: Record<string, unknown>): LogsSearch {
     service: s.service as string | undefined,
     environment: s.environment as string | undefined,
     trace: s.trace as string | undefined,
+    requestId: s.requestId as string | undefined,
     logWindow: s.logWindow as LogsSearch["logWindow"],
     attribute: s.attribute as string | undefined,
     attributeValue: s.attributeValue as string | undefined,
@@ -168,6 +171,7 @@ export const clearedLogs: Record<keyof LogsSearch, undefined> = {
   service: undefined,
   environment: undefined,
   trace: undefined,
+  requestId: undefined,
   logWindow: undefined,
   attribute: undefined,
   attributeValue: undefined,

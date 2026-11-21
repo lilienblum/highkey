@@ -10,6 +10,7 @@ export type ExploreDrilldown = {
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type ExploreSearch = {
+  order?: "oldest";
   drilldown?: ExploreDrilldown;
   invalidDrilldown?: true;
   query?: ExploreSpec;
@@ -109,6 +110,9 @@ export const defaultSpec: ExploreSpec = {
 };
 export function validateExploreSearch(search: Record<string, unknown>): ExploreSearch {
   const result = validateDrilldown(search);
+  if (search.order !== undefined && search.order !== "oldest")
+    return { ...result, invalidQuery: true };
+  if (search.order === "oldest") result.order = "oldest";
   if (
     search.invalidQuery === true ||
     (search.page !== undefined &&

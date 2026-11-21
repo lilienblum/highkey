@@ -22,6 +22,7 @@ export interface Filter {
 }
 
 export interface EventsQuery {
+  order?: string;
   from: Date;
   to: Date;
   bucket: Bucket;
@@ -67,6 +68,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
     body,
     {
       from: "string",
+      order: "string",
       to: "string",
       bucket: "string",
       event: "string?",
@@ -80,7 +82,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       page: "integer",
       page_size: "integer",
     },
-    { bucket: "day", measure: "count", page: 0, page_size: 25 },
+    { bucket: "day", measure: "count", page: 0, page_size: 25, order: "newest" },
   );
   const query: EventsQuery = {
     ...input,
@@ -109,6 +111,8 @@ export function validateEventsQuery(q: EventsQuery): void {
   )
     throw bad(LIMITS);
   if (!MEASURES.includes(q.measure)) throw bad("Unsupported measure");
+  if (q.order !== undefined && !["oldest", "newest"].includes(q.order))
+    throw bad("Order must be oldest or newest");
   if (NUMERIC.includes(q.measure)) {
     if (!q.property) throw bad("Numeric measures need a property");
     path("properties", q.property);
@@ -222,8 +226,9 @@ export async function runEventsQuery(reader: ClickHouse, q: EventsQuery): Promis
     `SELECT ${grouping.select}, ${value} AS value, count() AS count FROM events WHERE ${where} GROUP BY ${grouping.by} ORDER BY value DESC NULLS LAST, s LIMIT 12`,
     options,
   );
+  const direction = q.order === "oldest" ? "ASC" : "DESC";
   const events = await reader.query<Record<string, unknown>>(
-    `SELECT toString(source_id) AS source_id, event_id, name, source, toUnixTimestamp64Milli(event_time) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, actor_id, identity_kind, session_id, properties FROM events WHERE ${where} ORDER BY event_time DESC, event_id DESC LIMIT ${q.page_size} OFFSET ${q.page * q.page_size}`,
+    `SELECT toString(source_id) AS source_id, event_id, name, source, toUnixTimestamp64Milli(event_time) AS timestamp, toUnixTimestamp64Milli(received_at) AS received_at, actor_id, identity_kind, session_id, profile_id, groups, backfill, properties FROM events WHERE ${where} ORDER BY event_time ${direction}, event_id ${direction} LIMIT ${q.page_size} OFFSET ${q.page * q.page_size}`,
     options,
   );
   const names = await reader.query<{ name: string }>(

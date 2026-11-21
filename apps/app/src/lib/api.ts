@@ -37,6 +37,9 @@ export type EventRow = {
   actor_id: string | null;
   identity_kind: string | null;
   session_id: string | null;
+  profile_id?: string | null;
+  groups?: Record<string, string>;
+  backfill?: boolean;
   properties: Properties;
 };
 export type Group = {

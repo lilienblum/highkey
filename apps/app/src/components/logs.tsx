@@ -94,7 +94,7 @@ function LogExplorer() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState(search.logq ?? "");
   const [advanced, setAdvanced] = useState(
-    Boolean(search.attribute || search.environment || search.trace),
+    Boolean(search.attribute || search.environment || search.trace || search.requestId),
   );
   const [follow, setFollow] = useState(true);
   const [selection, setSelection] = useState<{ log: LogRow; scope: string }>();
@@ -133,6 +133,7 @@ function LogExplorer() {
       environment: search.environment || undefined,
       search: search.logq || undefined,
       trace_id: search.trace || undefined,
+      request_id: search.requestId || undefined,
       cursor: search.logBefore,
       filters: filters.length ? filters : undefined,
     },
@@ -206,7 +207,8 @@ function LogExplorer() {
     search.service ||
     search.attribute ||
     search.environment ||
-    search.trace,
+    search.trace ||
+    search.requestId,
   );
   return (
     <>
@@ -352,7 +354,10 @@ function LogExplorer() {
             onClick={() => setAdvanced((v) => !v)}
           >
             <HugeiconsIcon icon={FilterHorizontalIcon} aria-hidden="true" />
-            Filters{search.attribute || search.environment || search.trace ? " · Applied" : ""}
+            Filters
+            {search.attribute || search.environment || search.trace || search.requestId
+              ? " · Applied"
+              : ""}
           </Button>
           <span className="logs-result-count" aria-live="polite">
             {data
@@ -606,6 +611,7 @@ function LogFilters({
   const [draft, setDraft] = useState({
     environment: search.environment ?? "",
     trace: search.trace ?? "",
+    requestId: search.requestId ?? "",
     attribute: search.attribute ?? "",
     value: search.attributeValue ?? "",
     type: search.attributeType ?? "string",
@@ -622,6 +628,7 @@ function LogFilters({
           onApply({
             environment: draft.environment || undefined,
             trace: draft.trace || undefined,
+            requestId: draft.requestId || undefined,
             attribute: draft.attribute || undefined,
             attributeValue: draft.attribute ? draft.value : undefined,
             attributeType: draft.type,
@@ -655,6 +662,15 @@ function LogFilters({
           maxLength={128}
           value={draft.trace}
           onChange={(e) => setDraft({ ...draft, trace: e.target.value })}
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="log-request-id">Request ID</FieldLabel>
+        <Input
+          id="log-request-id"
+          maxLength={128}
+          value={draft.requestId}
+          onChange={(e) => setDraft({ ...draft, requestId: e.target.value })}
         />
       </Field>
       <Field>
@@ -709,6 +725,7 @@ function LogFilters({
           onApply({
             environment: undefined,
             trace: undefined,
+            requestId: undefined,
             attribute: undefined,
             attributeValue: undefined,
             attributeType: undefined,

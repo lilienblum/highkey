@@ -280,7 +280,7 @@ export function logViewState(search: LogsSearch): string {
  */
 export function logPageState(search: LogsSearch): string {
   const state = logViewState(search);
-  const narrowed = search.trace || search.logFrom || search.logTo;
+  const narrowed = search.trace || search.requestId || search.logFrom || search.logTo;
   return narrowed ? `${state}+narrowed` : state;
 }
 

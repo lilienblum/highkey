@@ -26,6 +26,7 @@ export interface LogsQuery {
   environment?: string | null;
   search?: string | null;
   trace_id?: string | null;
+  request_id?: string | null;
   filters: LogFilter[];
   cursor?: { timestamp: number; log_id: string } | null;
 }
@@ -50,6 +51,7 @@ export function parseLogsQuery(body: unknown): LogsQuery {
     environment: "string?",
     search: "string?",
     trace_id: "string?",
+    request_id: "string?",
     filters: "unknown",
     cursor: "unknown",
   });
@@ -86,7 +88,7 @@ export function validateLogsQuery(q: LogsQuery): void {
     if (level != null && !(LEVELS as readonly string[]).includes(level))
       throw bad("Invalid log level");
   if (q.level != null && q.min_level != null) throw bad("Use either level or min_level, not both");
-  for (const text of [q.service, q.environment, q.trace_id])
+  for (const text of [q.service, q.environment, q.trace_id, q.request_id])
     if (text != null && (text.length === 0 || bytes(text) > 128))
       throw bad("Filter values require 1–128 bytes");
   if (q.search != null && bytes(q.search) > 512) throw bad("Search is limited to 512 bytes");
@@ -119,7 +121,14 @@ export function attribute(name: string, params: Params): string {
 export function logConditions(
   q: Pick<
     LogsQuery,
-    "level" | "min_level" | "service" | "environment" | "trace_id" | "search" | "filters"
+    | "level"
+    | "min_level"
+    | "service"
+    | "environment"
+    | "trace_id"
+    | "request_id"
+    | "search"
+    | "filters"
   >,
   params: Params,
 ): string[] {
@@ -129,6 +138,7 @@ export function logConditions(
     ["service", q.service],
     ["environment", q.environment],
     ["trace_id", q.trace_id],
+    ["request_id", q.request_id],
   ] as const)
     if (value != null) conditions.push(`${column} = ${params.add("String", value)}`);
   if (q.search)

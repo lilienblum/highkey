@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
 import {
   appliedSpec,
+  defaultSpec,
   type ExploreFilter,
   type ExploreSpec as Spec,
   type ExploreDrilldown,
@@ -134,7 +135,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const bucket = automaticBucket(range);
   // A rolling end time advances without changing the selected dates or URL.
   const rangeKey =
-    drilldown || search.snapshot || search.from ? `${range.from}:${range.to}` : range.from;
+    drilldown || search.snapshot || search.from
+      ? `${range.from}:${range.to}`
+      : `${search.period ?? search.days ?? "default"}`;
   const pageSize = search.pageSize ?? 15;
   const page = (search.page ?? 1) - 1;
   const setPage = (page: number) =>
@@ -162,12 +165,13 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   }, [applied]);
   const moreFilters = applied.moreFilters ?? [];
   const allFilters = useMemo(() => [...filters, ...moreFilters], [filters, moreFilters]);
-  const scopeKey = JSON.stringify([product?.id, sourceId, rangeKey, applied]);
+  const scopeKey = JSON.stringify([product?.id, sourceId, rangeKey, applied, search.order]);
   const query = useQuery(
     product?.id,
     {
       ...range,
       bucket,
+      order: search.order,
       source_id: applied.sourceId ?? sourceId,
       identity_kind: applied.identityKind,
       event: applied.event || undefined,
@@ -548,7 +552,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                   />
                 </div>
                 <EventStream
-                  key={scopeKey}
+                  key={`${scopeKey}:${page}:${pageSize}`}
                   events={query.data?.events ?? []}
                   total={data.summary.total}
                   page={page}
@@ -558,6 +562,34 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                   error={query.data ? undefined : query.error}
                   onRetry={retry}
                   onPageChange={setPage}
+                  oldest={search.order === "oldest"}
+                  onOrderChange={() =>
+                    void navigate({
+                      search: (prev) => ({
+                        ...prev,
+                        page: undefined,
+                        order: prev.order === "oldest" ? undefined : "oldest",
+                      }),
+                      resetScroll: false,
+                    })
+                  }
+                  onFollow={(property, value) =>
+                    void navigate({
+                      search: (prev) => ({
+                        ...prev,
+                        query: {
+                          ...defaultSpec,
+                          filterProperty: property,
+                          filterValue: JSON.stringify(value),
+                        },
+                        order: "oldest",
+                        page: undefined,
+                        view: undefined,
+                        viewAt: undefined,
+                      }),
+                      resetScroll: false,
+                    })
+                  }
                   onPageSizeChange={(size) => {
                     void navigate({
                       search: (previous) => ({ ...previous, pageSize: size, page: 1 }),

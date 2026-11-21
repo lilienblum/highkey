@@ -188,3 +188,29 @@ export async function sessionDetail(ctx: ApiContext, id: string, body: unknown) 
     };
   });
 }
+
+/** Look up a known visit even if the inspected event's date range starts mid-visit. */
+export async function sessionSummary(ctx: ApiContext, id: string, body: unknown) {
+  const q = fields(body, { source_id: "string", actor_id: "string", session_id: "string" });
+  if (
+    ![q.actor_id, q.session_id].every((v) => v.length && new TextEncoder().encode(v).length <= 128)
+  )
+    throw bad("Invalid session identity");
+  await requireSource(ctx.db, id, q.source_id);
+  const result = await readAs(ctx, id, (r) =>
+    r.query<Pick<Session, "events" | "page_views" | "duration_ms" | "start">>(
+      `SELECT events,page_views,duration_ms,toUnixTimestamp64Milli(started_at) AS start FROM sessions
+     WHERE source_id={source_id:UUID} AND actor_id={actor_id:String} AND session_id={session_id:String} LIMIT 1`,
+      {
+        params: q,
+        settings: runSettings({
+          from: new Date(0),
+          to: new Date(ctx.now().getTime() + 60001),
+          source: q.source_id,
+          bucket: "day",
+        }),
+      },
+    ),
+  );
+  return result.data[0] ?? null;
+}

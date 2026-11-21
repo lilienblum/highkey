@@ -42,6 +42,8 @@ Attributes preserve strings, numbers, booleans, null, objects, and arrays. Nesti
 
 ## OpenTelemetry
 
+When investigating an event, **Logs for this request** and **Logs for this trace** open matching logs across the project. The log query accepts `request_id` as well as `trace_id`; both use exact equality.
+
 Use an **OTLP/HTTP** logs exporter or collector with these settings:
 
 ```sh
