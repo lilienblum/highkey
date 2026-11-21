@@ -20,11 +20,22 @@ test("generation wrappers preserve results and failures without collecting promp
   expect(
     await trackOpenAI(
       client,
-      { ...options, prompt: "private", trace_id: "trace-1", cost: 0.002 },
+      {
+        ...options,
+        prompt: "private",
+        trace_id: "trace-1",
+        cost: 0.002,
+        visit: { actor_id: "visitor", session_id: "visit" },
+      },
       () => result,
     ),
   ).toBe(result);
   expect(client.events[0].ai_prompt).toBeUndefined();
+  expect(client.events[0]).toMatchObject({
+    actor_id: "visitor",
+    session_id: "visit",
+    identity_kind: "visitor",
+  });
   expect(client.events[0].properties).toMatchObject({
     provider: "openai",
     input_tokens: 10,
@@ -40,6 +51,7 @@ test("generation wrappers preserve results and failures without collecting promp
     }),
   ).rejects.toBe(error);
   expect(client.events[1].properties?.error).toBe(true);
+  expect(client.events[1].session_id).toBeUndefined();
   expect(JSON.stringify(client.events)).not.toContain("private");
   expect(JSON.stringify(client.events)).not.toContain("secret provider request");
   expect(

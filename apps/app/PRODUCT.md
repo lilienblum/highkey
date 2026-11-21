@@ -64,6 +64,8 @@ Use `/projects/<slug>`, `/projects/<slug>/events`, `/projects/<slug>/logs`, and 
 
 ## Overview reporting
 
+The project’s Revenue report shows exact net cents grouped by source, page, profile or session, including refunds and unattributed payments. Sessions lists explicitly identified visits with selectable columns, path/referrer search, duration, page-view and bounce filters. Opening a visit shows its entry and exit, acquisition, revenue, chronological event and AI activity, and related request/trace logs. Backfills contribute activity but never establish a session boundary.
+
 Choose the reporting period in one grouped shadcn Base UI menu with visible keycaps and a custom-range calendar; applicable previous/next arrows navigate calendar periods or fixed ranges. Chart buckets follow the range automatically. Active now counts opt-in identified actors over the last five minutes, independently of the selected reporting period, while respecting project, source, and applied filter. Visitors and installations retain distinct meanings; anonymous events still count as activity.
 
 Report rows filter Overview in place with one validated string, number, or boolean filter alongside source scope. View matching events opens Events with that context. An independent external-link icon appears for supported page/referrer destinations on hover or keyboard focus and remains visible on touch. Website and CLI sources remain equally supported.

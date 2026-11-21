@@ -7,6 +7,7 @@ import {
   Cancel01Icon,
   ComputerTerminal02Icon,
   Coins01Icon,
+  Clock01Icon,
   CubeIcon,
   DashboardSquare01Icon,
   HelpCircleIcon,
@@ -159,6 +160,7 @@ export function WorkspaceSidebar({
                     [
                       ["/", "Overview", DashboardSquare01Icon],
                       ["/events", "Events", Search01Icon],
+                      ["/sessions", "Sessions", Clock01Icon],
                       ["/revenue", "Revenue", Coins01Icon],
                       ["/logs", "Logs", ComputerTerminal02Icon],
                       ["/settings", "Settings", Settings02Icon],

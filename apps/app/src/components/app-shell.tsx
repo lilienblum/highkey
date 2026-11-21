@@ -286,6 +286,7 @@ export function AppShell({
       "/": "Overview",
       "/events": "Events",
       "/revenue": "Revenue",
+      "/sessions": "Sessions",
       "/logs": "Logs",
       "/settings": "Settings",
       "/dashboards": "Dashboard",

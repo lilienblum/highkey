@@ -4,6 +4,8 @@ export interface GenerationOptions {
   source: string;
   model: string;
   profile_id?: string;
+  /** Explicit attribution to a visitor's existing session, if available. */
+  visit?: { actor_id: string; session_id: string };
   groups?: Record<string, string>;
   trace_id?: string;
   properties?: Properties;
@@ -71,6 +73,13 @@ function generation(client: Pick<Highkey, "send">, provider: Provider, options: 
     name: "ai_generation",
     source: options.source,
     profile_id: options.profile_id,
+    ...(options.visit
+      ? {
+          actor_id: options.visit.actor_id,
+          session_id: options.visit.session_id,
+          identity_kind: "visitor",
+        }
+      : {}),
     groups: options.groups ? { ...options.groups } : undefined,
     properties: {
       ...options.properties,

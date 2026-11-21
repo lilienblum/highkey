@@ -40,6 +40,8 @@ For that opted-in browser flow, call `tracker.beginCheckout(2950)` before naviga
 
 Use the dependency-free wrappers with your existing provider SDK. They emit `ai_generation` with model, provider, reported token counts, latency, error/cancellation flags, and optional USD cost. Supply `trace_id` to correlate with application logs and `profile_id` or `groups` for attribution.
 
+To include a call in an existing visit's timeline, use its source key and explicitly pass `visit: { actor_id, session_id }`. The wrappers never create either ID.
+
 ```ts
 import { trackOpenAI, trackAnthropic, trackVercelAI, vercelAIHooks } from "@highkey/sdk/ai";
 

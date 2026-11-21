@@ -146,6 +146,8 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 Only events with an explicit visitor and session ID contribute. Project, source, visitor and session together identify a visit. Non-backfilled events establish its start, end, entry/exit pages, and acquisition fields. Backfills can contribute activity and revenue, but a backfill alone never creates a visit. A bounce means exactly one retained page view. All monetary totals are exact integer cents returned as decimal strings.
 
+Agents can call `query_sessions` and `get_session` on either MCP endpoint. The default date range is the last seven days. Pass the list's range when inspecting a historical visit.
+
 The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
 
 ### Deduplication
