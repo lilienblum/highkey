@@ -2,6 +2,19 @@ import { expect, test } from "bun:test";
 
 const { isIngestPath, proxyIngest } = await import("../apps/app/src/server/api-gateway");
 
+// The test process owns its environment; the generated app bindings are read-only.
+async function withIngestUrl(url: string, run: () => Promise<void>) {
+  const env: Record<string, string | undefined> = process.env;
+  const previous = env.HIGHKEY_INGEST_URL;
+  env.HIGHKEY_INGEST_URL = url;
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) delete env.HIGHKEY_INGEST_URL;
+    else env.HIGHKEY_INGEST_URL = previous;
+  }
+}
+
 async function withUpstream(
   respond: (request: Request) => Response | Promise<Response>,
   run: (
@@ -22,13 +35,9 @@ async function withUpstream(
       return respond(request);
     },
   });
-  const previous = process.env.HIGHKEY_INGEST_URL;
-  process.env.HIGHKEY_INGEST_URL = upstream.url.toString();
   try {
-    await run(received);
+    await withIngestUrl(upstream.url.toString(), () => run(received));
   } finally {
-    if (previous === undefined) delete process.env.HIGHKEY_INGEST_URL;
-    else process.env.HIGHKEY_INGEST_URL = previous;
     upstream.stop(true);
   }
 }
@@ -131,19 +140,14 @@ test("gateway forwards the tracker from the ingest app", async () => {
 });
 
 test("an unreachable ingest app is a retryable 503 with ingest CORS", async () => {
-  const previous = process.env.HIGHKEY_INGEST_URL;
-  process.env.HIGHKEY_INGEST_URL = "http://127.0.0.1:9";
-  try {
+  await withIngestUrl("http://127.0.0.1:9", async () => {
     const response = await proxyIngest(
       new Request("https://dashboard.example/api/ingest", { method: "POST", body: "{}" }),
     );
     expect(response.status).toBe(503);
     expect(response.headers.get("retry-after")).toBe("1");
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
-  } finally {
-    if (previous === undefined) delete process.env.HIGHKEY_INGEST_URL;
-    else process.env.HIGHKEY_INGEST_URL = previous;
-  }
+  });
 });
 
 test("gateway bounds pending uploads, cancels them, and releases admission slots", async () => {

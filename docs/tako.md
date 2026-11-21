@@ -2,7 +2,7 @@
 
 Highkey runs as two native Tako apps: `tako.ingest.toml` runs the ingest app as `highkey-ingest`, and `tako.app.toml` runs the app as `highkey`. Both need a ClickHouse server: locally `bun dev` starts one in Docker; in production you run your own.
 
-Highkey uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. The JavaScript SDK is pinned to `0.0.0-77be09d`; use the matching CLI for ordinary local development. The main-config browser test runner also needs `tako dev --env`, which is not in this release.
+Highkey uses the published Rust SDK for the ingest app and the JavaScript SDK for TanStack Start. The ingest app has no dashboard imports: it can optionally emit generic post-commit change hints to a configured HTTP endpoint. The dashboard turns those hints, and its own writes, into an ephemeral Tako channel. The JavaScript SDK is pinned to `0.0.0-419336e`. The matching published CLI supports both ordinary development and `bun run test:e2e`, which uses `tako dev --env test-e2e`.
 
 ## Local development
 
@@ -27,7 +27,7 @@ The development ClickHouse passwords are fixed in each config's `[vars.developme
 
 If the checkout moved and Docker cannot mount `deploy/clickhouse/.../highkey.xml`, run `bun scripts/clickhouse.ts dev-down`, then `bun dev`. This replaces the container and its obsolete bind mounts while reusing the named `highkey-dev-clickhouse` data volume.
 
-After upgrading Tako, restart any existing dev daemon as well as the apps. An app-only `tako dev --restart` does not replace an older daemon. Stop Highkey's apps before restarting it.
+If `tako dev list --json` reports a daemon protocol mismatch after a CLI upgrade, run `tako -c tako.ingest.toml dev --restart --background` to replace the old daemon, then `bun dev` to bring both apps up. Replacing the daemon stops other local apps it manages; restart those from their projects. The E2E runner never requests a daemon upgrade.
 
 The returned Tako HTTPS URLs are the supported development entrypoints. The runner links the public local Tako CA at `.tako/dev-ca.pem`; development-only `SSL_CERT_FILE` settings let Bun and Rust verify it even when their default trust stores differ from macOS. The dashboard also sets `NODE_USE_SYSTEM_CA=0` so Bun trusts only that file: stale certificates with the same "Tako Development CA" name in the system keychain otherwise cause `CERT_SIGNATURE_FAILURE`. Bun versions that ignore `NODE_USE_SYSTEM_CA` still verify the CA when it is also given as `NODE_EXTRA_CA_CERTS=.tako/dev-ca.pem`, which the dashboard and the browser tests set too. Use the same variables for `bun seed` and other local Bun clients, or delete the stale keychain entries. Certificate verification stays enabled.
 
