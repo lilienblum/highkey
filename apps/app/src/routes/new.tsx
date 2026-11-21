@@ -189,47 +189,13 @@ function NewProject() {
           </div>
         </footer>
       </div>
-      <aside
-        aria-labelledby="new-project-how"
-        className="sticky top-0 hidden h-svh min-w-0 flex-col overflow-hidden border-l-2 bg-sidebar [border-image:var(--rule-y)_0_0_0_2_/_0_0_0_2px] lg:flex"
+      <div
+        data-slot="project-artwork"
+        aria-hidden="true"
+        className="sticky top-0 isolate hidden h-svh min-w-0 overflow-hidden border-l-2 bg-sidebar [border-image:var(--rule-y)_0_0_0_2_/_0_0_0_2px] lg:block"
       >
-        <div className="relative isolate min-h-40 flex-1">
-          <DitherField profile="field" drift="always" />
-        </div>
-        <div className="px-[clamp(28px,4vw,56px)] pb-[clamp(32px,6vh,64px)]">
-          <h2
-            id="new-project-how"
-            className="mb-5 font-pixel text-[22px] leading-tight font-normal text-heading"
-          >
-            {created ? "Your project is ready" : "How a Highkey project works"}
-          </h2>
-          {created ? (
-            <p className={HINT}>You can find the install guide again in project settings.</p>
-          ) : (
-            <ol className="grid max-w-[48ch] list-decimal gap-4 ps-6 marker:font-pixel marker:text-data">
-              {[
-                [
-                  "The product",
-                  "Say you build Orbit. Its website and app can be two sources in the same project.",
-                ],
-                [
-                  "The activity",
-                  "Your website can send page views, and your app can send an event when someone signs up.",
-                ],
-                [
-                  "The question",
-                  "Did signups rise along with traffic after your last release? Compare page views and signups day by day.",
-                ],
-              ].map(([title, description]) => (
-                <li key={title} className="ps-1">
-                  <strong className="text-sm font-semibold">{title}</strong>
-                  <p className={HINT}>{description}</p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </aside>
+        <DitherField profile="field" drift="always" />
+      </div>
     </div>
   );
 }

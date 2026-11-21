@@ -287,7 +287,7 @@ test.describe("first project", () => {
       await page.setViewportSize({ width, height: 844 });
       await page.screenshot({ path: info.outputPath(`new-project-${width}.png`) });
       const main = (await page.getByRole("main").boundingBox())!;
-      const rail = page.locator('aside[aria-labelledby="new-project-how"]');
+      const rail = page.locator('[data-slot="project-artwork"]');
       const panelWidth = (await rail.boundingBox())?.x ?? width;
       expect(Math.abs(main.x - (panelWidth - main.x - main.width))).toBeLessThan(2);
       const field = (await input.boundingBox())!,
