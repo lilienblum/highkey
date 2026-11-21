@@ -10,6 +10,7 @@ import { type Integration, IntegrationTabs } from "@/components/integration-guid
 import { Activation } from "@/components/activation";
 import { oversees } from "@/components/settings/settings-nav";
 import { type SourceDraft, SourceFields } from "@/components/source-settings";
+import { ProjectWebsites, parseWebsites } from "@/components/project-websites";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { api, type Product, type Source } from "@/lib/api";
@@ -53,7 +54,7 @@ function NewProject() {
     try {
       project.current ??= await api<Product>("/products", "POST", {
         name: String(data.get("name") ?? "").trim(),
-        website_url: String(data.get("website") ?? "").trim(),
+        website_urls: parseWebsites(String(data.get("websites") ?? "")),
         retention_days: RETENTION_DAYS,
       });
     } catch (failure) {
@@ -128,15 +129,7 @@ function NewProject() {
                     label="Source"
                     hint="Where its events come from: a site, an app, a CLI. You can add more sources later in settings."
                   />
-                  <TextField
-                    name="website"
-                    label="Website"
-                    placeholder="example.com (optional)"
-                    inputMode="url"
-                    autoComplete="url"
-                    maxLength={2048}
-                    hint="Optional. Highkey fetches and stores its icon on your server."
-                  />
+                  <ProjectWebsites id="new-project-websites" />
                   <SubmitButton pending={form.pending}>Create project</SubmitButton>
                 </form>
               </>

@@ -29,7 +29,12 @@ import { fields, readJson } from "./body";
 import { json, missing, noContent, bad } from "./errors";
 import { READ, route } from "./router";
 
-const PRODUCT = { name: "string", retention_days: "integer", website_url: "string?" } as const;
+const PRODUCT = {
+  name: "string",
+  retention_days: "integer",
+  website_url: "string?",
+  website_urls: "string[]?",
+} as const;
 const SOURCE = { name: "string", icon: "string?", visitor_mode: "string?" } as const;
 
 export function registerManagement(): void {

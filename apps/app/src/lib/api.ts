@@ -16,6 +16,7 @@ export type ViewLink = { id: string; slug: string; name: string; kind: "events" 
 export type Product = {
   slug: string;
   website_url: string | null;
+  website_urls?: string[];
   favicon_version: string | null;
   id: string;
   name: string;

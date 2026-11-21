@@ -25,9 +25,9 @@ export function AllowedOriginsField({
   value,
   onChange,
   disabled,
-  website,
+  websites,
 }: {
-  website?: string | null;
+  websites?: string[];
   id: string;
   value: string;
   onChange: (value: string) => void;
@@ -46,16 +46,16 @@ export function AllowedOriginsField({
         spellCheck={false}
         placeholder="https://example.com, https://*.example.com"
       />
-      {website && (
+      {!!websites?.length && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="self-start"
           disabled={disabled}
-          onClick={() => onChange(website)}
+          onClick={() => onChange(websites.join(", "))}
         >
-          Use project website
+          Use project websites
         </Button>
       )}
       <FieldDescription>
@@ -68,11 +68,13 @@ export function AllowedOriginsField({
 
 export function KeyOriginsEditor({
   productId,
+  websites,
   keyInfo,
   onSaved,
   disabled,
 }: {
   productId: string;
+  websites: string[];
   keyInfo: { id: string; label: string; allowed_origins: string[] };
   onSaved: () => Promise<void>;
   disabled?: boolean;
@@ -130,6 +132,7 @@ export function KeyOriginsEditor({
         </DialogHeader>
         <form onSubmit={save}>
           <AllowedOriginsField
+            websites={websites}
             id={`origins-${keyInfo.id}`}
             value={value}
             onChange={setValue}

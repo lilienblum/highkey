@@ -194,6 +194,36 @@ describe("management API", () => {
     expect(moved.json.favicon_version).toBeNull();
   });
 
+  test("website lists preserve wildcard-only projects and pick the first concrete link", async () => {
+    const { id } = await project(ctx, "Many sites");
+    const save = (extra: object) =>
+      call(ctx, "PATCH", `/api/products/${id}`, {
+        name: "Many sites",
+        retention_days: 30,
+        ...extra,
+      });
+    const urls = ["https://*.example.com", "http://127.0.0.1", "https://example.com"];
+    expect(
+      (await save({ website_urls: ["*.EXAMPLE.com", urls[1] + "/path", "example.com", urls[0]] }))
+        .json,
+    ).toMatchObject({ website_urls: urls, website_url: urls[1] });
+    expect((await save({})).json.website_urls).toEqual(urls);
+    for (const invalid of [
+      ["foo.*.example.com"],
+      ["*"],
+      ["*.com"],
+      ["https://*.127.0.0.1"],
+      Array(17).fill("example.com"),
+    ])
+      expect((await save({ website_urls: invalid })).status).toBe(400);
+    expect((await save({ website_urls: ["*.example.com"] })).json).toMatchObject({
+      website_url: null,
+      website_urls: [urls[0]],
+      favicon_version: null,
+    });
+    expect((await save({ website_urls: [] })).json.website_urls).toEqual([]);
+  });
+
   test("connect_source_is_atomic", async () => {
     const { id } = await project(ctx, "Atomic source");
     await expect(

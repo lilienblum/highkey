@@ -148,7 +148,7 @@ Codes: `invalid_document`, `not_found` (the hint names the nearest slug), `revis
 
 Besides dashboards, the full MCP manages the workspace. Every tool takes `project` as an id or slug; sources are an id or slug, keys are ids.
 
-- Projects: `create_project` (retention defaults to 365 days), `update_project` (only the given fields change; `website_url: ""` clears the website).
+- Projects: `create_project` (retention defaults to 365 days), `update_project` (only the given fields change). Use `website_urls` for multiple sites and wildcard subdomains, e.g. `["example.com", "*.example.com"]`; `[]` clears the list.
 - Sources: `list_sources`, `create_source`, `update_source`, and `connect_source`, which creates a source plus an ingestion key and returns ready-to-paste setup snippets with the secret filled in. Replace `HIGHKEY_URL` in them with the origin of the Highkey URL this server is reached at. The secret is shown only once. `icon` is one of website, ios, android, mobile, terminal, desktop, server, code, package, game, generic.
 - Ingestion keys: `list_keys`, `create_key`, `update_key_origins`, `revoke_key`.
 - Logs: `list_log_keys`, `create_log_key`, `revoke_log_key`, `get_log_settings`, `update_log_settings` (retention 1-365 days, 7 by default).

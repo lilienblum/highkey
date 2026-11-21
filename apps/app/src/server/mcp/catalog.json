@@ -445,6 +445,12 @@
           "website_url": {
             "description": "The project's website, such as https://example.com. Highkey fetches its icon.",
             "type": ["string", "null"]
+          },
+          "website_urls": {
+            "description": "Up to 16 websites, including wildcard subdomains such as *.example.com. Use instead of website_url.",
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 16
           }
         },
         "required": ["name"],
@@ -1108,6 +1114,12 @@
           "website_url": {
             "description": "A new website; `\"\"` removes it.",
             "type": ["string", "null"]
+          },
+          "website_urls": {
+            "description": "Replace the project's websites, including wildcard subdomains. An empty list clears them.",
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 16
           }
         },
         "required": ["project"],

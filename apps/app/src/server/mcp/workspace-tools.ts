@@ -34,6 +34,7 @@ export const workspaceTools: Record<string, Tool> = {
     createProject(ctx, {
       name: a.name,
       website_url: a.website_url ?? null,
+      website_urls: a.website_urls,
       retention_days: a.retention_days ?? 365,
     }),
   update_project: async (ctx, a) => {
@@ -43,6 +44,7 @@ export const workspaceTools: Record<string, Tool> = {
     return updateProject(ctx, id, {
       name: a.name ?? current.name,
       website_url: a.website_url ?? null,
+      website_urls: a.website_urls,
       retention_days: a.retention_days ?? current.retention_days,
     });
   },

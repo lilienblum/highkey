@@ -26,7 +26,7 @@ Route the three ingest paths and `/tracker.js` to the ingest app at the edge whe
 
 | Method      | Path                                  | Body/result                                                                              |
 | ----------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| GET / POST  | `/api/products`                       | List / create `{ name, retention_days, website_url? }`                                   |
+| GET / POST  | `/api/products`                       | List / create `{ name, retention_days, website_urls? }`                                  |
 | PATCH       | `/api/products/:id`                   | Edit name, website and retention (1–3650 days)                                           |
 | GET         | `/api/products/:id/favicon`           | The cached website icon, or 404                                                          |
 | GET / POST  | `/api/products/:id/sources`           | List / create `{ name, icon? }`                                                          |
@@ -363,7 +363,7 @@ The ingestion CORS preflight stays public (preflights do not carry the ingestion
 
 ### Project websites and favicons
 
-Project create/update accepts optional `website_url`. Bare domains default to HTTPS; only the origin is stored, and credentials, query strings, and fragments are rejected. Omission or `null` preserves an existing website; send `""` to clear it. A website is never required and does not silently change any key's origin policy. Settings provides **Use project website** when explicitly choosing a key's allowed origins.
+Project create/update accepts `website_urls`, an ordered list of up to 16 websites, for example `["example.com","*.example.com","example.org"]`. Bare domains default to HTTPS; duplicates are removed. A leading `*.` matches subdomains, not the root. The first concrete address supplies `website_url` for the icon, installation checker and page links; wildcard-only lists have no concrete address. Omit the list to preserve it, or send `[]` to clear it. The older `website_url` input still accepts a single website (`""` clears it). Websites never change key restrictions automatically: choose **Use project websites** to copy the list to a browser key.
 
 On saving a website without a cached icon, the dashboard tries `/favicon.ico`, `/favicon.png`, and `/apple-touch-icon.png`. Supported raster types are ICO, PNG, JPEG, and WebP; SVG, HTML discovery, redirects, and remote icon services are deliberately not used. The default project icon remains if retrieval or rendering fails. Cached bytes live in the management database, survive restarts, and are invalidated when the website changes. Saving again retries a missing icon.
 

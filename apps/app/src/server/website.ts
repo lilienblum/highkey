@@ -5,6 +5,7 @@ import http from "node:http";
 import https from "node:https";
 import { isIP, type LookupFunction } from "node:net";
 import { bad } from "./api/errors";
+import { normalizeOrigins } from "./origins";
 
 const MAX_ICON_BYTES = 256 * 1024;
 
@@ -23,12 +24,28 @@ export function normalizeWebsite(input: string): string | null {
   if (
     !["http:", "https:"].includes(url.protocol) ||
     !url.hostname ||
+    url.hostname.includes("*") ||
     address.includes("@") ||
     url.search ||
     url.hash
   )
     throw bad("Use an HTTP(S) website without credentials, a query, or a fragment");
   return url.origin;
+}
+
+/** Website patterns can be copied to a browser key without changing their meaning. */
+export function normalizeWebsites(values: string[]): string[] {
+  if (!Array.isArray(values) || values.length > 16) throw bad("Use up to 16 websites");
+  const origins = values.map((input) => {
+    if (typeof input !== "string" || !input.trim()) throw bad("Enter a website address");
+    const value = input.trim();
+    if (!value.includes("*")) return normalizeWebsite(value)!;
+    const address = value.includes("://") ? value : `https://${value}`;
+    if (!/^https?:\/\/\*\.[^/*?#]+\/?$/i.test(address))
+      throw bad("Use *.example.com to include subdomains");
+    return address;
+  });
+  return normalizeOrigins(origins);
 }
 
 function ipv4Number(ip: string): number {

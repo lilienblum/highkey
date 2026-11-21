@@ -3,28 +3,46 @@ import { readFile } from "node:fs/promises";
 import { apiHeaders } from "./auth";
 
 const endpoint = process.env.HIGHKEY_API_URL;
-test("optional website persists, suggests the browser origin, and can be cleared", async ({
+test("several websites and wildcard subdomains persist, fill key origins, and can be cleared", async ({
   page,
 }) => {
   await page.goto("/settings");
   await page.getByRole("button", { name: "New project", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Project name").fill(`Website settings ${Date.now()}`);
-  await dialog.getByLabel("Website", { exact: true }).fill("http://127.0.0.1/private-path");
+  await dialog
+    .getByLabel("Websites", { exact: true })
+    .fill("*.example.com,\nhttp://127.0.0.1/private-path\nexample.com");
   await dialog.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByLabel("Website", { exact: true })).toHaveValue("http://127.0.0.1");
+  const sites = page.getByLabel("Websites", { exact: true });
+  const list = ["https://*.example.com", "http://127.0.0.1", "https://example.com"];
+  await expect(sites).toHaveValue(list.join("\n"));
   await expect(page.getByText(/No supported favicon found/)).toBeVisible();
-  await page.getByRole("button", { name: "Use project website" }).click();
-  await expect(page.getByLabel("Allowed origins", { exact: true })).toHaveValue("http://127.0.0.1");
+  await page.getByRole("button", { name: "Use project websites" }).click();
+  await expect(page.getByLabel("Allowed origins", { exact: true })).toHaveValue(list.join(", "));
+  await page.getByLabel("New key label").fill("Browser sites");
+  await page.getByRole("button", { name: "Create ingestion key", exact: true }).click();
+  const key = (await page.locator(".new-key").innerText()).trim();
+  for (const [origin, status] of [
+    ["https://docs.eu.example.com", 200],
+    ["https://unrelated.test", 403],
+  ] as const) {
+    const r = await fetch(`${endpoint}/api/ingest`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json", origin },
+      body: JSON.stringify({ event_id: crypto.randomUUID(), name: "view", source: "web" }),
+    });
+    expect(r.status, await r.text()).toBe(status);
+  }
   await page.reload();
-  await expect(page.getByLabel("Website", { exact: true })).toHaveValue("http://127.0.0.1");
-  await page.getByLabel("Website", { exact: true }).fill("");
+  await expect(sites).toHaveValue(list.join("\n"));
+  await sites.fill("");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByText("Project changes saved.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Use project website" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Use project websites" })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel("Website", { exact: true })).toHaveValue("");
+  await expect(sites).toHaveValue("");
 });
 
 test("project icons load only from Highkey and failed images fall back without shifting the picker", async ({

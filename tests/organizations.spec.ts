@@ -272,6 +272,7 @@ test.describe("first project", () => {
     // Its source is named on the same screen, with an icon of its own.
     const input = page.getByLabel("Source", { exact: true });
     await input.fill("Website");
+    await page.getByLabel("Websites", { exact: true }).fill("*.example.com\n*.example.org");
     const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 844 });
@@ -290,6 +291,10 @@ test.describe("first project", () => {
     // The same page then shows how to connect it: the source's new key in a snippet, and the
     // agent's MCP setup.
     await expect(page.getByRole("heading", { name: "Connect Website" })).toBeVisible();
+    expect((await (await api.get("/api/products")).json())[0].website_urls).toEqual([
+      "https://*.example.com",
+      "https://*.example.org",
+    ]);
     await expect(page).toHaveURL(`${base}/new`);
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
     expect(key).toMatch(/^pk_/);

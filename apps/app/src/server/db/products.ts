@@ -1,7 +1,7 @@
 // Projects, with their sources and sidebar links as the API returns them.
 import { createHash } from "node:crypto";
 import { bad, projectMissing } from "../api/errors";
-import { normalizeWebsite } from "../website";
+import { normalizeWebsites } from "../website";
 import { all, changes, type Db, one } from "./db";
 import { listSources, projectSlug, type Source } from "./sources";
 import { now, newId } from "./ids";
@@ -15,6 +15,7 @@ export interface Link {
 export interface Product {
   slug: string;
   website_url: string | null;
+  website_urls: string[];
   favicon_version: string | null;
   id: string;
   name: string;
@@ -29,15 +30,24 @@ export interface ProductInput {
   name: string;
   retention_days: number;
   website_url?: string | null;
+  website_urls?: string[];
 }
 
-const ROW = "id, name, retention_days, created_at, website_url, favicon_version, slug";
+const ROW =
+  "id, name, retention_days, created_at, website_url, website_urls, favicon_version, slug";
 
-type Row = Omit<Product, "sources" | "dashboards" | "views">;
+type Row = Omit<Product, "sources" | "dashboards" | "views" | "website_urls"> & {
+  website_urls: string | null;
+};
 
 async function withLinks(db: Db, row: Row): Promise<Product> {
   return {
     ...row,
+    website_urls: row.website_urls
+      ? JSON.parse(row.website_urls)
+      : row.website_url
+        ? [row.website_url]
+        : [],
     sources: await listSources(db, row.id),
     dashboards: await all<Link>(
       db,
@@ -109,7 +119,8 @@ export async function resolveProduct(db: Db, key: string, orgId?: string): Promi
 }
 
 export function validateProduct(input: ProductInput): void {
-  if (input.website_url) normalizeWebsite(input.website_url);
+  if (input.website_urls !== undefined && input.website_url != null)
+    throw bad("Send website_urls or website_url, not both");
   const size = new TextEncoder().encode(input.name).length;
   if (!input.name.trim() || size > 80) throw bad("Use a project name of 1–80 bytes");
   if (
@@ -128,16 +139,19 @@ export async function saveProduct(
 ): Promise<Product> {
   validateProduct(input);
   const previous = id ? await product(db, id) : null;
-  const website =
-    input.website_url !== undefined && input.website_url !== null
-      ? normalizeWebsite(input.website_url)
-      : (previous?.website_url ?? null);
+  const websites =
+    input.website_urls !== undefined
+      ? normalizeWebsites(input.website_urls)
+      : input.website_url != null
+        ? normalizeWebsites(input.website_url.trim() ? [input.website_url] : [])
+        : (previous?.website_urls ?? []);
+  const website = websites.find((url) => !url.includes("*")) ?? null;
   const productId = id ?? newId();
   await db.transaction(async (tx) => {
     if (previous) {
       await tx.execute(
-        "UPDATE products SET name = ?2, retention_days = ?3, website_url = ?4, favicon = CASE WHEN website_url IS ?4 THEN favicon ELSE NULL END, favicon_version = CASE WHEN website_url IS ?4 THEN favicon_version ELSE NULL END WHERE id = ?1",
-        [productId, input.name.trim(), input.retention_days, website],
+        "UPDATE products SET name = ?2, retention_days = ?3, website_url = ?4, website_urls = ?5, favicon = CASE WHEN website_url IS ?4 THEN favicon ELSE NULL END, favicon_version = CASE WHEN website_url IS ?4 THEN favicon_version ELSE NULL END WHERE id = ?1",
+        [productId, input.name.trim(), input.retention_days, website, JSON.stringify(websites)],
       );
     } else {
       const base = projectSlug(input.name);
@@ -146,8 +160,17 @@ export async function saveProduct(
         // Slugs are unique within an organization; there, the unique index arbitrates.
         const inserted = await changes(
           tx,
-          "INSERT INTO products(id, name, retention_days, created_at, website_url, slug, org_id) SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = ?6 AND org_id IS ?7) ON CONFLICT DO NOTHING",
-          [productId, input.name.trim(), input.retention_days, now(), website, slug, orgId],
+          "INSERT INTO products(id, name, retention_days, created_at, website_url, slug, org_id, website_urls) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = ?6 AND org_id IS ?7) ON CONFLICT DO NOTHING",
+          [
+            productId,
+            input.name.trim(),
+            input.retention_days,
+            now(),
+            website,
+            slug,
+            orgId,
+            JSON.stringify(websites),
+          ],
         );
         if (inserted === 1) break;
         slug = `${base}-${suffix}`;

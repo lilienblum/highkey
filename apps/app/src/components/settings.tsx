@@ -53,6 +53,7 @@ import { ExportSettings } from "./export-settings";
 import { Notifications } from "./notifications";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
+import { ProjectWebsites, parseWebsites, websiteList } from "./project-websites";
 import { LogSettings } from "./log-settings";
 import { type Integration, IntegrationTabs } from "./integration-guide";
 type KeyInfo = {
@@ -71,7 +72,7 @@ function ProductFields({
   prefix,
   disabled = false,
 }: {
-  value: { name: string; retention_days: number; website_url: string };
+  value: { name: string; retention_days: number; websites: string };
   onChange: (v: typeof value) => void;
   prefix: string;
   disabled?: boolean;
@@ -90,23 +91,12 @@ function ProductFields({
           onChange={(e) => onChange({ ...value, name: e.target.value })}
         />
       </Field>
-      <Field>
-        <FieldLabel htmlFor={`${prefix}-website`}>Website</FieldLabel>
-        <Input
-          id={`${prefix}-website`}
-          inputMode="url"
-          autoComplete="url"
-          disabled={disabled}
-          value={value.website_url}
-          maxLength={2048}
-          placeholder="example.com (optional)"
-          onChange={(e) => onChange({ ...value, website_url: e.target.value })}
-        />
-        <FieldDescription>
-          Optional. Highkey fetches and stores the site icon on your server. Website addresses don’t
-          restrict keys automatically.
-        </FieldDescription>
-      </Field>
+      <ProjectWebsites
+        id={`${prefix}-websites`}
+        value={value.websites}
+        disabled={disabled}
+        onChange={(e) => onChange({ ...value, websites: e.target.value })}
+      />
       <Field>
         <FieldLabel htmlFor={`${prefix}-retention`}>Retention (days)</FieldLabel>
         <Input
@@ -131,7 +121,7 @@ export function Settings() {
   const { timeZone, setTimeZone, dateShortcuts, setDateShortcuts } = useDisplayPreferences();
   const timeZones = Array.from(new Set(["UTC", timeZone, ...Intl.supportedValuesOf("timeZone")]));
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: "", retention_days: 365, website_url: "" });
+  const [draft, setDraft] = useState({ name: "", retention_days: 365, websites: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [createdProduct, setCreatedProduct] = useState<Product>();
@@ -142,11 +132,15 @@ export function Settings() {
     setError("");
     let saved = createdProduct;
     try {
-      saved ??= await api<Product>("/products", "POST", draft);
+      saved ??= await api<Product>("/products", "POST", {
+        name: draft.name,
+        retention_days: draft.retention_days,
+        website_urls: parseWebsites(draft.websites),
+      });
       setCreatedProduct(saved);
       await reload(saved.id);
       setOpen(false);
-      setDraft({ name: "", retention_days: 365, website_url: "" });
+      setDraft({ name: "", retention_days: 365, websites: "" });
       setCreatedProduct(undefined);
     } catch (e) {
       setError(
@@ -283,7 +277,7 @@ function ProductSettings({ product }: { product: Product }) {
   const keySource = product.sources?.find((source) => source.id === keySourceId);
   const [draft, setDraft] = useState({
     name: product.name,
-    website_url: product.website_url ?? "",
+    websites: websiteList(product).join("\n"),
     retention_days: product.retention_days,
   });
   const [keyState, setKeyState] = useState<
@@ -359,11 +353,15 @@ function ProductSettings({ product }: { product: Product }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 void action("save", async () => {
-                  const saved = await api<Product>(`/products/${product.id}`, "PATCH", draft);
+                  const saved = await api<Product>(`/products/${product.id}`, "PATCH", {
+                    name: draft.name,
+                    retention_days: draft.retention_days,
+                    website_urls: parseWebsites(draft.websites),
+                  });
                   setDraft({
                     name: saved.name,
                     retention_days: saved.retention_days,
-                    website_url: saved.website_url ?? "",
+                    websites: websiteList(saved).join("\n"),
                   });
                   setNotice("Project changes saved.");
                   try {
@@ -469,6 +467,7 @@ function ProductSettings({ product }: { product: Product }) {
                     {!k.revoked && k.kind !== "server" && (
                       <KeyOriginsEditor
                         productId={product.id}
+                        websites={websiteList(product)}
                         keyInfo={k}
                         disabled={busy}
                         onSaved={() =>
@@ -576,7 +575,7 @@ function ProductSettings({ product }: { product: Product }) {
                 {keyKind === "public" && (
                   <AllowedOriginsField
                     id="key-origins"
-                    website={product.website_url}
+                    websites={websiteList(product)}
                     value={allowedOrigins}
                     onChange={setAllowedOrigins}
                     disabled={busy || keyState.status !== "ready"}
