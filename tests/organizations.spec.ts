@@ -134,7 +134,7 @@ test.describe("organizations", () => {
       animations: "disabled",
     });
     await settings.click();
-    await expect(page).toHaveURL(/\/settings\/account$/);
+    await expect(page).toHaveURL(`${base}/account`);
     await expect(page.getByRole("dialog", { name: "Sidebar", exact: true })).toBeHidden();
     await context.close();
   });
@@ -222,6 +222,9 @@ test.describe("no dead ends", () => {
     await page.goto("/");
     await expect(page).toHaveURL(`${base}/welcome`);
     await expect(page.getByRole("heading", { name: "No organization yet" })).toBeVisible();
+    await page.getByRole("link", { name: "Account settings" }).click();
+    await expect(page.getByRole("heading", { name: "Account settings" })).toBeVisible();
+    await page.goBack();
     const invitation = await invite(inviter, second.id, email);
     // On a server without email verification, the team shares the private link.
     await page.reload();
@@ -235,6 +238,12 @@ test.describe("no dead ends", () => {
     // The new organization has no projects yet.
     await expect(page).toHaveURL(`${base}/new`);
     await expect(page.getByRole("contentinfo")).toContainText(`Newcomer ${run}`);
+    await page.getByRole("link", { name: /^Organization settings:/ }).click();
+    await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "General", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await context.close();
   });
 
@@ -270,7 +279,7 @@ test.describe("no dead ends", () => {
     const context = await browser.newContext({ storageState: await member.storageState() });
     const page = await context.newPage();
     await page.goto(`/${home.slug}`);
-    await expect(page).toHaveURL(`${base}/settings/account`);
+    await expect(page).toHaveURL(`${base}/account`);
     await expect(page.getByText(`${home.name} requires two-factor codes`)).toBeVisible();
     await expect(page.getByRole("button", { name: "Set up two-factor codes" })).toBeVisible();
     await context.close();
@@ -287,7 +296,7 @@ test.describe("first project", () => {
     const page = await context.newPage();
     // Organization settings stay reachable without a project.
     await page.goto("/settings/members");
-    await expect(page).toHaveURL(`${base}/settings/members`);
+    await expect(page).toHaveURL(`${base}/organizations/settings/members`);
     await page.goto("/events");
     await expect(page).toHaveURL(`${base}/new`);
     await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();

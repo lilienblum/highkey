@@ -407,7 +407,9 @@ test("failed queries can retry and context-only empty queries show matching feed
   await page.getByLabel("Trace ID", { exact: true }).fill("no-such-trace");
   await page.getByRole("button", { name: "Apply filters", exact: true }).click();
   await expect(page.getByRole("heading", { name: "No matching logs" })).toBeVisible();
-  await expect(page.getByText("Connect a service in Settings.", { exact: false })).toHaveCount(0);
+  await expect(
+    page.getByText("Connect a service in Project settings.", { exact: false }),
+  ).toHaveCount(0);
 });
 
 test("dragging across the log volume histogram narrows the query to those buckets", async ({

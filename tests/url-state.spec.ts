@@ -96,7 +96,7 @@ test("project URL wins over saved preferences and applies a portable calendar ra
   } finally {
     await fresh.close();
   }
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}/settings`);
   expect(new URL(page.url()).search).toBe("");
   await page.goBack();
@@ -120,21 +120,32 @@ test("workspace links carry only the filters their destination uses", async ({ p
     ["Logs", "/logs", { source }],
     ["Realtime", "/realtime", { source }],
     ["Profiles", "/people", { source }],
-    ["Settings", "/settings", {}],
+    ["Project settings", "/settings", {}],
   ] as const) {
     const href = await nav.getByRole("link", { name, exact: true }).getAttribute("href");
     const url = new URL(href!, page.url());
     expect(url.pathname).toBe(path + suffix);
     expect(Object.fromEntries(url.searchParams)).toEqual(expected);
   }
-  await nav.getByRole("link", { name: "Settings", exact: true }).click();
+  await nav.getByRole("link", { name: "Project settings", exact: true }).click();
   await expect(page).toHaveURL((url) => url.pathname === `${path}/settings` && !url.search);
   await page.reload();
+  await expect(
+    page.getByRole("navigation", { name: "Organization settings", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: /^Account and organization:/ }).click();
+  await page.getByRole("menuitem", { name: "Organization settings", exact: true }).click();
+  await expect(nav.getByRole("link", { name: "Project settings" })).not.toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await page
-    .getByRole("navigation", { name: "Settings", exact: true })
+    .getByRole("navigation", { name: "Organization settings", exact: true })
     .getByRole("link", { name: "Members" })
     .click();
-  await expect(page).toHaveURL((url) => url.pathname === "/settings/members" && !url.search);
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/organizations/settings/members" && !url.search,
+  );
   await nav.getByRole("link", { name: "Overview", exact: true }).click();
   await expect(page).toHaveURL(
     (url) =>
@@ -150,7 +161,7 @@ test("workspace links carry only the filters their destination uses", async ({ p
   await page.goto(`${path}/logs?source=all&days=7&logWindow=24h`);
   await expect(page).toHaveURL((url) => url.search === "?logWindow=24h");
   await page.goto("/settings/account?source=all&days=7");
-  await expect(page).toHaveURL((url) => url.pathname === "/settings/account" && url.search === "");
+  await expect(page).toHaveURL((url) => url.pathname === "/account" && url.search === "");
 });
 
 test("applied Explore queries and pages survive reload and browser history", async ({ page }) => {

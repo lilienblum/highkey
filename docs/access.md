@@ -31,13 +31,13 @@ A role covers every project of its organization.
 
 - **Invitations** name an email address and a role, and expire after 7 days. The Join page they link to shows who invited you, to which organization and as what. Pending invitations are also listed on the welcome page for verified addresses. Without email verification, use the private link shared by the inviting team. An organization always keeps at least one owner.
 - **Moving a project** to another organization needs admin or owner in both (project settings, **Move to another organization**). Its keys, dashboards and views go with it; its data in ClickHouse does not move, because it is stored by project.
-- **Deleting a project** (project settings, **Delete project**) stops its ingestion keys at once and hides it everywhere; an admin can restore it for 7 days from **Settings → Organization → Deleted projects**. After that a background job deletes its events and logs, its ClickHouse reader and views, and its records, one project at a time.
+- **Deleting a project** (project settings, **Delete project**) stops its ingestion keys at once and hides it everywhere; an admin can restore it for 7 days from **Organization settings → General → Deleted projects**. After that a background job deletes its events and logs, its ClickHouse reader and views, and its records, one project at a time.
 - **Deleting an organization** (owner only) is refused while it has projects, deleted ones included until they are wiped. Its members, invitations, API keys and agent connections go with it.
 - A removed member, or one demoted to viewer, loses access on their next request: roles are read on every request, not cached in the session.
 
 ## API keys
 
-API keys (`hk_…`) let scripts, local pages, scheduled reports and CI reach the API and MCP. Each is created in **Settings → API keys** (or `POST /api/keys`) by a signed-in person for one organization, read-only or read and write, optionally expiring. Send it as `Authorization: Bearer hk_…` or `X-Api-Key: hk_…`.
+API keys (`hk_…`) let scripts, local pages, scheduled reports and CI reach the API and MCP. Each is created in **Organization settings → API keys** (or `POST /api/keys`) by a signed-in person for one organization, read-only or read and write, optionally expiring. Send it as `Authorization: Bearer hk_…` or `X-Api-Key: hk_…`.
 
 - A key belongs to the person who made it. On every use it is capped by that person's current role: a removed member's keys stop at once, and a viewer's keys only read (viewers can create read-only keys only).
 - Keys are stored hashed and shown once. Owners and admins see everyone's keys in their organization (name, owner, access, last use) and can revoke them; nobody sees a secret again.
@@ -55,7 +55,7 @@ Agents connect to `https://highkey.example.com/mcp`, an OAuth 2.1 protected reso
 
 1. The agent finds the authorization server through `/.well-known/oauth-protected-resource/mcp` and identifies itself with a [Client ID Metadata Document](https://modelcontextprotocol.io/) (its `client_id` is an HTTPS URL). Highkey fetches that document over HTTPS only, from public addresses, with no redirects, at most 64 KiB in 5 seconds.
 2. The person signs in, chooses the organization the agent works in, and consents to **Read only** or **Read and write** (viewers can grant read only). A read-only grant lists only the read tools.
-3. The agent's access tokens last 15 minutes, are bound to `/mcp` and name the organization; it refreshes them while in use. Every request checks that the grant still stands and that its person still belongs to the organization, so revoking a connection in **Settings → Agents** (owners and admins see everyone's) or removing the member stops the agent at once.
+3. The agent's access tokens last 15 minutes, are bound to `/mcp` and name the organization; it refreshes them while in use. Every request checks that the grant still stands and that its person still belongs to the organization, so revoking a connection in **Organization settings → Agents** (owners and admins see everyone's) or removing the member stops the agent at once.
 
 `/mcp` also accepts API keys. `/api/read/mcp` accepts API keys only and lists only the read tools whatever the key allows; scheduled and CI runs, which cannot sign in, use it with a read-only key. Neither address accepts a browser session, and both refuse any request carrying a browser `Origin`.
 

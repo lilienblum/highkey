@@ -57,7 +57,7 @@ export function WorkspaceSidebar({
   navigationReady,
   onSourceChange,
 }: {
-  path: string;
+  path: string | null;
   /** The open dashboard, when the page is one. */
   dashboardSlug?: string;
   /** The open event view, when the page is Events with one applied. */
@@ -173,7 +173,7 @@ export function WorkspaceSidebar({
                       ["/revenue", "Revenue", Coins01Icon],
                       ["/ai", "AI costs", AiBrain01Icon],
                       ["/logs", "Logs", ComputerTerminal02Icon],
-                      ["/settings", "Settings", Settings02Icon],
+                      ["/settings", "Project settings", Settings02Icon],
                     ] as const
                   ).map(([to, label, icon]) => (
                     <SidebarMenuItem key={to}>
@@ -368,7 +368,9 @@ export function WorkspaceSidebar({
                 </SidebarMenu>
               </nav>
               {product && !product.sources.length && (
-                <p className="workspace-source-empty">Connect your first source in Settings.</p>
+                <p className="workspace-source-empty">
+                  Connect your first source in Project settings.
+                </p>
               )}
             </SidebarGroupContent>
           </SidebarGroup>
@@ -385,7 +387,7 @@ export function WorkspaceSidebar({
               </Dialog>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <OrganizationMenu />
+              <OrganizationMenu projectSlug={product?.slug} />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

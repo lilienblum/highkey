@@ -89,7 +89,7 @@ Drag across the Overview activity chart or an Events chart to zoom the workspace
 
 ## Display formatting
 
-Every displayed time uses the timezone chosen in Settings → Display, in one readable format such as `13 Nov 2026, 15:03:37.602`; UTC reads the same way. Chart buckets, calendar ranges, and raw JSON stay UTC. Reports and filter chips show well-known values with their proper names: operating systems (`macos` → macOS, `ios` → iOS), architectures (`aarch64` → ARM64, `x86_64` → x86-64), browsers, device types, and identity kinds. Unknown values appear as sent. Inspectors, raw JSON, and filters always keep the stored value.
+Every displayed time uses the timezone chosen in Account settings → Display, in one readable format such as `13 Nov 2026, 15:03:37.602`; UTC reads the same way. Chart buckets, calendar ranges, and raw JSON stay UTC. Reports and filter chips show well-known values with their proper names: operating systems (`macos` → macOS, `ios` → iOS), architectures (`aarch64` → ARM64, `x86_64` → x86-64), browsers, device types, and identity kinds. Unknown values appear as sent. Inspectors, raw JSON, and filters always keep the stored value.
 
 ## Logs
 
@@ -139,6 +139,8 @@ The shared component theme defines foreground/background pairs, hover and presse
 
 At the bottom of the sidebar, **Use with your agent** opens the connection instructions for this Highkey server and a question you can copy into your agent.
 
-Your name and current organization appear just below it. Open that menu for **Account settings**, to switch or create an organization, or to sign out. Each organization shows your role. In the collapsed sidebar, use the account icon. Switching organizations opens the new organization's workspace.
+Your name and current organization appear just below it. Open that menu for **Account settings** or **Organization settings**, to switch or create an organization, or to sign out. Each organization shows your role. In the collapsed sidebar, use the account icon. Switching organizations opens the new organization's workspace.
 
-Settings has a row of parts: **Project** (this project's sources, keys, retention and logs), **Organization** (name, address, requiring two-factor codes, transferring ownership, deleting it), **Members** (inviting with a role and a copyable link, changing roles, removing people, pending invitations), **API keys**, **Agents** (connected agents, with their access and last use, to revoke), and **Account** (name, password, two-factor codes with backup codes, sessions, deleting your account). What a page offers follows your role; see [roles](access.md#organizations-and-roles). Server-wide account management is available through the [admin API](api.md#api-keys-connections-and-the-server-admin).
+- **Project settings** in the sidebar manages the selected project's sources, ingestion keys, retention and logs.
+- **Account settings** (`/account`) manages your profile, password, two-factor codes, sessions and account deletion. Display preferences here apply to this browser.
+- **Organization settings** (`/organizations/settings`) names the current organization and groups its **General**, **Members**, **API keys** and **Agents** sections. What you can change follows your [role](access.md#organizations-and-roles). Server-wide account management is available through the [admin API](api.md#api-keys-connections-and-the-server-admin).

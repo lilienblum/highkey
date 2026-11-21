@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { type FormEvent, useState } from "react";
-import { PageHeader, useWorkspace } from "@/components/app-shell";
+import { useWorkspace } from "@/components/app-shell";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,12 @@ import {
 } from "@/components/ui/table";
 import { ValueSelect } from "@/components/value-select";
 import { api } from "@/lib/api";
-import { formatDate, oversees, SettingsNav, useOrganizationRole } from "./settings-nav";
+import {
+  formatDate,
+  oversees,
+  OrganizationSettingsHeader,
+  useOrganizationRole,
+} from "./settings-nav";
 import { useLoaded } from "./use-loaded";
 
 interface ApiKey {
@@ -71,13 +76,9 @@ export function ApiKeys() {
   };
   return (
     <>
-      <SettingsNav />
-      <PageHeader
-        title="API keys"
-        description="For scripts, local pages and scheduled agent runs. A key acts as you, in this organization, never beyond your role."
-      >
+      <OrganizationSettingsHeader>
         <CreateKey readOnly={role === "viewer"} onCreated={keys.reload} />
-      </PageHeader>
+      </OrganizationSettingsHeader>
       <div className="settings-stack">
         {error ? (
           <Alert variant="destructive">

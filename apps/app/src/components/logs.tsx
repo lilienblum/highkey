@@ -176,8 +176,7 @@ function LogExplorer() {
     if (draft === (search.logq ?? "")) void query.refresh();
     else apply({ logq: draft || undefined });
   }
-  if (!product)
-    return <p className="quiet">Create a project in Settings to start collecting logs.</p>;
+  if (!product) return <p className="quiet">Create a project to start collecting logs.</p>;
   const maximum = Math.max(1, ...(data?.series.map((b) => b.count) ?? []));
   const axisTime = new Intl.DateTimeFormat("en-GB", {
     timeZone,
@@ -521,7 +520,7 @@ function LogExplorer() {
                   ? "Retry the request above or clear the query to continue."
                   : hasFilters
                     ? "Try another search, remove a filter, or widen the time range."
-                    : "Connect a service in Settings. Its logs will appear here as they arrive."}
+                    : "Connect a service in Project settings. Its logs will appear here as they arrive."}
               </p>
             </div>
           )}

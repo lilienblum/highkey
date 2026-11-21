@@ -1,5 +1,4 @@
 import { AllowedOriginsField, KeyOriginsEditor, parseOrigins } from "./key-origins";
-import { useDisplayPreferences } from "./display-preferences";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -26,10 +25,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { ValueSelect } from "./value-select";
-import { TimeZoneSelect } from "./time-zone-select";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -43,7 +40,6 @@ import {
 import { api, type Product } from "@/lib/api";
 import { PageHeader, useWorkspace } from "./app-shell";
 import { ProjectLifecycle } from "./settings/project-lifecycle";
-import { SettingsNav } from "./settings/settings-nav";
 import { RevenueSettings } from "./settings/revenue";
 import { Activation } from "./activation";
 import { ErrorState } from "./shared";
@@ -120,8 +116,6 @@ function ProductFields({
 export function Settings() {
   const { product, reload, sourceId, source } = useWorkspace();
   const site = sourceWebsite(source);
-  const { timeZone, setTimeZone, dateShortcuts, setDateShortcuts } = useDisplayPreferences();
-  const timeZones = Array.from(new Set(["UTC", timeZone, ...Intl.supportedValuesOf("timeZone")]));
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ name: "", retention_days: 365, websites: "" });
   const [error, setError] = useState("");
@@ -156,7 +150,6 @@ export function Settings() {
   }
   return (
     <>
-      <SettingsNav />
       <PageHeader
         title="Project settings"
         description="Manage collection, ingestion keys, and retention."
@@ -205,45 +198,6 @@ export function Settings() {
           </DialogContent>
         </Dialog>
       </PageHeader>
-      <Card className="display-settings">
-        <CardHeader>
-          <CardTitle>Display</CardTitle>
-          <CardDescription>Preferences for this browser.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="event-timezone">Event timezone</FieldLabel>
-              <TimeZoneSelect
-                id="event-timezone"
-                label="Event timezone"
-                value={timeZone}
-                zones={timeZones}
-                onValueChange={setTimeZone}
-              />
-              <FieldDescription>
-                Used for every displayed time: event and log rows, inspectors, and log volume.
-                Charts and date ranges still use UTC calendar buckets; raw JSON stays UTC.
-              </FieldDescription>
-            </Field>
-            <Field orientation="horizontal">
-              <div>
-                <FieldLabel htmlFor="date-shortcuts">Date keyboard shortcuts</FieldLabel>
-                <FieldDescription id="date-shortcuts-description">
-                  Use the keys shown in the date menu to change periods. Shortcuts stay inactive
-                  while typing or using other menus and dialogs.
-                </FieldDescription>
-              </div>
-              <Switch
-                id="date-shortcuts"
-                aria-describedby="date-shortcuts-description"
-                checked={dateShortcuts}
-                onCheckedChange={setDateShortcuts}
-              />
-            </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
       {product ? (
         <>
           <ProductSettings key={product.id} product={product} />

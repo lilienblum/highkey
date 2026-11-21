@@ -15,9 +15,9 @@ Highkey serves an MCP server (streamable HTTP) in the dashboard. It has two addr
 | `/mcp`          | What the connection allows: read, build and save dashboards and views, manage projects, sources and keys | OAuth (the agent opens a browser), or an API key |
 | `/api/read/mcp` | Read only: projects, catalog, `run_widget`, samples, dashboards and views to read, validate              | A read-only API key, for scheduled and CI runs   |
 
-Connecting an agent to `/mcp` signs it in as you: the agent opens Highkey in your browser, you sign in, choose the organization it works in, and allow **Read only** or **Read and write** (viewers can allow read only). It then sees only that organization's projects, and only the read tools when it may only read. Its connection appears under **Settings → Agents**, where you (or an owner or admin) can revoke it; see [agents](access.md#agents-mcp). `/mcp` is served by the dashboard and forwards to its own `/api/mcp`.
+Connecting an agent to `/mcp` signs it in as you: the agent opens Highkey in your browser, you sign in, choose the organization it works in, and allow **Read only** or **Read and write** (viewers can allow read only). It then sees only that organization's projects, and only the read tools when it may only read. Its connection appears under **Organization settings → Agents**, where you (or an owner or admin) can revoke it; see [agents](access.md#agents-mcp). `/mcp` is served by the dashboard and forwards to its own `/api/mcp`.
 
-A run that cannot sign in (a scheduled report, CI) uses an API key instead: create a read-only key under **Settings → API keys** and send it as `Authorization: Bearer hk_…` to `/api/read/mcp`.
+A run that cannot sign in (a scheduled report, CI) uses an API key instead: create a read-only key under **Organization settings → API keys** and send it as `Authorization: Bearer hk_…` to `/api/read/mcp`.
 
 ### Claude Code
 
@@ -502,7 +502,7 @@ Because the read paths are plain HTTP, you can write your own page against a pro
 - A literal `*` in `HIGHKEY_CORS_ORIGINS` is accepted by the code and allows every origin. Don't use it: the allowlist is the point.
 - Credentials (cookies) are never enabled, no write path sends CORS headers at all, and the only request headers allowed are `Content-Type`, `Authorization` and `X-Api-Key`.
 
-Every read needs an API key: create a read-only one under **Settings → API keys** and send it as `Authorization: Bearer hk_…`. Anything in a page's source is readable by whoever opens it, so only put a key in a page you serve to yourself, and revoke it when the page is gone.
+Every read needs an API key: create a read-only one under **Organization settings → API keys** and send it as `Authorization: Bearer hk_…`. Anything in a page's source is readable by whoever opens it, so only put a key in a page you serve to yourself, and revoke it when the page is gone.
 
 This page asks one widget for its result and prints the numbers. Edit `highkey`, `project` and `key`.
 
@@ -516,7 +516,7 @@ This page asks one widget for its result and prints the numbers. Edit `highkey`,
 <script type="module">
   const highkey = "http://127.0.0.1:3000"; // or https://highkey.example.com
   const project = "orbit"; // a project slug or id
-  const key = "hk_…"; // a read-only API key (Settings → API keys)
+  const key = "hk_…"; // a read-only API key (Organization settings → API keys)
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${key}` };
 
   const to = new Date();

@@ -68,7 +68,8 @@ export function NoEvents() {
         </EmptyMedia>
         <EmptyTitle>No events in this range</EmptyTitle>
         <EmptyDescription>
-          No events match this date range. Try a wider range or connect your project in Settings.
+          No events match this date range. Try a wider range or connect your project in Project
+          settings.
         </EmptyDescription>
       </EmptyHeader>
       <Button

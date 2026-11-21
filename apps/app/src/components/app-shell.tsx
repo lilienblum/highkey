@@ -5,11 +5,11 @@ import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
 import {
   hasReportDates,
-  isOrganizationPage,
   useWorkspaceMatch,
   useWorkspaceTarget,
   workspaceView,
 } from "@/lib/workspace-route";
+import { isManagementPage } from "@/lib/auth-routes";
 import { dashboardQueries } from "@/server/dashboards";
 import { viewQueries } from "@/lib/views";
 import { ProjectIcon } from "./project-icon";
@@ -188,16 +188,16 @@ export function AppShell({
     (product && drilldown?.productId && product.id !== drilldown.productId) ||
     (!drilldown && search.source && missingSource);
   // Organization and account pages need no project, so nothing resolves or redirects there.
-  const organizationPage = isOrganizationPage(path);
+  const managementPage = isManagementPage(path);
   const resolvingProject =
-    !organizationPage &&
+    !managementPage &&
     !!product &&
     !projectSlug &&
     !selectionError &&
     !(drilldown && missingSource);
   useEffect(() => {
     if (
-      organizationPage ||
+      managementPage ||
       !preferencesReady ||
       !product ||
       selectionError ||
@@ -245,7 +245,7 @@ export function AppShell({
     search.days,
     navigate,
     workspaceTarget,
-    organizationPage,
+    managementPage,
   ]);
   const rangeIdentity = JSON.stringify([
     view,
@@ -388,7 +388,7 @@ export function AppShell({
         aria-disabled={preferencesReady ? undefined : true}
       >
         <WorkspaceSidebar
-          path={view}
+          path={managementPage ? null : view}
           dashboardSlug={view === "/dashboards" ? dashboardSlug : undefined}
           eventViewSlug={view === "/events" ? search.view : undefined}
           logViewSlug={view === "/logs" ? search.view : undefined}
@@ -447,8 +447,12 @@ export function AppShell({
           >
             <div className="workspace-toolbar-navigation">
               <SidebarTrigger disabled={!preferencesReady} />
-              <div className="mobile-project-picker">{projectPicker}</div>
-              <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
+              {!managementPage && (
+                <>
+                  <div className="mobile-project-picker">{projectPicker}</div>
+                  <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
+                </>
+              )}
             </div>
             {reportDates && (
               <div className="workspace-toolbar">
@@ -482,7 +486,7 @@ export function AppShell({
               </div>
             )}
             {error && <ErrorState message={error} retry={refresh} />}
-            {product && !resolvingProject && !selectionError && !isOrganizationPage(path) && (
+            {product && !resolvingProject && !selectionError && !managementPage && (
               <NotificationToast key={product.id} project={product.id} />
             )}
             {resolvingProject ? (

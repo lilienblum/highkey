@@ -2,7 +2,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { UserAdd01Icon } from "@hugeicons/core-free-icons";
 import { useRouteContext } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,7 @@ import {
   formatDate,
   oversees,
   ROLE_LABEL,
-  SettingsNav,
+  OrganizationSettingsHeader,
   useOrganizationId,
   useOrganizationRole,
 } from "./settings-nav";
@@ -90,11 +89,7 @@ export function Members() {
   const pending = org.data?.invitations.filter((i) => i.status === "pending") ?? [];
   return (
     <>
-      <SettingsNav />
-      <PageHeader
-        title="Members"
-        description="Organization roles and the projects each member can open or edit."
-      />
+      <OrganizationSettingsHeader />
       <div className="settings-stack">
         {manage ? <InviteCard roleOptions={roleOptions} onInvited={org.reload} /> : null}
         {error ? (

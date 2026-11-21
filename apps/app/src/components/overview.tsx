@@ -302,7 +302,7 @@ function ProductOverview() {
   };
   const noEvents =
     s?.total === 0
-      ? "No events in this range. Try another date range or connect a source in Settings."
+      ? "No events in this range. Try another date range or connect a source in Project settings."
       : undefined;
   const chartEmpty =
     noEvents ??

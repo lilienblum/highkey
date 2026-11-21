@@ -1,34 +1,37 @@
-import { Link, useLocation, useRouteContext } from "@tanstack/react-router";
-import { cn } from "@/lib/utils";
+import { Link, useRouteContext } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { PageHeader } from "../app-shell";
 
-/**
- * The parts of Settings: the open project's, then the organization's (its details, people,
- * API keys and agents), then the person's own account.
- */
-export function SettingsNav() {
-  const path = useLocation({ select: (location) => location.pathname });
-  const items: [string, string, boolean][] = [
-    ["/settings", "Project", /^(\/[^/]+\/[^/]+)?\/settings\/?$/.test(path)],
-    ["/settings/organization", "Organization", path.startsWith("/settings/organization")],
-    ["/settings/members", "Members", path.startsWith("/settings/members")],
-    ["/settings/keys", "API keys", path.startsWith("/settings/keys")],
-    ["/settings/agents", "Agents", path.startsWith("/settings/agents")],
-    ["/settings/account", "Account", path.startsWith("/settings/account")],
-  ];
+const sections = [
+  ["/organizations/settings", "General"],
+  ["/organizations/settings/members", "Members"],
+  ["/organizations/settings/keys", "API keys"],
+  ["/organizations/settings/agents", "Agents"],
+] as const;
+
+export function OrganizationSettingsHeader({ children }: { children?: ReactNode }) {
+  const { viewer } = useRouteContext({ from: "__root__" });
+  const org = viewer?.organizations.find((o) => o.id === viewer.activeOrganizationId);
   return (
-    <nav className="settings-nav" aria-label="Settings">
-      {items.map(([to, label, active]) => (
-        <Link
-          key={to}
-          to={to}
-          state={true}
-          className={cn("settings-nav-link", active && "is-active")}
-          aria-current={active ? "page" : undefined}
-        >
-          {label}
-        </Link>
-      ))}
-    </nav>
+    <>
+      <PageHeader title="Organization settings" description={org?.name ?? ""}>
+        {children}
+      </PageHeader>
+      <nav className="settings-nav" aria-label="Organization settings">
+        {sections.map(([to, label]) => (
+          <Link
+            key={to}
+            to={to}
+            state={true}
+            className="settings-nav-link"
+            activeOptions={{ exact: true, includeSearch: false }}
+            activeProps={{ className: "is-active" }}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+    </>
   );
 }
 

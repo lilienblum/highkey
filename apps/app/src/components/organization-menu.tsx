@@ -21,7 +21,8 @@ import { NameDialog } from "@/components/name-dialog";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { authPost } from "@/lib/auth-client";
 import { createOrganization } from "@/lib/organizations";
-import { useOrganizationSlug } from "@/lib/workspace-route";
+import { useOrganizationSlug, useWorkspaceTarget } from "@/lib/workspace-route";
+import { ACCOUNT_SETTINGS, ORGANIZATION_SETTINGS } from "@/lib/auth-routes";
 
 const ROLE: Record<string, string> = {
   owner: "Owner",
@@ -33,9 +34,10 @@ const ROLE: Record<string, string> = {
 /**
  * Switching organizations loads a fresh document so every page, cache and live stream belongs to it.
  */
-export function OrganizationMenu() {
+export function OrganizationMenu({ projectSlug }: { projectSlug?: string }) {
   const { viewer } = useRouteContext({ from: "__root__" });
   const current = useOrganizationSlug();
+  const target = useWorkspaceTarget();
   const { state, isMobile, setOpenMobile } = useSidebar();
   const [creating, setCreating] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -44,6 +46,7 @@ export function OrganizationMenu() {
   const collapsed = state === "collapsed" && !isMobile;
   const identity = viewer.user.name || viewer.user.email;
   const orgName = organization?.name ?? "No organization";
+  const reportState = target("/settings", projectSlug).state ?? true;
   const signOut = async () => {
     await authPost("/sign-out");
     window.location.assign("/sign-in");
@@ -82,13 +85,33 @@ export function OrganizationMenu() {
             </DropdownMenuLabel>
             <DropdownMenuItem
               render={
-                <Link to="/settings/account" state={true} onClick={() => setOpenMobile(false)} />
+                <Link
+                  to={ACCOUNT_SETTINGS}
+                  state={reportState}
+                  onClick={() => setOpenMobile(false)}
+                />
               }
             >
               Account settings
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          {organization && (
+            <>
+              <DropdownMenuItem
+                render={
+                  <Link
+                    to={ORGANIZATION_SETTINGS}
+                    state={reportState}
+                    onClick={() => setOpenMobile(false)}
+                  />
+                }
+              >
+                Organization settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuGroup>
             <DropdownMenuLabel>Organizations</DropdownMenuLabel>
             {viewer.organizations.map((org) => (
@@ -123,7 +146,7 @@ export function OrganizationMenu() {
         open={creating}
         onOpenChange={setCreating}
         title="Create organization"
-        description="You’ll own it. Invite people and create projects in it from Settings."
+        description="You’ll own it. Invite people from Organization settings."
         initialName=""
         submitLabel="Create"
         failure="Could not create the organization."

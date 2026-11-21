@@ -33,7 +33,7 @@ export function ProjectWebsites({ id, ...props }: ComponentProps<"textarea"> & {
         subdomains.
         <span className="mt-1 block">
           By default, any website with the key can send events. To limit that to specific sites, set
-          the key’s allowed origins in Settings.
+          the key’s allowed origins in Project settings.
         </span>
       </FieldDescription>
     </Field>

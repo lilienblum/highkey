@@ -4,6 +4,7 @@ import { SubmitButton, TextField, useAuthForm } from "@/components/auth/auth-fie
 import { authPost } from "@/lib/auth-client";
 import { createOrganization } from "@/lib/organizations";
 import { getPendingInvitations } from "@/server/viewer";
+import { ACCOUNT_SETTINGS } from "@/lib/auth-routes";
 
 // An account can wait here for a team invitation or choose to create its own organization.
 export const Route = createFileRoute("/welcome")({
@@ -53,7 +54,10 @@ function Welcome() {
       }
       footer={
         <>
-          Not you?{" "}
+          <a className="auth-link" href={ACCOUNT_SETTINGS}>
+            Account settings
+          </a>
+          {" · "}
           <button
             type="button"
             className="auth-link auth-text-button"

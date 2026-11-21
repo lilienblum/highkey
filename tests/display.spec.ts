@@ -35,7 +35,7 @@ test("event timezone persists across reload, changes event inspection, and leave
   });
   expect(response.ok).toBe(true);
   await page.addInitScript((id) => localStorage.setItem("highkey:product", id), project.id);
-  await page.goto("/settings");
+  await page.goto("/account");
   await expect(page.locator(".topbar, .live-status, .sidebar-footer, .page-footer")).toHaveCount(0);
   await expect(page.getByRole("menu", { name: "Date range", exact: true })).toHaveCount(0);
   const zone = page.getByRole("combobox", { name: "Event timezone", exact: true });

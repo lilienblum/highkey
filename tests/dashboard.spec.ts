@@ -156,7 +156,7 @@ test("date picker supports keyboard selection, persistence, and narrow layouts",
 });
 test("create product, edit retention, create and revoke a key", async ({ page }) => {
   await openWorkspace(page);
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   await page.getByRole("button", { name: "New project" }).click();
   const dialog = page.getByRole("dialog");
   const name = `UI product ${Date.now()}`;
@@ -330,7 +330,7 @@ test("one theme ignores legacy preferences and operating-system changes", async 
     await expect(page.locator("html")).toHaveClass("dark");
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(31, 31, 40)");
   }
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   await page.getByRole("button", { name: "New project" }).click();
   await expect(page.getByRole("dialog")).toHaveCSS("background-color", "rgb(31, 31, 40)");
   await page.keyboard.press("Escape");
@@ -880,7 +880,7 @@ test("workspace stays usable when browser storage and cookies are blocked", asyn
     "collapsed",
   );
   await expect(page.locator("html")).toHaveClass("dark");
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   await page.getByRole("button", { name: "New project" }).click();
   const dialog = page.getByRole("dialog");
   const name = `Storage denied ${Date.now()}`;

@@ -1,6 +1,5 @@
 import { useRouteContext } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -23,7 +22,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ValueSelect } from "@/components/value-select";
 import { authAction, authGet } from "@/lib/auth-client";
-import { oversees, SettingsNav, useOrganizationId, useOrganizationRole } from "./settings-nav";
+import {
+  oversees,
+  OrganizationSettingsHeader,
+  useOrganizationId,
+  useOrganizationRole,
+} from "./settings-nav";
 import { DeletedProjects } from "./deleted-projects";
 import { useLoaded } from "./use-loaded";
 
@@ -55,11 +59,7 @@ export function OrganizationSettings() {
   );
   return (
     <>
-      <SettingsNav />
-      <PageHeader
-        title="Organization"
-        description="Its name and address, and what only its owner decides."
-      />
+      <OrganizationSettingsHeader />
       <div className="settings-stack">
         {org.error ? (
           <ErrorState message={org.error} retry={org.reload} />

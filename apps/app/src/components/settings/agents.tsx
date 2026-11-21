@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { PageHeader } from "@/components/app-shell";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { formatDate, oversees, SettingsNav, useOrganizationRole } from "./settings-nav";
+import {
+  formatDate,
+  oversees,
+  OrganizationSettingsHeader,
+  useOrganizationRole,
+} from "./settings-nav";
 import { useLoaded } from "./use-loaded";
 
 interface Connection {
@@ -48,11 +52,7 @@ export function Agents() {
   const address = typeof window === "undefined" ? "/mcp" : `${window.location.origin}/mcp`;
   return (
     <>
-      <SettingsNav />
-      <PageHeader
-        title="Agents"
-        description="AI agents connected to this organization over MCP. Revoking one stops it at once."
-      />
+      <OrganizationSettingsHeader />
       <div className="settings-stack">
         {error ? (
           <Alert variant="destructive">

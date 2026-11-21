@@ -75,7 +75,7 @@ function Consent() {
           you.
         </>
       }
-      footer="You can revoke it any time in Settings → Agents."
+      footer="You can revoke it any time in Organization settings → Agents."
     >
       <dl className="auth-facts">
         <dt>Agent</dt>

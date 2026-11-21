@@ -151,7 +151,7 @@ export function Activation({
               [d.dashboard, "Create a first dashboard with your agent"],
               [
                 d.invited,
-                <a className="text-primary underline" href="/settings/members">
+                <a className="text-primary underline" href="/organizations/settings/members">
                   Invite a teammate
                 </a>,
               ],

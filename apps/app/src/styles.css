@@ -2768,9 +2768,6 @@ html:has([data-page="new-project"]) {
   line-height: 1.8;
   color: var(--muted-foreground);
 }
-.display-settings {
-  margin-bottom: 24px;
-}
 .display-settings [data-slot="field"] {
   max-width: 560px;
 }
@@ -3450,7 +3447,7 @@ button.workspace-dashboards-menu-link {
   font-size: 11px;
   color: var(--muted-foreground);
 }
-/* Settings' parts: a row of destinations above the page heading. */
+/* Only organization settings has section navigation, below its heading. */
 .settings-nav {
   display: flex;
   flex-wrap: wrap;

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrgSlugRouteImport } from './routes/$orgSlug'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as EventsRouteImport } from './routes/events'
@@ -37,12 +38,9 @@ import { Route as HighkeyChangesRouteImport } from './routes/[_]highkey.changes'
 import { Route as HighkeyRuntimeRouteImport } from './routes/[_]highkey.runtime'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as JoinInvitationIdRouteImport } from './routes/join.$invitationId'
+import { Route as OrganizationsSettingsRouteImport } from './routes/organizations.settings'
 import { Route as ProjectsSplatRouteImport } from './routes/projects.$'
-import { Route as SettingsAccountRouteImport } from './routes/settings_.account'
-import { Route as SettingsAgentsRouteImport } from './routes/settings_.agents'
-import { Route as SettingsKeysRouteImport } from './routes/settings_.keys'
-import { Route as SettingsMembersRouteImport } from './routes/settings_.members'
-import { Route as SettingsOrganizationRouteImport } from './routes/settings_.organization'
+import { Route as SettingsSectionRouteImport } from './routes/settings_.$section'
 import { Route as OrgSlugProjectSlugIndexRouteImport } from './routes/$orgSlug.$projectSlug.index'
 import { Route as OrgSlugProjectSlugAiRouteImport } from './routes/$orgSlug.$projectSlug.ai'
 import { Route as OrgSlugProjectSlugEventsRouteImport } from './routes/$orgSlug.$projectSlug.events'
@@ -54,6 +52,10 @@ import { Route as OrgSlugProjectSlugRevenueRouteImport } from './routes/$orgSlug
 import { Route as OrgSlugProjectSlugSessionsRouteImport } from './routes/$orgSlug.$projectSlug.sessions'
 import { Route as OrgSlugProjectSlugSettingsRouteImport } from './routes/$orgSlug.$projectSlug.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
+import { Route as OrganizationsSettingsIndexRouteImport } from './routes/organizations.settings.index'
+import { Route as OrganizationsSettingsAgentsRouteImport } from './routes/organizations.settings.agents'
+import { Route as OrganizationsSettingsKeysRouteImport } from './routes/organizations.settings.keys'
+import { Route as OrganizationsSettingsMembersRouteImport } from './routes/organizations.settings.members'
 import { Route as OrgSlugProjectSlugDashboardsDashboardSlugRouteImport } from './routes/$orgSlug.$projectSlug.dashboards.$dashboardSlug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -64,6 +66,11 @@ const IndexRoute = IndexRouteImport.update({
 const OrgSlugRoute = OrgSlugRouteImport.update({
   id: '/$orgSlug',
   path: '/$orgSlug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -196,34 +203,19 @@ const JoinInvitationIdRoute = JoinInvitationIdRouteImport.update({
   path: '/join/$invitationId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrganizationsSettingsRoute = OrganizationsSettingsRouteImport.update({
+  id: '/organizations/settings',
+  path: '/organizations/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsSplatRoute = ProjectsSplatRouteImport.update({
   id: '/projects/$',
   path: '/projects/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsAccountRoute = SettingsAccountRouteImport.update({
-  id: '/settings_/account',
-  path: '/settings/account',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsAgentsRoute = SettingsAgentsRouteImport.update({
-  id: '/settings_/agents',
-  path: '/settings/agents',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsKeysRoute = SettingsKeysRouteImport.update({
-  id: '/settings_/keys',
-  path: '/settings/keys',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsMembersRoute = SettingsMembersRouteImport.update({
-  id: '/settings_/members',
-  path: '/settings/members',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsOrganizationRoute = SettingsOrganizationRouteImport.update({
-  id: '/settings_/organization',
-  path: '/settings/organization',
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/settings_/$section',
+  path: '/settings/$section',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgSlugProjectSlugIndexRoute = OrgSlugProjectSlugIndexRouteImport.update({
@@ -288,6 +280,30 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrganizationsSettingsIndexRoute =
+  OrganizationsSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => OrganizationsSettingsRoute,
+  } as any)
+const OrganizationsSettingsAgentsRoute =
+  OrganizationsSettingsAgentsRouteImport.update({
+    id: '/agents',
+    path: '/agents',
+    getParentRoute: () => OrganizationsSettingsRoute,
+  } as any)
+const OrganizationsSettingsKeysRoute =
+  OrganizationsSettingsKeysRouteImport.update({
+    id: '/keys',
+    path: '/keys',
+    getParentRoute: () => OrganizationsSettingsRoute,
+  } as any)
+const OrganizationsSettingsMembersRoute =
+  OrganizationsSettingsMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => OrganizationsSettingsRoute,
+  } as any)
 const OrgSlugProjectSlugDashboardsDashboardSlugRoute =
   OrgSlugProjectSlugDashboardsDashboardSlugRouteImport.update({
     id: '/dashboards/$dashboardSlug',
@@ -298,6 +314,7 @@ const OrgSlugProjectSlugDashboardsDashboardSlugRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$orgSlug': typeof OrgSlugRouteWithChildren
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
@@ -323,12 +340,9 @@ export interface FileRoutesByFullPath {
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
+  '/organizations/settings': typeof OrganizationsSettingsRouteWithChildren
   '/projects/$': typeof ProjectsSplatRoute
-  '/settings/account': typeof SettingsAccountRoute
-  '/settings/agents': typeof SettingsAgentsRoute
-  '/settings/keys': typeof SettingsKeysRoute
-  '/settings/members': typeof SettingsMembersRoute
-  '/settings/organization': typeof SettingsOrganizationRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
@@ -340,11 +354,16 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/organizations/settings/agents': typeof OrganizationsSettingsAgentsRoute
+  '/organizations/settings/keys': typeof OrganizationsSettingsKeysRoute
+  '/organizations/settings/members': typeof OrganizationsSettingsMembersRoute
   '/$orgSlug/$projectSlug/': typeof OrgSlugProjectSlugIndexRoute
+  '/organizations/settings/': typeof OrganizationsSettingsIndexRoute
   '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
@@ -370,11 +389,7 @@ export interface FileRoutesByTo {
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
   '/projects/$': typeof ProjectsSplatRoute
-  '/settings/account': typeof SettingsAccountRoute
-  '/settings/agents': typeof SettingsAgentsRoute
-  '/settings/keys': typeof SettingsKeysRoute
-  '/settings/members': typeof SettingsMembersRoute
-  '/settings/organization': typeof SettingsOrganizationRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/$orgSlug': typeof OrgSlugIndexRoute
   '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
@@ -386,13 +401,18 @@ export interface FileRoutesByTo {
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/organizations/settings/agents': typeof OrganizationsSettingsAgentsRoute
+  '/organizations/settings/keys': typeof OrganizationsSettingsKeysRoute
+  '/organizations/settings/members': typeof OrganizationsSettingsMembersRoute
   '/$orgSlug/$projectSlug': typeof OrgSlugProjectSlugIndexRoute
+  '/organizations/settings': typeof OrganizationsSettingsIndexRoute
   '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$orgSlug': typeof OrgSlugRouteWithChildren
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
   '/consent': typeof ConsentRoute
   '/events': typeof EventsRoute
@@ -418,12 +438,9 @@ export interface FileRoutesById {
   '/_highkey/runtime': typeof HighkeyRuntimeRoute
   '/api/$': typeof ApiSplatRoute
   '/join/$invitationId': typeof JoinInvitationIdRoute
+  '/organizations/settings': typeof OrganizationsSettingsRouteWithChildren
   '/projects/$': typeof ProjectsSplatRoute
-  '/settings_/account': typeof SettingsAccountRoute
-  '/settings_/agents': typeof SettingsAgentsRoute
-  '/settings_/keys': typeof SettingsKeysRoute
-  '/settings_/members': typeof SettingsMembersRoute
-  '/settings_/organization': typeof SettingsOrganizationRoute
+  '/settings_/$section': typeof SettingsSectionRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
   '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
@@ -435,7 +452,11 @@ export interface FileRoutesById {
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/organizations/settings/agents': typeof OrganizationsSettingsAgentsRoute
+  '/organizations/settings/keys': typeof OrganizationsSettingsKeysRoute
+  '/organizations/settings/members': typeof OrganizationsSettingsMembersRoute
   '/$orgSlug/$projectSlug/': typeof OrgSlugProjectSlugIndexRoute
+  '/organizations/settings/': typeof OrganizationsSettingsIndexRoute
   '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': typeof OrgSlugProjectSlugDashboardsDashboardSlugRoute
 }
 export interface FileRouteTypes {
@@ -443,6 +464,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$orgSlug'
+    | '/account'
     | '/admin'
     | '/consent'
     | '/events'
@@ -468,12 +490,9 @@ export interface FileRouteTypes {
     | '/_highkey/runtime'
     | '/api/$'
     | '/join/$invitationId'
+    | '/organizations/settings'
     | '/projects/$'
-    | '/settings/account'
-    | '/settings/agents'
-    | '/settings/keys'
-    | '/settings/members'
-    | '/settings/organization'
+    | '/settings/$section'
     | '/$orgSlug/'
     | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
@@ -485,11 +504,16 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
+    | '/organizations/settings/agents'
+    | '/organizations/settings/keys'
+    | '/organizations/settings/members'
     | '/$orgSlug/$projectSlug/'
+    | '/organizations/settings/'
     | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/admin'
     | '/consent'
     | '/events'
@@ -515,11 +539,7 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/join/$invitationId'
     | '/projects/$'
-    | '/settings/account'
-    | '/settings/agents'
-    | '/settings/keys'
-    | '/settings/members'
-    | '/settings/organization'
+    | '/settings/$section'
     | '/$orgSlug'
     | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
@@ -531,12 +551,17 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
+    | '/organizations/settings/agents'
+    | '/organizations/settings/keys'
+    | '/organizations/settings/members'
     | '/$orgSlug/$projectSlug'
+    | '/organizations/settings'
     | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   id:
     | '__root__'
     | '/'
     | '/$orgSlug'
+    | '/account'
     | '/admin'
     | '/consent'
     | '/events'
@@ -562,12 +587,9 @@ export interface FileRouteTypes {
     | '/_highkey/runtime'
     | '/api/$'
     | '/join/$invitationId'
+    | '/organizations/settings'
     | '/projects/$'
-    | '/settings_/account'
-    | '/settings_/agents'
-    | '/settings_/keys'
-    | '/settings_/members'
-    | '/settings_/organization'
+    | '/settings_/$section'
     | '/$orgSlug/'
     | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
@@ -579,13 +601,18 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
     | '/api/auth/$'
+    | '/organizations/settings/agents'
+    | '/organizations/settings/keys'
+    | '/organizations/settings/members'
     | '/$orgSlug/$projectSlug/'
+    | '/organizations/settings/'
     | '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   OrgSlugRoute: typeof OrgSlugRouteWithChildren
+  AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
   ConsentRoute: typeof ConsentRoute
   EventsRoute: typeof EventsRoute
@@ -610,12 +637,9 @@ export interface RootRouteChildren {
   HighkeyRuntimeRoute: typeof HighkeyRuntimeRoute
   ApiSplatRoute: typeof ApiSplatRoute
   JoinInvitationIdRoute: typeof JoinInvitationIdRoute
+  OrganizationsSettingsRoute: typeof OrganizationsSettingsRouteWithChildren
   ProjectsSplatRoute: typeof ProjectsSplatRoute
-  SettingsAccountRoute: typeof SettingsAccountRoute
-  SettingsAgentsRoute: typeof SettingsAgentsRoute
-  SettingsKeysRoute: typeof SettingsKeysRoute
-  SettingsMembersRoute: typeof SettingsMembersRoute
-  SettingsOrganizationRoute: typeof SettingsOrganizationRoute
+  SettingsSectionRoute: typeof SettingsSectionRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -633,6 +657,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgSlug'
       fullPath: '/$orgSlug'
       preLoaderRoute: typeof OrgSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -817,6 +848,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JoinInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organizations/settings': {
+      id: '/organizations/settings'
+      path: '/organizations/settings'
+      fullPath: '/organizations/settings'
+      preLoaderRoute: typeof OrganizationsSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$': {
       id: '/projects/$'
       path: '/projects/$'
@@ -824,39 +862,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings_/account': {
-      id: '/settings_/account'
-      path: '/settings/account'
-      fullPath: '/settings/account'
-      preLoaderRoute: typeof SettingsAccountRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings_/agents': {
-      id: '/settings_/agents'
-      path: '/settings/agents'
-      fullPath: '/settings/agents'
-      preLoaderRoute: typeof SettingsAgentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings_/keys': {
-      id: '/settings_/keys'
-      path: '/settings/keys'
-      fullPath: '/settings/keys'
-      preLoaderRoute: typeof SettingsKeysRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings_/members': {
-      id: '/settings_/members'
-      path: '/settings/members'
-      fullPath: '/settings/members'
-      preLoaderRoute: typeof SettingsMembersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings_/organization': {
-      id: '/settings_/organization'
-      path: '/settings/organization'
-      fullPath: '/settings/organization'
-      preLoaderRoute: typeof SettingsOrganizationRouteImport
+    '/settings_/$section': {
+      id: '/settings_/$section'
+      path: '/settings/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$orgSlug/$projectSlug/': {
@@ -936,6 +946,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organizations/settings/': {
+      id: '/organizations/settings/'
+      path: '/'
+      fullPath: '/organizations/settings/'
+      preLoaderRoute: typeof OrganizationsSettingsIndexRouteImport
+      parentRoute: typeof OrganizationsSettingsRoute
+    }
+    '/organizations/settings/agents': {
+      id: '/organizations/settings/agents'
+      path: '/agents'
+      fullPath: '/organizations/settings/agents'
+      preLoaderRoute: typeof OrganizationsSettingsAgentsRouteImport
+      parentRoute: typeof OrganizationsSettingsRoute
+    }
+    '/organizations/settings/keys': {
+      id: '/organizations/settings/keys'
+      path: '/keys'
+      fullPath: '/organizations/settings/keys'
+      preLoaderRoute: typeof OrganizationsSettingsKeysRouteImport
+      parentRoute: typeof OrganizationsSettingsRoute
+    }
+    '/organizations/settings/members': {
+      id: '/organizations/settings/members'
+      path: '/members'
+      fullPath: '/organizations/settings/members'
+      preLoaderRoute: typeof OrganizationsSettingsMembersRouteImport
+      parentRoute: typeof OrganizationsSettingsRoute
+    }
     '/$orgSlug/$projectSlug/dashboards/$dashboardSlug': {
       id: '/$orgSlug/$projectSlug/dashboards/$dashboardSlug'
       path: '/dashboards/$dashboardSlug'
@@ -991,9 +1029,29 @@ const OrgSlugRouteChildren: OrgSlugRouteChildren = {
 const OrgSlugRouteWithChildren =
   OrgSlugRoute._addFileChildren(OrgSlugRouteChildren)
 
+interface OrganizationsSettingsRouteChildren {
+  OrganizationsSettingsAgentsRoute: typeof OrganizationsSettingsAgentsRoute
+  OrganizationsSettingsKeysRoute: typeof OrganizationsSettingsKeysRoute
+  OrganizationsSettingsMembersRoute: typeof OrganizationsSettingsMembersRoute
+  OrganizationsSettingsIndexRoute: typeof OrganizationsSettingsIndexRoute
+}
+
+const OrganizationsSettingsRouteChildren: OrganizationsSettingsRouteChildren = {
+  OrganizationsSettingsAgentsRoute: OrganizationsSettingsAgentsRoute,
+  OrganizationsSettingsKeysRoute: OrganizationsSettingsKeysRoute,
+  OrganizationsSettingsMembersRoute: OrganizationsSettingsMembersRoute,
+  OrganizationsSettingsIndexRoute: OrganizationsSettingsIndexRoute,
+}
+
+const OrganizationsSettingsRouteWithChildren =
+  OrganizationsSettingsRoute._addFileChildren(
+    OrganizationsSettingsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   OrgSlugRoute: OrgSlugRouteWithChildren,
+  AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
   ConsentRoute: ConsentRoute,
   EventsRoute: EventsRoute,
@@ -1018,12 +1076,9 @@ const rootRouteChildren: RootRouteChildren = {
   HighkeyRuntimeRoute: HighkeyRuntimeRoute,
   ApiSplatRoute: ApiSplatRoute,
   JoinInvitationIdRoute: JoinInvitationIdRoute,
+  OrganizationsSettingsRoute: OrganizationsSettingsRouteWithChildren,
   ProjectsSplatRoute: ProjectsSplatRoute,
-  SettingsAccountRoute: SettingsAccountRoute,
-  SettingsAgentsRoute: SettingsAgentsRoute,
-  SettingsKeysRoute: SettingsKeysRoute,
-  SettingsMembersRoute: SettingsMembersRoute,
-  SettingsOrganizationRoute: SettingsOrganizationRoute,
+  SettingsSectionRoute: SettingsSectionRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

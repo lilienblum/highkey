@@ -446,7 +446,8 @@ test("date shortcuts can be disabled persistently while ordinary menu navigation
   page,
 }) => {
   await open(page);
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account and organization:/ }).click();
+  await page.getByRole("menuitem", { name: "Account settings", exact: true }).click();
   const preference = page.getByRole("switch", { name: "Date keyboard shortcuts", exact: true });
   await expect(preference).toBeChecked();
   await preference.click();

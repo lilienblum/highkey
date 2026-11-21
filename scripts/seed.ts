@@ -1,6 +1,6 @@
 import { Highkey, type Event } from "../sdk/typescript/client";
 const endpoint = process.env.HIGHKEY_API_URL ?? "http://127.0.0.1:3000";
-// A write API key of an owner or admin (Settings → API keys).
+// A write API key of an owner or admin (Organization settings → API keys).
 const apiKey = process.env.HIGHKEY_API_KEY;
 if (!apiKey)
   throw new Error("Set HIGHKEY_API_KEY to a write API key of an organization owner or admin");

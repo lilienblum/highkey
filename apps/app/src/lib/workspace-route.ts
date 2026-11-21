@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useCallback } from "react";
 import type { WorkspaceSearch } from "./workspace-search";
+import { isManagementPage } from "./auth-routes";
 import { profileUsesDates } from "./route-search";
 
 export type WorkspaceView =
@@ -126,7 +127,7 @@ export function useWorkspaceTarget() {
       const project = `${orgSlug}/${projectSlug}`;
       const parked = reportScope?.project === project ? reportScope.filters : undefined;
       if (!projectSlug || (currentProject !== projectSlug && !parked))
-        return { ...target, search: undefined };
+        return { ...target, search: undefined, state: undefined };
       const filters = usesDates
         ? { source, days, period, from, to, snapshot }
         : { ...parked, source: here === "/settings" ? (source ?? parked?.source) : source };
@@ -158,17 +159,9 @@ export function useWorkspaceTarget() {
  * `logs` or `settings` still reads as its own Overview. Bare `/events`, `/logs` and `/settings`
  * are the browser-saved project's views; dashboards exist only under a project.
  */
-/**
- * Pages about the organization or the account rather than a project: they stay where they are
- * instead of being sent to the saved project's address, and show under Settings.
- */
-export function isOrganizationPage(path: string): boolean {
-  return /^\/settings\/(organization|members|keys|agents|account)\/?$/.test(path);
-}
-
 export function workspaceView(path: string): WorkspaceView {
   if (/^\/[^/]+\/[^/]+\/realtime\/?$/.test(path)) return "/realtime";
-  if (isOrganizationPage(path)) return "/settings";
+  if (isManagementPage(path)) return "/settings";
   if (/^\/[^/]+\/[^/]+\/ai\/?$/.test(path)) return "/ai";
   if (/^\/[^/]+\/[^/]+\/revenue\/?$/.test(path)) return "/revenue";
   if (/^\/[^/]+\/[^/]+\/sessions\/?$/.test(path)) return "/sessions";

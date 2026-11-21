@@ -19,7 +19,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { authAction, authGet } from "@/lib/auth-client";
-import { formatDate, SettingsNav } from "./settings-nav";
+import { formatDate } from "./settings-nav";
+import { TimeZoneSelect } from "../time-zone-select";
+import { useDisplayPreferences } from "../display-preferences";
+import { Switch } from "@/components/ui/switch";
 import { useLoaded } from "./use-loaded";
 
 function Failure({ message }: { message: string | null }) {
@@ -75,8 +78,7 @@ export function Account() {
       );
   return (
     <>
-      <SettingsNav />
-      <PageHeader title="Account" description={`Signed in as ${viewer.user.email}.`} />
+      <PageHeader title="Account settings" description={`Signed in as ${viewer.user.email}.`} />
       <div className="settings-stack">
         {required ? (
           <Alert>
@@ -86,12 +88,58 @@ export function Account() {
           </Alert>
         ) : null}
         <Profile name={viewer.user.name} />
+        <DisplaySettings />
         <Password />
         <TwoFactor enabled={viewer.user.twoFactor} />
         <Sessions />
         <DeleteAccount />
       </div>
     </>
+  );
+}
+
+function DisplaySettings() {
+  const { timeZone, setTimeZone, dateShortcuts, setDateShortcuts } = useDisplayPreferences();
+  const timeZones = Array.from(new Set(["UTC", timeZone, ...Intl.supportedValuesOf("timeZone")]));
+  return (
+    <Card className="display-settings">
+      <CardHeader>
+        <CardTitle>Display</CardTitle>
+        <CardDescription>Preferences for this browser.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="event-timezone">Event timezone</FieldLabel>
+            <TimeZoneSelect
+              id="event-timezone"
+              label="Event timezone"
+              value={timeZone}
+              zones={timeZones}
+              onValueChange={setTimeZone}
+            />
+            <FieldDescription>
+              Used for event and log timestamps. Charts, date ranges and raw JSON use UTC.
+            </FieldDescription>
+          </Field>
+          <Field orientation="horizontal">
+            <div>
+              <FieldLabel htmlFor="date-shortcuts">Date keyboard shortcuts</FieldLabel>
+              <FieldDescription id="date-shortcuts-description">
+                Use the keys shown in the date menu to change periods. Shortcuts stay inactive while
+                typing or using other menus and dialogs.
+              </FieldDescription>
+            </div>
+            <Switch
+              id="date-shortcuts"
+              aria-describedby="date-shortcuts-description"
+              checked={dateShortcuts}
+              onCheckedChange={setDateShortcuts}
+            />
+          </Field>
+        </FieldGroup>
+      </CardContent>
+    </Card>
   );
 }
 

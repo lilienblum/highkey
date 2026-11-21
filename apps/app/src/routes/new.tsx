@@ -169,9 +169,13 @@ function NewProject() {
           <div className="flex min-h-10 items-center justify-between gap-3 text-[13px] text-muted-foreground">
             <span className="flex min-w-0 items-baseline gap-2.5">
               <span>Organization:</span>
-              <strong className="truncate font-semibold text-foreground">
+              <a
+                href="/organizations/settings"
+                aria-label={`Organization settings: ${organization.name}`}
+                className={`${LINK} truncate font-semibold`}
+              >
                 {organization.name}
-              </strong>
+              </a>
               <Button
                 variant="link"
                 size="sm"

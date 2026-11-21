@@ -1,5 +1,5 @@
 // Agent connections: each OAuth grant a person gave an agent for one organization (its consent),
-// listed under Settings → Agents. Everyone sees and revokes their own; owners and admins see and
+// listed under Organization settings → Agents. Everyone sees and revokes their own; owners and admins see and
 // revoke everyone's in the organization. Revoking deletes the grant and the agent's tokens, and
 // since every request checks the grant, an access token stops working at once.
 import { ApiError, json, noContent } from "../api/errors";

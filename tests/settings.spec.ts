@@ -170,11 +170,9 @@ test("turn on two-factor", async ({ browser }) => {
 
 test("an old admin bookmark opens account settings without report filters", async ({ page }) => {
   await page.goto("/admin?source=all&days=7");
-  await expect(page).toHaveURL(`${base}/settings/account`);
-  const nav = page.getByRole("navigation", { name: "Settings", exact: true });
-  await expect(nav.getByRole("link", { name: "Account", exact: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await expect(nav.getByRole("link", { name: "Server", exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(`${base}/account`);
+  await expect(page.getByRole("heading", { name: "Account settings", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Organization settings", exact: true }),
+  ).toHaveCount(0);
 });

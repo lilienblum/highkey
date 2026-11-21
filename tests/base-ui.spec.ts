@@ -105,9 +105,11 @@ for (const width of [1440, 894, 390]) {
           scrollY,
         };
       });
-    const before = await geometry();
     for (const name of ["Select project", "Event timezone"]) {
+      if (name === "Event timezone") await page.goto("/account");
       const select = page.getByRole("combobox", { name, exact: true });
+      await select.scrollIntoViewIfNeeded();
+      const before = await geometry();
       await select.click();
       await expect(page.getByRole("listbox")).toBeVisible();
       expect(await geometry()).toEqual(before);
@@ -117,6 +119,8 @@ for (const width of [1440, 894, 390]) {
       expect(await geometry()).toEqual(before);
     }
     // A filter picker must not lock page scrolling or remove its scrollbar.
+    await page.goto("/settings");
+    const before = await geometry();
     await page.getByRole("combobox", { name: "Select project", exact: true }).click();
     await page.mouse.move(width / 2, 700);
     await page.mouse.wheel(0, 200);

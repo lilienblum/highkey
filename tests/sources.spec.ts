@@ -126,7 +126,7 @@ test("one project combines website and mobile sources with scoped keys, queries,
   await select(page, "Select source", "iOS app");
   await expect(page.locator(".workspace-source-name")).toHaveText("iOS app");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({
@@ -295,7 +295,7 @@ test("automatic and pinned source icons survive renames without changing analyti
   await expect(
     page.getByRole("link", { name: "Filter by custom_event", exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "Project settings", exact: true }).click();
   await page.getByRole("button", { name: "Edit source Orbit CLI", exact: true }).click();
   await dialog.getByLabel("Source name").fill("Orbit iOS");
   await expect(icon).toHaveAccessibleName("Source icon: Android");
