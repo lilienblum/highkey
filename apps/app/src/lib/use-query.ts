@@ -45,6 +45,7 @@ export function useReportQuery<T>(
   body: Record<string, unknown>,
   refreshKey: string | number,
   backgroundScope?: string,
+  enabled = true,
 ) {
   const bodyKey = JSON.stringify(body);
   const request = `${refreshKey}:${bodyKey}`;
@@ -52,7 +53,7 @@ export function useReportQuery<T>(
   const client = useQueryClient();
   const query = useCachedQuery<Cached<T>, QueryFailure>({
     queryKey,
-    enabled: !!product,
+    enabled: !!product && enabled,
     queryFn: async ({ signal }) => {
       try {
         return {
@@ -81,9 +82,9 @@ export function useReportQuery<T>(
 
   // Revalidate when this scope's request changed (time advanced, refresh, or new options).
   useEffect(() => {
-    if (!product || query.isFetching || current || failed) return;
+    if (!product || !enabled || query.isFetching || current || failed) return;
     void query.refetch();
-  }, [product, query, current, failed]);
+  }, [product, enabled, query, current, failed]);
 
   const attempts = useRef(0);
   const attemptsFor = useRef(request);

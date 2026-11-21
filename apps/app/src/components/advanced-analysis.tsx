@@ -22,6 +22,7 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from ".
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { WorldMap } from "./world-map";
+import { TimelineMarkers } from "./chart-references";
 type Spec = ReturnType<typeof analysisSpec>;
 type Result = Awaited<ReturnType<typeof analysis>>;
 const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
@@ -511,12 +512,15 @@ function AnalysisForm({ names, filters }: { names: string[]; filters: Spec["filt
               <h3>
                 {String(l.label ?? "All qualifying actors")} · {pct(l.average)}
               </h3>
-              <Curve
-                label="Conversion, previous period and weighted average"
-                values={l.points.map((v) => v.rate)}
-                previous={l.points.map((v) => v.previous)}
-                average={l.average}
-              />
+              <div className="relative">
+                <Curve
+                  label="Conversion, previous period and weighted average"
+                  values={l.points.map((v) => v.rate)}
+                  previous={l.points.map((v) => v.previous)}
+                  average={l.average}
+                />
+                <TimelineMarkers from={range.from} to={range.to} />
+              </div>
               <p>
                 Best: {l.best == null ? "—" : date(l.best)} · Worst:{" "}
                 {l.worst == null ? "—" : date(l.worst)}

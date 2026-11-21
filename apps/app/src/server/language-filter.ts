@@ -104,7 +104,10 @@ export async function languageFilter(
     result.period === "keep"
       ? { from: current.from.toISOString(), to: current.to.toISOString() }
       : days
-        ? { from: new Date(now - days * DAY_MS).toISOString(), to: new Date(now).toISOString() }
+        ? {
+            from: new Date((Math.floor(now / DAY_MS) - days + 1) * DAY_MS).toISOString(),
+            to: new Date(now).toISOString(),
+          }
         : presetRange(result.period as DatePeriod, now);
   if (result.field) {
     const p = new Params(),

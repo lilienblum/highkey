@@ -55,4 +55,23 @@ test("website entry tabs, typed row filters and a verified plain-English date/de
   await page.getByRole("button", { name: "Apply filter", exact: true }).click();
   await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("Mobile");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const board = await post(`products/${p.id}/dashboards`, {
+    document: {
+      version: 1,
+      name: "Group map",
+      widgets: [
+        {
+          id: "countries",
+          title: "Active groups",
+          view: { type: "map" },
+          queries: {
+            g: { signal: "events", measure: "unique_groups", group_by: "property:context.country" },
+          },
+        },
+      ],
+    },
+  });
+  await page.goto(`/owner/${p.slug}/dashboards/${board.slug}`);
+  await expect(page.getByRole("img", { name: "Active groups" })).toBeVisible();
+  await page.getByText("Country values", { exact: true }).click();
 });

@@ -16,7 +16,7 @@ Provide a clear, minimal view of product usage and application behavior, self-ho
 
 ## Positioning
 
-Projects group named sources from websites, mobile apps, and developer tools under one typed event model and project-scoped storage. Sources have separate ingestion keys, combined or filtered analytics, and shared project retention. All sources use the same analytics UI; source types are removed. Optional Hugeicons are visual metadata only, inferred from the name when not explicitly selected. Collection does not require a URL or infer identity from IP/user-agent information. An optional project website supplies a server-cached favicon; optional per-key origin restrictions filter browser ingestion without constraining native sources.
+Projects group named sources from websites, mobile apps, and developer tools under one typed event model and project-scoped storage. Sources have separate ingestion keys, combined or filtered analytics, and shared project retention. All sources use the same analytics UI; source icons are visual metadata only. Collection needs no website URL. Automatic visitor counting is Off by default. A source may explicitly opt into a cookieless, daily identifier, or persistent browser IDs on sites that have consent. An optional project website supplies a server-cached favicon; per-key origin restrictions filter browser ingestion without constraining native sources.
 
 ## Operating Context
 
@@ -30,7 +30,7 @@ Two Tako applications: the Rust ingest app (collection only) and the TanStack St
 
 People sign in to Highkey (email and password, optionally GitHub or Google, optional two-factor codes). Signing up creates an organization you own; owners and admins invite people with a role (owner, admin, member, viewer) that covers every project of the organization, and one person can belong to several organizations, switched from the name above the project picker. Project addresses carry the organization: `/<organization>/<project>/…`. Scripts and local pages use API keys; AI agents sign in over OAuth and are granted read only or read and write for one organization. A self-hosted server works without email or OAuth apps: invitations are shared as links and the first account, the server admin, hands out password reset links. Sharing happens by inviting a viewer, never through public links.
 
-One fixed Kanagawa Wave theme, Hugeicons, accessible shadcn Base UI primitives, TanStack Charts, and server-paginated tables remain. Theme selection and saved/system appearance preferences are removed. Existing privacy controls and stable refresh behavior must survive. Logs support JSON and OTLP/HTTP, literal message search, typed attribute filters, and cursor pagination. No arbitrary SQL, full-text index, log alerts, funnels, session replay, dashboard builders, or multi-user administration in v1.
+One fixed Kanagawa Wave theme, Hugeicons, accessible shadcn Base UI primitives, TanStack Charts, and server-paginated tables remain. Logs support JSON and OTLP/HTTP, literal message search, typed attribute filters, and cursor pagination. Explore owns hand-built funnel, retention, conversion and breakdown analyses; agents write dashboards over MCP. A project can opt into notifications for event matches, completed visits, source or log-service health, and weekly digests. No arbitrary SQL, session replay, public sharing, or embeds.
 
 ## Brand Commitments
 

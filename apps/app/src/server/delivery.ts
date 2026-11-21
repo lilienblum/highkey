@@ -96,9 +96,9 @@ export async function webhookPost(url: URL, headers: Record<string, string>, bod
 export async function hasEmailAccess(ctx: ApiContext, id: string, email: string) {
   return !!(await one(
     ctx.db,
-    `SELECT 1 FROM products p JOIN member m ON p.org_id=m.organizationId JOIN user u ON m.userId=u.id
+    `SELECT 1 FROM products p JOIN organization o ON o.id=p.org_id JOIN member m ON p.org_id=m.organizationId JOIN user u ON m.userId=u.id
  LEFT JOIN restricted_members r ON r.member_id=m.id LEFT JOIN member_projects g ON g.member_id=m.id AND g.project_id=p.id
- WHERE p.id=? AND p.deleted_at IS NULL AND lower(u.email)=lower(?) AND (m.role IN ('owner','admin') OR r.member_id IS NULL OR g.project_id IS NOT NULL)`,
+  WHERE p.id=? AND p.deleted_at IS NULL AND NOT coalesce(u.banned,0) AND (NOT coalesce(o.requireTwoFactor,0) OR u.twoFactorEnabled=1) AND lower(u.email)=lower(?) AND (m.role IN ('owner','admin') OR r.member_id IS NULL OR g.project_id IS NOT NULL)`,
     [id, email],
   ));
 }

@@ -98,6 +98,7 @@ function Report({
     },
     refreshKey,
     JSON.stringify([rangeScope, sourceId, name, tab, ctx]),
+    near,
   );
   const rows = result.data?.rows ?? [];
   return (

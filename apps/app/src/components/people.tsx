@@ -60,6 +60,7 @@ function ProfileDirectory() {
     s.groupId,
     s.cohort,
     s.person,
+    s.audience,
     page,
   ]);
   const list = useReportQuery(
@@ -74,6 +75,7 @@ function ProfileDirectory() {
       group_id: s.groupId,
       group_type: s.groupType,
       cohort: s.cohort,
+      audience: s.audience,
       page,
       page_size: size,
     },
@@ -136,6 +138,15 @@ function ProfileDirectory() {
       >
         {!s.person && (
           <>
+            {s.audience && (
+              <Button
+                variant="secondary"
+                className="w-fit"
+                onClick={() => update({ audience: undefined, page: undefined })}
+              >
+                Clear chart-point filter
+              </Button>
+            )}
             <Tabs
               value={kind}
               onValueChange={(kind) =>

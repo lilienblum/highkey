@@ -10,7 +10,7 @@ let running = 0;
 const waiting: (() => void)[] = [];
 
 /** Waits for a run slot. A released slot passes straight to the next waiter, so none is lost. */
-async function acquire(signal: AbortSignal): Promise<() => void> {
+export async function acquireWidgetSlot(signal: AbortSignal): Promise<() => void> {
   signal.throwIfAborted();
   if (running < CONCURRENT_RUNS) running++;
   else
@@ -83,7 +83,7 @@ export function useWidgetRun(
     queryKey,
     enabled: near && !!project && !holding,
     queryFn: async ({ signal }) => {
-      const release = await acquire(signal);
+      const release = await acquireWidgetSlot(signal);
       try {
         return {
           request,

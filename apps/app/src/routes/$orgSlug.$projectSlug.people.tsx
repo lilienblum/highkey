@@ -5,6 +5,7 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
     s: Record<string, unknown>,
   ): {
     kind?: string;
+    audience?: string;
     find?: string;
     person?: string;
     groupType?: string;
@@ -13,6 +14,12 @@ export const Route = createFileRoute("/$orgSlug/$projectSlug/people")({
     tab?: string;
     page?: number;
   } => ({
+    audience:
+      s.audience === undefined
+        ? undefined
+        : typeof s.audience === "string" && s.audience.length <= 8192
+          ? s.audience
+          : "invalid",
     kind: s.kind === "anonymous" || s.kind === "power" || s.kind === "groups" ? s.kind : undefined,
     find: typeof s.find === "string" && s.find.length <= 256 ? s.find : undefined,
     person:

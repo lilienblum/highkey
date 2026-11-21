@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useState, useContext, type FormEvent } from "react";
+import { ChartAudience } from "@/lib/chart-audience";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ruleX } from "@tanstack/charts";
@@ -25,6 +26,31 @@ const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
     signal,
   );
 const empty: ChartReference[] = [];
+/** Date-based mini charts share one cached reference window instead of rerunning on each tick. */
+export function TimelineMarkers({ from, to }: { from: string; to: string }) {
+  const start = Date.parse(from),
+    end = Date.parse(to);
+  const hour = 3600000,
+    lo = Math.floor(start / hour) * hour,
+    hi = Math.ceil(end / hour) * hour;
+  const refs =
+    useReferences(
+      hi - lo <= 366 * 86400000
+        ? { from: new Date(lo).toISOString(), to: new Date(hi).toISOString() }
+        : { from, to },
+    ).data?.rows ?? empty;
+  return refs
+    .filter((r) => r.at >= start && r.at < end)
+    .map((r) => (
+      <span
+        key={r.id}
+        aria-hidden="true"
+        title={`${r.title} · ${new Date(r.at).toISOString()}`}
+        className="pointer-events-none absolute inset-y-0 border-l border-dashed border-data-secondary"
+        style={{ left: `${(100 * (r.at - start)) / (end - start)}%` }}
+      />
+    ));
+}
 export function useReferences(chartRange?: AnalyticsRange) {
   const { product, range, rangeScope, refreshKey } = useWorkspace();
   const dates = chartRange ?? range;
@@ -181,6 +207,7 @@ export function ChartPointActions({
     { product, sourceId } = useWorkspace(),
     role = useOrganizationRole();
   const [adding, setAdding] = useState(false);
+  const audience = useContext(ChartAudience);
   const notes = rows.filter((r) => r.at >= Date.parse(range.from) && r.at < Date.parse(range.to));
   return (
     <Dialog
@@ -212,13 +239,19 @@ export function ChartPointActions({
               </ul>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                {...target("/people", product?.slug)}
-                search={{ ...range, source: sourceParam(product?.sources, sourceId) }}
-                onClick={close}
-              >
-                View users
-              </Link>
+              {audience.length > 0 && (
+                <Link
+                  {...target("/people", product?.slug)}
+                  search={{
+                    ...range,
+                    source: sourceParam(product?.sources, sourceId),
+                    audience: JSON.stringify(audience),
+                  }}
+                  onClick={close}
+                >
+                  View users
+                </Link>
+              )}
               {role && role !== "viewer" && (
                 <Button variant="outline" onClick={() => setAdding(true)}>
                   Add reference

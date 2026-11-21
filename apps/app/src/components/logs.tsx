@@ -445,6 +445,7 @@ function LogExplorer() {
               }}
               onPointerCancel={() => setBrush(null)}
             >
+              {data && <TimelineMarkers from={from} to={to} />}
               {brush && data && (
                 <span
                   className="logs-volume-brush"
@@ -844,3 +845,4 @@ function LogInspector({
     </Sheet>
   );
 }
+import { TimelineMarkers } from "./chart-references";

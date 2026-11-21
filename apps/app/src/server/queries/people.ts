@@ -3,7 +3,7 @@ import { bad, missing } from "../api/errors";
 import type { ApiContext } from "../api/context";
 import { runSettings } from "../clickhouse/access";
 import { requireSource } from "../db/sources";
-import { parseEventsQuery } from "./events";
+import { parseEventsQuery, predicate } from "./events";
 import { runEntityQuery, parseEntityQuery } from "./entities";
 import { readAs } from "./read";
 import { all, one } from "../db/db";
@@ -31,6 +31,7 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
       group_type: "string?",
       group_id: "string?",
       cohort: "string?",
+      audience: "string?",
       page: "integer",
       page_size: "integer",
     },
@@ -57,12 +58,36 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
     throw bad("Unknown cohort");
   const anonymous = q.kind === "anonymous",
     key = anonymous ? "actor_id" : "profile_id";
+  const params = new Params();
+  let matches = "";
+  if (q.audience != null) {
+    let raw: unknown;
+    try {
+      raw = q.audience.length <= 8192 && JSON.parse(q.audience);
+    } catch {
+      throw bad("Invalid chart-point filter");
+    }
+    if (!Array.isArray(raw) || raw.length > 6) throw bad("Invalid chart-point filter");
+    const rules = await customRules(ctx.db, id);
+    const clauses = raw.map((v) => {
+      const a = fields(v, {
+        event: "string?",
+        source: "string?",
+        identity_kind: "string?",
+        source_id: "string?",
+        filters: "unknown",
+      });
+      const query = parseEventsQuery({ from: q.from, to: q.to, ...a });
+      return `(${predicate(query, params, rules)}${a.source_id ? ` AND toString(source_id)=${params.add("String", a.source_id)}` : ""})`;
+    });
+    matches = ` AND (${clauses.join(" OR ") || "0"})`;
+  }
   const start = q.kind === "power" ? new Date(+to - 90 * 86400000) : from;
   const members = q.group_type ? " AND groups[{type:String}]={group:String}" : "";
   const stats = `SELECT assumeNotNull(${key}) AS id,count() AS n,max(event_time) AS seen FROM profile_events
-    WHERE ${anonymous ? "profile_id IS NULL AND identity_kind='visitor' AND actor_id IS NOT NULL" : "profile_id IS NOT NULL"}${members} GROUP BY ${key}`;
+     WHERE ${anonymous ? "profile_id IS NULL AND identity_kind='visitor' AND actor_id IS NOT NULL" : "profile_id IS NOT NULL"}${members}${matches} GROUP BY ${key}`;
   const identified = `SELECT coalesce(nullIf(a.id,''),t.id) AS id,t.name,t.email,ifNull(a.n,0) AS events,greatest(a.seen,t.last_identify) AS seen
-    FROM (${stats}) a ${q.kind === "power" || members ? "LEFT" : "FULL OUTER"} JOIN (${names}) t USING(id)`;
+     FROM (${stats}) a ${q.kind === "power" || members || matches ? "LEFT" : "FULL OUTER"} JOIN (${names}) t USING(id)`;
   const result = await readAs(ctx, id, (r) =>
     r.query<{
       id: string;
@@ -79,6 +104,7 @@ export async function peopleList(ctx: ApiContext, id: string, body: unknown) {
         settings: runSettings({ from: start, to, source: q.source_id ?? null, bucket: "day" }),
         params: {
           start: +start,
+          ...params.values,
           cohort: q.cohort ?? "",
           end: +to,
           src: q.source_id ?? "",

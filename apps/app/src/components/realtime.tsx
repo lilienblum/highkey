@@ -9,6 +9,7 @@ import { PageHeader, useWorkspace, useAnalyticsPending } from "./app-shell";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 import { WorldMap } from "./world-map";
+import { TimelineMarkers } from "./chart-references";
 import { Button } from "./ui/button";
 import { Card, CardTitle, CardHeader, CardContent } from "./ui/card";
 const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
@@ -72,7 +73,7 @@ export function Realtime() {
             </CardHeader>
             <CardContent>
               <div
-                className="flex h-20 items-end gap-1"
+                className="relative flex h-20 items-end gap-1"
                 role="img"
                 aria-label={`Events per minute, oldest first: ${r.minutes.join(", ")}`}
               >
@@ -86,6 +87,7 @@ export function Realtime() {
                     title={`${time(Date.parse(r.from) + i * 60000)} · ${v} events`}
                   />
                 ))}
+                <TimelineMarkers from={r.from} to={r.to} />
               </div>
               <div className="flex justify-between text-xs">
                 <span>{time(Date.parse(r.from))}</span>

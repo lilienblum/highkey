@@ -55,6 +55,15 @@ test("map measures and entity filters count typed memberships and whole visits",
       expect(r.status, JSON.stringify(r.json)).toBe(200);
       return r.json;
     };
+    const people = async (path: string) =>
+      (
+        await call(ctx, "POST", `/api/products/${p.id}/people/query`, {
+          ...range,
+          audience: JSON.stringify([{ filters: [{ property: "path", op: "eq", value: path }] }]),
+        })
+      ).json.rows;
+    expect((await people("/1")).map((v: { id: string }) => v.id)).toEqual(["a"]);
+    expect(await people("/3")).toEqual([]);
     for (const [property, op, value, total] of [
       ["profile.plan", "eq", "pro", 2],
       ["group.team.size", "gt", 3, 2],

@@ -42,6 +42,7 @@ import { useQuery, useReportQuery } from "@/lib/use-query";
 import { queryReadOnly } from "@/lib/api";
 import { eventContext } from "@/lib/event-context";
 import { sessionFields } from "@/lib/session-fields";
+import { ChartAudience } from "@/lib/chart-audience";
 import type { eventOptions } from "@/server/queries/event-options";
 const loadOptions = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Awaited<ReturnType<typeof eventOptions>>>(
@@ -645,19 +646,35 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
             ) : (
               <>
                 <div className="explore-charts">
-                  <SeriesChart
-                    data={data}
-                    title="Results over time"
-                    bucket={bucket}
-                    description={
-                      ["count", "actors", "unique_groups", "first_time", "once_per_user"].includes(
-                        applied.measure,
-                      )
-                        ? `One point per ${bucket} · UTC`
-                        : `One point per ${bucket} · UTC · missing numeric values are excluded`
-                    }
-                    label={measureLabels[applied.measure]}
-                  />
+                  <ChartAudience
+                    value={[
+                      {
+                        event: applied.event || undefined,
+                        source: applied.source || undefined,
+                        identity_kind: applied.identityKind,
+                        source_id: applied.sourceId,
+                        filters: allFilters,
+                      },
+                    ]}
+                  >
+                    <SeriesChart
+                      data={data}
+                      title="Results over time"
+                      bucket={bucket}
+                      description={
+                        [
+                          "count",
+                          "actors",
+                          "unique_groups",
+                          "first_time",
+                          "once_per_user",
+                        ].includes(applied.measure)
+                          ? `One point per ${bucket} · UTC`
+                          : `One point per ${bucket} · UTC · missing numeric values are excluded`
+                      }
+                      label={measureLabels[applied.measure]}
+                    />
+                  </ChartAudience>
                   <Breakdown
                     title="Breakdown"
                     externalHref={(group) =>

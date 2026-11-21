@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { WorldMap } from "../world-map";
+import { ChartAudience } from "@/lib/chart-audience";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
 import {
@@ -389,15 +390,30 @@ function ChartBody({
           }
         >
           {result && (
-            <WidgetChart
-              result={result}
-              view={view}
-              bucket={bucket}
-              range={span}
-              series={series}
-              label={widget.title}
-              zoom={!widget.range}
-            />
+            <ChartAudience
+              value={Object.values(widget.queries).flatMap((q) =>
+                q.signal === "events"
+                  ? [
+                      {
+                        event: q.event,
+                        identity_kind: q.identity_kind,
+                        source_id: q.source_id,
+                        filters: q.filters,
+                      },
+                    ]
+                  : [],
+              )}
+            >
+              <WidgetChart
+                result={result}
+                view={view}
+                bucket={bucket}
+                range={span}
+                series={series}
+                label={widget.title}
+                zoom={!widget.range}
+              />
+            </ChartAudience>
           )}
         </WidgetContent>
       </div>

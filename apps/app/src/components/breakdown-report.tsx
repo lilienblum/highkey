@@ -4,6 +4,7 @@ import { useWorkspace, useAnalyticsPending } from "./app-shell";
 import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { number, queryReadOnly, sourceGroups, type Group } from "@/lib/api";
 import { useQuery, useReportQuery } from "@/lib/use-query";
+import { acquireWidgetSlot } from "@/lib/use-widget";
 import { displayValue } from "@/lib/display-values";
 import { sourceParam } from "@/lib/workspace-search";
 import { automaticBucket } from "@/lib/time-buckets";
@@ -24,11 +25,22 @@ import { ValueSelect } from "./value-select";
 import { ErrorState, BreakdownRows } from "./shared";
 import { AnalyticsChart } from "./analytics-chart";
 import { PageLoading } from "./loading";
+import { ChartAudience } from "@/lib/chart-audience";
 
 type Report = Awaited<ReturnType<typeof breakdownReport>>;
 type Row = Report["rows"][number];
-export const loadBreakdown = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
-  queryReadOnly<Report>(`/products/${id}/breakdown`, body, signal);
+export const loadBreakdown = async (
+  id: string,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+) => {
+  const release = await acquireWidgetSlot(signal);
+  try {
+    return await queryReadOnly<Report>(`/products/${id}/breakdown`, body, signal);
+  } finally {
+    release();
+  }
+};
 function Spark({ values }: { values: number[] }) {
   const max = Math.max(1, ...values);
   return (
@@ -277,12 +289,14 @@ function ReportRow({
         {data.error && <ErrorState message={data.error} retry={refresh} />}
         {data.data && (
           <div className="h-48">
-            <AnalyticsChart
-              label="Events"
-              bucket={bucket}
-              series={data.data.series}
-              range={range}
-            />
+            <ChartAudience value={[{ ...ctx, source_id: src }]}>
+              <AnalyticsChart
+                label="Events"
+                bucket={bucket}
+                series={data.data.series}
+                range={range}
+              />
+            </ChartAudience>
           </div>
         )}
         <ValueSelect

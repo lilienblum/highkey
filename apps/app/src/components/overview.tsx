@@ -34,6 +34,8 @@ import { PatternReports } from "./pattern-reports";
 import { ProjectInsights } from "./insights";
 import { WebsiteReports } from "./website-reports";
 import { LanguageFilter } from "./language-filter";
+import { ChartAudience } from "@/lib/chart-audience";
+import { TimelineMarkers } from "./chart-references";
 import { BreakdownReport } from "./breakdown-report";
 import { useWebMetrics, WebChart, WebTiles } from "./web-metrics";
 import { webMetric, type WebMetric } from "@/lib/web-metrics";
@@ -362,411 +364,427 @@ function ProductOverview() {
           </Link>
         </section>
       )}
-      <div className="overview-dashboard">
-        <ValueSelect
-          className="w-fit"
-          label="Metric set"
-          value={websiteMetric ? "web" : "general"}
-          onValueChange={(v) => setChartMetric(v === "web" ? "web_page_views" : "count")}
-          options={[
-            ["general", "Product metrics"],
-            ["web", "Website metrics"],
-          ]}
-        />
-        {websiteMetric ? (
-          <WebTiles result={website} selected={websiteMetric} select={selectWeb} />
-        ) : (
-          <section className="overview-metrics" aria-label="Key metrics">
-            <article className="metric-widget live-metric" aria-label="Active now">
-              <span className="metric-label">
-                <i className="live-dot" aria-hidden="true" />
-                Active now
-              </span>
-              <WidgetValue
-                value={
-                  active.error
-                    ? "—"
-                    : active.data?.events && !active.data.active
-                      ? "—"
-                      : number(active.data?.active)
-                }
-                label={
-                  active.error ? "Live activity unavailable" : "Identified actors · last 5 minutes"
-                }
-                loading={active.loading}
-              />
-              <div
-                className="flex h-7 shrink-0 items-end gap-px"
-                role="img"
-                aria-label={
-                  active.data
-                    ? `Active actors per minute over the last 30 minutes, oldest first: ${active.data.minutes.join(", ")}`
-                    : "Live activity chart unavailable"
-                }
-              >
-                {active.data?.minutes.map((n, i) => (
-                  <span
-                    key={i}
-                    className="min-w-0 flex-1 bg-data-tertiary"
-                    style={{
-                      height: `${Math.max(n ? 4 : 0, (n / Math.max(1, ...active.data!.minutes)) * 100)}%`,
-                    }}
-                    title={`${30 - i} min ago: ${n}`}
-                  />
-                ))}
-              </div>
-            </article>
-            {[
-              {
-                label: "Events",
-                value: number(s?.total),
-                detail: "In selected period",
-                change: growth(s?.total, p?.total, { range }),
-              },
-              {
-                label: "Visitors",
-                value: number(s?.visitors),
-                detail: "Unique visitor IDs",
-                change: growth(s?.visitors, p?.visitors, { range }),
-              },
-              {
-                label: "Installations",
-                value: number(s?.installations),
-                detail: "Unique installation IDs",
-                change: growth(s?.installations, p?.installations, { range }),
-              },
-              {
-                label: "Success rate",
-                value: s?.success_rate == null ? "—" : `${number(s.success_rate, 1)}%`,
-                detail: "Among reported outcomes",
-                change: growth(s?.success_rate, p?.success_rate, { range, points: 1 }),
-              },
-              {
-                label: "Avg. duration",
-                value: s?.avg_duration == null ? "—" : `${number(s.avg_duration)} ms`,
-                detail: "Numeric durations only",
-                change: growth(s?.avg_duration, p?.avg_duration, { range, lowerIsBetter: true }),
-              },
-            ].map((item) => (
-              <article className="metric-widget" key={item.label}>
-                <span className="metric-label">{item.label}</span>
-                {item.label === "Visitors" && source?.visitor_mode === "off" ? (
-                  <p className="text-xs">
-                    Visitor counting is off for this source.{" "}
-                    <Link
-                      className="text-primary underline"
-                      to="/$orgSlug/$projectSlug/settings"
-                      params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
-                    >
-                      Source settings
-                    </Link>
-                  </p>
-                ) : (
-                  <WidgetValue
-                    value={query.error && !s ? "—" : item.value}
-                    label={item.detail}
-                    growth={item.change}
-                    compactGrowth
-                    loading={query.loading}
-                    growthLoading={query.loading || previous.loading}
-                  />
-                )}
-              </article>
-            ))}
-          </section>
-        )}
-        <div
-          className="overview-grid"
-          data-source-comparison={showSources}
-          aria-busy={query.loading}
-        >
+      <ChartAudience value={[eventFilters]}>
+        <div className="overview-dashboard">
+          <ValueSelect
+            className="w-fit"
+            label="Metric set"
+            value={websiteMetric ? "web" : "general"}
+            onValueChange={(v) => setChartMetric(v === "web" ? "web_page_views" : "count")}
+            options={[
+              ["general", "Product metrics"],
+              ["web", "Website metrics"],
+            ]}
+          />
           {websiteMetric ? (
-            <WebChart result={website} selected={websiteMetric} select={selectWeb} />
+            <WebTiles result={website} selected={websiteMetric} select={selectWeb} />
           ) : (
-            <OverviewWidget
-              title="Activity over time"
-              className="activity-widget"
-              error={activity.error}
-              retry={refresh}
-              footer={<span className="chart-period-note">{periodNote}</span>}
-            >
-              <div className="widget-value-row">
+            <section className="overview-metrics" aria-label="Key metrics">
+              <article className="metric-widget live-metric" aria-label="Active now">
+                <span className="metric-label">
+                  <i className="live-dot" aria-hidden="true" />
+                  Active now
+                </span>
                 <WidgetValue
-                  value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
-                  label={choice.label}
-                  growth={growth(
-                    activity.data?.summary.value,
-                    (choice.id === "count" ? previous : previousChart).data?.summary.value,
-                    { range, lowerIsBetter: choice.lowerIsBetter },
+                  value={
+                    active.error
+                      ? "—"
+                      : active.data?.events && !active.data.active
+                        ? "—"
+                        : number(active.data?.active)
+                  }
+                  label={
+                    active.error
+                      ? "Live activity unavailable"
+                      : "Identified actors · last 5 minutes"
+                  }
+                  loading={active.loading}
+                />
+                <div
+                  className="relative flex h-7 shrink-0 items-end gap-px"
+                  role="img"
+                  aria-label={
+                    active.data
+                      ? `Active actors per minute over the last 30 minutes, oldest first: ${active.data.minutes.join(", ")}`
+                      : "Live activity chart unavailable"
+                  }
+                >
+                  {active.data?.minutes.map((n, i) => (
+                    <span
+                      key={i}
+                      className="min-w-0 flex-1 bg-data-tertiary"
+                      style={{
+                        height: `${Math.max(n ? 4 : 0, (n / Math.max(1, ...active.data!.minutes)) * 100)}%`,
+                      }}
+                      title={`${30 - i} min ago: ${n}`}
+                    />
+                  ))}
+                  {active.data && (
+                    <TimelineMarkers
+                      from={new Date(now - 1800000).toISOString()}
+                      to={new Date(now).toISOString()}
+                    />
                   )}
-                  loading={activity.loading}
-                  growthLoading={
-                    activity.loading || (choice.id === "count" ? previous : previousChart).loading
-                  }
-                />
-                <ValueSelect
-                  label="Chart metric"
-                  disabled={query.loading}
-                  value={choice.id}
-                  onValueChange={setChartMetric}
-                  options={chartChoices.map((option) => [option.id, option.label])}
-                />
-              </div>
-              <div className="widget-plot chart-plot" aria-busy={activity.loading}>
-                <WidgetContent label="chart" loading={activity.loading} empty={chartEmpty}>
-                  <AnalyticsChart
-                    series={activity.data?.series ?? []}
-                    label={choice.label}
-                    bucket={bucket}
-                    unit={choice.unit}
-                    range={range}
-                  />
-                </WidgetContent>
-              </div>
-            </OverviewWidget>
+                </div>
+              </article>
+              {[
+                {
+                  label: "Events",
+                  value: number(s?.total),
+                  detail: "In selected period",
+                  change: growth(s?.total, p?.total, { range }),
+                },
+                {
+                  label: "Visitors",
+                  value: number(s?.visitors),
+                  detail: "Unique visitor IDs",
+                  change: growth(s?.visitors, p?.visitors, { range }),
+                },
+                {
+                  label: "Installations",
+                  value: number(s?.installations),
+                  detail: "Unique installation IDs",
+                  change: growth(s?.installations, p?.installations, { range }),
+                },
+                {
+                  label: "Success rate",
+                  value: s?.success_rate == null ? "—" : `${number(s.success_rate, 1)}%`,
+                  detail: "Among reported outcomes",
+                  change: growth(s?.success_rate, p?.success_rate, { range, points: 1 }),
+                },
+                {
+                  label: "Avg. duration",
+                  value: s?.avg_duration == null ? "—" : `${number(s.avg_duration)} ms`,
+                  detail: "Numeric durations only",
+                  change: growth(s?.avg_duration, p?.avg_duration, { range, lowerIsBetter: true }),
+                },
+              ].map((item) => (
+                <article className="metric-widget" key={item.label}>
+                  <span className="metric-label">{item.label}</span>
+                  {item.label === "Visitors" && source?.visitor_mode === "off" ? (
+                    <p className="text-xs">
+                      Visitor counting is off for this source.{" "}
+                      <Link
+                        className="text-primary underline"
+                        to="/$orgSlug/$projectSlug/settings"
+                        params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
+                      >
+                        Source settings
+                      </Link>
+                    </p>
+                  ) : (
+                    <WidgetValue
+                      value={query.error && !s ? "—" : item.value}
+                      label={item.detail}
+                      growth={item.change}
+                      compactGrowth
+                      loading={query.loading}
+                      growthLoading={query.loading || previous.loading}
+                    />
+                  )}
+                </article>
+              ))}
+            </section>
           )}
-          <OverviewWidget
-            title="Breakdown"
-            className="breakdown-widget"
-            controls={
-              <ValueSelect
-                label="Breakdown"
-                value={dimension}
-                onValueChange={setDimension}
-                options={dimensions}
-              />
-            }
-            error={breakdown.error}
-            retry={refresh}
-            footer={
-              <div className="flex items-center justify-between">
-                <span>{number(s?.total)} events in this range</span>
-                <BreakdownReport
-                  key={dimension}
-                  title={dimensionLabel}
-                  dimension={dimension}
-                  filters={eventFilters}
-                />
-              </div>
-            }
+          <div
+            className="overview-grid"
+            data-source-comparison={showSources}
+            aria-busy={query.loading}
           >
-            <WidgetContent
-              label="breakdown"
-              loading={breakdown.loading}
-              empty={!breakdown.data ? "Breakdown unavailable." : noEvents}
-            >
-              <section className="widget-ranking breakdowns" aria-label={dimensionLabel}>
-                <BreakdownRows
-                  destination="overview"
-                  sources={product.sources}
-                  title={dimensionLabel}
-                  groups={
-                    dimension === "source_id"
-                      ? sourceGroups(breakdown.data?.groups ?? [], product.sources)
-                      : displayGroups(breakdown.data?.groups ?? [], dimension)
-                  }
-                  total={breakdown.data?.summary.total}
-                  drilldown={(group) => drilldown(dimension, group)}
-                  externalHref={(group) => reportLink(dimension, group.label, product.website_url)}
-                />
-              </section>
-            </WidgetContent>
-          </OverviewWidget>
-          {showSources && (
+            {websiteMetric ? (
+              <WebChart result={website} selected={websiteMetric} select={selectWeb} />
+            ) : (
+              <OverviewWidget
+                title="Activity over time"
+                className="activity-widget"
+                error={activity.error}
+                retry={refresh}
+                footer={<span className="chart-period-note">{periodNote}</span>}
+              >
+                <div className="widget-value-row">
+                  <WidgetValue
+                    value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
+                    label={choice.label}
+                    growth={growth(
+                      activity.data?.summary.value,
+                      (choice.id === "count" ? previous : previousChart).data?.summary.value,
+                      { range, lowerIsBetter: choice.lowerIsBetter },
+                    )}
+                    loading={activity.loading}
+                    growthLoading={
+                      activity.loading || (choice.id === "count" ? previous : previousChart).loading
+                    }
+                  />
+                  <ValueSelect
+                    label="Chart metric"
+                    disabled={query.loading}
+                    value={choice.id}
+                    onValueChange={setChartMetric}
+                    options={chartChoices.map((option) => [option.id, option.label])}
+                  />
+                </div>
+                <div className="widget-plot chart-plot" aria-busy={activity.loading}>
+                  <WidgetContent label="chart" loading={activity.loading} empty={chartEmpty}>
+                    <ChartAudience
+                      value={[{ ...eventFilters, identity_kind: choice.identity_kind }]}
+                    >
+                      <AnalyticsChart
+                        series={activity.data?.series ?? []}
+                        label={choice.label}
+                        bucket={bucket}
+                        unit={choice.unit}
+                        range={range}
+                      />
+                    </ChartAudience>
+                  </WidgetContent>
+                </div>
+              </OverviewWidget>
+            )}
             <OverviewWidget
-              title="Sources"
-              className="sources-widget"
-              error={sources.error}
+              title="Breakdown"
+              className="breakdown-widget"
+              controls={
+                <ValueSelect
+                  label="Breakdown"
+                  value={dimension}
+                  onValueChange={setDimension}
+                  options={dimensions}
+                />
+              }
+              error={breakdown.error}
               retry={refresh}
               footer={
-                sources.data
-                  ? `${number(sources.data.summary.total)} events in this range`
-                  : "Share of events by source"
+                <div className="flex items-center justify-between">
+                  <span>{number(s?.total)} events in this range</span>
+                  <BreakdownReport
+                    key={dimension}
+                    title={dimensionLabel}
+                    dimension={dimension}
+                    filters={eventFilters}
+                  />
+                </div>
               }
             >
               <WidgetContent
-                label="sources"
-                loading={sources.loading}
-                empty={!sources.data ? "Sources unavailable." : undefined}
+                label="breakdown"
+                loading={breakdown.loading}
+                empty={!breakdown.data ? "Breakdown unavailable." : noEvents}
               >
-                <section className="widget-ranking breakdowns" aria-label="Source distribution">
+                <section className="widget-ranking breakdowns" aria-label={dimensionLabel}>
                   <BreakdownRows
                     destination="overview"
                     sources={product.sources}
-                    title="Source"
-                    groups={sourceSlices.map(
-                      (slice) =>
-                        slice.group ?? {
-                          label: null,
-                          display: slice.label,
-                          value: slice.value,
-                          count: slice.value,
-                        },
-                    )}
-                    total={sources.data?.summary.total}
-                    drilldown={(group) => drilldown("source_id", group)}
+                    title={dimensionLabel}
+                    groups={
+                      dimension === "source_id"
+                        ? sourceGroups(breakdown.data?.groups ?? [], product.sources)
+                        : displayGroups(breakdown.data?.groups ?? [], dimension)
+                    }
+                    total={breakdown.data?.summary.total}
+                    drilldown={(group) => drilldown(dimension, group)}
+                    externalHref={(group) =>
+                      reportLink(dimension, group.label, product.website_url)
+                    }
                   />
                 </section>
               </WidgetContent>
             </OverviewWidget>
-          )}
-          {!showSources && (
+            {showSources && (
+              <OverviewWidget
+                title="Sources"
+                className="sources-widget"
+                error={sources.error}
+                retry={refresh}
+                footer={
+                  sources.data
+                    ? `${number(sources.data.summary.total)} events in this range`
+                    : "Share of events by source"
+                }
+              >
+                <WidgetContent
+                  label="sources"
+                  loading={sources.loading}
+                  empty={!sources.data ? "Sources unavailable." : undefined}
+                >
+                  <section className="widget-ranking breakdowns" aria-label="Source distribution">
+                    <BreakdownRows
+                      destination="overview"
+                      sources={product.sources}
+                      title="Source"
+                      groups={sourceSlices.map(
+                        (slice) =>
+                          slice.group ?? {
+                            label: null,
+                            display: slice.label,
+                            value: slice.value,
+                            count: slice.value,
+                          },
+                      )}
+                      total={sources.data?.summary.total}
+                      drilldown={(group) => drilldown("source_id", group)}
+                    />
+                  </section>
+                </WidgetContent>
+              </OverviewWidget>
+            )}
+            {!showSources && (
+              <OverviewWidget
+                title="Identified actors"
+                className="audience-widget"
+                error={query.error ?? (canCompareSources ? sources.error : undefined)}
+                retry={refresh}
+                footer="Identity kinds are counted separately. IDs are optional."
+              >
+                <WidgetValue
+                  value={s?.total && !s.actors ? "—" : number(s?.actors)}
+                  label="distinct identities"
+                  loading={query.loading}
+                  detail={s?.sessions ? `${number(s.sessions)} website sessions` : undefined}
+                />
+                <WidgetContent
+                  label="identities"
+                  loading={query.loading}
+                  empty={
+                    !query.data
+                      ? "Identities unavailable."
+                      : (noEvents ??
+                        (!s?.actors
+                          ? "No actor IDs received. Anonymous events still count toward activity."
+                          : undefined))
+                  }
+                >
+                  <div className="audience-bars">
+                    <BreakdownRows title="Identity kind" groups={actorGroups} unit="Actors" />
+                  </div>
+                </WidgetContent>
+              </OverviewWidget>
+            )}
             <OverviewWidget
-              title="Identified actors"
-              className="audience-widget"
-              error={query.error ?? (canCompareSources ? sources.error : undefined)}
+              title="Success rate"
+              className="outcomes-widget"
+              error={query.error}
               retry={refresh}
-              footer="Identity kinds are counted separately. IDs are optional."
+              footer="Among events reporting a boolean success value"
             >
-              <WidgetValue
-                value={s?.total && !s.actors ? "—" : number(s?.actors)}
-                label="distinct identities"
-                loading={query.loading}
-                detail={s?.sessions ? `${number(s.sessions)} website sessions` : undefined}
-              />
               <WidgetContent
-                label="identities"
+                label="outcomes"
                 loading={query.loading}
                 empty={
                   !query.data
-                    ? "Identities unavailable."
+                    ? "Outcomes unavailable."
                     : (noEvents ??
-                      (!s?.actors
-                        ? "No actor IDs received. Anonymous events still count toward activity."
+                      (s?.success_rate == null
+                        ? "No success values received. Send a boolean success property to measure outcomes."
                         : undefined))
                 }
               >
-                <div className="audience-bars">
-                  <BreakdownRows title="Identity kind" groups={actorGroups} unit="Actors" />
-                </div>
+                <WidgetValue
+                  value={`${number(s?.success_rate, 1)}%`}
+                  label="succeeded"
+                  loading={query.loading}
+                />
+                <BreakdownRows
+                  title="Outcome"
+                  unit="Percent"
+                  groups={[
+                    { label: "Succeeded", value: s?.success_rate ?? 0, count: 0 },
+                    { label: "Failed", value: 100 - (s?.success_rate ?? 0), count: 0 },
+                  ]}
+                />
               </WidgetContent>
             </OverviewWidget>
-          )}
-          <OverviewWidget
-            title="Success rate"
-            className="outcomes-widget"
-            error={query.error}
-            retry={refresh}
-            footer="Among events reporting a boolean success value"
-          >
-            <WidgetContent
-              label="outcomes"
-              loading={query.loading}
-              empty={
-                !query.data
-                  ? "Outcomes unavailable."
-                  : (noEvents ??
-                    (s?.success_rate == null
-                      ? "No success values received. Send a boolean success property to measure outcomes."
-                      : undefined))
+            <OverviewWidget
+              title="Duration"
+              className="duration-widget"
+              controls={
+                <ToggleGroup
+                  aria-label="Duration measure"
+                  variant="outline"
+                  spacing={0}
+                  value={[durationMetric]}
+                  onValueChange={(values) => {
+                    if (values[0]) setDurationMetric(values[0]);
+                  }}
+                >
+                  <ToggleGroupItem value="avg">Average</ToggleGroupItem>
+                  <ToggleGroupItem value="p95">p95</ToggleGroupItem>
+                </ToggleGroup>
+              }
+              error={query.error}
+              retry={refresh}
+              footer={
+                !hasDuration
+                  ? "Only numeric duration_ms values are included"
+                  : durationMetric === "avg"
+                    ? "Among events reporting a numeric duration"
+                    : "95% of recorded durations were at or below this"
               }
             >
               <WidgetValue
-                value={`${number(s?.success_rate, 1)}%`}
-                label="succeeded"
+                value={
+                  s?.avg_duration == null
+                    ? "—"
+                    : `${number(durationMetric === "avg" ? s.avg_duration : s.p95_duration)} ms`
+                }
+                label={durationMetric === "avg" ? "Average duration" : "p95 duration"}
                 loading={query.loading}
               />
-              <BreakdownRows
-                title="Outcome"
-                unit="Percent"
-                groups={[
-                  { label: "Succeeded", value: s?.success_rate ?? 0, count: 0 },
-                  { label: "Failed", value: 100 - (s?.success_rate ?? 0), count: 0 },
-                ]}
-              />
-            </WidgetContent>
-          </OverviewWidget>
-          <OverviewWidget
-            title="Duration"
-            className="duration-widget"
-            controls={
-              <ToggleGroup
-                aria-label="Duration measure"
-                variant="outline"
-                spacing={0}
-                value={[durationMetric]}
-                onValueChange={(values) => {
-                  if (values[0]) setDurationMetric(values[0]);
-                }}
-              >
-                <ToggleGroupItem value="avg">Average</ToggleGroupItem>
-                <ToggleGroupItem value="p95">p95</ToggleGroupItem>
-              </ToggleGroup>
-            }
-            error={query.error}
-            retry={refresh}
-            footer={
-              !hasDuration
-                ? "Only numeric duration_ms values are included"
-                : durationMetric === "avg"
-                  ? "Among events reporting a numeric duration"
-                  : "95% of recorded durations were at or below this"
-            }
-          >
-            <WidgetValue
-              value={
-                s?.avg_duration == null
-                  ? "—"
-                  : `${number(durationMetric === "avg" ? s.avg_duration : s.p95_duration)} ms`
-              }
-              label={durationMetric === "avg" ? "Average duration" : "p95 duration"}
-              loading={query.loading}
-            />
-            <WidgetContent
-              label="duration"
-              loading={query.loading}
-              empty={
-                noEvents ??
-                (!hasDuration ? "No numeric durations received in this range." : undefined)
-              }
-            >
-              <BreakdownRows
-                title="Measure"
-                unit="Milliseconds"
-                groups={[
-                  { label: "Average", value: s?.avg_duration ?? 0, count: 0 },
-                  { label: "95th percentile", value: s?.p95_duration ?? 0, count: 0 },
-                ]}
-              />
-            </WidgetContent>
-          </OverviewWidget>
-          {websiteMetric && <WebsiteReports filters={eventFilters} goals={conversionNames} />}
-          {conversionNames.length > 0 && (
-            <OverviewWidget
-              title="Conversions"
-              error={conversions.error}
-              retry={refresh}
-              footer="Events marked as conversions in the event catalog"
-            >
-              <WidgetValue
-                label="conversion events"
-                value={number(conversions.data?.summary.total)}
-                loading={conversions.loading}
-              />
               <WidgetContent
-                label="conversion events"
-                loading={conversions.loading}
+                label="duration"
+                loading={query.loading}
                 empty={
-                  conversions.data?.summary.total === 0
-                    ? "No conversions in this range."
-                    : undefined
+                  noEvents ??
+                  (!hasDuration ? "No numeric durations received in this range." : undefined)
                 }
               >
-                <div className="widget-ranking">
-                  <BreakdownRows
-                    title="Conversion"
-                    groups={conversions.data?.groups ?? []}
-                    total={conversions.data?.summary.total}
-                    destination="overview"
-                    sources={product.sources}
-                    drilldown={(g) => drilldown("name", g)}
-                  />
-                </div>
+                <BreakdownRows
+                  title="Measure"
+                  unit="Milliseconds"
+                  groups={[
+                    { label: "Average", value: s?.avg_duration ?? 0, count: 0 },
+                    { label: "95th percentile", value: s?.p95_duration ?? 0, count: 0 },
+                  ]}
+                />
               </WidgetContent>
             </OverviewWidget>
-          )}
+            {websiteMetric && <WebsiteReports filters={eventFilters} goals={conversionNames} />}
+            {conversionNames.length > 0 && (
+              <OverviewWidget
+                title="Conversions"
+                error={conversions.error}
+                retry={refresh}
+                footer="Events marked as conversions in the event catalog"
+              >
+                <WidgetValue
+                  label="conversion events"
+                  value={number(conversions.data?.summary.total)}
+                  loading={conversions.loading}
+                />
+                <WidgetContent
+                  label="conversion events"
+                  loading={conversions.loading}
+                  empty={
+                    conversions.data?.summary.total === 0
+                      ? "No conversions in this range."
+                      : undefined
+                  }
+                >
+                  <div className="widget-ranking">
+                    <BreakdownRows
+                      title="Conversion"
+                      groups={conversions.data?.groups ?? []}
+                      total={conversions.data?.summary.total}
+                      destination="overview"
+                      sources={product.sources}
+                      drilldown={(g) => drilldown("name", g)}
+                    />
+                  </div>
+                </WidgetContent>
+              </OverviewWidget>
+            )}
+          </div>
         </div>
-      </div>
+      </ChartAudience>
     </>
   );
 }
