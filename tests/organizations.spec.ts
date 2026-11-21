@@ -307,11 +307,11 @@ test.describe("first project", () => {
     await page.setViewportSize({ width: 1280, height: 844 });
     await icon.click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
-    await expect(counting).toHaveText("Events only");
+    await expect(counting).toHaveText("Don’t count visitors");
     await counting.click();
     await page.getByRole("option", { name: "Daily visitors" }).click();
     await counting.click();
-    await page.getByRole("option", { name: "Events only" }).click();
+    await page.getByRole("option", { name: "Don’t count visitors" }).click();
     await counting.click();
     await page.getByRole("option", { name: "Returning visitors" }).click();
     const create = page.getByRole("button", { name: "Create project" });

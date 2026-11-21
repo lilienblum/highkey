@@ -223,7 +223,7 @@ export function SourceFields({
             }
             disabled={disabled}
             options={[
-              ["off", "Events only"],
+              ["off", "Don’t count visitors"],
               ["cookieless", "Daily visitors"],
               ["persistent", "Returning visitors"],
             ]}
@@ -233,7 +233,7 @@ export function SourceFields({
               ? "Recognizes the same browser on later visits, with permission."
               : value.visitor_mode === "cookieless"
                 ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
-                : "Counts events without counting visitors."}
+                : "Page views and other events are still counted."}
           </FieldDescription>
         </Field>
       </div>
