@@ -357,7 +357,7 @@
     },
     {
       "name": "list_people",
-      "description": "Find identified profiles, anonymous visitor IDs, or power users (90 days). Search by name, email or ID. Anonymous events without a visitor ID never form a person.",
+      "description": "Find identified profiles or anonymous visitor IDs across retained history, or rank power users over 90 days. Search by name, email or ID. Supply from and to for a report range. Anonymous events without a visitor ID never form a person.",
       "inputSchema": {
         "type": "object",
         "properties": {
