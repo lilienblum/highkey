@@ -39,8 +39,6 @@ const SOURCE = {
   name: "string",
   icon: "string?",
   visitor_mode: "string?",
-  consent_prompt: "string?",
-  consent_theme: "string?",
 } as const;
 
 export function registerManagement(): void {

@@ -51,7 +51,7 @@ export function SubmitButton({
     <Button
       type="submit"
       size={compact ? "default" : "lg"}
-      className={compact ? "mt-1 self-start" : "auth-submit"}
+      className={compact ? "mt-1 self-end" : "auth-submit"}
       disabled={pending || !hydrated}
       aria-busy={pending}
     >

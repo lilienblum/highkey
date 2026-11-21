@@ -206,7 +206,7 @@ test.describe("no dead ends", () => {
     await page.getByRole("button", { name: "Create organization" }).click();
     // The new organization has no projects yet.
     await expect(page).toHaveURL(`${base}/new`);
-    await expect(page.getByRole("main")).toContainText(`Newcomer ${run}`);
+    await expect(page.getByRole("contentinfo")).toContainText(`Newcomer ${run}`);
     await context.close();
   });
 
@@ -274,7 +274,10 @@ test.describe("first project", () => {
     const input = page.getByLabel("Source", { exact: true });
     const counting = page.getByRole("combobox", { name: "Visitor counting" });
     await input.fill("Website");
+    const addWebsites = page.getByText("Add websites (optional)", { exact: true });
+    await addWebsites.click();
     await page.getByLabel("Websites", { exact: true }).fill("*.example.com\n*.example.org");
+    await addWebsites.click();
     const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
     for (const width of [1600, 1024, 840, 390]) {
       await page.setViewportSize({ width, height: 844 });
@@ -291,6 +294,7 @@ test.describe("first project", () => {
       expect((await counting.boundingBox())!.width).toBeLessThanOrEqual(225);
       if (width === 1600 || width === 390) {
         await counting.click();
+        await expect(page.getByRole("option", { name: "Returning visitors" })).toBeVisible();
         await page.screenshot({ path: info.outputPath(`visitor-counting-${width}.png`) });
         expect((await page.getByRole("listbox").boundingBox())!.width).toBeLessThan(250);
         await page.keyboard.press("Escape");
@@ -306,31 +310,52 @@ test.describe("first project", () => {
     await page.getByRole("option", { name: "Events only" }).click();
     await counting.click();
     await page.getByRole("option", { name: "Returning visitors" }).click();
-    await page.getByLabel("Layout", { exact: true }).click();
-    await page.getByRole("option", { name: "Corner card" }).click();
-    await page.getByLabel("Theme", { exact: true }).click();
-    await page.getByRole("option", { name: "Light", exact: true }).click();
-    await expect(page.getByText("Prompt preview")).toBeVisible();
-    await page.getByRole("button", { name: "Create project" }).click();
+    const create = page.getByRole("button", { name: "Create project" });
+    const formBox = (await page.locator("form.auth-form").boundingBox())!;
+    const createBox = (await create.boundingBox())!;
+    expect(Math.abs(formBox.x + formBox.width - createBox.x - createBox.width)).toBeLessThan(2);
+    await create.click();
     // The same page then shows how to connect it: the source's new key in a snippet, and the
     // agent's MCP setup.
     await expect(page.getByRole("heading", { name: "Connect Website" })).toBeVisible();
     await expect(page.getByText("Step 2 of 2")).toBeVisible();
-    expect((await (await api.get("/api/products")).json())[0].website_urls).toEqual([
-      "https://*.example.com",
-      "https://*.example.org",
-    ]);
+    const [project] = await (await api.get("/api/products")).json();
+    expect(project.website_urls).toEqual(["https://*.example.com", "https://*.example.org"]);
     await expect(page).toHaveURL(`${base}/new`);
+    await page.getByText("View source key", { exact: true }).click();
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
+    await page.getByText("View source key", { exact: true }).click();
     expect(key).toMatch(/^pk_/);
     await expect(page.locator(".integration-code")).toContainText(key);
     await expect(page.locator(".integration-code")).toContainText("registerAnalyticsConsent");
+    const customize = page.getByText("Customize consent snippet", { exact: true });
+    await customize.click();
+    await page.getByLabel("Who asks for permission?").click();
+    await page.getByRole("option", { name: "My site already asks" }).click();
+    await expect(page.locator(".integration-code")).toContainText("analyticsConsentChanged");
+    await expect(page.getByText("Prompt preview")).toHaveCount(0);
+    await page.getByLabel("Who asks for permission?").click();
+    await page.getByRole("option", { name: "Ask with Highkey" }).click();
+    await page.getByLabel("Layout", { exact: true }).click();
+    await page.getByRole("option", { name: "Corner card" }).click();
+    await page.getByLabel("Theme", { exact: true }).click();
+    await page.getByRole("option", { name: "Light", exact: true }).click();
+    await expect(
+      page.locator('.hk-consent[data-preview][data-theme="light"][data-layout="corner"]'),
+    ).toBeVisible();
     await expect(page.locator(".integration-code")).toContainText(
       'layout: "corner", theme: "light"',
     );
+    await customize.click();
     const connection = page.getByRole("status", { name: "Source connection" });
+    const sourcesAfterPreview = await (await api.get(`/api/products/${project.id}/sources`)).json();
+    const website = sourcesAfterPreview.find((s: { name: string }) => s.name === "Website");
+    expect(website.visitor_mode).toBe("persistent");
+    expect(website).not.toHaveProperty("consent_prompt");
+    expect(website).not.toHaveProperty("consent_theme");
     await expect(connection).toContainText("Waiting for the first event from Website");
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: info.outputPath("connect-390.png") });
     await expect(connection).toBeInViewport();
     await page.setViewportSize({ width: 1280, height: 844 });

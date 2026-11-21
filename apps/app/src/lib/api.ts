@@ -2,8 +2,6 @@ import type { SourceIconId } from "./source-icons";
 
 export type Source = {
   visitor_mode?: "off" | "persistent" | "cookieless";
-  consent_prompt?: "site" | "bar" | "corner";
-  consent_theme?: "auto" | "light" | "dark";
   id: string;
   product_id: string;
   name: string;

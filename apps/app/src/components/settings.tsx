@@ -626,10 +626,9 @@ function ProductSettings({ product }: { product: Product }) {
         </CardHeader>
         <CardContent>
           <IntegrationTabs
+            key={keySource?.id}
             value={integration}
             visitorMode={keySource?.visitor_mode}
-            consentPrompt={keySource?.consent_prompt}
-            consentTheme={keySource?.consent_theme}
             onValueChange={setIntegration}
             ingestionKey={newKey}
             onCopyError={() =>

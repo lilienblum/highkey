@@ -1,9 +1,10 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { mountConsentPrompt, type ConsentAppearance } from "../../../../sdk/typescript/consent-ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { highlight } from "@/lib/highlight";
 import { ValueSelect } from "./value-select";
-import type { Source } from "@/lib/api";
+import { Field, FieldLabel } from "./ui/field";
 
 /** The ways a source sends events: the hosted browser tracker, the SDKs, or plain HTTP. */
 export type Integration = "browser" | "typescript" | "rust" | "http";
@@ -95,29 +96,28 @@ export function IntegrationTabs({
   onValueChange,
   ingestionKey,
   visitorMode,
-  consentPrompt = "site",
-  consentTheme = "auto",
   onCopyError,
 }: {
   value: Integration;
   onValueChange: (value: Integration) => void;
   ingestionKey?: string;
   visitorMode?: "off" | "cookieless" | "persistent";
-  consentPrompt?: Source["consent_prompt"];
-  consentTheme?: Source["consent_theme"];
   onCopyError: () => void;
 }) {
   const origin = useOrigin();
   const [framework, setFramework] = useState<keyof typeof placements>("html");
+  const [siteConsent, setSiteConsent] = useState(false);
+  const [layout, setLayout] = useState<NonNullable<ConsentAppearance["layout"]>>("bar");
+  const [theme, setTheme] = useState<NonNullable<ConsentAppearance["theme"]>>("auto");
   const server = ingestionKey?.startsWith("sk_");
   if (server && (value === "browser" || value === "rust")) value = "typescript";
   const key = ingestionKey || "YOUR_INGESTION_KEY";
-  const builtIn = visitorMode === "persistent" && consentPrompt !== "site";
+  const builtIn = visitorMode === "persistent" && !siteConsent;
   let raw = integrationSnippet(value, origin, key);
   if (value === "browser" && visitorMode && visitorMode !== "off") {
     raw = raw.replace('identity: "none"', `identity: "${visitorMode}"`);
     if (builtIn)
-      raw = `<script type="module" referrerpolicy="no-referrer">\n  import { registerAnalyticsConsent } from "${origin}/tracker.js";\n\n  const consent = registerAnalyticsConsent({\n    endpoint: "${origin}",\n    key: "${key}",\n    appearance: { layout: "${consentPrompt}", theme: "${consentTheme}" },\n  });\n  // In your footer: <button type="button" data-highkey-privacy>Privacy preferences</button>\n</script>`;
+      raw = `<script type="module" referrerpolicy="no-referrer">\n  import { registerAnalyticsConsent } from "${origin}/tracker.js";\n\n  const consent = registerAnalyticsConsent({\n    endpoint: "${origin}",\n    key: "${key}",\n    appearance: { layout: "${layout}", theme: "${theme}" },\n  });\n  // In your footer: <button type="button" data-highkey-privacy>Privacy preferences</button>\n</script>`;
     else if (visitorMode === "persistent")
       raw = `<script type="module" referrerpolicy="no-referrer">\n  import { startBrowserTracker } from "${origin}/tracker.js";\n\n  let tracker;\n  // Call this from your existing consent manager on load and when consent changes.\n  function analyticsConsentChanged(allowed) {\n    if (allowed) {\n      tracker ??= startBrowserTracker({ endpoint: "${origin}", key: "${key}", identity: "persistent" });\n    } else {\n      tracker?.optOut();\n      tracker = undefined;\n    }\n  }\n</script>`;
   }
@@ -137,7 +137,7 @@ export function IntegrationTabs({
   const identityInstruction =
     value === "browser" && visitorMode === "persistent"
       ? builtIn
-        ? `Use registerAnalyticsConsent with the ${consentPrompt} layout and ${consentTheme} theme, and add a data-highkey-privacy button to the footer. Do not start a second tracker.`
+        ? `Use registerAnalyticsConsent with the ${layout} layout and ${theme} theme, and add a data-highkey-privacy button to the footer. Do not start a second tracker.`
         : "Start persistent tracking only from the site's existing analytics consent handler; opt out when consent is withdrawn."
       : value === "browser" && visitorMode === "cookieless"
         ? "Use cookieless daily visitor counting."
@@ -160,6 +160,7 @@ export function IntegrationTabs({
           <div className="mb-3 grid gap-2">
             <ValueSelect
               label="Install framework"
+              className="max-w-56"
               value={framework}
               options={[
                 ["html", "Plain HTML"],
@@ -172,6 +173,62 @@ export function IntegrationTabs({
               onValueChange={(v) => setFramework(v as keyof typeof placements)}
             />
             <p className="quiet">{placements[framework][1]}</p>
+            {visitorMode === "persistent" && (
+              <details className="my-2">
+                <summary className="w-fit cursor-pointer">Customize consent snippet</summary>
+                <div className="mt-3 grid min-w-0 gap-3">
+                  <p className="quiet">
+                    These choices change the code below. You can edit them in your app at any time.
+                  </p>
+                  <Field className="max-w-64">
+                    <FieldLabel htmlFor="snippet-consent">Who asks for permission?</FieldLabel>
+                    <ValueSelect
+                      id="snippet-consent"
+                      value={siteConsent ? "site" : "highkey"}
+                      options={[
+                        ["highkey", "Ask with Highkey"],
+                        ["site", "My site already asks"],
+                      ]}
+                      onValueChange={(value) => setSiteConsent(value === "site")}
+                    />
+                  </Field>
+                  {!siteConsent && (
+                    <>
+                      <div className="grid max-w-[22rem] grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
+                        <Field>
+                          <FieldLabel htmlFor="snippet-layout">Layout</FieldLabel>
+                          <ValueSelect
+                            id="snippet-layout"
+                            value={layout}
+                            options={[
+                              ["bar", "Bottom bar"],
+                              ["corner", "Corner card"],
+                            ]}
+                            onValueChange={(v) => setLayout(v === "corner" ? "corner" : "bar")}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="snippet-theme">Theme</FieldLabel>
+                          <ValueSelect
+                            id="snippet-theme"
+                            value={theme}
+                            options={[
+                              ["auto", "Match site"],
+                              ["light", "Light"],
+                              ["dark", "Dark"],
+                            ]}
+                            onValueChange={(v) =>
+                              setTheme(v === "light" || v === "dark" ? v : "auto")
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <ConsentPreview layout={layout} theme={theme} />
+                    </>
+                  )}
+                </div>
+              </details>
+            )}
           </div>
         )}
         <div className="code-toolbar">
@@ -224,5 +281,19 @@ export function IntegrationTabs({
         </details>
       </TabsContent>
     </Tabs>
+  );
+}
+
+function ConsentPreview({ layout, theme }: ConsentAppearance) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const panel = mountConsentPrompt(ref.current!, { layout, theme }, () => {}, null, true);
+    return () => panel.remove();
+  }, [layout, theme]);
+  return (
+    <figure>
+      <figcaption className="mb-2 text-xs text-muted-foreground">Prompt preview</figcaption>
+      <div ref={ref} />
+    </figure>
   );
 }

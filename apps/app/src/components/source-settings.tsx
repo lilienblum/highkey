@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { mountConsentPrompt } from "../../../../sdk/typescript/consent-ui";
+import { useState, type FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { api, type Product, type Source } from "@/lib/api";
@@ -34,8 +33,6 @@ export function SourceSettings({ product }: { product: Product }) {
             name: source.name,
             icon: source.icon,
             visitor_mode: source.visitor_mode,
-            consent_prompt: source.consent_prompt,
-            consent_theme: source.consent_theme,
           }
         : { name: "", icon: null },
     );
@@ -151,8 +148,6 @@ export type SourceDraft = {
   name: string;
   icon: SourceIconId | null;
   visitor_mode?: Source["visitor_mode"];
-  consent_prompt?: Source["consent_prompt"];
-  consent_theme?: Source["consent_theme"];
 };
 
 /**
@@ -173,147 +168,59 @@ export function SourceFields({
   hint?: string;
 }) {
   return (
-    <>
-      <div className="@container">
-        <div className="grid items-start gap-4 @min-[32rem]:grid-cols-[minmax(0,22rem)_minmax(0,14rem)]">
-          <Field className="min-w-0 max-w-[22rem]" data-disabled={disabled}>
-            <FieldLabel htmlFor="source-name">{label}</FieldLabel>
-            <div className="relative">
-              <Input
-                id="source-name"
-                className="pe-11"
-                value={value.name}
-                onChange={(e) => onChange({ ...value, name: e.target.value })}
-                placeholder="e.g. Website"
-                aria-describedby={hint ? "source-name-hint" : undefined}
-                required
-                maxLength={80}
-                disabled={disabled}
-              />
-              <SourceIconPicker
-                name={value.name}
-                value={value.icon}
-                onChange={(icon) => onChange({ ...value, icon })}
-                disabled={disabled}
-                className="absolute end-1 top-1/2 -translate-y-1/2"
-              />
-            </div>
-            {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
-          </Field>
-          <Field className="min-w-0 max-w-56">
-            <FieldLabel htmlFor="visitor-mode">Visitor counting</FieldLabel>
-            <ValueSelect
-              id="visitor-mode"
-              value={value.visitor_mode ?? "off"}
-              onValueChange={(v) =>
-                onChange({
-                  ...value,
-                  visitor_mode: v as Source["visitor_mode"],
-                  consent_prompt: value.consent_prompt ?? (v === "persistent" ? "bar" : undefined),
-                })
-              }
+    <div className="@container">
+      <div className="grid items-start gap-4 @min-[32rem]:grid-cols-[minmax(0,22rem)_minmax(0,14rem)]">
+        <Field className="min-w-0 max-w-[22rem]" data-disabled={disabled}>
+          <FieldLabel htmlFor="source-name">{label}</FieldLabel>
+          <div className="relative">
+            <Input
+              id="source-name"
+              className="pe-11"
+              value={value.name}
+              onChange={(e) => onChange({ ...value, name: e.target.value })}
+              placeholder="e.g. Website"
+              aria-describedby={hint ? "source-name-hint" : undefined}
+              required
+              maxLength={80}
               disabled={disabled}
-              options={[
-                ["off", "Events only"],
-                ["cookieless", "Daily visitors"],
-                ["persistent", "Returning visitors"],
-              ]}
             />
-            <FieldDescription>
-              {value.visitor_mode === "persistent"
-                ? "Recognizes the same browser on later visits, with permission."
-                : value.visitor_mode === "cookieless"
-                  ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
-                  : "Counts events without counting visitors."}
-            </FieldDescription>
-          </Field>
-        </div>
+            <SourceIconPicker
+              name={value.name}
+              value={value.icon}
+              onChange={(icon) => onChange({ ...value, icon })}
+              disabled={disabled}
+              className="absolute end-1 top-1/2 -translate-y-1/2"
+            />
+          </div>
+          {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
+        </Field>
+        <Field className="min-w-0 max-w-56">
+          <FieldLabel htmlFor="visitor-mode">Visitor counting</FieldLabel>
+          <ValueSelect
+            id="visitor-mode"
+            value={value.visitor_mode ?? "off"}
+            onValueChange={(v) =>
+              onChange({
+                ...value,
+                visitor_mode: v as Source["visitor_mode"],
+              })
+            }
+            disabled={disabled}
+            options={[
+              ["off", "Events only"],
+              ["cookieless", "Daily visitors"],
+              ["persistent", "Returning visitors"],
+            ]}
+          />
+          <FieldDescription>
+            {value.visitor_mode === "persistent"
+              ? "Recognizes the same browser on later visits, with permission."
+              : value.visitor_mode === "cookieless"
+                ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
+                : "Counts events without counting visitors."}
+          </FieldDescription>
+        </Field>
       </div>
-      {value.visitor_mode === "persistent" && (
-        <>
-          <Field>
-            <FieldLabel htmlFor="source-consent">Who asks for permission?</FieldLabel>
-            <ValueSelect
-              id="source-consent"
-              className="max-w-64"
-              value={value.consent_prompt === "site" ? "site" : "highkey"}
-              disabled={disabled}
-              options={[
-                ["highkey", "Ask with Highkey"],
-                ["site", "My site already asks"],
-              ]}
-              onValueChange={(v) =>
-                onChange({ ...value, consent_prompt: v === "site" ? "site" : "bar" })
-              }
-            />
-            <FieldDescription>
-              {value.consent_prompt === "site"
-                ? "Start the tracker only after your visitor agrees."
-                : "Visitors can decline and keep using your site. Copy the updated browser snippet to use this prompt."}
-            </FieldDescription>
-          </Field>
-          {value.consent_prompt !== "site" && (
-            <div className="grid gap-3">
-              <div className="grid max-w-[22rem] grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
-                <Field>
-                  <FieldLabel htmlFor="source-consent-layout">Layout</FieldLabel>
-                  <ValueSelect
-                    id="source-consent-layout"
-                    disabled={disabled}
-                    value={value.consent_prompt ?? "bar"}
-                    options={[
-                      ["bar", "Bottom bar"],
-                      ["corner", "Corner card"],
-                    ]}
-                    onValueChange={(v) =>
-                      onChange({ ...value, consent_prompt: v as Source["consent_prompt"] })
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="source-consent-theme">Theme</FieldLabel>
-                  <ValueSelect
-                    id="source-consent-theme"
-                    disabled={disabled}
-                    value={value.consent_theme ?? "auto"}
-                    options={[
-                      ["auto", "Match site"],
-                      ["light", "Light"],
-                      ["dark", "Dark"],
-                    ]}
-                    onValueChange={(v) =>
-                      onChange({ ...value, consent_theme: v as Source["consent_theme"] })
-                    }
-                  />
-                </Field>
-              </div>
-              <ConsentPreview
-                layout={value.consent_prompt ?? "bar"}
-                theme={value.consent_theme ?? "auto"}
-              />
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-function ConsentPreview({
-  layout,
-  theme,
-}: {
-  layout: "bar" | "corner";
-  theme: "auto" | "light" | "dark";
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const panel = mountConsentPrompt(ref.current!, { layout, theme }, () => {}, null, true);
-    return () => panel.remove();
-  }, [layout, theme]);
-  return (
-    <figure>
-      <figcaption className="mb-2 text-xs text-muted-foreground">Prompt preview</figcaption>
-      <div ref={ref} />
-    </figure>
+    </div>
   );
 }

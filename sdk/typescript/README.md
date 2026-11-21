@@ -79,7 +79,7 @@ The tracker honors DNT/GPC, collects no identity or campaign parameters by defau
 
 ### Ask before counting returning visitors
 
-Set the source to **Returning visitors → Ask with Highkey**. Install once on the client, after your page mounts. Use this **instead of** starting a separate tracker:
+Set the source to **Returning visitors**. Choose the prompt layout and theme in your SDK call; the dashboard’s snippet preview does not save them on the source. Install once on the client, after your page mounts. Use this **instead of** starting a separate tracker:
 
 ```js
 import { registerAnalyticsConsent } from "@highkey/sdk/consent";

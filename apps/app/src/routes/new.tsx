@@ -62,8 +62,6 @@ function NewProject() {
         name: sourceName,
         icon: sourceDraft.icon,
         visitor_mode: sourceDraft.visitor_mode,
-        consent_prompt: sourceDraft.consent_prompt,
-        consent_theme: sourceDraft.consent_theme,
       });
       const key = await api<{ key: string }>(`/products/${made.id}/keys`, "POST", {
         label: source.current.name,
@@ -125,7 +123,19 @@ function NewProject() {
                     maxLength={80}
                     required
                   />
-                  <ProjectWebsites id="new-project-websites" />
+                  <div className="grid gap-1.5">
+                    <details className="peer">
+                      <summary className="w-fit cursor-pointer text-sm text-primary">
+                        Add websites (optional)
+                      </summary>
+                      <div className="mt-3">
+                        <ProjectWebsites id="new-project-websites" />
+                      </div>
+                    </details>
+                    <p className={`${HINT} peer-open:hidden`}>
+                      Any website with the source key can send events by default.
+                    </p>
+                  </div>
                   <div className={`mt-1 grid min-w-0 gap-4 pt-5 ${SEAM}`}>
                     <SourceFields
                       value={sourceDraft}
@@ -279,16 +289,18 @@ function Connect({ organization, created }: { organization: string; created: Cre
         >
           Add Highkey to your app
         </h2>
-        <div className="flex items-center gap-2 rounded-md border bg-surface-inset px-3 py-2.5 font-mono text-[13px] [overflow-wrap:anywhere]">
-          <code data-testid="ingestion-key" className="min-w-0 flex-1">
-            {key}
-          </code>
-          <CopyButton variant="ghost" aria-label="Copy ingestion key" content={key} />
-        </div>
-        <p className={HINT}>
-          {source.name}’s ingestion key. It only sends events, and Highkey shows it once: copy it
-          now. Restrict it to your site’s address, or make more, in the project’s settings.
-        </p>
+        <details>
+          <summary className="w-fit cursor-pointer text-sm text-primary">View source key</summary>
+          <div className="my-2 flex items-center gap-2 rounded-md border bg-surface-inset px-3 py-2.5 font-mono text-[13px] [overflow-wrap:anywhere]">
+            <code data-testid="ingestion-key" className="min-w-0 flex-1">
+              {key}
+            </code>
+            <CopyButton variant="ghost" aria-label="Copy ingestion key" content={key} />
+          </div>
+          <p className={HINT}>
+            Copy this key or the snippet before leaving. You can create another key in Settings.
+          </p>
+        </details>
         {copyFailed ? (
           <p className={HINT} role="alert">
             Clipboard unavailable. Select the snippet and copy it manually.
@@ -299,8 +311,6 @@ function Connect({ organization, created }: { organization: string; created: Cre
           onValueChange={setIntegration}
           ingestionKey={key}
           visitorMode={source.visitor_mode}
-          consentPrompt={source.consent_prompt}
-          consentTheme={source.consent_theme}
           onCopyError={() => setCopyFailed(true)}
         />
         {project.website_url && <WebsiteCheck id={project.id} />}
@@ -312,16 +322,21 @@ function Connect({ organization, created }: { organization: string; created: Cre
         </p>
         <ConnectAgent />
       </details>
-      <div className="flex flex-wrap items-center gap-5 pt-2">
-        <Button nativeButton={false} role="link" render={<a href={home} />}>
-          Open {project.name}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <a
           href={`${home}/settings?source=${encodeURIComponent(source.slug)}`}
           className={`text-[13px] ${LINK}`}
         >
           Project settings
         </a>
+        <Button
+          className="ms-auto max-w-full"
+          nativeButton={false}
+          role="link"
+          render={<a href={home} />}
+        >
+          <span className="truncate">Open {project.name}</span>
+        </Button>
       </div>
     </main>
   );
