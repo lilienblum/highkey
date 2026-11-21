@@ -365,8 +365,8 @@ test("visible preset shortcuts select periods and bracket keys navigate without 
     await trigger(page).press(key);
     await expect(trigger(page)).toContainText(label);
     const params = new URL(page.url()).searchParams;
-    expect(params.get(/^\d+$/.test(value) ? "days" : "period")).toBe(value);
-    expect(params.get("source")).toBe("all");
+    expect(params.get(/^\d+$/.test(value) ? "days" : "period")).toBe(value === "7" ? null : value);
+    expect(params.has("source")).toBe(false);
     await trigger(page).click();
     const item = dateMenu(page).getByRole("menuitemradio", { name: label, exact: true });
     await expect(item).toHaveAttribute("aria-checked", "true");

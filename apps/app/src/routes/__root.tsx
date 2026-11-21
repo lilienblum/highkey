@@ -2,7 +2,6 @@ import { SkulletProvider } from "skullet/react";
 import { DisplayPreferencesProvider } from "@/components/display-preferences";
 import {
   createRootRouteWithContext,
-  retainSearchParams,
   HeadContent,
   Outlet,
   redirect,
@@ -26,7 +25,6 @@ import { setPageOrganization } from "@/lib/api";
 import type { ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
-import { validateWorkspaceSearch } from "@/lib/workspace-search";
 import { sidebarScript } from "@/lib/preferences";
 import styles from "../styles.css?url";
 // Signing in or out, joining and switching organizations all load a new page, so in the browser
@@ -46,10 +44,6 @@ function rememberViewer(viewer: Viewer): Viewer {
   return viewer;
 }
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  validateSearch: validateWorkspaceSearch,
-  search: {
-    middlewares: [retainSearchParams(["source", "days", "period", "snapshot", "from", "to"])],
-  },
   // Everyone signs in first; account screens (signing in, joining) are the only public pages.
   beforeLoad: async ({ location }) => {
     let viewer = await currentViewer();

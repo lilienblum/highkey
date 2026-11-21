@@ -1,2 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-export const Route = createFileRoute("/$orgSlug/$projectSlug")({ component: Outlet });
+import { projectSearch } from "@/lib/route-search";
+export const Route = createFileRoute("/$orgSlug/$projectSlug")({
+  search: projectSearch,
+  component: Outlet,
+});

@@ -101,9 +101,9 @@ export function AppShell({
   const { projectSlug, dashboardSlug } = useParams({ strict: false });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const search = useSearch({ from: "__root__" });
-  const currentSearch = useSearch({ strict: false });
-  const drilldown = view === "/events" ? currentSearch.drilldown : undefined;
+  const search = useSearch({ strict: false });
+  const drilldown = view === "/events" ? search.drilldown : undefined;
+  const hasReportDates = view !== "/settings" && view !== "/logs" && view !== "/realtime";
   const requestedProject = projectSlug ?? search.project;
   const days = search.days ?? (requestedProject ? 7 : savedDays);
   useEffect(() => {
@@ -134,7 +134,7 @@ export function AppShell({
       search: {
         source: "all",
         days: 7,
-        // Explicitly clear the dates retained by the root search middleware.
+        // Switching projects clears the previous report's dates.
         period: undefined,
         snapshot: undefined,
         from: undefined,
@@ -163,11 +163,16 @@ export function AppShell({
         : (products.find((p) => p.id === selected) ?? products[0]);
   const requestedSource = drilldown
     ? (drilldown.sourceId ?? "all")
-    : (search.source ?? (requestedProject ? "all" : (sourceSelection[product?.id ?? ""] ?? "all")));
+    : (search.source ??
+      (requestedProject || view === "/settings"
+        ? "all"
+        : (sourceSelection[product?.id ?? ""] ?? "all")));
   // URLs name sources by slug; IDs come from older links, drilldowns and saved choices.
   const source = findSource(product?.sources, requestedSource);
   const sourceId = source?.id;
   const sourceValue = sourceParam(product?.sources, sourceId);
+  const urlSource = sourceValue === "all" ? undefined : sourceValue;
+  const urlDays = hasReportDates && days !== 7 ? days : undefined;
   const missingSource = !!requestedSource && requestedSource !== "all" && !source;
   const selectionError =
     search.invalidWorkspace ||
@@ -192,21 +197,21 @@ export function AppShell({
     )
       return;
     savePreference("highkey:product", product.id);
-    savePreference("highkey:days", String(days));
-    savePreference(`highkey:source:${product.id}`, sourceId ?? "");
+    if (hasReportDates) savePreference("highkey:days", String(days));
+    if (view !== "/settings") savePreference(`highkey:source:${product.id}`, sourceId ?? "");
     if (
       projectSlug !== product.slug ||
       search.project !== undefined ||
-      search.source !== sourceValue ||
-      search.days !== days
+      search.source !== urlSource ||
+      search.days !== urlDays
     )
       void navigate({
         ...workspaceTarget(view, product.slug, dashboardSlug),
         search: (previous) => ({
           ...previous,
           project: undefined,
-          source: sourceValue,
-          days,
+          source: urlSource,
+          days: urlDays,
         }),
         hash: true,
         replace: true,
@@ -220,7 +225,9 @@ export function AppShell({
     missingSource,
     days,
     sourceId,
-    sourceValue,
+    urlSource,
+    urlDays,
+    hasReportDates,
     projectSlug,
     dashboardSlug,
     view,
@@ -374,8 +381,8 @@ export function AppShell({
         <WorkspaceSidebar
           path={view}
           dashboardSlug={view === "/dashboards" ? dashboardSlug : undefined}
-          eventViewSlug={view === "/events" ? currentSearch.view : undefined}
-          logViewSlug={view === "/logs" ? currentSearch.view : undefined}
+          eventViewSlug={view === "/events" ? search.view : undefined}
+          logViewSlug={view === "/logs" ? search.view : undefined}
           product={product}
           sourceId={sourceId}
           picker={projectPicker}
@@ -387,8 +394,8 @@ export function AppShell({
               search: {
                 // The Events query and open view, or the log filters, carry over to the new
                 // source; a page number or log cursor does not.
-                ...(view === "/events" ? eventFilters(currentSearch) : {}),
-                ...(view === "/logs" ? logFilters(currentSearch) : {}),
+                ...(view === "/events" ? eventFilters(search) : {}),
+                ...(view === "/logs" ? logFilters(search) : {}),
                 project: undefined,
                 source: sourceParam(product.sources, id),
                 days,
@@ -433,7 +440,7 @@ export function AppShell({
               <div className="mobile-project-picker">{projectPicker}</div>
               <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
             </div>
-            {view !== "/settings" && view !== "/logs" && view !== "/realtime" && (
+            {hasReportDates && (
               <div className="workspace-toolbar">
                 <div className="workspace-toolbar-actions">
                   <DateRangePicker

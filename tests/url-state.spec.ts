@@ -98,10 +98,9 @@ test("project URL wins over saved preferences and applies a portable calendar ra
   }
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}/settings`);
-  expect(params(page).has("project")).toBe(false);
-  expect(params(page).get("from")).toBe(from);
-  expect(params(page).get("to")).toBe(to);
+  expect(new URL(page.url()).search).toBe("");
   await page.goBack();
+  await expect(page).toHaveURL(link);
   await expect(page.locator(".activity-widget .chart-period-note")).toContainText(
     "One point per day",
   );
@@ -109,6 +108,33 @@ test("project URL wins over saved preferences and applies a portable calendar ra
   await page.getByRole("menuitemradio", { name: "Last 30 days", exact: true }).click();
   await expect.poll(() => params(page).has("from")).toBe(false);
   expect(params(page).has("to")).toBe(false);
+});
+
+test("workspace links carry only the filters their destination uses", async ({ page }) => {
+  const path = `/owner/${project.slug}`;
+  const source = project.sources[0].slug;
+  await page.goto(`${path}?source=${source}&days=30`);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  for (const [name, suffix, expected] of [
+    ["Events", "/events", { source, days: "30" }],
+    ["Logs", "/logs", { source }],
+    ["Realtime", "/realtime", { source }],
+    ["Settings", "/settings", {}],
+  ] as const) {
+    const href = await nav.getByRole("link", { name, exact: true }).getAttribute("href");
+    const url = new URL(href!, page.url());
+    expect(url.pathname).toBe(path + suffix);
+    expect(Object.fromEntries(url.searchParams)).toEqual(expected);
+  }
+  // Old bookmarks shed report dates without breaking a source-specific guide or log filters.
+  await page.goto(`${path}/settings?source=${source}&days=30#install-guide`);
+  await expect(page).toHaveURL(
+    (url) => url.search === `?source=${source}` && url.hash === "#install-guide",
+  );
+  await page.goto(`${path}/logs?source=all&days=7&logWindow=24h`);
+  await expect(page).toHaveURL((url) => url.search === "?logWindow=24h");
+  await page.goto("/settings/account?source=all&days=7");
+  await expect(page).toHaveURL((url) => url.pathname === "/settings/account" && url.search === "");
 });
 
 test("applied Explore queries and pages survive reload and browser history", async ({ page }) => {
@@ -263,7 +289,7 @@ for (const [label, dates] of Object.entries<Record<string, string>>({
     );
     await select(page, "Select project", project.name);
     await expect(page.locator(".activity-widget .widget-value")).toHaveText("31");
-    expect(Object.fromEntries(params(page))).toEqual({ source: "all", days: "7" });
+    expect(new URL(page.url()).search).toBe("");
     await expect(page.getByRole("button", { name: "Choose date range" })).toContainText(
       "Last 7 days",
     );
@@ -287,7 +313,7 @@ for (const [label, dates] of Object.entries<Record<string, string>>({
     });
     await page.goForward();
     await expect(page.locator(".activity-widget .widget-value")).toHaveText("31");
-    expect(Object.fromEntries(params(page))).toEqual({ source: "all", days: "7" });
+    expect(new URL(page.url()).search).toBe("");
   });
 }
 
@@ -327,7 +353,7 @@ test("switching projects resets Explore queries, drafts, drilldowns and paginati
   await select(page, "Select project", project.name);
   await expect(page.getByText("across 31 matching events")).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(`/owner/${project.slug}/events`);
-  expect(Object.fromEntries(params(page))).toEqual({ source: "all", days: "7" });
+  expect(new URL(page.url()).search).toBe("");
   expect((await request).postDataJSON()).toMatchObject({
     measure: "count",
     group_by: "name",

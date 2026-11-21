@@ -96,7 +96,7 @@ test("the old Explore paths redirect to Events and keep their search", async ({ 
   await expect(page).toHaveURL(new RegExp(`/owner/${project.slug}/events\\?`));
   const params = new URL(page.url()).searchParams;
   expect(params.get("days")).toBe("30");
-  expect(params.get("source")).toBe("all");
+  expect(params.has("source")).toBe(false);
   expect(JSON.parse(params.get("query") ?? "null")).toMatchObject({ event: "signup" });
   await expect(page.getByRole("heading", { level: 1, name: "Events", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Event", exact: true })).toContainText("signup");
