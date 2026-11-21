@@ -165,7 +165,22 @@ function WorkspaceError() {
     <main className="workspace-error">
       <img src="/favicon.svg?v=7" width="40" height="40" alt="Highkey" />
       <h1>Something went wrong</h1>
-      <Button onClick={() => void router.invalidate()}>Try again</Button>
+      <p>
+        If this keeps happening, email{" "}
+        <a
+          className="text-primary underline underline-offset-4"
+          href="mailto:support@usehighkey.com"
+        >
+          support@usehighkey.com
+        </a>
+        .
+      </p>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button onClick={() => void router.invalidate()}>Try again</Button>
+        <Button variant="outline" nativeButton={false} role="link" render={<a href="/" />}>
+          Go home
+        </Button>
+      </div>
     </main>
   );
 }
