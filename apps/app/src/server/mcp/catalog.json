@@ -81,7 +81,11 @@
       "description": "Inspect the last 30 minutes of event and session activity, country, page and source counts.",
       "inputSchema": {
         "type": "object",
-        "properties": { "project": { "type": "string" }, "source_id": { "type": "string" } },
+        "properties": {
+          "project": { "type": "string" },
+          "source_id": { "type": "string" },
+          "cohort": { "type": "string", "description": "Optional project cohort ID" }
+        },
         "required": ["project"]
       },
       "annotations": { "readOnlyHint": true, "destructiveHint": false }
@@ -92,7 +96,6 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "title": { "type": "string" },
           "description": { "type": "string" },
