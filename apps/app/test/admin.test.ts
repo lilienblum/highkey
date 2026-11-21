@@ -1,7 +1,7 @@
 // The server admin (the first account on a self-host; Dan on the hosted service): find people and
 // organizations, ban and unban, end someone's sessions, and hand over a one-time reset link.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { authRequest, signUp } from "./auth-helpers";
+import { authRequest, signUp, signUpOwner } from "./auth-helpers";
 import { call, type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -20,7 +20,7 @@ async function userId(email: string): Promise<string> {
 
 describe("server admin", () => {
   test("the_first_account_is_the_server_admin", async () => {
-    await signUp(await ctx.auth(), "second@example.com", "Second");
+    await signUpOwner(await ctx.auth(), "second@example.com", "Second");
     const users = await call(ctx, "GET", "/api/admin/users");
     expect(users.status).toBe(200);
     expect(users.json).toEqual(
@@ -58,7 +58,7 @@ describe("server admin", () => {
 
   test("a_banned_user_cannot_sign_in", async () => {
     const auth = await ctx.auth();
-    const person = await signUp(auth, "spam@example.com");
+    const person = await signUpOwner(auth, "spam@example.com");
     const key = (await call(ctx, "POST", "/api/keys", { name: "k", access: "read" }, as(person)))
       .json.key;
     const id = await userId("spam@example.com");

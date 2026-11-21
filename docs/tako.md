@@ -125,7 +125,7 @@ backup = { storage = "private_backups" }
 HIGHKEY_PUBLIC_URL = "https://highkey.example.com"
 HIGHKEY_CLICKHOUSE_URL = "http://127.0.0.1:8123"
 HIGHKEY_INGEST_URL = "https://highkey-ingest.example.com"
-# HIGHKEY_SIGNUP = "open"   # the default, "invite", admits the first account and invited people
+# HIGHKEY_SIGNUP = "invite"  # optional: restrict signup to invited people after the first account
 ```
 
 The Tako database needs a network (`tako network` commands) and is created once on the server that will hold it: `tako sqlite create highkey --server your-server`. `backup.storage` names a private S3-compatible storage resource (`[storages.private_backups]`, with credentials set by `tako storages credentials private_backups --env production`) that receives the database's encrypted snapshots; without one, Tako takes no snapshots and losing the server loses the management state. Tako applies `migrations/` on every deploy, after a snapshot and before the new release starts.

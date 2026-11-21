@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { KEY_RATE_LIMIT } from "../src/server/auth/auth";
-import { authRequest, joinAs, signUp, testAuth } from "./auth-helpers";
+import { authRequest, joinAs, signUpOwner, testAuth } from "./auth-helpers";
 import { call, project, type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -115,7 +115,7 @@ describe("API keys", () => {
     expect((await call(ctx, "DELETE", `/api/keys/${mine.id}`, undefined, as(member))).status).toBe(
       404,
     );
-    const stranger = await signUp(auth, "stranger@example.com");
+    const stranger = await signUpOwner(auth, "stranger@example.com");
     expect(
       (await call(ctx, "DELETE", `/api/keys/${mine.id}`, undefined, as(stranger))).status,
     ).toBe(404);

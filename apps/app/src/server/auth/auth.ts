@@ -22,6 +22,7 @@ import { keyFrom } from "./keys";
 import { forgetOrganization, projectCount } from "./org-cleanup";
 import { type Mailer, resendMailer, type SocialProviders, socialFromEnv } from "./mailer";
 import { ac, roles } from "./roles";
+import { signupPolicy } from "./signup";
 
 export { type Mailer, memoryMailer } from "./mailer";
 
@@ -272,11 +273,12 @@ export function createAuth(options: AuthOptions) {
               });
             if (first) return { data: { ...user, role: "admin" } };
           },
-          // Signing up on your own creates an organization you own; joining by invitation does
-          // not. The first account's organization takes in projects that have none.
+          // Only the bootstrap admin gets an initial organization, including any legacy projects.
+          // Everyone else can wait for an invitation or explicitly create an organization.
           after: async (user, ctx) => {
+            if (!("role" in user) || user.role !== "admin") return;
             const adapter = await adapterOf(ctx);
-            if (!adapter || !self || (await invited(adapter, user.email))) return;
+            if (!adapter || !self) return;
             const org = (await self.api.createOrganization({
               body: { name: user.name, slug: await freeSlug(adapter, user.name), userId: user.id },
             })) as { id: string };
@@ -285,8 +287,7 @@ export function createAuth(options: AuthOptions) {
               where: [{ field: "userId", value: user.id }],
               update: { activeOrganizationId: org.id },
             });
-            if (options.db && (await adapter.count({ model: "user" })) === 1)
-              await adoptOrphanProjects(options.db, org.id);
+            if (options.db) await adoptOrphanProjects(options.db, org.id);
           },
         },
       },
@@ -477,7 +478,7 @@ export function getAuth(): Promise<Auth> {
         ]);
         await prepareUserDeletion(apiContext(), userId);
       },
-      signup: process.env.HIGHKEY_SIGNUP === "open" ? "open" : "invite",
+      signup: signupPolicy(process.env.HIGHKEY_SIGNUP),
       social: socialFromEnv({
         HIGHKEY_GITHUB_CLIENT_ID: setting("HIGHKEY_GITHUB_CLIENT_ID"),
         HIGHKEY_GITHUB_CLIENT_SECRET: setting("HIGHKEY_GITHUB_CLIENT_SECRET"),

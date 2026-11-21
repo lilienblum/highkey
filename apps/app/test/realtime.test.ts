@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ChangeEnvelope } from "../src/lib/change-envelope";
 import { routeChanges, sessionCookieName, verifyChannel } from "../src/server/realtime";
-import { signUp, TEST_ORIGIN } from "./auth-helpers";
+import { signUp, signUpOwner, TEST_ORIGIN } from "./auth-helpers";
 import { call, project, type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -30,7 +30,7 @@ describe("live hints", () => {
   test("hints_reach_only_the_owning_organization", async () => {
     const auth = await ctx.auth();
     const shop = await project(ctx, "Shop");
-    const other = await signUp(auth, "other@example.com");
+    const other = await signUpOwner(auth, "other@example.com");
     const elsewhere = (
       await call(
         ctx,
@@ -107,7 +107,7 @@ describe("live hints", () => {
     expect(await verifyChannel(ctx, { params: { org }, header: bearer(key) })).toMatchObject({
       subject: expect.any(String),
     });
-    const other = await signUp(auth, "other@example.com");
+    const other = await signUpOwner(auth, "other@example.com");
     expect(
       await verifyChannel(ctx, { params: { org: await orgOf(other) }, header: bearer(key) }),
     ).toBe(false);

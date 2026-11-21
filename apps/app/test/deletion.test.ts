@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readerUser, projectDatabase } from "../src/server/clickhouse/access";
 import { reconcileOnce } from "../src/server/registry";
 import { type WipePayload, wipeProject, wipeRunId } from "../src/server/wipe";
-import { authRequest, joinAs, signUp } from "./auth-helpers";
+import { authRequest, joinAs, signUpOwner } from "./auth-helpers";
 import { call, project, seedEvents, seedLogs, type TestContext, testContext } from "./helpers";
 
 const DAY = 86_400_000;
@@ -281,7 +281,7 @@ describe("deleting", () => {
 
   test("the_only_owner_with_other_members_cannot_be_deleted", async () => {
     const auth = await ctx.auth();
-    const founder = await signUp(auth, "founder@example.com");
+    const founder = await signUpOwner(auth, "founder@example.com");
     const helper = await joinAs(auth, founder, "helper@example.com", "member");
     const shop = (
       await call(
@@ -317,7 +317,7 @@ describe("deleting", () => {
 
   test("a_person_deleting_their_own_account_follows_the_same_rules", async () => {
     const auth = await ctx.auth();
-    const founder = await signUp(auth, "founder@example.com");
+    const founder = await signUpOwner(auth, "founder@example.com");
     await joinAs(auth, founder, "helper@example.com", "member");
     const leave = () =>
       authRequest(auth, "/delete-user", { password: "a password long enough" }, founder);

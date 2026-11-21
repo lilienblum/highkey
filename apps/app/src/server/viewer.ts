@@ -2,6 +2,7 @@
 // person with their organizations, which sign-in options this server offers, an invitation's
 // details for its Join page, and an agent's name for the consent page.
 import { createServerFn } from "@tanstack/react-start";
+import { signupPolicy } from "./auth/signup";
 
 export interface ViewerOrganization {
   id: string;
@@ -101,7 +102,7 @@ export const getAuthSetup = createServerFn({ method: "GET" }).handler(
     };
     return {
       email: Boolean(options.emailVerification),
-      signup: process.env.HIGHKEY_SIGNUP === "open" ? "open" : "invite",
+      signup: signupPolicy(process.env.HIGHKEY_SIGNUP),
       firstAccount: Number(users?.n ?? 0) === 0,
       social: {
         github: Boolean(options.socialProviders?.github),
@@ -173,7 +174,8 @@ export const getPendingInvitations = createServerFn({ method: "GET" }).handler(
     const { ctx, request } = await context();
     const auth = await ctx.auth();
     const session = await auth.api.getSession({ headers: request.headers });
-    if (!session) return [];
+    // Without a verified address, the invitation link itself proves the person received it.
+    if (!session?.user.emailVerified) return [];
     const { all } = await import("./db/db");
     const rows = await all<{
       id: string;

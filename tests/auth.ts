@@ -1,6 +1,15 @@
 // The account the browser tests run as, and how they call the API.
 import { join } from "node:path";
 import { E2E_ENV } from "../scripts/e2e-config";
+import type { APIRequestContext } from "@playwright/test";
+
+export async function createTestOrganization(api: APIRequestContext, name: string) {
+  const response = await api.post("/api/auth/organization/create", {
+    data: { name, slug: name.toLowerCase().replaceAll(" ", "-") },
+  });
+  if (!response.ok()) throw new Error(`Creating test organization failed: ${response.status()}`);
+  return (await response.json()) as { id: string; slug: string; name: string };
+}
 
 export const E2E_OWNER = { email: "owner@highkey-e2e.test", password: "browser tests password" };
 

@@ -1,6 +1,6 @@
 // Deleting, restoring and moving projects from settings.
 import { expect, request, test } from "@playwright/test";
-import { apiHeaders } from "./auth";
+import { apiHeaders, createTestOrganization } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;
 const run = Date.now();
@@ -43,12 +43,7 @@ test("move a project to another organization", async ({ browser }) => {
       })
     ).ok(),
   ).toBe(true);
-  const session = (await (await api.get("/api/auth/get-session")).json()) as {
-    session: { activeOrganizationId: string };
-  };
-  const home = (
-    (await (await api.get("/api/auth/organization/list")).json()) as { id: string; slug: string }[]
-  ).find((org) => org.id === session.session.activeOrganizationId) as { id: string; slug: string };
+  const home = await createTestOrganization(api, `Mover ${run}`);
   expect(
     (
       await api.post("/api/auth/organization/create", {

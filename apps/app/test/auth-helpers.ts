@@ -71,6 +71,13 @@ export async function signUp(auth: Auth, email: string, name = email.split("@")[
   return cookieFrom(response);
 }
 
+/** A second, independent workspace for cross-organization tests. */
+export async function signUpOwner(auth: Auth, email: string, name = email.split("@")[0] as string) {
+  const headers = await signUp(auth, email, name);
+  await auth.api.createOrganization({ headers, body: { name, slug: crypto.randomUUID() } });
+  return headers;
+}
+
 /** Invites `email` into the owner's active organization as `role`; they sign up and accept. */
 export async function joinAs(
   auth: Auth,

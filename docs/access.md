@@ -1,12 +1,12 @@
 # Accounts, organizations and access
 
-Highkey has its own sign-in. People have accounts, accounts belong to organizations, and organizations hold projects. Everything except collection (the ingest app's public endpoints) needs a signed-in person, an API key or an agent's OAuth token, and every request acts inside one organization with the role its person holds there now.
+Highkey has its own sign-in. An account can belong to zero or more organizations. Projects belong to organizations, and requests for their data use the role the person holds there now.
 
 Authentication runs on [Better Auth](https://www.better-auth.com/) inside the dashboard, with its tables in the same management database as projects and keys. Set `HIGHKEY_PUBLIC_URL` to the address people use (for example `https://highkey.example.com`) and `BETTER_AUTH_SECRET` to a long random secret (a Tako secret in production). The public URL is the only origin cookie-authenticated writes are accepted from, and a request for any other host (except loopback in development) is refused.
 
 ## Accounts
 
-- **Signing up.** `HIGHKEY_SIGNUP=invite` (the default) admits the very first account and people with a pending invitation. `HIGHKEY_SIGNUP=open` admits anyone (the hosted service). Signing up on your own creates an organization named after you, which you own; signing up from an invitation joins only the inviting organization.
+- **Signing up.** `HIGHKEY_SIGNUP=open` (the default) lets anyone create an account. Signing up alone grants no access to existing organizations or projects. You can wait for an invitation link or create an organization of your own. The first account is the exception: it sets up the server’s first organization. Set `HIGHKEY_SIGNUP=invite` to restrict later registrations to people with a pending invitation.
 - **The server admin.** The first account on a server is its admin, above every organization: they find people and organizations, ban and unban, sign someone out everywhere, hand over a one-time password-reset link, and delete accounts (`/api/admin/*`, server admin only). On an upgraded install, projects that existed before accounts join the first account's organization.
 - **Email.** With `HIGHKEY_RESEND_API_KEY` and `HIGHKEY_EMAIL_FROM` set (Tako secrets or environment), Highkey sends plain-text email through [Resend](https://resend.com/): address verification (required before sign-in), password reset links and invitations. Without them there is no email: verification is off, every invitation shows a link to share yourself, and a forgotten password is reset with a link the server admin creates.
 - **Two-factor codes.** Anyone can turn on TOTP codes from an authenticator app, with backup codes. An owner who uses them can require them of everyone in the organization; members without codes are then refused (by session, API key or agent) until they turn them on; in the browser they land on their Account settings, where they do. Codes are asked at password sign-in; GitHub and Google sign-in do not ask for them.
@@ -29,7 +29,7 @@ A role covers every project of its organization.
 | API keys and agent connections of their own            | yes   | yes   | yes    | read   |
 | See and revoke everyone's keys and connections         | yes   | yes   | —      | —      |
 
-- **Invitations** name an email address and a role, and expire after 7 days. The Join page they link to shows who invited you, to which organization and as what. An organization always keeps at least one owner.
+- **Invitations** name an email address and a role, and expire after 7 days. The Join page they link to shows who invited you, to which organization and as what. Pending invitations are also listed on the welcome page for verified addresses. Without email verification, use the private link shared by the inviting team. An organization always keeps at least one owner.
 - **Moving a project** to another organization needs admin or owner in both (project settings, **Move to another organization**). Its keys, dashboards and views go with it; its data in ClickHouse does not move, because it is stored by project.
 - **Deleting a project** (project settings, **Delete project**) stops its ingestion keys at once and hides it everywhere; an admin can restore it for 7 days from **Settings → Organization → Deleted projects**. After that a background job deletes its events and logs, its ClickHouse reader and views, and its records, one project at a time.
 - **Deleting an organization** (owner only) is refused while it has projects, deleted ones included until they are wiped. Its members, invitations, API keys and agent connections go with it.

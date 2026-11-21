@@ -39,7 +39,9 @@ function SignUp() {
     ? "This first account administers the server and owns its first organization."
     : invited
       ? undefined
-      : "Your account comes with an organization of its own for your projects.";
+      : setup.signup === "invite"
+        ? "Use the email address your invitation was sent to."
+        : "Join your team when you’re invited, or create your own organization after signing up.";
   return (
     <AuthFrame
       title={title}

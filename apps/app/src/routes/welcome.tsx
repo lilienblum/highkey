@@ -5,8 +5,7 @@ import { authPost } from "@/lib/auth-client";
 import { createOrganization } from "@/lib/organizations";
 import { getPendingInvitations } from "@/server/viewer";
 
-// Where someone lands without an organization to open: they were invited and have not accepted,
-// they left or were removed from the last one, or it was deleted. They join or create one here.
+// An account can wait here for a team invitation or choose to create its own organization.
 export const Route = createFileRoute("/welcome")({
   loader: () => getPendingInvitations(),
   head: () => ({ meta: [{ title: "Choose an organization · Highkey" }] }),
@@ -47,7 +46,9 @@ function Welcome() {
           Signed in as <strong>{viewer.user.email}</strong>.{" "}
           {invitations.length
             ? "Join an organization that invited you, or create your own."
-            : "Create an organization for your projects, or ask an owner to invite you."}
+            : none
+              ? "Joining a team? Ask them to send you an invitation link for this email address. You can come back when you have it."
+              : "Choose an organization below, or create a new one."}
         </>
       }
       footer={

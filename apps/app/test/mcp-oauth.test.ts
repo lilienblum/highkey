@@ -6,7 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { type Auth, createAuth, oauthAvailable } from "../src/server/auth/auth";
 import type { BunDb } from "../src/server/db/bun-db";
 import { capped, MAX_METADATA_BYTES, pinnedAddress } from "../src/server/auth/cimd-fetch";
-import { joinAs, signUp, TEST_ORIGIN, testAuth } from "./auth-helpers";
+import { joinAs, signUpOwner, TEST_ORIGIN, testAuth } from "./auth-helpers";
 import { call, project, type TestContext, testContext } from "./helpers";
 
 const CLIENT = "https://agent.example/client.json";
@@ -163,7 +163,7 @@ describe("agents over OAuth", () => {
   test("the_full_flow_issues_a_token_bound_to_the_chosen_organization", async () => {
     await project(ctx, "Shop");
     // The person also belongs to a second organization, and connects the agent to that one.
-    const other = await signUp(auth, "other@example.com");
+    const other = await signUpOwner(auth, "other@example.com");
     await call(
       ctx,
       "POST",

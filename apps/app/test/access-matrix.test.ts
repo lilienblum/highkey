@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { handleApi, registeredRoutes } from "../src/server/api/router";
 import { visitorRequest } from "../src/server/api/serve";
 import { can, type Role } from "../src/server/auth/roles";
-import { joinAs, signUp, TEST_ORIGIN } from "./auth-helpers";
+import { joinAs, signUpOwner, TEST_ORIGIN } from "./auth-helpers";
 import { call, project, type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -17,7 +17,7 @@ beforeAll(async () => {
   as.admin = await joinAs(auth, ctx.session, "admin@example.com", "admin");
   as.member = await joinAs(auth, ctx.session, "member@example.com", "member");
   as.viewer = await joinAs(auth, ctx.session, "viewer@example.com", "viewer");
-  as.outsider = await signUp(auth, "outsider@example.com");
+  as.outsider = await signUpOwner(auth, "outsider@example.com");
   as.anonymous = new Headers();
   shop = await project(ctx, "Shop");
 }, 300_000);
@@ -177,7 +177,7 @@ describe("access", () => {
     expect((await call(ctx, "POST", `${path}/dashboards`, { document: board })).status).toBe(200);
     expect((await call(ctx, "POST", `${path}/keys`, { label: "Web" })).status).toBe(200);
     // The target already has a project of that name, so the moved one takes the next slug there.
-    const target = await signUp(auth, "target@example.com");
+    const target = await signUpOwner(auth, "target@example.com");
     const [org] = (await auth.api.listOrganizations({ headers: target })) as { id: string }[];
     const targetId = org?.id as string;
     const taken = { name: "Moving", retention_days: 30 };
@@ -227,7 +227,7 @@ describe("access", () => {
     // Two tabs, two organizations: each page names its organization on every request, so a tab
     // left open on one never writes into the one another tab switched the session to.
     const auth = await ctx.auth();
-    const other = await signUp(auth, "neighbour@example.com");
+    const other = await signUpOwner(auth, "neighbour@example.com");
     const [theirs] = (await auth.api.listOrganizations({ headers: other })) as { id: string }[];
     const invitation = (await auth.api.createInvitation({
       body: { email: "tabs@example.com", role: "admin", organizationId: theirs?.id as string },
@@ -257,7 +257,7 @@ describe("access", () => {
       "Second tab",
     );
     // An organization the person is not in is refused, never quietly replaced by another.
-    const stranger = await signUp(auth, "stranger-tabs@example.com");
+    const stranger = await signUpOwner(auth, "stranger-tabs@example.com");
     const [strangers] = (await auth.api.listOrganizations({ headers: stranger })) as {
       id: string;
     }[];

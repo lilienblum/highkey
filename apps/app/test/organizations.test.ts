@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Auth } from "../src/server/auth/auth";
+import { signupPolicy } from "../src/server/auth/signup";
 import { can, type Permission, type Role } from "../src/server/auth/roles";
 import { saveProduct } from "../src/server/db/products";
-import { authRequest, cookieFrom, testAuth } from "./auth-helpers";
+import { authRequest, cookieFrom, signUpOwner, testAuth } from "./auth-helpers";
 import { type TestContext, testContext } from "./helpers";
 
 let ctx: TestContext;
@@ -34,7 +35,7 @@ async function invite(auth: Auth, owner: Headers, email: string, role: Role = "m
 }
 
 describe("organizations", () => {
-  test("signing_up_creates_an_owned_organization", async () => {
+  test("the_first_account_owns_the_bootstrap_organization", async () => {
     const auth = testAuth(ctx);
     const { headers } = await signUp(auth, "ada@example.com", "Ada");
     const orgs = await organizations(auth, headers);
@@ -58,13 +59,15 @@ describe("organizations", () => {
     expect((await signUp(auth, "guest@example.com")).response.status).toBe(200);
   });
 
-  test("open_mode_admits_anyone", async () => {
-    const auth = testAuth(ctx, { signup: "open" });
+  test("registration_is_open_by_default_without_granting_membership", async () => {
+    const auth = testAuth(ctx, { signup: signupPolicy(undefined) });
     expect((await signUp(auth, "one@example.com")).response.status).toBe(200);
     const second = await signUp(auth, "two@example.com");
     expect(second.response.status).toBe(200);
     const session = await auth.api.getSession({ headers: second.headers });
     expect((session?.user as { role?: string } | undefined)?.role).not.toBe("admin");
+    expect(await organizations(auth, second.headers)).toEqual([]);
+    expect(session?.session.activeOrganizationId).toBeFalsy();
   });
 
   test("an_invited_new_person_joins_only_the_inviting_organization", async () => {
@@ -95,8 +98,7 @@ describe("organizations", () => {
       headers: other.headers,
     });
     const orgs = await organizations(auth, other.headers);
-    expect(orgs).toHaveLength(2);
-    expect(orgs.map((o) => o.id)).toContain(org.id);
+    expect(orgs.map((o) => o.id)).toEqual([org.id]);
   });
 
   test("an_expired_or_cancelled_invitation_is_refused_with_a_message", async () => {
@@ -148,7 +150,7 @@ describe("organizations", () => {
   test("project_slugs_are_unique_per_organization", async () => {
     const auth = testAuth(ctx, { signup: "open" });
     const [a] = await organizations(auth, (await signUp(auth, "a@example.com")).headers);
-    const [b] = await organizations(auth, (await signUp(auth, "b@example.com")).headers);
+    const [b] = await organizations(auth, await signUpOwner(auth, "b@example.com"));
     const input = { name: "Shop", retention_days: 30 };
     expect((await saveProduct(ctx.db, null, input, a?.id)).slug).toBe("shop");
     expect((await saveProduct(ctx.db, null, input, b?.id)).slug).toBe("shop");

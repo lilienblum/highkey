@@ -29,7 +29,7 @@ async function activeOrganization(page: import("@playwright/test").Page) {
   });
 }
 
-test("sign up and land in your own organization, ready for a first project", async ({ page }) => {
+test("sign up before being invited, then accept the team's invitation", async ({ page }) => {
   const email = `newcomer-${Date.now()}@example.com`;
   await page.goto("/");
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
@@ -39,10 +39,24 @@ test("sign up and land in your own organization, ready for a first project", asy
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  // A new organization has no projects yet: its first page creates one.
-  await expect(page).toHaveURL(`${base}/new`);
-  await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
-  expect(await activeOrganization(page)).toBeTruthy();
+  await expect(page).toHaveURL(`${base}/welcome`);
+  await expect(page.getByRole("heading", { name: "No organization yet" })).toBeVisible();
+  expect(await activeOrganization(page)).toBeNull();
+  expect((await page.request.get(`${base}/api/products`)).status()).toBe(403);
+  const owner = await request.newContext({
+    baseURL: base,
+    storageState: E2E_STATE,
+    extraHTTPHeaders: { origin: base },
+  });
+  const invited = await owner.post("/api/auth/organization/invite-member", {
+    data: { email, role: "viewer" },
+  });
+  expect(invited.ok()).toBe(true);
+  const { link, organizationId } = await invited.json();
+  await page.goto(link);
+  await page.getByRole("button", { name: "Accept" }).click();
+  await expect.poll(() => activeOrganization(page)).toBe(organizationId);
+  await owner.dispose();
 });
 
 test("a wrong password says so and keeps the form", async ({ page }) => {
@@ -73,8 +87,8 @@ test("sign in with a two-factor code", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("isn’t right");
   await page.getByRole("textbox", { name: "Code" }).fill(totpCode(totpURI));
   await page.getByRole("button", { name: "Verify" }).click();
-  await expect(page).toHaveURL(`${base}/new`);
-  await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
+  await expect(page).toHaveURL(`${base}/welcome`);
+  await expect(page.getByRole("heading", { name: "No organization yet" })).toBeVisible();
 });
 
 test("accept an invitation as a new person", async ({ page }) => {

@@ -79,7 +79,7 @@ Dashboard settings:
 | `HIGHKEY_QUERY_CONCURRENCY`              | `4` (1–16)                | Dashboard widget runs: event widgets share one fewer slot than this, log widgets one           |
 | `HIGHKEY_PUBLIC_URL`                     | `http://127.0.0.1:3000`   | The address people use; the only origin for signed-in writes, and agents' OAuth resource       |
 | `BETTER_AUTH_SECRET`                     | Tako secret               | Signs sessions and tokens; a long random value                                                 |
-| `HIGHKEY_SIGNUP`                         | `invite`                  | `open` lets anyone sign up; `invite` admits the first account and invited people               |
+| `HIGHKEY_SIGNUP`                         | `open`                    | `open` lets anyone sign up; `invite` admits the first account and invited people               |
 | `HIGHKEY_RESEND_API_KEY`, `…_EMAIL_FROM` | unset (no email)          | Resend key and sender for verification, reset and invitation email                             |
 | `HIGHKEY_GITHUB_CLIENT_ID`, `…_SECRET`   | unset                     | GitHub sign-in (likewise `HIGHKEY_GOOGLE_CLIENT_ID` and `…_SECRET`)                            |
 | `HIGHKEY_CORS_ORIGINS`                   | unset (loopback only)     | Extra origins allowed to read `/api/read/*`; see [local pages](docs/dashboards.md#local-pages) |
@@ -92,7 +92,7 @@ Dashboard settings:
 3. **Events:** inspect typed records and follow a value into related activity. **Analyze** opens funnels, retention, conversion and breakdown reports that you can save as views. Open **Profiles** for individual people, groups and cohorts; **Sessions** for visit timelines and correlated logs; **Revenue** for integer-cent attribution; and **AI costs** for usage, cost and traces.
 4. **Logs:** search messages, filter by severity, service, and context, inspect structured records, and follow live logs. Services send structured JSON or OTLP/HTTP with separate `pl_` log keys created in Settings → Logs. Logs live in ClickHouse apart from events, with an independent seven-day default retention. See [application logs](docs/logs.md).
 
-Everyone signs in. Signing up creates an organization you own; owners and admins invite people with a role (owner, admin, member or viewer), and one person can belong to several organizations. Scripts and local pages use API keys, and agents sign in over OAuth. See [accounts, organizations and access](docs/access.md).
+Everyone signs in. After signup, you can wait for an invitation or create your own organization. Owners and admins invite people with a role (owner, admin, member or viewer), and one person can belong to several organizations. Scripts and local pages use API keys, and agents sign in over OAuth. See [accounts, organizations and access](docs/access.md).
 
 Click an Overview breakdown row to filter the dashboard in place; **View matching events** opens the filtered event stream. Page and referrer rows offer a separate external-link action on hover or keyboard focus. See [the dashboard guide](docs/dashboard.md) for drilldowns, typed filters, and date behavior.
 

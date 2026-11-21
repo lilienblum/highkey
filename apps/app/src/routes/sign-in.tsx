@@ -45,7 +45,7 @@ function SignIn() {
             New to Highkey? <a href={`/sign-up${search}`}>Create an account</a>
           </>
         ) : (
-          "Accounts are by invitation. Ask an organization owner to invite you."
+          "This server requires an invitation to sign up. Open your invitation link to get started."
         )
       }
     >

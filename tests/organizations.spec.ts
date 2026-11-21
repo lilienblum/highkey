@@ -1,7 +1,7 @@
 // Organizations in the address: /<organization>/<project>/…, the switcher, and old links.
 import { expect, request, test } from "@playwright/test";
 import { totpCode } from "../apps/app/test/totp";
-import { apiHeaders } from "./auth";
+import { apiHeaders, createTestOrganization } from "./auth";
 
 const base = process.env.HIGHKEY_DASHBOARD_URL as string;
 const run = Date.now();
@@ -20,18 +20,7 @@ async function personWithTwoOrganizations() {
       })
     ).ok(),
   ).toBe(true);
-  const session = (await (await api.get("/api/auth/get-session")).json()) as {
-    session: { activeOrganizationId: string };
-  };
-  const first = (await (await api.get("/api/auth/organization/list")).json()) as {
-    id: string;
-    slug: string;
-  }[];
-  const home = first.find((org) => org.id === session.session.activeOrganizationId) as {
-    id: string;
-    slug: string;
-    name: string;
-  };
+  const home = await createTestOrganization(api, `Switcher ${id}`);
   const second = (await (
     await api.post("/api/auth/organization/create", {
       data: { name: `Side ${id}`, slug: `side-${id}` },
@@ -197,18 +186,19 @@ test.describe("no dead ends", () => {
   test("someone in no organization can join one or create their own", async ({ browser }) => {
     const { api: inviter, second } = await personWithTwoOrganizations();
     const email = `newcomer-${run}@example.com`;
-    const invitation = await invite(inviter, second.id, email);
-    // Invited people get no organization of their own when they sign up.
     const api = await signUp(email);
     const context = await browser.newContext({ storageState: await api.storageState() });
     const page = await context.newPage();
     await page.goto("/");
     await expect(page).toHaveURL(`${base}/welcome`);
     await expect(page.getByRole("heading", { name: "No organization yet" })).toBeVisible();
-    await expect(page.getByRole("link", { name: `Join ${second.name}` })).toHaveAttribute(
-      "href",
-      `/join/${invitation.id}`,
-    );
+    const invitation = await invite(inviter, second.id, email);
+    // On a server without email verification, the team shares the private link.
+    await page.reload();
+    await expect(page.getByRole("link", { name: `Join ${second.name}` })).toHaveCount(0);
+    await page.goto(`/join/${invitation.id}`);
+    await expect(page.getByRole("button", { name: "Accept" })).toBeVisible();
+    await page.goto("/welcome");
     await expect(page.getByRole("button", { name: "Create organization" })).toBeEnabled();
     await page.getByLabel("Organization name").fill(`Newcomer ${run}`);
     await page.getByRole("button", { name: "Create organization" }).click();
@@ -262,10 +252,7 @@ test.describe("first project", () => {
   test("an organization without projects opens the new-project page", async ({ browser }, info) => {
     const email = `first-light-${run}@example.com`;
     const api = await signUp(email);
-    const [org] = (await (await api.get("/api/auth/organization/list")).json()) as {
-      slug: string;
-      name: string;
-    }[];
+    const org = await createTestOrganization(api, `First light ${run}`);
     const context = await browser.newContext({ storageState: await api.storageState() });
     const page = await context.newPage();
     // Organization settings stay reachable without a project.
@@ -413,9 +400,7 @@ test.describe("first project", () => {
 
   test("a member is told who can create the first project", async ({ browser }) => {
     const owner = await signUp(`empty-owner-${run}@example.com`);
-    const [org] = (await (await owner.get("/api/auth/organization/list")).json()) as {
-      id: string;
-    }[];
+    const org = await createTestOrganization(owner, `Empty ${run}`);
     const email = `empty-member-${run}@example.com`;
     const invitation = await invite(owner, org?.id as string, email);
     const member = await signUp(email);
