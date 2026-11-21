@@ -16,6 +16,9 @@ pub enum RecordType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
+    pub visit_nonce: Option<String>,
+    #[serde(skip)]
+    pub day_salt: String,
     #[serde(skip)]
     pub request_context: std::sync::Arc<RequestContext>,
     #[serde(skip)]
@@ -81,6 +84,9 @@ pub fn valid_key(s: &str) -> bool {
 }
 impl Event {
     pub fn validate(&mut self, now: DateTime<Utc>, retention: i64) -> ApiResult<()> {
+        if self.visit_nonce.as_ref().is_some_and(|v| !valid_key(v)) {
+            return Err(ApiError::bad("Invalid ephemeral visit nonce"));
+        }
         if !valid_key(&self.event_id) || !valid_key(&self.name) || !valid_key(&self.source) {
             return Err(ApiError::bad(
                 "event_id, name and source require 1–64 ASCII letters, digits, _, -, . or /",
@@ -265,9 +271,11 @@ impl crate::writer::Row for Event {
         "request_fetch",
         "event_time",
         "received_at",
-        "actor_id",
-        "identity_kind",
-        "session_id",
+        "sent_actor",
+        "sent_kind",
+        "sent_session",
+        "day_salt",
+        "visit_nonce",
         "properties",
         "record_type",
         "backfill",
@@ -302,9 +310,10 @@ impl crate::writer::Row for Event {
             "request_site":self.request_context.site,"request_web":u8::from(self.request_context.web),"request_fetch":u8::from(self.request_context.fetch),
             "event_time": datetime64(time),
             "received_at": datetime64(context.received_at),
-            "actor_id": self.actor_id,
-            "identity_kind": self.identity_kind,
-            "session_id": self.session_id,
+            "sent_actor": self.actor_id.as_deref().unwrap_or(""),
+            "sent_kind": self.identity_kind.as_deref().unwrap_or(""),
+            "sent_session": self.session_id.as_deref().unwrap_or(""),
+            "day_salt":self.day_salt,"visit_nonce":self.visit_nonce.as_deref().unwrap_or(""),
             "properties": self.properties,
             "record_type": self.record_type,
             "backfill": self.backfill,

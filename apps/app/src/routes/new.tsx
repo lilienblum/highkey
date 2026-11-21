@@ -64,6 +64,7 @@ function NewProject() {
       source.current ??= await api<Source>(`/products/${made.id}/sources`, "POST", {
         name: sourceName,
         icon: sourceDraft.icon,
+        visitor_mode: sourceDraft.visitor_mode,
       });
       const key = await api<{ key: string }>(`/products/${made.id}/keys`, "POST", {
         label: source.current.name,
@@ -301,6 +302,7 @@ function Connect({ organization, created }: { organization: string; created: Cre
           value={integration}
           onValueChange={setIntegration}
           ingestionKey={key}
+          visitorMode={source.visitor_mode}
           onCopyError={() => setCopyFailed(true)}
         />
       </section>

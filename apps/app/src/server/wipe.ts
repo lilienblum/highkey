@@ -130,5 +130,8 @@ export async function wipeProject(
     }),
   );
   await step("organization", () => removeEmptyOrganization(ctx.db, org));
+  await step("visitor-policies", () =>
+    ctx.admin.command("DELETE FROM highkey.visitor_policies WHERE product_id={p:UUID}", { params }),
+  );
   return "wiped";
 }

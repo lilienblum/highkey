@@ -27,6 +27,7 @@ pub enum KeyKind {
 
 #[derive(Debug, Clone)]
 pub struct KeyRecord {
+    pub visitor_mode: String,
     pub product_id: Uuid,
     pub source_id: Uuid,
     pub allowed_origins: Vec<String>,
@@ -37,6 +38,7 @@ pub struct KeyRecord {
 
 #[derive(Deserialize)]
 struct Row {
+    visitor_mode: String,
     kind: KeyKind,
     product_id: Uuid,
     source_id: Uuid,
@@ -85,7 +87,7 @@ impl Keys {
         let rows = self
             .clickhouse
             .select_json::<Row>(
-                "SELECT k.kind AS kind, k.product_id AS product_id, k.source_id AS source_id, k.allowed_origins AS allowed_origins, k.retention_days AS retention_days, k.revoked AS revoked, ifNull(p.server_key, 0) AS server_key, ifNull(p.allow_browser_revenue, 0) AS allow_browser_revenue FROM highkey.ingest_keys k LEFT JOIN (SELECT * FROM highkey.ingest_key_policies WHERE hash = {hash:String}) p USING (hash, product_id) WHERE k.hash = {hash:String}",
+                "SELECT k.kind AS kind, k.product_id AS product_id, k.source_id AS source_id, k.allowed_origins AS allowed_origins, k.retention_days AS retention_days, k.revoked AS revoked, ifNull(p.server_key, 0) AS server_key, ifNull(p.allow_browser_revenue, 0) AS allow_browser_revenue, ifNull(nullIf(v.mode,''),'off') AS visitor_mode FROM highkey.ingest_keys k LEFT JOIN (SELECT * FROM highkey.ingest_key_policies WHERE hash = {hash:String}) p USING (hash, product_id) LEFT JOIN (SELECT * FROM highkey.visitor_policies WHERE hash={hash:String}) v USING(hash,product_id) WHERE k.hash = {hash:String}",
                 &[("hash", hash.to_string())],
             )
             .await?;
@@ -93,6 +95,7 @@ impl Keys {
             (
                 row.kind,
                 KeyRecord {
+                    visitor_mode: row.visitor_mode,
                     product_id: row.product_id,
                     source_id: row.source_id,
                     allowed_origins: row.allowed_origins,

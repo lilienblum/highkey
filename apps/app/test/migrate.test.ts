@@ -79,6 +79,9 @@ describe("ClickHouse migrations", () => {
         "referrer_name",
         "referrer_type",
       ].map((k) => `${k} LowCardinality(String)`),
+      ...["sent_actor", "sent_kind", "sent_session", "day_salt", "visit_nonce"].map(
+        (k) => `${k} String`,
+      ),
     ]);
     expect(await columns("logs")).toEqual([
       "product_id UUID",

@@ -37,6 +37,7 @@ const STARTUP_WAIT: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct AppState {
+    day_salt: Arc<std::sync::Mutex<(chrono::NaiveDate, String)>>,
     pub gateway_secret: Option<Arc<str>>,
     pub clickhouse: ClickHouse,
     pub keys: Keys,
@@ -69,6 +70,10 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
     }
     let changes = changes::Changes::default();
     Ok(AppState {
+        day_salt: Arc::new(std::sync::Mutex::new((
+            chrono::Utc::now().date_naive(),
+            uuid::Uuid::new_v4().to_string(),
+        ))),
         gateway_secret: None,
         keys: Keys::new(clickhouse.clone()),
         events: writer::Writer::spawn(clickhouse.clone(), config.queue_capacity, changes.clone()),
@@ -189,6 +194,22 @@ async fn ingest_events(
         web: sdk == "browser",
         fetch: headers.contains_key("sec-fetch-mode"),
     });
+    let private = headers.get("dnt").is_some_and(|v| v == "1")
+        || headers.get("sec-gpc").is_some_and(|v| v == "1");
+    let day_salt = if sdk == "browser"
+        && !private
+        && record.visitor_mode == "cookieless"
+        && !request_context.ip.is_empty()
+        && !request_context.ua.is_empty()
+    {
+        let mut day = state.day_salt.lock().expect("day salt");
+        if day.0 != now.date_naive() {
+            *day = (now.date_naive(), uuid::Uuid::new_v4().to_string());
+        }
+        Some(day.1.clone())
+    } else {
+        None
+    };
     for (i, event) in events.iter_mut().enumerate() {
         event.sdk = sdk;
         event.request_context = request_context.clone();
@@ -203,6 +224,23 @@ async fn ingest_events(
         event
             .validate(now, i64::from(record.retention_days))
             .map_err(|e| ApiError::bad(format!("events[{i}]: {}", e.1)))?;
+        if sdk == "browser"
+            || (event.source == "browser"
+                && headers.contains_key(header::ORIGIN)
+                && !record.server_key)
+        {
+            if record.visitor_mode != "persistent" || private {
+                event.actor_id = None;
+                event.identity_kind = None;
+                event.session_id = None;
+            }
+            if event.visit_nonce.is_some()
+                && !event.backfill
+                && let Some(salt) = &day_salt
+            {
+                event.day_salt = salt.clone();
+            }
+        }
     }
     Ok(Json(
         state
@@ -234,12 +272,12 @@ async fn ingest_limit(
 
 pub fn router(state: AppState) -> Router {
     let ingest = Router::new()
-        .route("/api/ingest", post(ingest_events))
+        .route("/api/ingest", post(ingest_events).get(visitor_policy))
         .layer(middleware::from_fn_with_state(state.clone(), ingest_limit))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
-                .allow_methods([axum::http::Method::POST])
+                .allow_methods([axum::http::Method::POST, axum::http::Method::GET])
                 .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
                 .expose_headers([header::RETRY_AFTER]),
         );
@@ -256,6 +294,13 @@ pub fn router(state: AppState) -> Router {
         .layer(DefaultBodyLimit::max(256 * 1024))
         .layer(middleware::from_fn(security_headers))
         .with_state(state)
+}
+async fn visitor_policy(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<Json<serde_json::Value>> {
+    let record = authorize(&state, &headers, KeyKind::Events).await?;
+    Ok(Json(json!({"visitor_mode":record.visitor_mode})))
 }
 
 async fn security_headers(req: Request, next: Next) -> Response {

@@ -226,6 +226,11 @@ async fn concurrent_ingestion_queries_and_controlled_overload() {
 async fn visitor_and_installation_ids_do_not_collapse() {
     let (app, _) = app().await;
     let (id, key) = project(30).await;
+    admin_query(&format!(
+        "INSERT INTO highkey.visitor_policies VALUES ('{}','{id}','persistent')",
+        common::hash(&key)
+    ))
+    .await;
     let mut web = event("web", json!(1));
     web["identity_kind"] = json!("visitor");
     web["source"] = json!("browser");

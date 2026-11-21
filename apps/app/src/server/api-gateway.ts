@@ -49,7 +49,7 @@ export async function proxyIngest(request: Request): Promise<Response> {
         );
       }
     }
-    for (const name of ["user-agent", "sec-fetch-mode"]) {
+    for (const name of ["user-agent", "sec-fetch-mode", "dnt", "sec-gpc"]) {
       const v = request.headers.get(name);
       if (v) headers.set(name, v.slice(0, 512));
     }

@@ -31,6 +31,15 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
   );
   if (!project) throw projectMissing();
   const eventRetention = project.retention_days;
+  const modes = new Map(
+    (
+      await all<{ id: string; visitor_mode: string }>(
+        ctx.db,
+        "SELECT id,visitor_mode FROM sources WHERE product_id=?",
+        [productId],
+      )
+    ).map((s) => [s.id, s.visitor_mode]),
+  );
   // A deleted project's keys stop at once, without losing which were revoked before (a restore
   // brings them back as they were).
   const stopped = project.deleted_at !== null;
@@ -69,6 +78,7 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
     allowed_origins: JSON.parse(row.allowed_origins) as string[],
     retention_days: row.retention_days,
     revoked: stopped ? 1 : row.revoked,
+    visitor_mode: row.kind === "events" ? (modes.get(row.source_id) ?? "off") : "off",
     updated_at,
     server_key: row.server_key,
     allow_browser_revenue: revenue?.allow_browser_revenue === 1 ? 1 : 0,
@@ -78,7 +88,10 @@ async function rows(ctx: ApiContext, productId: string, keyId?: string) {
 async function mirrorRows(ctx: ApiContext, found: Awaited<ReturnType<typeof rows>>) {
   await ctx.admin.insert(
     "highkey.ingest_keys",
-    found.map(({ server_key: _server, allow_browser_revenue: _revenue, ...key }) => key),
+    found.map(
+      ({ server_key: _server, allow_browser_revenue: _revenue, visitor_mode: _visitors, ...key }) =>
+        key,
+    ),
   );
   await ctx.admin.insert(
     "highkey.ingest_key_policies",
@@ -88,6 +101,12 @@ async function mirrorRows(ctx: ApiContext, found: Awaited<ReturnType<typeof rows
       server_key,
       allow_browser_revenue,
     })),
+  );
+  await ctx.admin.insert(
+    "highkey.visitor_policies",
+    found
+      .filter((k) => k.kind === "events")
+      .map((k) => ({ hash: k.hash, product_id: k.product_id, mode: k.visitor_mode })),
   );
 }
 

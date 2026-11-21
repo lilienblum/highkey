@@ -123,6 +123,7 @@ export async function updateSource(
   input: SourceInput,
 ): Promise<Source> {
   const source = await saveSource(ctx.db, id, sourceId, input);
+  if (input.visitor_mode != null) await mirrorProject(ctx, id);
   ctx.changes.notify(id, "dashboards");
   return source;
 }

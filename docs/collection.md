@@ -250,6 +250,10 @@ Supply `Authorization: Bearer pk_...` and `Content-Type: application/json`. Repl
 
 ## Coarse request context
 
+### Visitor counting
+
+Choose Off (the default), Cookieless or Persistent when adding or editing a source. The source's browser snippet reflects that choice. `identity: "cookieless"` uses no device storage. With a verified client address, ClickHouse derives a source/project-scoped visitor hash using a random salt discarded at UTC midnight (and on collector restart). The nonce for a cookieless visit stays in page memory, expires after 30 minutes of inactivity and is hashed before storage; reloading the document starts a new visit. Unknown client addresses produce no visitor. For persistent tracking, run the snippet only after consent: even with `identity: "persistent"` the SDK checks the source policy before touching local storage. Disabled tracking, DNT and GPC never start the tracker. Server-supplied business profiles and explicit native identities remain independent.
+
 Contract 5 derives device, browser, OS and their versions, country and region, and a traffic-source name and type. Raw user agent and IP are insert-only `EPHEMERAL` inputs, never report fields. Unknown devices and locations remain unknown. SDK and native server requests do not become visitor IDs. Referrer classification uses explicitly collected campaign and referrer fields; `utm_source` or `ref` wins over the external referrer, and same-site referrals are ignored. Known and suspected automated traffic is labeled and excluded from ordinary analytics. Pass `include_bots: true` in an Events query to inspect it.
 
 Coordinate trusted client addresses at the ingress: a directly listening ingest app uses its socket peer. Behind a proxy, set `HIGHKEY_TRUST_PROXY_IP=1` **only** if it replaces `X-Forwarded-For` with one verified address and direct access to the app is restricted. For ingestion through the app gateway, configure this on both apps and set their shared `HIGHKEY_CHANGE_TOKEN`; the gateway authenticates the forwarded address. Otherwise proxied location remains unknown. Never log request bodies or incoming client headers at the proxy.

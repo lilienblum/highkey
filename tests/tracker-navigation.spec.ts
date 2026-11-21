@@ -9,7 +9,7 @@ test.beforeAll(async () => {
   source = await response.text();
 });
 
-async function fixture(page: Page, options = "") {
+async function fixture(page: Page, options = "", visitorMode = "persistent") {
   const events: Event[] = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -19,6 +19,7 @@ async function fixture(page: Page, options = "") {
       if (path === "/tracker.js")
         return new Response(source, { headers: { "content-type": "application/javascript" } });
       if (path === "/api/ingest") {
+        if (request.method === "GET") return Response.json({ visitor_mode: visitorMode });
         const batch = (await request.json()).events as Event[];
         events.push(...batch);
         return Response.json({ accepted: batch.length, duplicates: 0 });
@@ -43,6 +44,24 @@ async function fixture(page: Page, options = "") {
     throw error;
   }
 }
+
+test("a stale persistent snippet on an Off source never stores or sends automatic IDs", async ({
+  page,
+}) => {
+  const f = await fixture(page, "identity:'persistent'", "off");
+  try {
+    const keys = await page.evaluate(async () => {
+      window.tracker.track("first");
+      await window.tracker.flush();
+      return Object.keys(localStorage);
+    });
+    expect(keys).toEqual([]);
+    expect(f.events.map((e) => e.name)).toEqual(["page_view", "first"]);
+    expect(f.events.every((e) => !e.actor_id && !e.session_id && !e.identity_kind)).toBe(true);
+  } finally {
+    await f.server.stop(true);
+  }
+});
 
 async function hash(page: Page, value: string) {
   await page.evaluate(

@@ -12,6 +12,7 @@ import { Spinner } from "./ui/spinner";
 import { SourceIcon, SourceIconPicker } from "./source-icon";
 import type { SourceIconId } from "@/lib/source-icons";
 import { ErrorState } from "./shared";
+import { ValueSelect } from "./value-select";
 
 export function SourceSettings({ product }: { product: Product }) {
   const { reload } = useWorkspace();
@@ -26,7 +27,11 @@ export function SourceSettings({ product }: { product: Product }) {
   const [error, setError] = useState("");
   function show(source?: Source) {
     setEditing(source);
-    setDraft(source ? { name: source.name, icon: source.icon } : { name: "", icon: null });
+    setDraft(
+      source
+        ? { name: source.name, icon: source.icon, visitor_mode: source.visitor_mode }
+        : { name: "", icon: null },
+    );
     setSaved(false);
     setError("");
     setOpen(true);
@@ -135,7 +140,11 @@ export function SourceSettings({ product }: { product: Product }) {
   );
 }
 
-export type SourceDraft = { name: string; icon: SourceIconId | null };
+export type SourceDraft = {
+  name: string;
+  icon: SourceIconId | null;
+  visitor_mode?: Source["visitor_mode"];
+};
 
 /**
  * A source's name and icon, as adding or editing one asks for them: the icon follows the name
@@ -155,27 +164,50 @@ export function SourceFields({
   hint?: string;
 }) {
   return (
-    <Field data-disabled={disabled}>
-      <FieldLabel htmlFor="source-name">{label}</FieldLabel>
-      <div className="flex items-center gap-2">
-        <SourceIconPicker
-          name={value.name}
-          value={value.icon}
-          onChange={(icon) => onChange({ ...value, icon })}
+    <>
+      <Field data-disabled={disabled}>
+        <FieldLabel htmlFor="source-name">{label}</FieldLabel>
+        <div className="flex items-center gap-2">
+          <SourceIconPicker
+            name={value.name}
+            value={value.icon}
+            onChange={(icon) => onChange({ ...value, icon })}
+            disabled={disabled}
+          />
+          <Input
+            id="source-name"
+            value={value.name}
+            onChange={(e) => onChange({ ...value, name: e.target.value })}
+            placeholder="e.g. Website, iOS app, CLI"
+            aria-describedby={hint ? "source-name-hint" : undefined}
+            required
+            maxLength={80}
+            disabled={disabled}
+          />
+        </div>
+        {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="visitor-mode">Visitor counting</FieldLabel>
+        <ValueSelect
+          id="visitor-mode"
+          value={value.visitor_mode ?? "off"}
+          onValueChange={(v) => onChange({ ...value, visitor_mode: v as Source["visitor_mode"] })}
           disabled={disabled}
+          options={[
+            ["off", "Off"],
+            ["cookieless", "Cookieless · daily visitors"],
+            ["persistent", "Persistent · consent required"],
+          ]}
         />
-        <Input
-          id="source-name"
-          value={value.name}
-          onChange={(e) => onChange({ ...value, name: e.target.value })}
-          placeholder="e.g. Website, iOS app, CLI"
-          aria-describedby={hint ? "source-name-hint" : undefined}
-          required
-          maxLength={80}
-          disabled={disabled}
-        />
-      </div>
-      {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
-    </Field>
+        <FieldDescription>
+          {value.visitor_mode === "persistent"
+            ? "Only start persistent tracking after consent. Browser storage keeps the visitor and session IDs."
+            : value.visitor_mode === "cookieless"
+              ? "Counts visitors for one UTC day using a rotating salt. A visit lasts for this page or SPA tab, without device storage."
+              : "Events still count. No automatic visitor or session ID is collected."}
+        </FieldDescription>
+      </Field>
+    </>
   );
 }

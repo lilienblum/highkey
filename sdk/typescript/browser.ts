@@ -12,7 +12,7 @@ export type BrowserOptions = Options & {
   defer?: boolean;
   properties?: Properties;
   filter?: (event: Event) => boolean;
-  identity?: "none" | "persistent";
+  identity?: "none" | "persistent" | "cookieless";
   identityScope?: string;
   campaigns?: readonly CampaignParam[];
   collectReferrer?: boolean;
@@ -37,6 +37,9 @@ export function startBrowserTracker(options: BrowserOptions) {
   let deferred = options.defer === true;
   let globalProperties = { ...options.properties };
   let actor: string | undefined;
+  let policy: Promise<void> | undefined;
+  let provisional: string | undefined;
+  let visit: { id: string; seen: number } | undefined;
   let profile: string | undefined;
   let groups: Record<string, string> = {};
   let checkoutEventId: string | undefined;
@@ -72,7 +75,16 @@ export function startBrowserTracker(options: BrowserOptions) {
     optOut();
     return false;
   }
-  function identity(): Pick<Event, "actor_id" | "identity_kind" | "session_id"> {
+  function identity(): Pick<Event, "actor_id" | "identity_kind" | "session_id" | "visit_nonce"> {
+    if (deferred) return {};
+    if (options.identity === "cookieless" || provisional) {
+      if (!visit || Date.now() - visit.seen >= 1800000)
+        visit = { id: crypto.randomUUID(), seen: Date.now() };
+      visit.seen = Date.now();
+      return options.identity === "cookieless"
+        ? { visit_nonce: visit.id }
+        : { actor_id: provisional, identity_kind: "visitor", session_id: visit.id };
+    }
     if (!actor) return {};
     try {
       const raw = localStorage.getItem(`${namespace}:session`);
@@ -198,6 +210,7 @@ export function startBrowserTracker(options: BrowserOptions) {
       return Promise.resolve();
     }
     if (deferred) return Promise.resolve();
+    if (policy) return policy.then(flush);
     if (running) return running;
     const batch = queue.splice(0, 20);
     if (!batch.length) return Promise.resolve();
@@ -354,13 +367,44 @@ export function startBrowserTracker(options: BrowserOptions) {
   );
   function initializeIdentity() {
     if (options.identity !== "persistent") return;
-    try {
-      const stored = localStorage.getItem(`${namespace}:visitor`) ?? crypto.randomUUID();
-      localStorage.setItem(`${namespace}:visitor`, stored);
-      actor = stored;
-    } catch {
-      /* Storage denied: anonymous events, no fingerprint fallback. */
-    }
+    // An old snippet must not activate persistent storage after the source is switched off.
+    const temporary = (provisional = crypto.randomUUID());
+    policy = (async () => {
+      try {
+        const r = await fetch(`${options.endpoint.replace(/\/$/, "")}/api/ingest`, {
+          headers: { authorization: `Bearer ${options.key}` },
+          credentials: "omit",
+          referrerPolicy: "no-referrer",
+          redirect: "error",
+          signal: AbortSignal.any([delivery.signal, AbortSignal.timeout(options.timeoutMs ?? 800)]),
+        });
+        if (r.ok && (await r.json()).visitor_mode === "persistent" && canTrack()) {
+          const stored = localStorage.getItem(`${namespace}:visitor`) ?? temporary;
+          localStorage.setItem(`${namespace}:visitor`, stored);
+          actor = stored;
+        }
+      } catch {
+        /* No policy or device storage: deliver anonymously. */
+      }
+      provisional = undefined;
+      for (const event of queue) {
+        if (event.actor_id !== temporary) continue;
+        const session = event.session_id;
+        delete event.actor_id;
+        delete event.identity_kind;
+        delete event.session_id;
+        if (actor) {
+          const persisted = identity();
+          if (persisted.actor_id) {
+            event.actor_id = persisted.actor_id;
+            event.identity_kind = "visitor";
+            if (session) event.session_id = persisted.session_id;
+          }
+        }
+      }
+    })().finally(() => {
+      policy = undefined;
+    });
   }
   if (!deferred) initializeIdentity();
   const navigationKey = () =>

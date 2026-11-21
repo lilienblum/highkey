@@ -426,14 +426,27 @@ function ProductOverview() {
           ].map((item) => (
             <article className="metric-widget" key={item.label}>
               <span className="metric-label">{item.label}</span>
-              <WidgetValue
-                value={query.error && !s ? "—" : item.value}
-                label={item.detail}
-                growth={item.change}
-                compactGrowth
-                loading={query.loading}
-                growthLoading={query.loading || previous.loading}
-              />
+              {item.label === "Visitors" && source?.visitor_mode === "off" ? (
+                <p className="text-xs">
+                  Visitor counting is off for this source.{" "}
+                  <Link
+                    className="text-primary underline"
+                    to="/$orgSlug/$projectSlug/settings"
+                    params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
+                  >
+                    Source settings
+                  </Link>
+                </p>
+              ) : (
+                <WidgetValue
+                  value={query.error && !s ? "—" : item.value}
+                  label={item.detail}
+                  growth={item.change}
+                  compactGrowth
+                  loading={query.loading}
+                  growthLoading={query.loading || previous.loading}
+                />
+              )}
             </article>
           ))}
         </section>

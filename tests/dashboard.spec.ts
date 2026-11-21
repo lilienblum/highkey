@@ -213,6 +213,12 @@ test("browser tracker sends page/SPA/custom events, preserves identity, and reta
     retention_days: 30,
   });
   const { key } = await admin(`/products/${p.id}/keys`, { label: "Tracker" });
+  const policy = await fetch(`${apiUrl}/api/products/${p.id}/sources/${p.id}`, {
+    method: "PATCH",
+    headers: apiHeaders(),
+    body: JSON.stringify({ name: p.sources[0].name, visitor_mode: "persistent" }),
+  });
+  expect(policy.ok).toBe(true);
   const fixture = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",

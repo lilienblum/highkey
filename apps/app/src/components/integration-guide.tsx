@@ -93,11 +93,13 @@ export function IntegrationTabs({
   value,
   onValueChange,
   ingestionKey,
+  visitorMode,
   onCopyError,
 }: {
   value: Integration;
   onValueChange: (value: Integration) => void;
   ingestionKey?: string;
+  visitorMode?: "off" | "cookieless" | "persistent";
   onCopyError: () => void;
 }) {
   const origin = useOrigin();
@@ -105,7 +107,15 @@ export function IntegrationTabs({
   const server = ingestionKey?.startsWith("sk_");
   if (server && (value === "browser" || value === "rust")) value = "typescript";
   const key = ingestionKey || "YOUR_INGESTION_KEY";
-  const raw = integrationSnippet(value, origin, key);
+  let raw = integrationSnippet(value, origin, key);
+  if (value === "browser" && visitorMode && visitorMode !== "off") {
+    raw = raw.replace('identity: "none"', `identity: "${visitorMode}"`);
+    if (visitorMode === "persistent")
+      raw = raw.replace(
+        "  const tracker",
+        "  // Run only after your application has obtained analytics consent.\n  const tracker",
+      );
+  }
   const snippet =
     value !== "browser"
       ? raw
@@ -174,7 +184,11 @@ export function IntegrationTabs({
         <p className="quiet">
           {server
             ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
-            : NOTE[value]}
+            : value === "browser" && visitorMode === "persistent"
+              ? "Requires consent. The tracker checks the source policy before using local storage."
+              : value === "browser" && visitorMode === "cookieless"
+                ? "No device storage. Anonymous visitor hashes expire at UTC midnight."
+                : NOTE[value]}
         </p>
         <details className="mt-3">
           <summary>Test with curl</summary>

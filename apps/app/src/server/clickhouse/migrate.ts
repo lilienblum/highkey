@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { ClickHouse } from "./client";
 
 /** The ingest contract these migrations provide. Raise it with the migration that changes it. */
-export const CONTRACT_VERSION = 5;
+export const CONTRACT_VERSION = 6;
 
 const defaultDir = new URL("../../../../../clickhouse/migrations/", import.meta.url).pathname;
 
@@ -43,6 +43,7 @@ async function ensureIngestUser(admin: ClickHouse, password: string): Promise<vo
   await admin.command("GRANT INSERT, SELECT ON highkey.logs TO highkey_ingest");
   await admin.command("GRANT SELECT ON highkey.ingest_keys TO highkey_ingest");
   await admin.command("GRANT SELECT ON highkey.ingest_key_policies TO highkey_ingest");
+  await admin.command("GRANT SELECT ON highkey.visitor_policies TO highkey_ingest");
   await admin.command("GRANT SELECT ON highkey.ingest_contract TO highkey_ingest");
   await admin.command("GRANT dictGet ON highkey.geo_lookup TO highkey_ingest");
 }

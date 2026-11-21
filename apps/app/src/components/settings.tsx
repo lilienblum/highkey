@@ -620,6 +620,7 @@ function ProductSettings({ product }: { product: Product }) {
         <CardContent>
           <IntegrationTabs
             value={integration}
+            visitorMode={keySource?.visitor_mode}
             onValueChange={setIntegration}
             ingestionKey={newKey}
             onCopyError={() =>

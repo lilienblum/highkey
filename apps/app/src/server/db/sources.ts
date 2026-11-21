@@ -5,6 +5,7 @@ import { requireProduct } from "./products";
 import { newId, now } from "./ids";
 
 export interface Source {
+  visitor_mode: "off" | "persistent" | "cookieless";
   icon: string | null;
   id: string;
   product_id: string;
@@ -50,7 +51,7 @@ function suffixed(base: string, suffix: number): string {
   return `${base.slice(0, 64 - tail.length).replace(/-+$/, "")}${tail}`;
 }
 
-const COLUMNS = "id, product_id, name, icon, created_at, slug";
+const COLUMNS = "id, product_id, name, icon, created_at, slug, visitor_mode";
 
 export function listSources(db: Db, productId: string): Promise<Source[]> {
   return all<Source>(
@@ -104,11 +105,17 @@ export function keySource(sources: Source[], productId: string, id?: string | nu
 }
 
 export interface SourceInput {
+  visitor_mode?: string | null;
   name: string;
   icon?: string | null;
 }
 
 export function validateSource(input: SourceInput): void {
+  if (
+    input.visitor_mode != null &&
+    !["off", "cookieless", "persistent"].includes(input.visitor_mode)
+  )
+    throw bad("Visitor counting must be off, cookieless or persistent");
   if (input.icon != null && !(SOURCE_ICONS as readonly string[]).includes(input.icon))
     throw bad(
       "Unknown source icon; use website/ios/android/mobile/terminal/desktop/server/code/package/game/generic, or null for automatic",
@@ -141,8 +148,8 @@ export async function saveSource(
     // Renames keep the slug, so workspace links stay valid.
     try {
       await db.execute(
-        "UPDATE sources SET name = ?3, icon = ?4 WHERE product_id = ?1 AND id = ?2",
-        [productId, id, name, input.icon ?? null],
+        "UPDATE sources SET name = ?3, icon = ?4,visitor_mode=coalesce(?5,visitor_mode) WHERE product_id = ?1 AND id = ?2",
+        [productId, id, name, input.icon ?? null, input.visitor_mode ?? null],
       );
     } catch (error) {
       duplicateName(error);
@@ -158,8 +165,8 @@ export async function saveSource(
       try {
         inserted = await changes(
           db,
-          "INSERT INTO sources(id, product_id, name, icon, created_at, slug) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, slug) DO NOTHING",
-          [sourceId, productId, name, input.icon ?? null, now(), slug],
+          "INSERT INTO sources(id, product_id, name, icon, created_at, slug,visitor_mode) VALUES (?, ?, ?, ?, ?, ?,?) ON CONFLICT(product_id, slug) DO NOTHING",
+          [sourceId, productId, name, input.icon ?? null, now(), slug, input.visitor_mode ?? "off"],
         );
       } catch (error) {
         duplicateName(error);

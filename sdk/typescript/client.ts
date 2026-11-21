@@ -1,5 +1,6 @@
 export type Properties = Record<string, string | number | boolean>;
 export type Event = {
+  visit_nonce?: string;
   event_id?: string;
   name: string;
   source: string;
