@@ -166,6 +166,9 @@
   * {
     border-color: var(--border);
   }
+  a {
+    text-decoration: none;
+  }
 }
 body {
   margin: 0;
@@ -186,9 +189,6 @@ button {
 }
 button:disabled {
   cursor: default;
-}
-a {
-  text-decoration: none;
 }
 p {
   margin: 0;

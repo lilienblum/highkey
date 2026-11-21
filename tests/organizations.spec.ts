@@ -432,6 +432,11 @@ test.describe("first project", () => {
     await expect(page).toHaveURL(`${base}/new`);
     await expect(page.getByText("Ask an owner or admin to create one")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create project" })).toHaveCount(0);
+    const switchOrg = page.getByRole("link", { name: "Switch", exact: true });
+    await switchOrg.hover();
+    await expect(switchOrg).toHaveCSS("text-decoration-line", "underline");
+    await switchOrg.click();
+    await expect(page).toHaveURL(`${base}/welcome`);
     await context.close();
   });
 });

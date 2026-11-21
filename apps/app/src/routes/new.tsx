@@ -172,9 +172,16 @@ function NewProject() {
               <strong className="truncate font-semibold text-foreground">
                 {organization.name}
               </strong>
-              <a href="/welcome" className={`shrink-0 ${LINK}`}>
+              <Button
+                variant="link"
+                size="sm"
+                className="px-0"
+                nativeButton={false}
+                role="link"
+                render={<a href="/welcome" />}
+              >
                 Switch
-              </a>
+              </Button>
             </span>
             <button type="button" className={LINK} onClick={() => void signOut()}>
               Sign out
