@@ -1,24 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { InformationCircleIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { api, type Source } from "@/lib/api";
 import { LiveUpdates } from "./live-updates";
 import { ErrorState } from "./shared";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import type { activation } from "@/server/activation";
 import { useOrganizationRole } from "./settings/settings-nav";
 
-export function Activation({
-  id,
-  source,
-  website,
-}: {
-  id: string;
-  source?: string;
-  website?: string | null;
-}) {
-  const role = useOrganizationRole();
-  const query = useQuery({
+function useActivation(id: string, source?: string) {
+  return useQuery({
     queryKey: ["activation", id, source],
     queryFn: ({ signal }) =>
       api<Awaited<ReturnType<typeof activation>>>(
@@ -29,6 +23,60 @@ export function Activation({
       ),
     retry: false,
   });
+}
+
+export function FirstEventNotice({ id, source }: { id: string; source: Source }) {
+  const query = useActivation(id, source.id);
+  const first = query.data?.first_event;
+  return (
+    <>
+      {!first && (
+        <LiveUpdates
+          productId={id}
+          scopeKey={`${id}:${source.id}`}
+          view="/"
+          busy={query.isFetching}
+          onRefresh={() => void query.refetch()}
+        />
+      )}
+      <Alert role="status" aria-label="Source connection" aria-atomic="true" className="min-w-0">
+        <HugeiconsIcon
+          icon={first ? Tick02Icon : InformationCircleIcon}
+          aria-hidden="true"
+          className={first ? "text-success" : "text-data"}
+        />
+        <AlertTitle className="line-clamp-none [overflow-wrap:anywhere]">
+          {first
+            ? "First event received"
+            : query.isError
+              ? "Couldn’t check for events"
+              : query.data
+                ? `Waiting for the first event from ${source.name}`
+                : "Checking for the first event…"}
+        </AlertTitle>
+        <AlertDescription className="[overflow-wrap:anywhere]">
+          {first ? (
+            <p>
+              {source.name} sent <code>{first.name}</code>.
+            </p>
+          ) : query.isError ? (
+            <Button size="sm" variant="outline" onClick={() => void query.refetch()}>
+              Try again
+            </Button>
+          ) : (
+            <p>
+              After adding the snippet below, run your app. Its first event will appear here
+              automatically.
+            </p>
+          )}
+        </AlertDescription>
+      </Alert>
+    </>
+  );
+}
+
+export function WebsiteCheck({ id }: { id: string }) {
+  const role = useOrganizationRole();
   const [checking, setChecking] = useState(false),
     [message, setMessage] = useState("");
   async function checkSite() {
@@ -48,6 +96,26 @@ export function Activation({
       setChecking(false);
     }
   }
+  return role && role !== "viewer" ? (
+    <div className="mt-3">
+      <Button variant="outline" disabled={checking} onClick={() => void checkSite()}>
+        {checking ? "Checking…" : "Check website for tracker"}
+      </Button>
+      <p role="status">{message}</p>
+    </div>
+  ) : null;
+}
+
+export function Activation({
+  id,
+  source,
+  website,
+}: {
+  id: string;
+  source?: string;
+  website?: string | null;
+}) {
+  const query = useActivation(id, source);
   const d = query.data,
     first = d?.first_event;
   return (
@@ -99,14 +167,7 @@ export function Activation({
         ) : (
           !query.error && <p>Checking setup…</p>
         )}
-        {website && role && role !== "viewer" && (
-          <div className="mt-3">
-            <Button variant="outline" disabled={checking} onClick={() => void checkSite()}>
-              {checking ? "Checking…" : "Check website for tracker"}
-            </Button>
-            <p role="status">{message}</p>
-          </div>
-        )}
+        {website && <WebsiteCheck id={id} />}
       </CardContent>
     </Card>
   );

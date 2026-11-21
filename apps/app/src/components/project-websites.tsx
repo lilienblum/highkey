@@ -29,8 +29,12 @@ export function ProjectWebsites({ id, ...props }: ComponentProps<"textarea"> & {
         placeholder={"example.com\n*.example.com"}
       />
       <FieldDescription id={`${id}-hint`}>
-        Optional. Enter up to 16 sites, separated by commas or new lines. Use *.example.com for
+        Optional. Separate sites with commas or new lines (up to 16). Use *.example.com for
         subdomains.
+        <span className="mt-1 block">
+          By default, any website with the key can send events. To limit that to specific sites,
+          set the key’s allowed origins in Settings.
+        </span>
       </FieldDescription>
     </Field>
   );

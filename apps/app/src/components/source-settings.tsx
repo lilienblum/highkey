@@ -174,63 +174,68 @@ export function SourceFields({
 }) {
   return (
     <>
-      <Field data-disabled={disabled}>
-        <FieldLabel htmlFor="source-name">{label}</FieldLabel>
-        <div className="relative">
-          <Input
-            id="source-name"
-            className="pe-11"
-            value={value.name}
-            onChange={(e) => onChange({ ...value, name: e.target.value })}
-            placeholder="e.g. Website, iOS app, CLI"
-            aria-describedby={hint ? "source-name-hint" : undefined}
-            required
-            maxLength={80}
-            disabled={disabled}
-          />
-          <SourceIconPicker
-            name={value.name}
-            value={value.icon}
-            onChange={(icon) => onChange({ ...value, icon })}
-            disabled={disabled}
-            className="absolute end-1 top-1/2 -translate-y-1/2"
-          />
+      <div className="@container">
+        <div className="grid items-start gap-4 @min-[32rem]:grid-cols-[minmax(0,22rem)_minmax(0,14rem)]">
+          <Field className="min-w-0 max-w-[22rem]" data-disabled={disabled}>
+            <FieldLabel htmlFor="source-name">{label}</FieldLabel>
+            <div className="relative">
+              <Input
+                id="source-name"
+                className="pe-11"
+                value={value.name}
+                onChange={(e) => onChange({ ...value, name: e.target.value })}
+                placeholder="e.g. Website"
+                aria-describedby={hint ? "source-name-hint" : undefined}
+                required
+                maxLength={80}
+                disabled={disabled}
+              />
+              <SourceIconPicker
+                name={value.name}
+                value={value.icon}
+                onChange={(icon) => onChange({ ...value, icon })}
+                disabled={disabled}
+                className="absolute end-1 top-1/2 -translate-y-1/2"
+              />
+            </div>
+            {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
+          </Field>
+          <Field className="min-w-0 max-w-56">
+            <FieldLabel htmlFor="visitor-mode">Visitor counting</FieldLabel>
+            <ValueSelect
+              id="visitor-mode"
+              value={value.visitor_mode ?? "off"}
+              onValueChange={(v) =>
+                onChange({
+                  ...value,
+                  visitor_mode: v as Source["visitor_mode"],
+                  consent_prompt: value.consent_prompt ?? (v === "persistent" ? "bar" : undefined),
+                })
+              }
+              disabled={disabled}
+              options={[
+                ["off", "Events only"],
+                ["cookieless", "Daily visitors"],
+                ["persistent", "Returning visitors"],
+              ]}
+            />
+            <FieldDescription>
+              {value.visitor_mode === "persistent"
+                ? "Recognizes the same browser on later visits, with permission."
+                : value.visitor_mode === "cookieless"
+                  ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
+                  : "Counts events without counting visitors."}
+            </FieldDescription>
+          </Field>
         </div>
-        {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="visitor-mode">Visitor counting</FieldLabel>
-        <ValueSelect
-          id="visitor-mode"
-          value={value.visitor_mode ?? "off"}
-          onValueChange={(v) =>
-            onChange({
-              ...value,
-              visitor_mode: v as Source["visitor_mode"],
-              consent_prompt: value.consent_prompt ?? (v === "persistent" ? "bar" : undefined),
-            })
-          }
-          disabled={disabled}
-          options={[
-            ["off", "Off"],
-            ["cookieless", "Daily visitors"],
-            ["persistent", "Returning visitors"],
-          ]}
-        />
-        <FieldDescription>
-          {value.visitor_mode === "persistent"
-            ? "Recognizes the same browser on later visits, with permission."
-            : value.visitor_mode === "cookieless"
-              ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
-              : "Counts events without counting visitors."}
-        </FieldDescription>
-      </Field>
+      </div>
       {value.visitor_mode === "persistent" && (
         <>
           <Field>
             <FieldLabel htmlFor="source-consent">Who asks for permission?</FieldLabel>
             <ValueSelect
               id="source-consent"
+              className="max-w-64"
               value={value.consent_prompt === "site" ? "site" : "highkey"}
               disabled={disabled}
               options={[
@@ -249,7 +254,7 @@ export function SourceFields({
           </Field>
           {value.consent_prompt !== "site" && (
             <div className="grid gap-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid max-w-[22rem] grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
                 <Field>
                   <FieldLabel htmlFor="source-consent-layout">Layout</FieldLabel>
                   <ValueSelect

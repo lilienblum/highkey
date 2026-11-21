@@ -266,11 +266,13 @@ test.describe("first project", () => {
     await page.goto("/events");
     await expect(page).toHaveURL(`${base}/new`);
     await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
-    await expect(page.getByRole("main")).toContainText(org?.name as string);
+    await expect(page.getByRole("contentinfo")).toContainText(org?.name as string);
+    await expect(page.getByText("Step 1 of 2")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
     await page.getByLabel("Project name").fill(`First light ${run}`);
     // Its source is named on the same screen, with an icon of its own.
     const input = page.getByLabel("Source", { exact: true });
+    const counting = page.getByRole("combobox", { name: "Visitor counting" });
     await input.fill("Website");
     await page.getByLabel("Websites", { exact: true }).fill("*.example.com\n*.example.org");
     const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
@@ -285,11 +287,24 @@ test.describe("first project", () => {
         button = (await icon.boundingBox())!;
       expect(button.x).toBeGreaterThan(field.x + field.width / 2);
       expect(button.x + button.width).toBeLessThanOrEqual(field.x + field.width);
+      expect(field.width).toBeLessThanOrEqual(353);
+      expect((await counting.boundingBox())!.width).toBeLessThanOrEqual(225);
+      if (width === 1600 || width === 390) {
+        await counting.click();
+        await page.screenshot({ path: info.outputPath(`visitor-counting-${width}.png`) });
+        expect((await page.getByRole("listbox").boundingBox())!.width).toBeLessThan(250);
+        await page.keyboard.press("Escape");
+      }
     }
     await page.setViewportSize({ width: 1280, height: 844 });
     await icon.click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
-    await page.getByLabel("Visitor counting").click();
+    await expect(counting).toHaveText("Events only");
+    await counting.click();
+    await page.getByRole("option", { name: "Daily visitors" }).click();
+    await counting.click();
+    await page.getByRole("option", { name: "Events only" }).click();
+    await counting.click();
     await page.getByRole("option", { name: "Returning visitors" }).click();
     await page.getByLabel("Layout", { exact: true }).click();
     await page.getByRole("option", { name: "Corner card" }).click();
@@ -300,6 +315,7 @@ test.describe("first project", () => {
     // The same page then shows how to connect it: the source's new key in a snippet, and the
     // agent's MCP setup.
     await expect(page.getByRole("heading", { name: "Connect Website" })).toBeVisible();
+    await expect(page.getByText("Step 2 of 2")).toBeVisible();
     expect((await (await api.get("/api/products")).json())[0].website_urls).toEqual([
       "https://*.example.com",
       "https://*.example.org",
@@ -312,8 +328,13 @@ test.describe("first project", () => {
     await expect(page.locator(".integration-code")).toContainText(
       'layout: "corner", theme: "light"',
     );
-    const activation = page.getByRole("region", { name: "Activation checklist" });
-    await expect(page.getByText("Waiting for first event", { exact: false })).toBeVisible();
+    const connection = page.getByRole("status", { name: "Source connection" });
+    await expect(connection).toContainText("Waiting for the first event from Website");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: info.outputPath("connect-390.png") });
+    await expect(connection).toBeInViewport();
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.screenshot({ path: info.outputPath("connect-1280.png") });
     await page.getByRole("combobox", { name: "Install framework" }).click();
     await page.getByRole("option", { name: "Next.js", exact: true }).click();
     await expect(page.getByText(/Save the module below as public\/highkey.mjs/)).toBeVisible();
@@ -332,9 +353,11 @@ test.describe("first project", () => {
       }),
     });
     expect(ingested.ok).toBe(true);
-    await expect(activation).toContainText("First event: setup_check · typescript · backend", {
+    await expect(connection).toContainText("First event received", {
       timeout: 15000,
     });
+    await expect(connection).toContainText("Website sent setup_check.");
+    await page.getByText("Connect an agent (optional)", { exact: true }).click();
     await expect(
       page.getByText(`claude mcp add --transport http highkey ${base}/mcp`),
     ).toBeVisible();

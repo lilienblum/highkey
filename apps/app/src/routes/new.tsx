@@ -7,7 +7,7 @@ import { SubmitButton, TextField, useAuthForm } from "@/components/auth/auth-fie
 import { ConnectAgent } from "@/components/dashboards/agent-guide";
 import { DitherField } from "@/components/dither-field";
 import { type Integration, IntegrationTabs } from "@/components/integration-guide";
-import { Activation } from "@/components/activation";
+import { FirstEventNotice, WebsiteCheck } from "@/components/activation";
 import { oversees } from "@/components/settings/settings-nav";
 import { type SourceDraft, SourceFields } from "@/components/source-settings";
 import { ProjectWebsites, parseWebsites } from "@/components/project-websites";
@@ -17,10 +17,6 @@ import { api, type Product, type Source } from "@/lib/api";
 import { authPost } from "@/lib/auth-client";
 
 // Where an organization without projects starts, and where anyone can start another project.
-// The task takes the main ground; beside it, the sidebar ground carries the dither field and the
-// three steps from a project to its first event. Owners and admins name the project and its first
-// source; the same page then shows the source's new key in a snippet for their app, and how to
-// connect their agent.
 export const Route = createFileRoute("/new")({
   head: () => ({ meta: [{ title: "Create a project · Highkey" }] }),
   component: NewProject,
@@ -95,13 +91,18 @@ function NewProject() {
       <div
         className={`mx-auto grid min-h-svh w-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto] px-6 sm:px-10 ${created ? "max-w-[50rem]" : "max-w-[42rem]"}`}
       >
-        <header className="flex h-20 items-center">
+        <header className="flex h-20 items-center justify-between gap-3">
           <a href="/" className="brand-link" aria-label="Highkey">
             <span className="brand">
               <img className="brand-mark" src="/favicon.svg?v=7" width="30" height="30" alt="" />
               <span className="brand-word">highkey</span>
             </span>
           </a>
+          {creates && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              Step {created ? 2 : 1} of 2
+            </span>
+          )}
         </header>
         {created ? (
           <Connect organization={organization.slug} created={created} />
@@ -112,29 +113,30 @@ function NewProject() {
                 <h1 className="text-[34px] leading-[1.1] lg:text-[40px]">
                   {first ? "Create your first project" : "Create a project"}
                 </h1>
-                <Lead>
-                  In <strong className="font-semibold text-foreground">{organization.name}</strong>.
-                  A project holds your sources (sites, apps, CLIs, servers) with their keys, events
-                  and logs.
-                </Lead>
+                <Lead>Name your project and its first source. Next, you’ll connect your app.</Lead>
                 <form className="auth-form" method="post" onSubmit={form.onSubmit}>
                   <AuthError>{form.error}</AuthError>
                   <TextField
                     name="name"
                     label="Project name"
+                    className="max-w-[22rem]"
                     placeholder="e.g. Orbit"
                     autoComplete="off"
                     maxLength={80}
                     required
                   />
-                  <SourceFields
-                    value={sourceDraft}
-                    onChange={setSourceDraft}
-                    label="Source"
-                    hint="Where its events come from: a site, an app, a CLI. You can add more sources later in settings."
-                  />
                   <ProjectWebsites id="new-project-websites" />
-                  <SubmitButton pending={form.pending}>Create project</SubmitButton>
+                  <div className={`mt-1 grid min-w-0 gap-4 pt-5 ${SEAM}`}>
+                    <SourceFields
+                      value={sourceDraft}
+                      onChange={setSourceDraft}
+                      label="Source"
+                      hint="The website, app, or tool that sends events."
+                    />
+                  </div>
+                  <SubmitButton pending={form.pending} compact>
+                    Create project
+                  </SubmitButton>
                 </form>
               </>
             ) : (
@@ -157,6 +159,7 @@ function NewProject() {
           className={`flex min-h-16 items-center justify-between gap-3 text-[13px] text-muted-foreground ${SEAM}`}
         >
           <span className="flex min-w-0 items-baseline gap-2.5">
+            <span>Organization:</span>
             <strong className="truncate font-semibold text-foreground">{organization.name}</strong>
             <a href="/welcome" className={`shrink-0 ${LINK}`}>
               Switch
@@ -189,16 +192,8 @@ function NewProject() {
             >
               A project is one product; each source (a site, an app, a CLI) gets its own keys.
             </Step>
-            <Step
-              number={2}
-              state={created ? "current" : "next"}
-              title="Connect your app and agent"
-            >
-              Paste a snippet with the source’s key, and add Highkey to your agent over MCP. No
-              cookies, no stored visitor IDs.
-            </Step>
-            <Step number={3} state="next" title="Watch it arrive">
-              Events show up in Overview as they come in, and your agent can read them too.
+            <Step number={2} state={created ? "current" : "next"} title="Connect your app">
+              Add the snippet for your source and watch for its first event.
             </Step>
           </ol>
         </div>
@@ -215,7 +210,7 @@ function Lead({ children }: { children: ReactNode }) {
   );
 }
 
-/** One of the three steps; a finished one steps back to the muted ink. */
+/** A finished step steps back to the muted ink. */
 function Step({
   number,
   state,
@@ -258,7 +253,10 @@ function Connect({ organization, created }: { organization: string; created: Cre
   const [copyFailed, setCopyFailed] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   // The form is gone: focus moves to what replaced it.
-  useEffect(() => heading.current?.focus(), []);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }, []);
   const home = `/${organization}/${project.slug}`;
   return (
     <main className="flex w-full min-w-0 max-w-[720px] flex-col gap-6 pt-2 pb-16">
@@ -270,15 +268,16 @@ function Connect({ organization, created }: { organization: string; created: Cre
         Connect {source.name}
       </h1>
       <Lead>
-        <strong className="font-semibold text-foreground">{project.name}</strong> is ready. Paste
-        the snippet into your app, and its events show up in Overview as they arrive.
+        <strong className="font-semibold text-foreground">{project.name}</strong> is ready. Choose
+        the instructions for your app. The snippet already includes this source’s key.
       </Lead>
+      <FirstEventNotice id={project.id} source={source} />
       <section aria-labelledby="new-project-app" className={`flex flex-col gap-3 pt-5 ${SEAM}`}>
         <h2
           id="new-project-app"
           className="font-pixel text-xl leading-snug font-normal text-heading"
         >
-          Your app
+          Add Highkey to your app
         </h2>
         <div className="flex items-center gap-2 rounded-md border bg-surface-inset px-3 py-2.5 font-mono text-[13px] [overflow-wrap:anywhere]">
           <code data-testid="ingestion-key" className="min-w-0 flex-1">
@@ -304,22 +303,17 @@ function Connect({ organization, created }: { organization: string; created: Cre
           consentTheme={source.consent_theme}
           onCopyError={() => setCopyFailed(true)}
         />
+        {project.website_url && <WebsiteCheck id={project.id} />}
       </section>
-      <section aria-labelledby="new-project-agent" className={`flex flex-col gap-3 pt-5 ${SEAM}`}>
-        <h2
-          id="new-project-agent"
-          className="font-pixel text-xl leading-snug font-normal text-heading"
-        >
-          Your agent
-        </h2>
-        <p className={HINT}>
+      <details className={`pt-5 ${SEAM}`}>
+        <summary>Connect an agent (optional)</summary>
+        <p className={`my-3 ${HINT}`}>
           Ask Claude Code or Codex about {project.name}, or have it build dashboards and views.
         </p>
         <ConnectAgent />
-      </section>
+      </details>
       <div className="flex flex-wrap items-center gap-5 pt-2">
-        <Activation id={project.id} source={source.id} website={project.website_url} />
-        <Button size="lg" nativeButton={false} role="link" render={<a href={home} />}>
+        <Button nativeButton={false} role="link" render={<a href={home} />}>
           Open {project.name}
         </Button>
         <a

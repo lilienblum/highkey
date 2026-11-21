@@ -37,13 +37,21 @@ export function useHydrated(): boolean {
  * The form's submit. Until the page is interactive it stays disabled, so a quick click never
  * makes the browser submit the form itself (with the password in a request of its own).
  */
-export function SubmitButton({ pending, children }: { pending: boolean; children: string }) {
+export function SubmitButton({
+  pending,
+  children,
+  compact = false,
+}: {
+  pending: boolean;
+  children: string;
+  compact?: boolean;
+}) {
   const hydrated = useHydrated();
   return (
     <Button
       type="submit"
-      size="lg"
-      className="auth-submit"
+      size={compact ? "default" : "lg"}
+      className={compact ? "mt-1 self-start" : "auth-submit"}
       disabled={pending || !hydrated}
       aria-busy={pending}
     >
