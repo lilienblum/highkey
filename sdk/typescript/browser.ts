@@ -344,11 +344,14 @@ export function startBrowserTracker(options: BrowserOptions) {
     throw new Error("capacity must be a positive finite integer");
   if (options.key.startsWith("sk_"))
     throw new Error("Server event keys must never be used in a browser");
-  const client = new Highkey({
-    ...options,
-    keepalive: true,
-    signal: options.signal ? AbortSignal.any([options.signal, delivery.signal]) : delivery.signal,
-  });
+  const client = new Highkey(
+    {
+      ...options,
+      keepalive: true,
+      signal: options.signal ? AbortSignal.any([options.signal, delivery.signal]) : delivery.signal,
+    },
+    "browser",
+  );
   function initializeIdentity() {
     if (options.identity !== "persistent") return;
     try {

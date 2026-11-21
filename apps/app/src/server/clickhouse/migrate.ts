@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { ClickHouse } from "./client";
 
 /** The ingest contract these migrations provide. Raise it with the migration that changes it. */
-export const CONTRACT_VERSION = 3;
+export const CONTRACT_VERSION = 4;
 
 const defaultDir = new URL("../../../../../clickhouse/migrations/", import.meta.url).pathname;
 

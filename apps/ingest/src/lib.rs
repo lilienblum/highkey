@@ -125,7 +125,21 @@ async fn ingest_events(
         return Err(ApiError::bad("Provide 1–100 events per request"));
     }
     let now = chrono::Utc::now();
+    // Keep only the SDK's bounded media-type parameter, never a raw user agent.
+    let sdk = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| {
+            s.split(';').skip(1).find_map(|p| match p.trim() {
+                "highkey-sdk=browser" => Some("browser"),
+                "highkey-sdk=typescript" => Some("typescript"),
+                "highkey-sdk=rust" => Some("rust"),
+                _ => None,
+            })
+        })
+        .unwrap_or("http");
     for (i, event) in events.iter_mut().enumerate() {
+        event.sdk = sdk;
         if event.properties.contains_key("revenue")
             && !record.server_key
             && !record.allow_browser_revenue

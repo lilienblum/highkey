@@ -91,6 +91,7 @@ export function contentType(bytes: Uint8Array): string | null {
 function download(
   url: URL,
   address: { address: string; family: number },
+  html = false,
 ): Promise<Uint8Array | null> {
   return new Promise((resolve) => {
     const client = url.protocol === "https:" ? https : http;
@@ -98,7 +99,10 @@ function download(
       url,
       {
         timeout: 2_000,
-        headers: { "user-agent": "Highkey favicon fetcher" },
+        headers: {
+          "user-agent": html ? "Highkey installation checker" : "Highkey favicon fetcher",
+        },
+        signal: AbortSignal.timeout(4000),
         // Connect only to the address that passed the public check.
         lookup: ((_host, options, callback) => {
           if (typeof options === "object" && options !== null && options.all)
@@ -113,9 +117,10 @@ function download(
         if (
           (response.statusCode ?? 0) < 200 ||
           (response.statusCode ?? 0) >= 300 ||
-          length > MAX_ICON_BYTES
+          length > MAX_ICON_BYTES ||
+          (html && !/^text\/html(?:;|$)/i.test(response.headers["content-type"] ?? ""))
         ) {
-          response.resume();
+          request.destroy();
           return resolve(null);
         }
         const chunks: Buffer[] = [];
@@ -129,7 +134,7 @@ function download(
         });
         response.on("end", () => {
           const bytes = new Uint8Array(Buffer.concat(chunks));
-          resolve(contentType(bytes) ? bytes : null);
+          resolve(html || contentType(bytes) ? bytes : null);
         });
         response.on("error", () => resolve(null));
       },
@@ -139,7 +144,7 @@ function download(
   });
 }
 
-async function fetchFrom(website: string): Promise<Uint8Array | null> {
+async function fetchFrom(website: string, html = false): Promise<Uint8Array | null> {
   const url = new URL(website);
   const port = url.port || (url.protocol === "https:" ? "443" : "80");
   if (!(
@@ -158,11 +163,29 @@ async function fetchFrom(website: string): Promise<Uint8Array | null> {
   }
   if (!addresses.length || addresses.some((a) => !publicAddress(a.address))) return null;
   const address = addresses[0] as { address: string; family: number };
+  if (html) return download(new URL("/", url), address, true);
   for (const path of ["/favicon.ico", "/favicon.png", "/apple-touch-icon.png"]) {
     const bytes = await download(new URL(path, url), address);
     if (bytes) return bytes;
   }
   return null;
+}
+
+/** Reports only presence; never return a public page's HTML to the caller. */
+export async function checkSite(website: string) {
+  const bytes = await Promise.race([
+    fetchFrom(website, true).catch(() => null),
+    new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+  ]);
+  if (!bytes) return { status: "unavailable" };
+  return {
+    status:
+      /(?:\/tracker\.js(?:[?"'`\s]|$)|\bstartBrowserTracker\b|src=["'][^"']*\/highkey\.mjs["'])/i.test(
+        new TextDecoder().decode(bytes),
+      )
+        ? "found"
+        : "absent",
+  };
 }
 
 /** The site's favicon, or null after at most four seconds. */

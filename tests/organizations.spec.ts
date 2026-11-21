@@ -239,6 +239,29 @@ test.describe("first project", () => {
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
     expect(key).toMatch(/^pk_/);
     await expect(page.locator(".integration-code")).toContainText(key);
+    const activation = page.getByRole("region", { name: "Activation checklist" });
+    await expect(page.getByText("Waiting for first event", { exact: false })).toBeVisible();
+    await page.getByRole("combobox", { name: "Install framework" }).click();
+    await page.getByRole("option", { name: "Next.js", exact: true }).click();
+    await expect(page.getByText(/Save the module below as public\/highkey.mjs/)).toBeVisible();
+    await page.getByText("Install with AI", { exact: true }).click();
+    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
+    const ingested = await fetch(`${process.env.HIGHKEY_API_URL}/api/ingest`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json; highkey-sdk=typescript",
+      },
+      body: JSON.stringify({
+        name: "setup_check",
+        event_id: crypto.randomUUID(),
+        source: "backend",
+      }),
+    });
+    expect(ingested.ok).toBe(true);
+    await expect(activation).toContainText("First event: setup_check · typescript · backend", {
+      timeout: 15000,
+    });
     await expect(
       page.getByText(`claude mcp add --transport http highkey ${base}/mcp`),
     ).toBeVisible();

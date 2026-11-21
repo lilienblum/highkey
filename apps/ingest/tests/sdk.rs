@@ -61,12 +61,13 @@ async fn sdk_events_commit_deduplicate_and_keep_typed_properties() {
         }
     );
     let rows = admin_query(&format!(
-        "SELECT name, properties, actor_id FROM highkey.events WHERE product_id = '{product}' ORDER BY name"
+        "SELECT name, properties, actor_id, sdk FROM highkey.events WHERE product_id = '{product}' ORDER BY name"
     ))
     .await;
     assert_eq!(rows.len(), 2);
     let event = rows.iter().find(|e| e["name"] == "command_run").unwrap();
     assert_eq!(event["properties"]["duration_ms"], 42);
+    assert_eq!(event["sdk"], "rust");
     assert_eq!(event["properties"]["success"], true);
     assert_eq!(event["properties"]["label"], "quoted \"東京\"\n");
     assert!(event["actor_id"].is_null());
@@ -89,7 +90,7 @@ async fn sdk_transport_refuses_redirects_and_omits_browser_credentials() {
         "/api/ingest",
         post(move |headers: HeaderMap| async move {
             assert_eq!(headers["authorization"], "Bearer pk_test");
-            assert_eq!(headers["content-type"], "application/json");
+            assert_eq!(headers["content-type"], "application/json; highkey-sdk=rust");
             assert!(!headers.contains_key("cookie"));
             assert!(!headers.contains_key("referer"));
             (

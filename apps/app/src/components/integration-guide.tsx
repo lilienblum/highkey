@@ -1,7 +1,8 @@
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { highlight } from "@/lib/highlight";
+import { ValueSelect } from "./value-select";
 
 /** The ways a source sends events: the hosted browser tracker, the SDKs, or plain HTTP. */
 export type Integration = "browser" | "typescript" | "rust" | "http";
@@ -51,6 +52,30 @@ const LANGUAGE: Record<Integration, Parameters<typeof highlight>[1]> = {
   http: "http",
 };
 
+const placements = {
+  html: ["index.html", "Place this module script before the closing </body> in your shared HTML."],
+  react: [
+    "index.html (Vite / React)",
+    "Place this module script in the root index.html, after the app entry. It observes client-side navigation itself.",
+  ],
+  next: [
+    "app/layout.tsx (Next.js)",
+    'Save the module below as public/highkey.mjs. In your root layout import Script from \'next/script\' and add <Script src="/highkey.mjs" type="module" strategy="afterInteractive" /> inside <body>.',
+  ],
+  vue: [
+    "index.html (Vite / Vue)",
+    "Place this module script in the root index.html once. Do not reinitialize it on each route change.",
+  ],
+  svelte: [
+    "src/app.html (SvelteKit)",
+    "Place this module script before the closing </body> of src/app.html. It runs only in the browser.",
+  ],
+  astro: [
+    "src/layouts/Layout.astro",
+    "Place the module script before </body> in your shared layout. Keep is:inline on the script so Astro serves the hosted import unchanged.",
+  ],
+} as const;
+
 const NOTE: Record<Integration, string> = {
   browser:
     "No cookies or stored visitor IDs. Campaign capture is off, and DNT/GPC stop collection. Map private routes before collecting page views.",
@@ -76,9 +101,25 @@ export function IntegrationTabs({
   onCopyError: () => void;
 }) {
   const origin = useOrigin();
+  const [framework, setFramework] = useState<keyof typeof placements>("html");
   const server = ingestionKey?.startsWith("sk_");
   if (server && (value === "browser" || value === "rust")) value = "typescript";
-  const snippet = integrationSnippet(value, origin, ingestionKey || "YOUR_INGESTION_KEY");
+  const key = ingestionKey || "YOUR_INGESTION_KEY";
+  const raw = integrationSnippet(value, origin, key);
+  const snippet =
+    value !== "browser"
+      ? raw
+      : framework === "next"
+        ? raw
+            .split("\n")
+            .slice(1, -1)
+            .map((s) => s.replace(/^  /, ""))
+            .join("\n")
+        : framework === "astro"
+          ? raw.replace("<script ", "<script is:inline ")
+          : raw;
+  const curl = `EVENT_ID="$(uuidgen)"\ncurl --fail-with-body '${origin}/api/ingest' \\\n  -H 'Authorization: Bearer ${key}' \\\n  -H 'Content-Type: application/json' \\\n  --data "{\\"event_id\\":\\"$EVENT_ID\\",\\"name\\":\\"setup_check\\",\\"source\\":\\"http\\"}"`;
+  const prompt = `Install Highkey analytics in this ${value === "browser" ? placements[framework][0] : value} project using ${origin} as the endpoint. ${server ? "Read HIGHKEY_SERVER_KEY only from the backend environment." : "Read the source's public ingestion key from the project's configuration."} Inspect the existing framework and install once. Keep anonymous collection and DNT/GPC defaults; exclude private routes, secrets and personal data. Do not enable identity, campaign capture or prompts. Send one setup_check event and verify the acknowledgment and source in Highkey.`;
   return (
     <Tabs value={value} onValueChange={(next) => onValueChange(next as Integration)}>
       <TabsList
@@ -92,20 +133,66 @@ export function IntegrationTabs({
         <TabsTrigger value="http">{server ? "HTTP / Server" : "HTTP / Mobile"}</TabsTrigger>
       </TabsList>
       <TabsContent value={value} key={value}>
+        {value === "browser" && (
+          <div className="mb-3 grid gap-2">
+            <ValueSelect
+              label="Install framework"
+              value={framework}
+              options={[
+                ["html", "Plain HTML"],
+                ["react", "React (Vite)"],
+                ["next", "Next.js"],
+                ["vue", "Vue (Vite)"],
+                ["svelte", "SvelteKit"],
+                ["astro", "Astro"],
+              ]}
+              onValueChange={(v) => setFramework(v as keyof typeof placements)}
+            />
+            <p className="quiet">{placements[framework][1]}</p>
+          </div>
+        )}
         <div className="code-toolbar">
-          <span>{CAPTION[value]}</span>
+          <span>
+            {value === "browser"
+              ? framework === "next"
+                ? "public/highkey.mjs"
+                : placements[framework][0]
+              : CAPTION[value]}
+          </span>
           <CopyButton variant="ghost" content={snippet} onCopyError={onCopyError}>
             Copy snippet
           </CopyButton>
         </div>
         <pre className="integration-code">
-          <code>{highlight(snippet, LANGUAGE[value])}</code>
+          <code>
+            {highlight(
+              snippet,
+              value === "browser" && framework === "next" ? "js" : LANGUAGE[value],
+            )}
+          </code>
         </pre>
         <p className="quiet">
           {server
             ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
             : NOTE[value]}
         </p>
+        <details className="mt-3">
+          <summary>Test with curl</summary>
+          <p className="quiet">Run from a terminal. Keep the same event ID if you retry.</p>
+          <pre className="setup-curl">
+            <code>{highlight(curl, "shell")}</code>
+          </pre>
+          <CopyButton content={curl} onCopyError={onCopyError}>
+            Copy curl command
+          </CopyButton>
+        </details>
+        <details className="mt-3">
+          <summary>Install with AI</summary>
+          <p className="quiet">{prompt}</p>
+          <CopyButton content={prompt} onCopyError={onCopyError}>
+            Copy install prompt
+          </CopyButton>
+        </details>
       </TabsContent>
     </Tabs>
   );

@@ -16,6 +16,8 @@ pub enum RecordType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
+    #[serde(skip)]
+    pub sdk: &'static str,
     pub event_id: String,
     pub name: String,
     pub source: String,
@@ -239,6 +241,7 @@ impl crate::writer::Row for Event {
         "event_id",
         "name",
         "source",
+        "sdk",
         "event_time",
         "received_at",
         "actor_id",
@@ -273,6 +276,7 @@ impl crate::writer::Row for Event {
             "event_id": self.event_id,
             "name": self.name,
             "source": self.source,
+            "sdk": self.sdk,
             "event_time": datetime64(time),
             "received_at": datetime64(context.received_at),
             "actor_id": self.actor_id,

@@ -40,7 +40,10 @@ export class DeliveryError extends Error {
 /** Small dependency-free client. A send's total deadline includes retries and backoff. */
 export class Highkey {
   private readonly options: Options;
-  constructor(options: Options) {
+  constructor(
+    options: Options,
+    private readonly sdk: "typescript" | "browser" = "typescript",
+  ) {
     const timeout = options.timeoutMs ?? 800;
     const retries = options.retries ?? 1;
     if (!Number.isSafeInteger(timeout) || timeout <= 0)
@@ -123,7 +126,7 @@ export class Highkey {
         const response = await fetch(`${this.options.endpoint.replace(/\/$/, "")}/api/ingest`, {
           method: "POST",
           headers: {
-            "content-type": "application/json",
+            "content-type": `application/json; highkey-sdk=${this.sdk}`,
             authorization: `Bearer ${this.options.key}`,
           },
           body: payload,

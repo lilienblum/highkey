@@ -1486,6 +1486,7 @@ p {
 .code-toolbar [data-slot="button"] {
   font-size: 12px;
 }
+.setup-curl,
 .integration-code {
   background: var(--subtle);
   border: 1px solid var(--border);

@@ -42,7 +42,10 @@ impl Transport for HttpsTransport {
             let mut response = self
                 .0
                 .post(request.url)
-                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/json; highkey-sdk=rust",
+                )
                 .bearer_auth(request.key)
                 .body(request.body.to_owned())
                 .timeout(remaining)

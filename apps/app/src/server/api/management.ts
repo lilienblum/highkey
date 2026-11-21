@@ -2,12 +2,14 @@
 // Every change tells open dashboards through the dashboards signal, so a sidebar showing the
 // project refreshes without a reload.
 import { requireActor } from "../auth/actor";
-import { favicon, products, requireProduct } from "../db/products";
+import { activation } from "../activation";
+import { favicon, products, requireProduct, productRow } from "../db/products";
 import { listKeys, listLogKeys, logRetention } from "../db/keys";
 import { listSources } from "../db/sources";
 import { revenueSettings } from "../db/revenue";
 import { cleanup } from "../registry";
-import { contentType } from "../website";
+import { contentType, checkSite } from "../website";
+import { throttle } from "../dashboards/routes";
 import {
   createEventKey,
   createProject,
@@ -23,13 +25,27 @@ import {
   updateRevenueSettings,
 } from "../operations";
 import { fields, readJson } from "./body";
-import { json, missing, noContent } from "./errors";
+import { json, missing, noContent, bad } from "./errors";
 import { READ, route } from "./router";
 
 const PRODUCT = { name: "string", retention_days: "integer", website_url: "string?" } as const;
 const SOURCE = { name: "string", icon: "string?" } as const;
 
 export function registerManagement(): void {
+  route(
+    "POST",
+    "/api/products/:id/check-website",
+    { source: ["write"] },
+    async (_r, ctx, { id }) => {
+      const project = await productRow(ctx.db, id as string);
+      if (!project.website_url) throw bad("Set the project website first");
+      throttle(ctx, project.id);
+      return json(await checkSite(project.website_url));
+    },
+  );
+  route("GET", "/api/products/:id/activation", READ, async (r, ctx, { id }) =>
+    json(await activation(ctx, id as string, new URL(r.url).searchParams.get("source_id"))),
+  );
   route("POST", "/api/cleanup", "server-admin", async (_r, ctx) => json(await cleanup(ctx)));
 
   route("GET", "/api/products", READ, async (_r, ctx) =>

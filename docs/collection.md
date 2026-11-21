@@ -245,3 +245,9 @@ Create a mobile source and use its key with `POST /api/ingest`, from a native ap
 ```
 
 Supply `Authorization: Bearer pk_...` and `Content-Type: application/json`. Replace the example event ID with a real UUID. Set an explicit HTTP deadline, retain the exact envelope for bounded retries, and only send after your app's collection preference permits it. For retries, include the original UTC RFC3339 `timestamp` too. The server's 200 response acknowledges persistence. These are HTTP integration examples, not native Swift/Kotlin SDKs; see [retry and validation semantics](api.md#ingestion).
+
+# Verify a new source
+
+The connect step and project settings show the first retained event for the selected source, with its event name, client and sending SDK. SDKs send a bounded `highkey-sdk` parameter on their JSON content type (`browser`, `typescript`, or `rust`); other current clients appear as `http`, and older records as “Unknown SDK”. No user agent is needed for this check. The checklist uses commit hints and visible-tab reconciliation, and also shows a project MCP connection, an agent-authored dashboard and an organization invitation.
+
+The browser integration offers instructions for plain HTML, React/Vite, Vue/Vite, Next.js, SvelteKit and Astro. “Install with AI” copies a framework-specific prompt without your key. “Test with curl” provides a terminal command. The website checker reads only the initial HTML of the configured public home page, with bounded size and time and no redirects. A dynamically bundled tracker might be working even if it is not visible there; use the received event as confirmation.

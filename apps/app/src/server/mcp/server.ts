@@ -118,7 +118,18 @@ async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
       isError: true,
     };
   try {
-    return { content: text(await (HANDLERS[name] as Tool)(ctx, args)), isError: false };
+    const result = await (HANDLERS[name] as Tool)(ctx, args);
+    if (typeof args.project === "string") {
+      // One onboarding milestone, without retaining which agent, credential or user called.
+      await ctx.db
+        .execute(
+          `INSERT OR IGNORE INTO project_mcp_connections(product_id)
+        SELECT id FROM products WHERE org_id=? AND (id=? OR slug=?) AND deleted_at IS NULL LIMIT 1`,
+          [actor.orgId, args.project, args.project],
+        )
+        .catch(() => console.warn("Could not record MCP setup milestone"));
+    }
+    return { content: text(result), isError: false };
   } catch (error) {
     return { content: text(errorBody(error)), isError: true };
   }

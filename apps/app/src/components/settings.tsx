@@ -45,6 +45,7 @@ import { PageHeader, useWorkspace } from "./app-shell";
 import { ProjectLifecycle } from "./settings/project-lifecycle";
 import { SettingsNav } from "./settings/settings-nav";
 import { RevenueSettings } from "./settings/revenue";
+import { Activation } from "./activation";
 import { ErrorState } from "./shared";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
@@ -246,6 +247,12 @@ export function Settings() {
       {product ? (
         <>
           <ProductSettings key={product.id} product={product} />
+          <Activation
+            key={`activation-${product.id}`}
+            id={product.id}
+            source={sourceId}
+            website={product.website_url}
+          />
           <LogSettings key={`logs-${product.id}`} product={product} sourceId={sourceId} />
           <ProjectLifecycle key={`lifecycle-${product.id}`} product={product} />
         </>

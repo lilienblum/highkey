@@ -7,6 +7,7 @@ import { SubmitButton, TextField, useAuthForm } from "@/components/auth/auth-fie
 import { ConnectAgent } from "@/components/dashboards/agent-guide";
 import { DitherField } from "@/components/dither-field";
 import { type Integration, IntegrationTabs } from "@/components/integration-guide";
+import { Activation } from "@/components/activation";
 import { oversees } from "@/components/settings/settings-nav";
 import { type SourceDraft, SourceFields } from "@/components/source-settings";
 import { Button } from "@/components/ui/button";
@@ -316,6 +317,7 @@ function Connect({ organization, created }: { organization: string; created: Cre
         <ConnectAgent />
       </section>
       <div className="flex flex-wrap items-center gap-5 pt-2">
+        <Activation id={project.id} source={source.id} website={project.website_url} />
         <Button size="lg" nativeButton={false} role="link" render={<a href={home} />}>
           Open {project.name}
         </Button>
