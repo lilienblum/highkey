@@ -277,12 +277,18 @@ test("sidebar collapses, persists and keeps navigation keyboard accessible", asy
     .getByRole("button", { name: "Toggle Sidebar", exact: true });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("title", "Collapse sidebar");
-  const top = (await toggle.boundingBox())?.y;
+  const logo = sidebar.getByRole("link", { name: "Highkey overview" });
   await toggle.click();
   await expect(sidebar).toHaveAttribute("data-state", "collapsed");
   await expect(toggle).toHaveAttribute("title", "Expand sidebar");
   await expect(toggle).toBeInViewport();
-  expect((await toggle.boundingBox())?.y).toBe(top);
+  await expect(logo).toBeInViewport();
+  const mark = (await logo.locator("img").boundingBox())!;
+  const top = (await toggle.boundingBox())!.y;
+  expect(top).toBeGreaterThan(mark.y + mark.height);
+  await logo.focus();
+  await page.keyboard.press("Tab");
+  await expect(toggle).toBeFocused();
   await expect(
     sidebar.locator('[data-slot="sidebar-footer"] [data-slot="sidebar-trigger"]'),
   ).toHaveCount(0);

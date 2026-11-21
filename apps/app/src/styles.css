@@ -2437,9 +2437,6 @@ details[open] > .install-summary > svg {
 :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .workspace-project {
   padding: 12px;
 }
-:where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .workspace-brand-row {
-  padding-inline: 12px;
-}
 :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .workspace-section-label,
 :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"])
   .workspace-project
@@ -2707,19 +2704,21 @@ html:has([data-page="new-project"]) {
   width: 32px;
   height: 32px;
 }
-@media (min-width: 768px) {
-  :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"])
-    .workspace-brand-row
-    .brand-link {
-    display: none;
-  }
-}
 @media (max-height: 480px) {
   .workspace-brand-row {
     height: 48px;
   }
   .workspace-navigation {
     padding-block: 4px;
+  }
+}
+@media (min-width: 768px) {
+  :where([data-collapsible="icon"], html[data-sidebar-initial="collapsed"]) .workspace-brand-row {
+    height: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 16px 0 0;
   }
 }
 .query-draft-notice {
