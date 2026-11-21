@@ -62,6 +62,7 @@ describe("ClickHouse migrations", () => {
       "increments JSON",
       "groups Map(String, String)",
       "ai_prompt String",
+      "sdk LowCardinality(String)",
     ]);
     expect(await columns("logs")).toEqual([
       "product_id UUID",
