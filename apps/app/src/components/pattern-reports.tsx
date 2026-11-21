@@ -162,7 +162,8 @@ function FlowDiagram({ data }: { data: Flow }) {
         </ol>
       </details>
       <p className="text-muted-foreground">
-        Top {data.paths.length} paths from {number(data.total)} matching visits.
+        Top {data.paths.length} {data.paths.length === 1 ? "path" : "paths"} from{" "}
+        {number(data.total)} matching {data.total === 1 ? "visit" : "visits"}.
       </p>
     </>
   );
@@ -184,7 +185,7 @@ export function PatternReports({ filters }: { filters: Record<string, unknown> }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" />}>Analyze patterns</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto p-4 sm:max-w-4xl sm:p-6">
         <DialogHeader>
           <DialogTitle>Activity patterns</DialogTitle>
           <DialogDescription>
@@ -192,10 +193,11 @@ export function PatternReports({ filters }: { filters: Record<string, unknown> }
           </DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={(v) => setMode(String(v))}>
-          <TabsList variant="line" aria-label="Analysis reports">
+          <TabsList variant="line" aria-label="Analysis reports" className="max-w-full">
             {reports.map(([k, label]) => (
               <TabsTrigger key={k} value={k}>
-                {label}
+                <span className="sm:hidden">{k === "weekly" ? "Weekly" : label}</span>
+                <span className="hidden sm:inline">{label}</span>
               </TabsTrigger>
             ))}
           </TabsList>

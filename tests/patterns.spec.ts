@@ -49,6 +49,9 @@ test("from Overview and Events, inspect a weekly pattern and follow the paths be
   await dialog.getByRole("tab", { name: "Distribution" }).click();
   await expect(dialog.getByText("Events per identified actor in this selection")).toBeVisible();
   await expect(dialog.locator("dd").nth(2)).toHaveText("1");
+  expect(
+    await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.scrollLeft === 0),
+  ).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath("distribution-mobile.png") });
 });
