@@ -314,7 +314,7 @@ export function AppShell({
     <ValueSelect
       label="Select project"
       value={product?.id ?? ""}
-      disabled={!products.length && !canCreate}
+      disabled={!preferencesReady || (!products.length && !canCreate)}
       placeholder={
         drilldown || requestedProject || selectionError ? "Project unavailable" : "No projects yet"
       }

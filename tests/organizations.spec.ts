@@ -397,7 +397,9 @@ test.describe("first project", () => {
     await expect(sources).toContainText("Website");
     await expect(sources.locator('[data-source-icon="terminal"]')).toHaveCount(1);
     const picker = page.getByRole("combobox", { name: "Select project" });
+    await expect(picker).toBeEnabled();
     await picker.press("ArrowDown");
+    await expect(page.getByRole("listbox")).toBeVisible();
     await page.keyboard.press("End");
     await expect(page.getByRole("option", { name: "New project", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
