@@ -1,4 +1,4 @@
-import { areaY, defineChart, dot, lineY, type ChartPoint } from "@tanstack/charts";
+import { areaY, barY, defineChart, dot, lineY, type ChartPoint } from "@tanstack/charts";
 import { crosshair } from "@tanstack/charts/crosshair";
 import { decorative } from "@tanstack/charts/mark/decorative";
 import { Chart } from "@tanstack/charts/react";
@@ -44,8 +44,10 @@ export function AnalyticsChart({
   unit,
   range,
   compact = false,
+  bars = false,
 }: {
-  series: QueryResult["series"];
+  series: (QueryResult["series"][number] & { exact?: string })[];
+  bars?: boolean;
   label: string;
   bucket: TimeBucket;
   unit?: string;
@@ -84,7 +86,7 @@ export function AnalyticsChart({
                 value:
                   value === null
                     ? "No numeric value"
-                    : `${number(value, 2)}${unit ? ` ${unit}` : ""}`,
+                    : `${"exact" in point.datum && typeof point.datum.exact === "string" ? BigInt(point.datum.exact).toLocaleString("en-US") : number(value, 2)}${unit ? ` ${unit}` : ""}`,
               },
             ],
           };
@@ -104,30 +106,43 @@ export function AnalyticsChart({
           marks: [
             ...referenceMarks(refs, bucket, series),
             // Dithered falloff: dense under the line, thinning toward the baseline.
-            ...TONE_BANDS.map((band, index) =>
-              decorative(
-                areaY(series, {
-                  id: `values-area-${index}`,
-                  x: "time",
-                  y1: (point) =>
-                    point.value === null ? null : Math.max(0, point.value - band.to * peak),
-                  y2: (point) =>
-                    point.value === null ? null : Math.max(0, point.value - band.from * peak),
-                  fill: `url(#${toneId}-${band.density})`,
-                }),
-              ),
-            ),
-            decorative(
-              lineY(series, {
-                id: "values-line",
-                x: "time",
-                y: "value",
-                stroke: "var(--data)",
-                strokeWidth: 2,
-                points: markers,
-              }),
-            ),
-            // Invisible focus targets let missing buckets be inspected without drawing a zero.
+            ...(bars
+              ? [
+                  decorative(
+                    barY(series, {
+                      id: "revenue-bars",
+                      x: "time",
+                      y: "value",
+                      fill: "var(--data)",
+                      inset: 1,
+                    }),
+                  ),
+                ]
+              : [
+                  ...TONE_BANDS.map((band, index) =>
+                    decorative(
+                      areaY(series, {
+                        id: `values-area-${index}`,
+                        x: "time",
+                        y1: (point) =>
+                          point.value === null ? null : Math.max(0, point.value - band.to * peak),
+                        y2: (point) =>
+                          point.value === null ? null : Math.max(0, point.value - band.from * peak),
+                        fill: `url(#${toneId}-${band.density})`,
+                      }),
+                    ),
+                  ),
+                  decorative(
+                    lineY(series, {
+                      id: "values-line",
+                      x: "time",
+                      y: "value",
+                      stroke: "var(--data)",
+                      strokeWidth: 2,
+                      points: markers,
+                    }),
+                  ),
+                ]), // Invisible focus targets let missing buckets be inspected without drawing a zero.
             dot(series, {
               id: "buckets",
               key: "time",
@@ -139,7 +154,13 @@ export function AnalyticsChart({
           ],
           scales: {
             x: {
-              scale: scaleLinear,
+              scale:
+                bars && series.length
+                  ? scaleLinear().domain([
+                      series[0].time - (nextBucket(series[0].time, bucket) - series[0].time) / 2,
+                      (series.at(-1)!.time + nextBucket(series.at(-1)!.time, bucket)) / 2,
+                    ])
+                  : scaleLinear,
               axis: {
                 line: false,
                 tickLabels: { fontSize: 12, opacity: 1 },
@@ -177,7 +198,7 @@ export function AnalyticsChart({
         };
       },
     });
-  }, [series, label, bucket, unit, from, to, compact, toneId, refs]);
+  }, [series, label, bucket, unit, from, to, compact, toneId, refs, bars]);
   return (
     <ZoomableChart
       bucket={bucket}

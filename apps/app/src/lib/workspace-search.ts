@@ -1,5 +1,6 @@
 import { DAY_MS, MAX_RANGE_DAYS, periodLabels, type DatePeriod } from "./date-range";
 import { eventContext } from "./event-context";
+import { webMetric, type WebMetric } from "./web-metrics";
 export type WorkspaceSearch = {
   /** Legacy entry input only; canonical URLs use /projects/$projectSlug. */
   project?: string;
@@ -107,7 +108,8 @@ export type OverviewFilter = { field: string; value: string | number | boolean }
 export type OverviewSearch = {
   filter?: OverviewFilter;
   invalidFilter?: true;
-  metric?: "count" | "actors" | "visitors" | "installations" | "average" | "p95";
+  metric?:
+    "count" | "actors" | "visitors" | "installations" | "average" | "p95" | `web_${WebMetric}`;
   breakdown?: string;
   duration?: "avg" | "p95";
 };
@@ -129,11 +131,13 @@ export function validateOverviewSearch(s: Record<string, unknown>): OverviewSear
         ? { filter: filter as OverviewFilter }
         : { invalidFilter: true as const }
       : {}),
-    metric: ["count", "actors", "visitors", "installations", "average", "p95"].includes(
-      typeof s.metric === "string" ? s.metric : "",
-    )
-      ? (s.metric as OverviewSearch["metric"])
-      : undefined,
+    metric:
+      webMetric(s.metric) ||
+      ["count", "actors", "visitors", "installations", "average", "p95"].includes(
+        typeof s.metric === "string" ? s.metric : "",
+      )
+        ? (s.metric as OverviewSearch["metric"])
+        : undefined,
     breakdown: [
       "name",
       "source_id",

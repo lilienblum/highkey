@@ -12,6 +12,7 @@ import { revenueReport } from "./revenue";
 import { liveActivity } from "./activity";
 import { patterns } from "./patterns";
 import { breakdownReport } from "./breakdowns";
+import { webMetrics } from "./web-metrics";
 import { generations } from "./generations";
 import { customRules } from "./custom";
 import { peopleList, personDetail } from "./people";
@@ -19,6 +20,9 @@ import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/web-metrics`, READ, async (request, ctx, { project }) =>
+      json(await webMetrics(ctx, project!, await readJson(request))),
+    );
     route("POST", `${prefix}/breakdown`, READ, async (request, ctx, { project }) =>
       json(await breakdownReport(ctx, project as string, await readJson(request))),
     );

@@ -32,6 +32,8 @@ import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
 import { PatternReports } from "./pattern-reports";
 import { BreakdownReport } from "./breakdown-report";
+import { useWebMetrics, WebChart, WebTiles } from "./web-metrics";
+import { webMetric, type WebMetric } from "@/lib/web-metrics";
 
 type ChartChoice = {
   id: string;
@@ -154,6 +156,7 @@ function ProductOverview() {
   const navigate = useNavigate({ from: "/$orgSlug/$projectSlug/" });
   const dimension = search.breakdown ?? "name";
   const chartMetric = search.metric ?? "count";
+  const websiteMetric = webMetric(chartMetric);
   const durationMetric = search.duration ?? "avg";
   const update = (patch: OverviewSearch) =>
     void navigate({ search: (previous) => ({ ...previous, ...patch }), resetScroll: false });
@@ -176,6 +179,8 @@ function ProductOverview() {
     measure: "count",
     group_by: "name",
   };
+  const website = useWebMetrics(!!websiteMetric, eventFilters);
+  const selectWeb = (m: WebMetric) => setChartMetric(`web_${m}`);
   // Rolling ranges keep one scope while their end time advances; fixed ranges include their end.
   const scope = JSON.stringify([
     range.from,
@@ -353,150 +358,168 @@ function ProductOverview() {
         </section>
       )}
       <div className="overview-dashboard">
-        <section className="overview-metrics" aria-label="Key metrics">
-          <article className="metric-widget live-metric" aria-label="Active now">
-            <span className="metric-label">
-              <i className="live-dot" aria-hidden="true" />
-              Active now
-            </span>
-            <WidgetValue
-              value={
-                active.error
-                  ? "—"
-                  : active.data?.events && !active.data.active
+        <ValueSelect
+          className="w-fit"
+          label="Metric set"
+          value={websiteMetric ? "web" : "general"}
+          onValueChange={(v) => setChartMetric(v === "web" ? "web_page_views" : "count")}
+          options={[
+            ["general", "Product metrics"],
+            ["web", "Website metrics"],
+          ]}
+        />
+        {websiteMetric ? (
+          <WebTiles result={website} selected={websiteMetric} select={selectWeb} />
+        ) : (
+          <section className="overview-metrics" aria-label="Key metrics">
+            <article className="metric-widget live-metric" aria-label="Active now">
+              <span className="metric-label">
+                <i className="live-dot" aria-hidden="true" />
+                Active now
+              </span>
+              <WidgetValue
+                value={
+                  active.error
                     ? "—"
-                    : number(active.data?.active)
-              }
-              label={
-                active.error ? "Live activity unavailable" : "Identified actors · last 5 minutes"
-              }
-              loading={active.loading}
-            />
-            <div
-              className="flex h-7 shrink-0 items-end gap-px"
-              role="img"
-              aria-label={
-                active.data
-                  ? `Active actors per minute over the last 30 minutes, oldest first: ${active.data.minutes.join(", ")}`
-                  : "Live activity chart unavailable"
-              }
-            >
-              {active.data?.minutes.map((n, i) => (
-                <span
-                  key={i}
-                  className="min-w-0 flex-1 bg-data-tertiary"
-                  style={{
-                    height: `${Math.max(n ? 4 : 0, (n / Math.max(1, ...active.data!.minutes)) * 100)}%`,
-                  }}
-                  title={`${30 - i} min ago: ${n}`}
-                />
-              ))}
-            </div>
-          </article>
-          {[
-            {
-              label: "Events",
-              value: number(s?.total),
-              detail: "In selected period",
-              change: growth(s?.total, p?.total, { range }),
-            },
-            {
-              label: "Visitors",
-              value: number(s?.visitors),
-              detail: "Unique visitor IDs",
-              change: growth(s?.visitors, p?.visitors, { range }),
-            },
-            {
-              label: "Installations",
-              value: number(s?.installations),
-              detail: "Unique installation IDs",
-              change: growth(s?.installations, p?.installations, { range }),
-            },
-            {
-              label: "Success rate",
-              value: s?.success_rate == null ? "—" : `${number(s.success_rate, 1)}%`,
-              detail: "Among reported outcomes",
-              change: growth(s?.success_rate, p?.success_rate, { range, points: 1 }),
-            },
-            {
-              label: "Avg. duration",
-              value: s?.avg_duration == null ? "—" : `${number(s.avg_duration)} ms`,
-              detail: "Numeric durations only",
-              change: growth(s?.avg_duration, p?.avg_duration, { range, lowerIsBetter: true }),
-            },
-          ].map((item) => (
-            <article className="metric-widget" key={item.label}>
-              <span className="metric-label">{item.label}</span>
-              {item.label === "Visitors" && source?.visitor_mode === "off" ? (
-                <p className="text-xs">
-                  Visitor counting is off for this source.{" "}
-                  <Link
-                    className="text-primary underline"
-                    to="/$orgSlug/$projectSlug/settings"
-                    params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
-                  >
-                    Source settings
-                  </Link>
-                </p>
-              ) : (
-                <WidgetValue
-                  value={query.error && !s ? "—" : item.value}
-                  label={item.detail}
-                  growth={item.change}
-                  compactGrowth
-                  loading={query.loading}
-                  growthLoading={query.loading || previous.loading}
-                />
-              )}
+                    : active.data?.events && !active.data.active
+                      ? "—"
+                      : number(active.data?.active)
+                }
+                label={
+                  active.error ? "Live activity unavailable" : "Identified actors · last 5 minutes"
+                }
+                loading={active.loading}
+              />
+              <div
+                className="flex h-7 shrink-0 items-end gap-px"
+                role="img"
+                aria-label={
+                  active.data
+                    ? `Active actors per minute over the last 30 minutes, oldest first: ${active.data.minutes.join(", ")}`
+                    : "Live activity chart unavailable"
+                }
+              >
+                {active.data?.minutes.map((n, i) => (
+                  <span
+                    key={i}
+                    className="min-w-0 flex-1 bg-data-tertiary"
+                    style={{
+                      height: `${Math.max(n ? 4 : 0, (n / Math.max(1, ...active.data!.minutes)) * 100)}%`,
+                    }}
+                    title={`${30 - i} min ago: ${n}`}
+                  />
+                ))}
+              </div>
             </article>
-          ))}
-        </section>
+            {[
+              {
+                label: "Events",
+                value: number(s?.total),
+                detail: "In selected period",
+                change: growth(s?.total, p?.total, { range }),
+              },
+              {
+                label: "Visitors",
+                value: number(s?.visitors),
+                detail: "Unique visitor IDs",
+                change: growth(s?.visitors, p?.visitors, { range }),
+              },
+              {
+                label: "Installations",
+                value: number(s?.installations),
+                detail: "Unique installation IDs",
+                change: growth(s?.installations, p?.installations, { range }),
+              },
+              {
+                label: "Success rate",
+                value: s?.success_rate == null ? "—" : `${number(s.success_rate, 1)}%`,
+                detail: "Among reported outcomes",
+                change: growth(s?.success_rate, p?.success_rate, { range, points: 1 }),
+              },
+              {
+                label: "Avg. duration",
+                value: s?.avg_duration == null ? "—" : `${number(s.avg_duration)} ms`,
+                detail: "Numeric durations only",
+                change: growth(s?.avg_duration, p?.avg_duration, { range, lowerIsBetter: true }),
+              },
+            ].map((item) => (
+              <article className="metric-widget" key={item.label}>
+                <span className="metric-label">{item.label}</span>
+                {item.label === "Visitors" && source?.visitor_mode === "off" ? (
+                  <p className="text-xs">
+                    Visitor counting is off for this source.{" "}
+                    <Link
+                      className="text-primary underline"
+                      to="/$orgSlug/$projectSlug/settings"
+                      params={{ orgSlug: orgSlug ?? "", projectSlug: product.slug }}
+                    >
+                      Source settings
+                    </Link>
+                  </p>
+                ) : (
+                  <WidgetValue
+                    value={query.error && !s ? "—" : item.value}
+                    label={item.detail}
+                    growth={item.change}
+                    compactGrowth
+                    loading={query.loading}
+                    growthLoading={query.loading || previous.loading}
+                  />
+                )}
+              </article>
+            ))}
+          </section>
+        )}
         <div
           className="overview-grid"
           data-source-comparison={showSources}
           aria-busy={query.loading}
         >
-          <OverviewWidget
-            title="Activity over time"
-            className="activity-widget"
-            error={activity.error}
-            retry={refresh}
-            footer={<span className="chart-period-note">{periodNote}</span>}
-          >
-            <div className="widget-value-row">
-              <WidgetValue
-                value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
-                label={choice.label}
-                growth={growth(
-                  activity.data?.summary.value,
-                  (choice.id === "count" ? previous : previousChart).data?.summary.value,
-                  { range, lowerIsBetter: choice.lowerIsBetter },
-                )}
-                loading={activity.loading}
-                growthLoading={
-                  activity.loading || (choice.id === "count" ? previous : previousChart).loading
-                }
-              />
-              <ValueSelect
-                label="Chart metric"
-                disabled={query.loading}
-                value={choice.id}
-                onValueChange={setChartMetric}
-                options={chartChoices.map((option) => [option.id, option.label])}
-              />
-            </div>
-            <div className="widget-plot chart-plot" aria-busy={activity.loading}>
-              <WidgetContent label="chart" loading={activity.loading} empty={chartEmpty}>
-                <AnalyticsChart
-                  series={activity.data?.series ?? []}
+          {websiteMetric ? (
+            <WebChart result={website} selected={websiteMetric} select={selectWeb} />
+          ) : (
+            <OverviewWidget
+              title="Activity over time"
+              className="activity-widget"
+              error={activity.error}
+              retry={refresh}
+              footer={<span className="chart-period-note">{periodNote}</span>}
+            >
+              <div className="widget-value-row">
+                <WidgetValue
+                  value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
                   label={choice.label}
-                  bucket={bucket}
-                  unit={choice.unit}
-                  range={range}
+                  growth={growth(
+                    activity.data?.summary.value,
+                    (choice.id === "count" ? previous : previousChart).data?.summary.value,
+                    { range, lowerIsBetter: choice.lowerIsBetter },
+                  )}
+                  loading={activity.loading}
+                  growthLoading={
+                    activity.loading || (choice.id === "count" ? previous : previousChart).loading
+                  }
                 />
-              </WidgetContent>
-            </div>
-          </OverviewWidget>
+                <ValueSelect
+                  label="Chart metric"
+                  disabled={query.loading}
+                  value={choice.id}
+                  onValueChange={setChartMetric}
+                  options={chartChoices.map((option) => [option.id, option.label])}
+                />
+              </div>
+              <div className="widget-plot chart-plot" aria-busy={activity.loading}>
+                <WidgetContent label="chart" loading={activity.loading} empty={chartEmpty}>
+                  <AnalyticsChart
+                    series={activity.data?.series ?? []}
+                    label={choice.label}
+                    bucket={bucket}
+                    unit={choice.unit}
+                    range={range}
+                  />
+                </WidgetContent>
+              </div>
+            </OverviewWidget>
+          )}
           <OverviewWidget
             title="Breakdown"
             className="breakdown-widget"

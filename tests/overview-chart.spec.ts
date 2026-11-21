@@ -121,7 +121,7 @@ test("visitor chart excludes installation identities without shrinking overview 
 }) => {
   const queries: unknown[] = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("/query") || request.url().endsWith("/activity"))
+    if (/\/api\/products\/[^/]+\/(?:query|activity)$/.test(new URL(request.url()).pathname))
       queries.push(request.postDataJSON());
   });
   await page.goto("/");
