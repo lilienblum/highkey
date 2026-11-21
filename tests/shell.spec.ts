@@ -181,11 +181,45 @@ for (const collapsed of [false, true]) {
     await expect(lastSource).toBeInViewport({ ratio: 1 });
     expect(await sources.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await expectSourcesFit(page);
-    await expect(page.getByRole("link", { name: "Documentation", exact: true })).toBeInViewport({
+    await expect(
+      page.getByRole("button", { name: "Use with your agent", exact: true }),
+    ).toBeInViewport({
       ratio: 1,
     });
   });
 }
+
+test("the sidebar connects an agent without leaving the open project", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(`/owner/${project.slug}/events`);
+  const url = page.url();
+  const trigger = page.getByRole("button", { name: "Use with your agent", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Use with your agent", exact: true });
+  await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+  await trigger.press("Enter");
+  await dialog.getByRole("tab", { name: "Other", exact: true }).click();
+  await dialog.getByRole("button", { name: "Copy MCP server URL" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    `${new URL(url).origin}/mcp`,
+  );
+  await dialog.getByRole("button", { name: "Copy prompt" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(`"${project.slug}"`);
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+  await trigger.click();
+  await expect(dialog.getByRole("tab", { name: "Other", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await expect(page).toHaveURL(url);
+});
 
 test("connect a source lives in the sidebar, not in page headers", async ({ page }) => {
   for (const route of ["/", "/events", "/logs"]) {

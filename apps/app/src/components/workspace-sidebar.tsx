@@ -13,11 +13,12 @@ import {
   UserGroupIcon,
   CubeIcon,
   DashboardSquare01Icon,
-  HelpCircleIcon,
+  AiChat02Icon,
   Search01Icon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sidebar,
@@ -39,7 +40,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { DashboardLink, Product } from "@/lib/api";
 import { clearedLogs } from "@/lib/logs";
-import { AgentGuideDialog, type GuideIntent } from "./dashboards/agent-guide";
+import { AgentGuideDialog, AgentSetupContent, type GuideIntent } from "./dashboards/agent-guide";
 import { DitherField } from "./dither-field";
 import { OrganizationMenu } from "./organization-menu";
 import { CollapsedGroup, ViewList, useCollapsedRail, type ViewLinkRenderer } from "./saved-views";
@@ -375,19 +376,13 @@ export function WorkspaceSidebar({
         <SidebarFooter className="shrink-0">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Documentation"
-                render={
-                  <a
-                    href="https://github.com/lilienblum/piko#readme"
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                }
-              >
-                <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={2} aria-hidden="true" />
-                <span className="group-data-[collapsible=icon]:sr-only">Documentation</span>
-              </SidebarMenuButton>
+              <Dialog>
+                <SidebarMenuButton tooltip="Use with your agent" render={<DialogTrigger />}>
+                  <HugeiconsIcon icon={AiChat02Icon} strokeWidth={2} aria-hidden="true" />
+                  <span className="group-data-[collapsible=icon]:sr-only">Use with your agent</span>
+                </SidebarMenuButton>
+                <AgentSetupContent projectSlug={product?.slug} />
+              </Dialog>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <OrganizationMenu />

@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Product } from "@/lib/api";
 import { readPreference, savePreference } from "@/lib/preferences";
 
-const docsUrl = "https://github.com/lilienblum/piko/blob/v0/docs/dashboards.md#ask-your-ai";
+const docsUrl = "https://github.com/lilienblum/highkey/blob/v0/docs/dashboards.md#ask-your-ai";
 
 export type GuideDashboard = { slug: string; name: string; revision: number };
 export type GuideView = { slug: string; name: string; kind: "events" | "logs" };
@@ -175,7 +175,7 @@ export function codexConfig(origin: string) {
   return `[mcp_servers.highkey]\nurl = "${origin}/mcp"`;
 }
 
-type Agent = "claude" | "codex";
+type Agent = "claude" | "codex" | "other";
 const agentKey = "highkey:agent";
 
 /**
@@ -185,7 +185,8 @@ const agentKey = "highkey:agent";
 function useAgent(): [Agent, (agent: Agent) => void] {
   const [agent, setAgent] = useState<Agent>("claude");
   useEffect(() => {
-    if (readPreference(agentKey) === "codex") setAgent("codex");
+    const saved = readPreference(agentKey);
+    if (saved === "codex" || saved === "other") setAgent(saved);
   }, []);
   return [
     agent,
@@ -276,6 +277,7 @@ export function ConnectAgent() {
         <TabsList variant="line" aria-label="Agent">
           <TabsTrigger value="claude">Claude Code</TabsTrigger>
           <TabsTrigger value="codex">Codex</TabsTrigger>
+          <TabsTrigger value="other">Other</TabsTrigger>
         </TabsList>
         <TabsContent value="claude">
           <GuideCode
@@ -291,17 +293,52 @@ export function ConnectAgent() {
             text={codexConfig(origin)}
           />
         </TabsContent>
+        <TabsContent value="other">
+          <GuideCode
+            caption="MCP server URL"
+            copyLabel="Copy MCP server URL"
+            text={`${origin}/mcp`}
+          />
+        </TabsContent>
       </Tabs>
       <p className="agent-guide-note">
-        Once per machine. The agent then opens Highkey for you to sign in and choose its
-        organization and access: in Claude Code run <code>/mcp</code> and choose Authenticate; in
-        Codex run <code>codex mcp login highkey</code>.{" "}
+        {agent === "claude" ? (
+          <>
+            Run <code>/mcp</code> in Claude Code and choose Authenticate.
+          </>
+        ) : agent === "codex" ? (
+          <>
+            Save the config, then run <code>codex mcp login highkey</code>.
+          </>
+        ) : (
+          "Add the URL as a remote HTTP MCP server in your agent and start sign-in."
+        )}{" "}
+        In Highkey, choose the organization and access to grant.{" "}
         <a href={docsUrl} target="_blank" rel="noreferrer">
           See the docs
         </a>
         .
       </p>
     </>
+  );
+}
+
+/** General setup from the sidebar, also available before the organization has a project. */
+export function AgentSetupContent({ projectSlug }: { projectSlug?: string }) {
+  const prompt = projectSlug
+    ? `Using Highkey, what changed in project "${projectSlug}" this week compared with last week?`
+    : "Using Highkey, list the projects I can access.";
+  return (
+    <DialogContent className="agent-guide-dialog">
+      <DialogHeader>
+        <DialogTitle>Use with your agent</DialogTitle>
+        <DialogDescription>
+          Connect your agent to Highkey, then ask it a question.
+        </DialogDescription>
+      </DialogHeader>
+      <ConnectAgent />
+      <GuideCode caption="Try asking" copyLabel="Copy prompt" text={prompt} />
+    </DialogContent>
   );
 }
 
