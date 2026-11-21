@@ -102,10 +102,10 @@ test.describe("organizations", () => {
     await expect(page).toHaveURL(new RegExp(`/${home.slug}/${homeProject.slug}`));
     await expect(page.locator(".workspace-project")).toContainText(homeProject.name);
     await page.locator(".organization-trigger").click();
-    await page.getByRole("menuitem", { name: new RegExp(`Side ${run}-1`) }).click();
+    await page.getByRole("menuitem", { name: new RegExp(second.name) }).click();
     await expect(page).toHaveURL(new RegExp(`/${second.slug}/${sideProject.slug}`));
     await expect(page.locator(".workspace-project")).toContainText(sideProject.name);
-    await expect(page.locator(".organization-trigger")).toContainText(`Side ${run}-1`);
+    await expect(page.locator(".organization-trigger")).toContainText(second.name);
     // The other organization's project is not offered here.
     await page.locator(".workspace-project").getByRole("combobox").click();
     await expect(page.getByRole("option", { name: homeProject.name })).toHaveCount(0);
