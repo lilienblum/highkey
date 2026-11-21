@@ -77,13 +77,14 @@ test("committed website events refresh without replacing charts; retries and oth
   await open(page, web);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("1");
   await page.waitForTimeout(2200); // Settle the initial connection reconciliation and coalescing window.
-  let queries = 0;
+  // A 503 can retry an in-flight read after the chart updates. A new refresh has a new range.
+  const queries = new Set<string>();
   page.on("request", (request) => {
-    if (request.url().includes(`/products/${web.id}/query`)) queries++;
+    if (request.url().endsWith(`/products/${web.id}/query`)) queries.add(request.postData()!);
   });
   await ingest(other, "tool");
   await page.waitForTimeout(2000);
-  expect(queries).toBe(0);
+  expect(queries.size).toBe(0);
   const chart = await page.locator(".activity-widget .analytics-plot").first().elementHandle();
   const item = event("website");
   const result = await send(web, [item]);
@@ -92,11 +93,11 @@ test("committed website events refresh without replacing charts; retries and oth
     timeout: 10000,
   });
   expect(await chart?.evaluate((element) => element.isConnected)).toBe(true);
-  const beforeRetry = queries;
+  const beforeRetry = queries.size;
   const retry = await send(web, [item]);
   expect(retry.duplicates).toBe(1);
   await page.waitForTimeout(2000);
-  expect(queries).toBe(beforeRetry);
+  expect(queries.size).toBe(beforeRetry);
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("2");
 });
 
