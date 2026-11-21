@@ -49,7 +49,11 @@ export const workspaceTools: Record<string, Tool> = {
     });
   },
   create_source: async (ctx, a) =>
-    createSource(ctx, await projectId(ctx, a.project), { name: a.name, icon: a.icon ?? null }),
+    createSource(ctx, await projectId(ctx, a.project), {
+      name: a.name,
+      icon: a.icon ?? null,
+      website_urls: a.website_urls,
+    }),
   update_source: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
     const source = await sourceId(ctx, id, a.source);
@@ -57,6 +61,7 @@ export const workspaceTools: Record<string, Tool> = {
     return updateSource(ctx, id, source, {
       name: a.name ?? current.name,
       icon: a.icon ?? current.icon,
+      website_urls: a.website_urls,
     });
   },
   connect_source: async (ctx, a) => {
@@ -70,7 +75,7 @@ export const workspaceTools: Record<string, Tool> = {
     const { source, key } = await connectSource(
       ctx,
       id,
-      { name: a.name, icon: a.icon ?? null },
+      { name: a.name, icon: a.icon ?? null, website_urls: a.website_urls },
       a.label,
       a.allowed_origins ?? [],
     );

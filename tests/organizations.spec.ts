@@ -81,6 +81,14 @@ test.describe("organizations", () => {
     const list = await (await member.get("/api/products")).json();
     expect(list.map((p: { id: string }) => p.id)).toEqual([homeProject.id]);
     expect((await member.get(`/api/products/${second.id}/sources`)).status()).toBe(404);
+    const memberPage = await browser.newPage({ storageState: await member.storageState() });
+    await memberPage.goto(`/${home.slug}/${homeProject.slug}`);
+    await memberPage.getByRole("combobox", { name: "Select project" }).click();
+    await expect(memberPage.getByRole("option", { name: homeProject.name })).toBeVisible();
+    await expect(memberPage.getByRole("option", { name: "New project", exact: true })).toHaveCount(
+      0,
+    );
+    await memberPage.close();
     await page.goto("/settings/keys");
     await page.getByRole("button", { name: "New API key" }).click();
     await d.getByRole("textbox", { name: "Name", exact: true }).fill("One project");
@@ -267,17 +275,13 @@ test.describe("first project", () => {
     await expect(page).toHaveURL(`${base}/new`);
     await expect(page.getByRole("heading", { name: "Create your first project" })).toBeVisible();
     await expect(page.getByRole("contentinfo")).toContainText(org?.name as string);
-    await expect(page.getByText("Step 1 of 2")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
     await page.getByLabel("Project name").fill(`First light ${run}`);
     // Its source is named on the same screen, with an icon of its own.
     const input = page.getByLabel("Source", { exact: true });
     const counting = page.getByRole("combobox", { name: "Visitor counting" });
     await input.fill("Website");
-    const addWebsites = page.getByText("Add websites (optional)", { exact: true });
-    await addWebsites.click();
     await page.getByLabel("Websites", { exact: true }).fill("*.example.com\n*.example.org");
-    await addWebsites.click();
     const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
     for (const width of [1600, 1024, 840, 390]) {
       await page.setViewportSize({ width, height: 844 });
@@ -315,16 +319,15 @@ test.describe("first project", () => {
     const createBox = (await create.boundingBox())!;
     expect(Math.abs(formBox.x + formBox.width - createBox.x - createBox.width)).toBeLessThan(2);
     await create.click();
-    // The same page then shows how to connect it: the source's new key in a snippet, and the
-    // agent's MCP setup.
-    await expect(page.getByRole("heading", { name: "Connect Website" })).toBeVisible();
-    await expect(page.getByText("Step 2 of 2")).toBeVisible();
+    await expect(page.getByRole("heading", { name: `First light ${run} is ready` })).toBeVisible();
+    const openProject = page.getByRole("link", { name: "Open project", exact: true });
+    expect(await openProject.boundingBox()).toEqual(createBox);
     const [project] = await (await api.get("/api/products")).json();
-    expect(project.website_urls).toEqual(["https://*.example.com", "https://*.example.org"]);
+    expect(project.website_urls).toEqual([]);
     await expect(page).toHaveURL(`${base}/new`);
-    await page.getByText("View source key", { exact: true }).click();
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
-    await page.getByText("View source key", { exact: true }).click();
+    await expect(page.locator(".integration-code")).toBeHidden();
+    await page.getByText("View SDK install guide", { exact: true }).click();
     expect(key).toMatch(/^pk_/);
     await expect(page.locator(".integration-code")).toContainText(key);
     await expect(page.locator(".integration-code")).toContainText("registerAnalyticsConsent");
@@ -351,6 +354,7 @@ test.describe("first project", () => {
     const sourcesAfterPreview = await (await api.get(`/api/products/${project.id}/sources`)).json();
     const website = sourcesAfterPreview.find((s: { name: string }) => s.name === "Website");
     expect(website.visitor_mode).toBe("persistent");
+    expect(website.website_urls).toEqual(["https://*.example.com", "https://*.example.org"]);
     expect(website).not.toHaveProperty("consent_prompt");
     expect(website).not.toHaveProperty("consent_theme");
     await expect(connection).toContainText("Waiting for the first event from Website");
@@ -386,12 +390,22 @@ test.describe("first project", () => {
     await expect(
       page.getByText(`claude mcp add --transport http highkey ${base}/mcp`),
     ).toBeVisible();
-    await page.getByRole("link", { name: `Open First light ${run}` }).click();
+    await openProject.click();
     await expect(page).toHaveURL(new RegExp(`/${org?.slug}/first-light-${run}`));
     await expect(page.locator(".workspace-project")).toContainText(`First light ${run}`);
     const sources = page.getByRole("navigation", { name: "Project sources" });
     await expect(sources).toContainText("Website");
     await expect(sources.locator('[data-source-icon="terminal"]')).toHaveCount(1);
+    const picker = page.getByRole("combobox", { name: "Select project" });
+    await picker.press("ArrowDown");
+    await page.keyboard.press("End");
+    await expect(page.getByRole("option", { name: "New project", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(`${base}/new`);
+    await expect(
+      page.getByRole("heading", { name: "Create a project", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Websites", { exact: true })).toBeVisible();
     await context.close();
   });
 

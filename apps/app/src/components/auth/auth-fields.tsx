@@ -41,17 +41,20 @@ export function SubmitButton({
   pending,
   children,
   compact = false,
+  form,
 }: {
   pending: boolean;
   children: string;
   compact?: boolean;
+  form?: string;
 }) {
   const hydrated = useHydrated();
   return (
     <Button
       type="submit"
+      form={form}
       size={compact ? "default" : "lg"}
-      className={compact ? "mt-1 self-end" : "auth-submit"}
+      className={compact ? "w-40" : "auth-submit"}
       disabled={pending || !hydrated}
       aria-busy={pending}
     >

@@ -1,6 +1,7 @@
 import type { SourceIconId } from "./source-icons";
 
 export type Source = {
+  website_urls?: string[];
   visitor_mode?: "off" | "persistent" | "cookieless";
   id: string;
   product_id: string;

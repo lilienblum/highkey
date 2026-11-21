@@ -1,5 +1,5 @@
 import { displayGroups, displayValue } from "@/lib/display-values";
-import { reportLink } from "@/lib/report-link";
+import { reportLink, sourceWebsite } from "@/lib/report-link";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
@@ -595,7 +595,11 @@ function ProductOverview() {
                     total={breakdown.data?.summary.total}
                     drilldown={(group) => drilldown(dimension, group)}
                     externalHref={(group) =>
-                      reportLink(dimension, group.label, product.website_url)
+                      reportLink(
+                        dimension,
+                        group.label,
+                        sourceWebsite(source) ?? product.website_url,
+                      )
                     }
                   />
                 </section>

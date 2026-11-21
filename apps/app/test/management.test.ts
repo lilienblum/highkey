@@ -224,6 +224,36 @@ describe("management API", () => {
     expect((await save({ website_urls: [] })).json.website_urls).toEqual([]);
   });
 
+  test("source websites are independent and changing them does not restrict an existing key", async () => {
+    const { id } = await project(ctx);
+    const path = `/api/products/${id}/sources`;
+    const url = "https://*.example.com";
+    const { json: site } = await call(ctx, "POST", path, {
+      name: "Web",
+      website_urls: ["*.Example.com"],
+    });
+    expect(site.website_urls).toEqual([url]);
+    const key = await call(ctx, "POST", `/api/products/${id}/keys`, {
+      label: "Web",
+      source_id: site.id,
+    });
+    expect(key.json.allowed_origins).toEqual([]);
+    expect(
+      (await call(ctx, "PATCH", `${path}/${site.id}`, { name: "Renamed" })).json.website_urls,
+    ).toEqual([url]);
+    expect(
+      (await call(ctx, "GET", path)).json.find((s: { id: string }) => s.id === id).website_urls,
+    ).toEqual([]);
+    expect(
+      (await call(ctx, "PATCH", `${path}/${site.id}`, { name: "Renamed", website_urls: ["*.com"] }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call(ctx, "PATCH", `${path}/${site.id}`, { name: "Renamed", website_urls: [] })).json
+        .website_urls,
+    ).toEqual([]);
+  });
+
   test("connect_source_is_atomic", async () => {
     const { id } = await project(ctx, "Atomic source");
     await expect(

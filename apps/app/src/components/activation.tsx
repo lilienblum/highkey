@@ -64,10 +64,7 @@ export function FirstEventNotice({ id, source }: { id: string; source: Source })
               Try again
             </Button>
           ) : (
-            <p>
-              After adding the snippet below, run your app. Its first event will appear here
-              automatically.
-            </p>
+            <p>Once your app sends an event, it will appear here automatically.</p>
           )}
         </AlertDescription>
       </Alert>
@@ -75,14 +72,18 @@ export function FirstEventNotice({ id, source }: { id: string; source: Source })
   );
 }
 
-export function WebsiteCheck({ id }: { id: string }) {
+export function WebsiteCheck({ id, source }: { id: string; source?: string }) {
   const role = useOrganizationRole();
   const [checking, setChecking] = useState(false),
     [message, setMessage] = useState("");
   async function checkSite() {
     setChecking(true);
     try {
-      const result = await api<{ status: string }>(`/products/${id}/check-website`, "POST", {});
+      const result = await api<{ status: string }>(
+        `/products/${id}/check-website${source ? `?source_id=${encodeURIComponent(source)}` : ""}`,
+        "POST",
+        {},
+      );
       setMessage(
         result.status === "found"
           ? "Tracker found in the site's HTML."
@@ -110,10 +111,12 @@ export function Activation({
   id,
   source,
   website,
+  websiteSource,
 }: {
   id: string;
   source?: string;
   website?: string | null;
+  websiteSource?: string;
 }) {
   const query = useActivation(id, source);
   const d = query.data,
@@ -167,7 +170,7 @@ export function Activation({
         ) : (
           !query.error && <p>Checking setup…</p>
         )}
-        {website && <WebsiteCheck id={id} />}
+        {website && <WebsiteCheck id={id} source={websiteSource} />}
       </CardContent>
     </Card>
   );

@@ -13,9 +13,12 @@ import { SourceIcon, SourceIconPicker } from "./source-icon";
 import type { SourceIconId } from "@/lib/source-icons";
 import { ErrorState } from "./shared";
 import { ValueSelect } from "./value-select";
+import { useOrganizationSlug } from "@/lib/workspace-route";
+import { parseWebsites, ProjectWebsites } from "./project-websites";
 
 export function SourceSettings({ product }: { product: Product }) {
   const { reload } = useWorkspace();
+  const org = useOrganizationSlug();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Source>();
   const [draft, setDraft] = useState<SourceDraft>({
@@ -33,6 +36,7 @@ export function SourceSettings({ product }: { product: Product }) {
             name: source.name,
             icon: source.icon,
             visitor_mode: source.visitor_mode,
+            websites: source.website_urls?.join("\n") ?? "",
           }
         : { name: "", icon: null },
     );
@@ -51,7 +55,7 @@ export function SourceSettings({ product }: { product: Product }) {
         await api(
           `/products/${product.id}/sources${editing ? `/${editing.id}` : ""}`,
           editing ? "PATCH" : "POST",
-          draft,
+          sourceInput(draft),
         );
         committed = true;
         setSaved(true);
@@ -91,6 +95,14 @@ export function SourceSettings({ product }: { product: Product }) {
               </span>
               <div className="source-copy">
                 <strong>{source.name}</strong>
+                {org && (
+                  <a
+                    className="text-xs text-primary hover:underline"
+                    href={`/${encodeURIComponent(org)}/${encodeURIComponent(product.slug)}/settings?source=${encodeURIComponent(source.slug)}#install-guide`}
+                  >
+                    View SDK install guide
+                  </a>
+                )}
               </div>
               <Button
                 size="sm"
@@ -145,10 +157,14 @@ export function SourceSettings({ product }: { product: Product }) {
 }
 
 export type SourceDraft = {
+  websites?: string;
   name: string;
   icon: SourceIconId | null;
   visitor_mode?: Source["visitor_mode"];
 };
+export function sourceInput({ websites, name, ...rest }: SourceDraft) {
+  return { ...rest, name: name.trim(), website_urls: parseWebsites(websites ?? "") };
+}
 
 /**
  * A source's name and icon, as adding or editing one asks for them: the icon follows the name
@@ -168,7 +184,7 @@ export function SourceFields({
   hint?: string;
 }) {
   return (
-    <div className="@container">
+    <div className="@container grid min-w-0 gap-4">
       <div className="grid items-start gap-4 @min-[32rem]:grid-cols-[minmax(0,22rem)_minmax(0,14rem)]">
         <Field className="min-w-0 max-w-[22rem]" data-disabled={disabled}>
           <FieldLabel htmlFor="source-name">{label}</FieldLabel>
@@ -221,6 +237,12 @@ export function SourceFields({
           </FieldDescription>
         </Field>
       </div>
+      <ProjectWebsites
+        id="source-websites"
+        value={value.websites ?? ""}
+        disabled={disabled}
+        onChange={(e) => onChange({ ...value, websites: e.target.value })}
+      />
     </div>
   );
 }

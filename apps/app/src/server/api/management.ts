@@ -6,7 +6,7 @@ import { visibleProjects } from "../auth/project-access";
 import { activation } from "../activation";
 import { favicon, products, requireProduct, productRow } from "../db/products";
 import { listKeys, listLogKeys, logRetention } from "../db/keys";
-import { listSources } from "../db/sources";
+import { getSource, listSources } from "../db/sources";
 import { revenueSettings } from "../db/revenue";
 import { cleanup } from "../registry";
 import { contentType, checkSite } from "../website";
@@ -36,6 +36,7 @@ const PRODUCT = {
   website_urls: "string[]?",
 } as const;
 const SOURCE = {
+  website_urls: "string[]?",
   name: "string",
   icon: "string?",
   visitor_mode: "string?",
@@ -46,11 +47,16 @@ export function registerManagement(): void {
     "POST",
     "/api/products/:id/check-website",
     { source: ["write"] },
-    async (_r, ctx, { id }) => {
-      const project = await productRow(ctx.db, id as string);
-      if (!project.website_url) throw bad("Set the project website first");
-      throttle(ctx, project.id);
-      return json(await checkSite(project.website_url));
+    async (r, ctx, { id }) => {
+      const sourceId = new URL(r.url).searchParams.get("source_id");
+      const website = sourceId
+        ? (await getSource(ctx.db, id as string, sourceId)).website_urls.find(
+            (url) => !url.includes("*"),
+          )
+        : (await productRow(ctx.db, id as string)).website_url;
+      if (!website) throw bad("Add a website without a wildcard first");
+      throttle(ctx, id as string);
+      return json(await checkSite(website));
     },
   );
   route("GET", "/api/products/:id/activation", READ, async (r, ctx, { id }) =>

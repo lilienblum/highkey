@@ -336,6 +336,12 @@
             "description": "The source's icon, as for create_source.",
             "type": ["string", "null"]
           },
+          "website_urls": {
+            "description": "Websites for this source. Does not restrict the key.",
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 16
+          },
           "integration": {
             "description": "`browser`, `typescript`, `http` or `rust`. Omit it for all four snippets.",
             "type": ["string", "null"]
@@ -470,6 +476,12 @@
           "icon": {
             "description": "One of website, ios, android, mobile, terminal, desktop, server, code, package, game or\ngeneric. Omit it to pick one automatically.",
             "type": ["string", "null"]
+          },
+          "website_urls": {
+            "description": "Websites for this source, including wildcard subdomains.",
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 16
           },
           "name": {
             "description": "The source's name, 1\u201380 bytes, unique in the project.",
@@ -1157,6 +1169,12 @@
           "icon": {
             "description": "A new icon. Omit it to keep the current one.",
             "type": ["string", "null"]
+          },
+          "website_urls": {
+            "description": "Replace this source’s websites. An empty list clears them.",
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 16
           },
           "name": {
             "description": "A new name. The slug stays the same.",

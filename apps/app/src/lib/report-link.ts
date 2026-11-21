@@ -1,3 +1,5 @@
+import type { Source } from "./api";
+
 /** Only open actual HTTP(S) destinations; event properties are untrusted input. */
 export function reportLink(
   dimension: string,
@@ -24,3 +26,5 @@ export function reportLink(
     return;
   }
 }
+export const sourceWebsite = (source?: Source) =>
+  source?.website_urls?.find((url) => !url.includes("*"));

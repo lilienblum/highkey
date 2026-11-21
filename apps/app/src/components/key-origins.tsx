@@ -26,8 +26,10 @@ export function AllowedOriginsField({
   onChange,
   disabled,
   websites,
+  sourceWebsites,
 }: {
   websites?: string[];
+  sourceWebsites?: string[];
   id: string;
   value: string;
   onChange: (value: string) => void;
@@ -46,16 +48,18 @@ export function AllowedOriginsField({
         spellCheck={false}
         placeholder="https://example.com, https://*.example.com"
       />
-      {!!websites?.length && (
+      {(!!sourceWebsites?.length || !!websites?.length) && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="self-start"
           disabled={disabled}
-          onClick={() => onChange(websites.join(", "))}
+          onClick={() =>
+            onChange((sourceWebsites?.length ? sourceWebsites : (websites ?? [])).join(", "))
+          }
         >
-          Use project websites
+          {sourceWebsites?.length ? "Use source websites" : "Use project websites"}
         </Button>
       )}
       <FieldDescription>
@@ -69,12 +73,14 @@ export function AllowedOriginsField({
 export function KeyOriginsEditor({
   productId,
   websites,
+  sourceWebsites,
   keyInfo,
   onSaved,
   disabled,
 }: {
   productId: string;
   websites: string[];
+  sourceWebsites?: string[];
   keyInfo: { id: string; label: string; allowed_origins: string[] };
   onSaved: () => Promise<void>;
   disabled?: boolean;
@@ -133,6 +139,7 @@ export function KeyOriginsEditor({
         <form onSubmit={save}>
           <AllowedOriginsField
             websites={websites}
+            sourceWebsites={sourceWebsites}
             id={`origins-${keyInfo.id}`}
             value={value}
             onChange={setValue}

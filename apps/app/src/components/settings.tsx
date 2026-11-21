@@ -54,6 +54,7 @@ import { Notifications } from "./notifications";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
 import { ProjectWebsites, parseWebsites, websiteList } from "./project-websites";
+import { sourceWebsite } from "@/lib/report-link";
 import { LogSettings } from "./log-settings";
 import { type Integration, IntegrationTabs } from "./integration-guide";
 type KeyInfo = {
@@ -117,7 +118,8 @@ function ProductFields({
   );
 }
 export function Settings() {
-  const { product, reload, sourceId } = useWorkspace();
+  const { product, reload, sourceId, source } = useWorkspace();
+  const site = sourceWebsite(source);
   const { timeZone, setTimeZone, dateShortcuts, setDateShortcuts } = useDisplayPreferences();
   const timeZones = Array.from(new Set(["UTC", timeZone, ...Intl.supportedValuesOf("timeZone")]));
   const [open, setOpen] = useState(false);
@@ -253,7 +255,8 @@ export function Settings() {
             key={`activation-${product.id}`}
             id={product.id}
             source={sourceId}
-            website={product.website_url}
+            website={site ?? product.website_url}
+            websiteSource={site ? sourceId : undefined}
           />
           <LogSettings key={`logs-${product.id}`} product={product} sourceId={sourceId} />
           <ProjectLifecycle key={`lifecycle-${product.id}`} product={product} />
@@ -468,6 +471,9 @@ function ProductSettings({ product }: { product: Product }) {
                       <KeyOriginsEditor
                         productId={product.id}
                         websites={websiteList(product)}
+                        sourceWebsites={
+                          product.sources?.find((s) => s.id === k.source_id)?.website_urls
+                        }
                         keyInfo={k}
                         disabled={busy}
                         onSaved={() =>
@@ -576,6 +582,7 @@ function ProductSettings({ product }: { product: Product }) {
                   <AllowedOriginsField
                     id="key-origins"
                     websites={websiteList(product)}
+                    sourceWebsites={keySource?.website_urls}
                     value={allowedOrigins}
                     onChange={setAllowedOrigins}
                     disabled={busy || keyState.status !== "ready"}
@@ -609,7 +616,7 @@ function ProductSettings({ product }: { product: Product }) {
           </CardContent>
         </Card>
       </div>
-      <Card className="integration-card">
+      <Card className="integration-card" id="install-guide">
         <CardHeader>
           <div className="card-heading">
             <div>

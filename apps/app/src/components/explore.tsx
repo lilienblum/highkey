@@ -1,7 +1,7 @@
 import { displayMinute } from "@/lib/display-time";
 import { filterOps, unaryFilter, textFilter } from "@/lib/filter-ops";
 import { displayGroups } from "@/lib/display-values";
-import { reportLink } from "@/lib/report-link";
+import { reportLink, sourceWebsite } from "@/lib/report-link";
 import { automaticBucket } from "@/lib/time-buckets";
 import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useEffect, useMemo, useState } from "react";
@@ -678,7 +678,11 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                   <Breakdown
                     title="Breakdown"
                     externalHref={(group) =>
-                      reportLink(applied.group, group.label, product?.website_url)
+                      reportLink(
+                        applied.group,
+                        group.label,
+                        sourceWebsite(source) ?? product?.website_url,
+                      )
                     }
                     description={`Grouped by ${applied.group.replace("property:", "")}`}
                     groups={

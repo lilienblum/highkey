@@ -3,8 +3,10 @@ import { ApiError, bad, missing, sourceMissing } from "../api/errors";
 import { changes, type Db, one, all } from "./db";
 import { requireProduct } from "./products";
 import { newId, now } from "./ids";
+import { normalizeWebsites } from "../website";
 
 export interface Source {
+  website_urls: string[];
   visitor_mode: "off" | "persistent" | "cookieless";
   icon: string | null;
   id: string;
@@ -51,24 +53,31 @@ function suffixed(base: string, suffix: number): string {
   return `${base.slice(0, 64 - tail.length).replace(/-+$/, "")}${tail}`;
 }
 
-const COLUMNS = "id, product_id, name, icon, created_at, slug, visitor_mode";
+const COLUMNS = "id, product_id, name, icon, created_at, slug, visitor_mode, website_urls";
+type SourceRow = Omit<Source, "website_urls"> & { website_urls: string };
+const sourceFromRow = (row: SourceRow): Source => ({
+  ...row,
+  website_urls: JSON.parse(row.website_urls),
+});
 
-export function listSources(db: Db, productId: string): Promise<Source[]> {
-  return all<Source>(
-    db,
-    `SELECT ${COLUMNS} FROM sources WHERE product_id = ? ORDER BY created_at, id`,
-    [productId],
-  );
+export async function listSources(db: Db, productId: string): Promise<Source[]> {
+  return (
+    await all<SourceRow>(
+      db,
+      `SELECT ${COLUMNS} FROM sources WHERE product_id = ? ORDER BY created_at, id`,
+      [productId],
+    )
+  ).map(sourceFromRow);
 }
 
 export async function getSource(db: Db, productId: string, id: string): Promise<Source> {
-  const source = await one<Source>(
+  const source = await one<SourceRow>(
     db,
     `SELECT ${COLUMNS} FROM sources WHERE product_id = ? AND id = ?`,
     [productId, id],
   );
   if (!source) throw missing();
-  return source;
+  return sourceFromRow(source);
 }
 
 /** A source the project has, for a read query filtered by one. */
@@ -83,13 +92,13 @@ export async function requireSource(db: Db, productId: string, id: string): Prom
 
 /** A source of the project by id, or else by slug. */
 export async function resolveSource(db: Db, productId: string, key: string): Promise<Source> {
-  const source = await one<Source>(
+  const source = await one<SourceRow>(
     db,
     `SELECT ${COLUMNS} FROM sources WHERE product_id = ?1 AND (id = ?2 OR slug = ?2) ORDER BY id = ?2 DESC`,
     [productId, key],
   );
   if (!source) throw missing();
-  return source;
+  return sourceFromRow(source);
 }
 
 /** The source a new key binds to: the one named, else the project's initial source. */
@@ -105,6 +114,7 @@ export function keySource(sources: Source[], productId: string, id?: string | nu
 }
 
 export interface SourceInput {
+  website_urls?: string[] | null;
   visitor_mode?: string | null;
   name: string;
   icon?: string | null;
@@ -141,6 +151,8 @@ export async function saveSource(
   input: SourceInput,
 ): Promise<Source> {
   validateSource(input);
+  const websites =
+    input.website_urls == null ? null : JSON.stringify(normalizeWebsites(input.website_urls));
   await requireProduct(db, productId);
   const name = input.name.trim();
   if (id) {
@@ -148,7 +160,7 @@ export async function saveSource(
     // Renames keep the slug, so workspace links stay valid.
     try {
       await db.execute(
-        "UPDATE sources SET name = ?3, icon = CASE WHEN ?4 THEN ?5 ELSE icon END, visitor_mode=coalesce(?6,visitor_mode) WHERE product_id = ?1 AND id = ?2",
+        "UPDATE sources SET name = ?3, icon = CASE WHEN ?4 THEN ?5 ELSE icon END, visitor_mode=coalesce(?6,visitor_mode), website_urls=coalesce(?7,website_urls) WHERE product_id = ?1 AND id = ?2",
         [
           productId,
           id,
@@ -156,6 +168,7 @@ export async function saveSource(
           Number(input.icon !== undefined),
           input.icon ?? null,
           input.visitor_mode ?? null,
+          websites,
         ],
       );
     } catch (error) {
@@ -172,8 +185,17 @@ export async function saveSource(
       try {
         inserted = await changes(
           db,
-          "INSERT INTO sources(id, product_id, name, icon, created_at, slug, visitor_mode) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, slug) DO NOTHING",
-          [sourceId, productId, name, input.icon ?? null, now(), slug, input.visitor_mode ?? "off"],
+          "INSERT INTO sources(id, product_id, name, icon, created_at, slug, visitor_mode, website_urls) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, slug) DO NOTHING",
+          [
+            sourceId,
+            productId,
+            name,
+            input.icon ?? null,
+            now(),
+            slug,
+            input.visitor_mode ?? "off",
+            websites ?? "[]",
+          ],
         );
       } catch (error) {
         duplicateName(error);
