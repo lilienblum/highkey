@@ -201,13 +201,33 @@ function NewProject() {
             id="new-project-how"
             className="mb-5 font-pixel text-[22px] leading-tight font-normal text-heading"
           >
-            {created ? "Your project is ready" : "What you’ll see in Highkey"}
+            {created ? "Your project is ready" : "How a Highkey project works"}
           </h2>
-          <p className={HINT}>
-            {created
-              ? "You can find the install guide again in project settings."
-              : "See where your website traffic comes from and which pages people visit. In the same project, you can track signups in your app or see which commands people use in your CLI."}
-          </p>
+          {created ? (
+            <p className={HINT}>You can find the install guide again in project settings.</p>
+          ) : (
+            <ol className="grid max-w-[48ch] list-decimal gap-4 ps-6 marker:font-pixel marker:text-data">
+              {[
+                [
+                  "The product",
+                  "Say you build Orbit. Its website and app can be two sources in the same project.",
+                ],
+                [
+                  "The activity",
+                  "Your website can send page views, and your app can send an event when someone signs up.",
+                ],
+                [
+                  "The question",
+                  "Did signups rise along with traffic after your last release? Compare page views and signups day by day.",
+                ],
+              ].map(([title, description]) => (
+                <li key={title} className="ps-1">
+                  <strong className="text-sm font-semibold">{title}</strong>
+                  <p className={HINT}>{description}</p>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </aside>
     </div>
