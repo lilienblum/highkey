@@ -124,7 +124,7 @@ function NewProject() {
                       value={sourceDraft}
                       onChange={setSourceDraft}
                       label="Source"
-                      hint="The website, app, or tool that sends events."
+                      hint="The website, app, or tool that sends events. You can add more sources later in project settings."
                     />
                   </div>
                 </form>
@@ -201,12 +201,12 @@ function NewProject() {
             id="new-project-how"
             className="mb-5 font-pixel text-[22px] leading-tight font-normal text-heading"
           >
-            {created ? "Your project is ready" : "Start with one source"}
+            {created ? "Your project is ready" : "What you’ll see in Highkey"}
           </h2>
           <p className={HINT}>
             {created
               ? "You can find the install guide again in project settings."
-              : "The source you name here is created with your project. If you start with your website, you can add your mobile app later in Settings → Sources → Add source."}
+              : "See where your website traffic comes from and which pages people visit. In the same project, you can track signups in your app or see which commands people use in your CLI."}
           </p>
         </div>
       </aside>
