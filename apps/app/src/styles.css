@@ -3481,40 +3481,8 @@ button.workspace-dashboards-menu-link {
   font-size: 13px;
   white-space: nowrap;
 }
-/* The organization names the project picker's group; it opens the organization menu. */
-.organization-trigger {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  border-radius: 4px;
-}
-.organization-trigger:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.organization-chevron {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-.organization-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.organization-trigger:hover .organization-name {
-  color: var(--foreground);
-}
-.organization-person {
-  overflow: hidden;
-  font-weight: 400;
-  color: var(--muted-foreground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.workspace-sidebar .organization-trigger {
+  height: 48px;
 }
 .organization-item {
   display: grid;

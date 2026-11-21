@@ -154,7 +154,6 @@ export function WorkspaceSidebar({
             )}
           </div>
           <div className="workspace-project" title={product?.name}>
-            <OrganizationMenu />
             {picker}
           </div>
         </SidebarHeader>
@@ -373,7 +372,7 @@ export function WorkspaceSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter>
+        <SidebarFooter className="shrink-0">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -389,6 +388,9 @@ export function WorkspaceSidebar({
                 <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={2} aria-hidden="true" />
                 <span className="group-data-[collapsible=icon]:sr-only">Documentation</span>
               </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <OrganizationMenu />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

@@ -1,6 +1,12 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, Logout03Icon, Tick02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
-import { useRouteContext } from "@tanstack/react-router";
+import {
+  Add01Icon,
+  Logout03Icon,
+  Tick02Icon,
+  UnfoldMoreIcon,
+  UserCircleIcon,
+} from "@hugeicons/core-free-icons";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import {
   DropdownMenu,
@@ -12,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NameDialog } from "@/components/name-dialog";
+import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { authPost } from "@/lib/auth-client";
 import { createOrganization } from "@/lib/organizations";
 import { useOrganizationSlug } from "@/lib/workspace-route";
@@ -24,18 +31,19 @@ const ROLE: Record<string, string> = {
 };
 
 /**
- * The organization above the project picker, and the account: which organization the workspace
- * shows (in place of the picker's label, so it costs no height), the others
- * the person belongs to, a new one, and signing out. Switching loads the other organization's
- * address afresh, so every page, cache and live stream belongs to it.
+ * Switching organizations loads a fresh document so every page, cache and live stream belongs to it.
  */
 export function OrganizationMenu() {
   const { viewer } = useRouteContext({ from: "__root__" });
   const current = useOrganizationSlug();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const [creating, setCreating] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   if (!viewer) return null;
   const organization = viewer.organizations.find((org) => org.slug === current);
+  const collapsed = state === "collapsed" && !isMobile;
+  const identity = viewer.user.name || viewer.user.email;
+  const orgName = organization?.name ?? "No organization";
   const signOut = async () => {
     await authPost("/sign-out");
     window.location.assign("/sign-in");
@@ -43,29 +51,42 @@ export function OrganizationMenu() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              ref={trigger}
-              type="button"
-              className="workspace-section-label organization-trigger"
-              aria-label={`Organization: ${organization?.name ?? "none"}. Switch organization`}
-            />
-          }
+        <SidebarMenuButton
+          className="organization-trigger"
+          size="lg"
+          tooltip="Account and organization"
+          aria-label={`Account and organization: ${identity}, ${orgName}`}
+          render={<DropdownMenuTrigger ref={trigger} />}
         >
-          <span className="organization-name">{organization?.name ?? "No organization"}</span>
+          <HugeiconsIcon icon={UserCircleIcon} strokeWidth={2} aria-hidden="true" />
+          <span className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate font-medium">{identity}</span>
+            <span className="truncate text-xs text-muted-foreground">{orgName}</span>
+          </span>
           <HugeiconsIcon
             icon={UnfoldMoreIcon}
             strokeWidth={2}
             aria-hidden="true"
-            className="organization-chevron"
+            className="text-muted-foreground group-data-[collapsible=icon]:hidden"
           />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="start" className="min-w-64">
+        </SidebarMenuButton>
+        <DropdownMenuContent
+          side={collapsed ? "right" : "top"}
+          align={collapsed ? "end" : "start"}
+          sideOffset={8}
+          className="w-64 max-w-[calc(100vw-1rem)]"
+        >
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="organization-person">
+            <DropdownMenuLabel className="font-normal [overflow-wrap:anywhere]">
               Signed in as {viewer.user.email}
             </DropdownMenuLabel>
+            <DropdownMenuItem
+              render={
+                <Link to="/settings/account" state={true} onClick={() => setOpenMobile(false)} />
+              }
+            >
+              Account settings
+            </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
@@ -77,7 +98,7 @@ export function OrganizationMenu() {
                 aria-current={org.slug === current ? "true" : undefined}
               >
                 <span className="organization-item">
-                  <span>{org.name}</span>
+                  <span className="[overflow-wrap:anywhere]">{org.name}</span>
                   <span className="organization-role">{ROLE[org.role] ?? org.role}</span>
                 </span>
                 {org.slug === current ? (

@@ -98,14 +98,35 @@ test.describe("organizations", () => {
     await page.goto(`/${home.slug}`);
     await expect(page).toHaveURL(new RegExp(`/${home.slug}/${homeProject.slug}`));
     await expect(page.locator(".workspace-project")).toContainText(homeProject.name);
-    await page.locator(".organization-trigger").click();
+    const footer = page.locator('[data-slot="sidebar-footer"]');
+    const account = footer.getByRole("button", { name: /^Account and organization:/ });
+    await expect(account).toBeInViewport({ ratio: 1 });
+    await account.click();
+    await page.screenshot({ path: test.info().outputPath("desktop-account.png") });
+    await page.keyboard.press("Escape");
+    await expect(account).toBeFocused();
+    await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+    await account.press("Enter");
+    await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("rail-account.png") });
     await page.getByRole("menuitem", { name: new RegExp(second.name) }).click();
     await expect(page).toHaveURL(new RegExp(`/${second.slug}/${sideProject.slug}`));
     await expect(page.locator(".workspace-project")).toContainText(sideProject.name);
-    await expect(page.locator(".organization-trigger")).toContainText(second.name);
+    await expect(account).toHaveAccessibleName(new RegExp(second.name));
     // The other organization's project is not offered here.
     await page.locator(".workspace-project").getByRole("combobox").click();
     await expect(page.getByRole("option", { name: homeProject.name })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.setViewportSize({ width: 390, height: 667 });
+    await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+    await expect(account).toBeInViewport({ ratio: 1 });
+    await account.click();
+    const settings = page.getByRole("menuitem", { name: "Account settings" });
+    await expect(settings).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: test.info().outputPath("drawer-account.png") });
+    await settings.click();
+    await expect(page).toHaveURL(/\/settings\/account$/);
+    await expect(page.getByRole("dialog", { name: "Sidebar", exact: true })).toBeHidden();
     await context.close();
   });
 

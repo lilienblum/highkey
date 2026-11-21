@@ -137,6 +137,6 @@ The shared component theme defines foreground/background pairs, hover and presse
 
 ## Organizations and settings
 
-The name above the project picker is the open organization; it opens a menu of your organizations (with your role in each), **Create organization** and **Sign out**. Switching loads the other organization's address afresh.
+Your name and current organization appear below **Documentation** at the bottom of the sidebar. Open that menu for **Account settings**, to switch or create an organization, or to sign out. Each organization shows your role. In the collapsed sidebar, use the account icon. Switching organizations opens the new organization's workspace.
 
 Settings has a row of parts: **Project** (this project's sources, keys, retention and logs), **Organization** (name, address, requiring two-factor codes, transferring ownership, deleting it), **Members** (inviting with a role and a copyable link, changing roles, removing people, pending invitations), **API keys**, **Agents** (connected agents, with their access and last use, to revoke), **Account** (name, password, two-factor codes with backup codes, sessions, deleting your account) and, for the server admin, **Server** (`/admin`: everyone's accounts and organizations, banning, signing someone out everywhere, password reset links, deleting accounts). What a page offers follows your role; see [roles](access.md#organizations-and-roles).
