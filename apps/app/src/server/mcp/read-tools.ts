@@ -12,6 +12,7 @@ import { listSources } from "../db/sources";
 import { getView, listViews } from "../views";
 import { parseEntityQuery, runEntityQuery } from "../queries/entities";
 import { readAs } from "../queries/read";
+import { revenueReport } from "../queries/revenue";
 import { type Args, badArgument, projectId, type Tool } from "./common";
 
 /** Points kept per series by run_widget; a long series is trimmed to its newest points. */
@@ -98,6 +99,10 @@ const defined = (entries: [string, unknown][]) =>
   Object.fromEntries(entries.filter(([, value]) => value != null));
 
 export const readTools: Record<string, Tool> = {
+  query_revenue: async (ctx, a) => {
+    const { project, from, to, ...query } = a;
+    return revenueReport(ctx, await projectId(ctx, project), { ...query, ...range(from, to) });
+  },
   query_profiles: async (ctx, a) => {
     const { project, ...query } = a;
     const id = await projectId(ctx, project);

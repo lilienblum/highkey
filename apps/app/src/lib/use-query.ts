@@ -4,7 +4,7 @@ import { ApiError, queryProduct, type QueryResult } from "./api";
 import { browserGcTime } from "./cache-time";
 
 /** A cached result remembers the exact request that produced it. */
-type Cached = { request: string; data: QueryResult };
+type Cached<T> = { request: string; data: T };
 class QueryFailure extends Error {
   constructor(
     message: string,
@@ -28,18 +28,36 @@ export function useQuery(
   refreshKey: string | number = 0,
   backgroundScope?: string,
 ) {
+  return useReportQuery<QueryResult>(
+    queryProduct,
+    "analytics",
+    product,
+    body,
+    refreshKey,
+    backgroundScope,
+  );
+}
+
+export function useReportQuery<T>(
+  load: (product: string, body: Record<string, unknown>, signal: AbortSignal) => Promise<T>,
+  kind: string,
+  product: string | undefined,
+  body: Record<string, unknown>,
+  refreshKey: string | number,
+  backgroundScope?: string,
+) {
   const bodyKey = JSON.stringify(body);
   const request = `${refreshKey}:${bodyKey}`;
-  const queryKey = ["analytics", product, backgroundScope ?? bodyKey];
+  const queryKey = [kind, product, backgroundScope ?? bodyKey];
   const client = useQueryClient();
-  const query = useCachedQuery<Cached, QueryFailure>({
+  const query = useCachedQuery<Cached<T>, QueryFailure>({
     queryKey,
     enabled: !!product,
     queryFn: async ({ signal }) => {
       try {
         return {
           request,
-          data: await queryProduct(product as string, JSON.parse(bodyKey), signal),
+          data: await load(product as string, JSON.parse(bodyKey), signal),
         };
       } catch (error) {
         throw new QueryFailure(

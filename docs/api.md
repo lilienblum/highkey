@@ -36,6 +36,7 @@ Route the three ingest paths and `/tracker.js` to the ingest app at the edge whe
 | PATCH       | `/api/products/:id/keys/:keyId`       | Replace `{ allowed_origins }`                                                            |
 | DELETE      | `/api/products/:id/keys/:keyId`       | Revoke the key, scoped to the project                                                    |
 | POST        | `/api/products/:id/query`             | The analytics query [below](#query)                                                      |
+| POST        | `/api/products/:id/revenue/query`     | [Revenue by source, page, profile, or session](collection.md#revenue-and-checkout)       |
 | POST        | `/api/products/:id/move`              | `{ organization }` (id or slug): move it; needs admin or owner in both                   |
 | DELETE      | `/api/products/:id`                   | 204; hidden and its keys stopped; restorable for 7 days                                  |
 | GET         | `/api/deleted-products`               | Deleted projects still restorable, with `restorable_until`                               |
@@ -196,21 +197,22 @@ Custom dashboards are `highkey.dashboard/v1` documents stored by the dashboard a
 
 Everything under `/api/read` is non-mutating whatever its method, and answers cross-origin requests from loopback origins and `HIGHKEY_CORS_ORIGINS` (see [local pages](dashboards.md#local-pages)). Pages and scripts read with a read-only API key; see [access](access.md#api-keys).
 
-| Method | Path                                                      | Result                                                                              |
-| ------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| GET    | `/api/read/products`                                      | Projects                                                                            |
-| POST   | `/api/read/products/{project}/query`                      | The analytics query above                                                           |
-| POST   | `/api/read/products/{project}/logs/query`                 | The [log query](logs.md#management-api)                                             |
-| POST   | `/api/read/products/{project}/widgets/run`                | Run one widget: `{ widget, from, to, bucket?, source_id? }`                         |
-| GET    | `/api/read/products/{project}/catalog`                    | Event names and properties, log services and levels, sources, retention, limits     |
-| GET    | `/api/read/products/{project}/dashboards`                 | Summaries: `id`, `slug`, `name`, `description`, `revision`, `updated_at`, `widgets` |
-| POST   | `/api/read/products/{project}/dashboards/validate`        | `{ document }` → `{ valid, errors, warnings }`; nothing is saved                    |
-| GET    | `/api/read/products/{project}/dashboards/{key}`           | `{ id, slug, revision, updated_at, document }`                                      |
-| GET    | `/api/read/products/{project}/dashboards/{key}/revisions` | Kept revisions, newest first, with their origin                                     |
-| GET    | `/api/read/products/{project}/views`                      | Saved views; `?kind=events` or `?kind=logs` narrows                                 |
-| GET    | `/api/read/products/{project}/views/{key}`                | One view; pass `kind` when both kinds share the slug                                |
-| GET    | `/api/read/schemas/dashboard.v1.json`                     | The document's JSON Schema                                                          |
-| POST   | `/api/read/mcp`                                           | MCP, read tools only; API keys only                                                 |
+| Method | Path                                                      | Result                                                                                  |
+| ------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| GET    | `/api/read/products`                                      | Projects                                                                                |
+| POST   | `/api/read/products/{project}/query`                      | The analytics query above                                                               |
+| POST   | `/api/read/products/{project}/revenue/query`              | Exact net cents and revenue event counts, paginated; also served by MCP `query_revenue` |
+| POST   | `/api/read/products/{project}/logs/query`                 | The [log query](logs.md#management-api)                                                 |
+| POST   | `/api/read/products/{project}/widgets/run`                | Run one widget: `{ widget, from, to, bucket?, source_id? }`                             |
+| GET    | `/api/read/products/{project}/catalog`                    | Event names and properties, log services and levels, sources, retention, limits         |
+| GET    | `/api/read/products/{project}/dashboards`                 | Summaries: `id`, `slug`, `name`, `description`, `revision`, `updated_at`, `widgets`     |
+| POST   | `/api/read/products/{project}/dashboards/validate`        | `{ document }` → `{ valid, errors, warnings }`; nothing is saved                        |
+| GET    | `/api/read/products/{project}/dashboards/{key}`           | `{ id, slug, revision, updated_at, document }`                                          |
+| GET    | `/api/read/products/{project}/dashboards/{key}/revisions` | Kept revisions, newest first, with their origin                                         |
+| GET    | `/api/read/products/{project}/views`                      | Saved views; `?kind=events` or `?kind=logs` narrows                                     |
+| GET    | `/api/read/products/{project}/views/{key}`                | One view; pass `kind` when both kinds share the slug                                    |
+| GET    | `/api/read/schemas/dashboard.v1.json`                     | The document's JSON Schema                                                              |
+| POST   | `/api/read/mcp`                                           | MCP, read tools only; API keys only                                                     |
 
 Widget runs wait at the dashboard's own query gates, so dashboards cannot take every slot an interactive page needs: event widgets share one fewer slot than `HIGHKEY_QUERY_CONCURRENCY` (default 4), and log widgets share one. A run waits for a slot until its deadline, and each run is bounded by the widget's `timeout_ms` (default 5,000; 1,000–10,000).
 

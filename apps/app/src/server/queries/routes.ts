@@ -8,9 +8,13 @@ import { parseEventsQuery, runEventsQuery } from "./events";
 import { parseLogsQuery, runLogsQuery } from "./logs";
 import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
+import { revenueReport } from "./revenue";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/revenue/query`, READ, async (request, ctx, { project }) =>
+      json(await revenueReport(ctx, project as string, await readJson(request))),
+    );
     for (const kind of ["profiles", "groups"] as const)
       route("POST", `${prefix}/${kind}/query`, READ, async (request, ctx, { project }) => {
         const product = await resolveProduct(ctx.db, project as string);

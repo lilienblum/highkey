@@ -1,11 +1,12 @@
 import { useParams, useRouteContext } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-export type WorkspaceView = "/" | "/events" | "/logs" | "/settings" | "/dashboards";
+export type WorkspaceView = "/" | "/events" | "/logs" | "/settings" | "/dashboards" | "/revenue";
 const routes = {
   "/": "/$orgSlug/$projectSlug",
   "/events": "/$orgSlug/$projectSlug/events",
   "/logs": "/$orgSlug/$projectSlug/logs",
+  "/revenue": "/$orgSlug/$projectSlug/revenue",
   "/settings": "/$orgSlug/$projectSlug/settings",
 } as const;
 export const projectRoute = "/$orgSlug/$projectSlug";
@@ -29,7 +30,7 @@ export function workspaceTarget(
   }
   return orgSlug && projectSlug
     ? { to: routes[view], params: { orgSlug, projectSlug } }
-    : { to: view };
+    : { to: view === "/revenue" ? "/" : view };
 }
 
 /** The organization the page shows: the one in its URL, else the session's. */
@@ -66,6 +67,7 @@ export function isOrganizationPage(path: string): boolean {
 
 export function workspaceView(path: string): WorkspaceView {
   if (isOrganizationPage(path)) return "/settings";
+  if (/^\/[^/]+\/[^/]+\/revenue\/?$/.test(path)) return "/revenue";
   const view = /^(?:\/[^/]+\/[^/]+)?\/(events|logs|settings)\/?$/.exec(path)?.[1];
   if (view) return `/${view}` as WorkspaceView;
   if (/^\/[^/]+\/[^/]+\/dashboards\/[^/]+\/?$/.test(path)) return "/dashboards";

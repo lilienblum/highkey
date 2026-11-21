@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { hashSecret } from "../src/server/db/keys";
 import { one } from "../src/server/db/db";
 import { reconcile } from "../src/server/registry";
-import { call, project, testContext, type TestContext } from "./helpers";
+import { call, project, seedEvents, testContext, type TestContext } from "./helpers";
 import { joinAs } from "./auth-helpers";
 
 let ctx: TestContext;
@@ -10,6 +10,68 @@ beforeAll(async () => {
   ctx = await testContext();
 }, 300_000);
 afterAll(() => ctx?.cleanup());
+
+test("revenue attribution preserves integer cents, refunds, missing dimensions and scoped totals across pages", async () => {
+  const p = await project(ctx, "Revenue report");
+  const other = await project(ctx);
+  const second = (await call(ctx, "POST", `/api/products/${p.id}/sources`, { name: "Server" })).json
+    .id;
+  const time = new Date();
+  const range = {
+    from: new Date(+time - 60_000).toISOString(),
+    to: new Date(+time + 60_000).toISOString(),
+  };
+  const row = (revenue: unknown, extra: object = {}) => ({
+    event_id: crypto.randomUUID(),
+    time,
+    properties: { revenue, path: "/thanks" },
+    profile_id: "sam",
+    session_id: "s1",
+    ...extra,
+  });
+  await seedEvents(p.id, [
+    row(Number.MAX_SAFE_INTEGER),
+    row(3),
+    row(0),
+    row(-1, { source_id: second, profile_id: null, session_id: null, properties: { revenue: -1 } }),
+    row("99"),
+    row(false),
+    row(2.5),
+    row(9, { time: new Date(range.to) }),
+  ]);
+  await seedEvents(other.id, [row(999)]);
+  const read = (body: object) =>
+    call(ctx, "POST", `/api/products/${p.slug}/revenue/query`, { ...range, ...body });
+  for (const [group_by, label, otherLabel] of [
+    ["source", p.id, second],
+    ["page", "/thanks", null],
+    ["session", "s1", null],
+    ["profile", "sam", null],
+  ]) {
+    const first = await read({ group_by, page_size: 1 });
+    expect(first.json).toMatchObject({
+      cents: "9007199254740993",
+      revenue_events: 4,
+      groups: 2,
+      rows: [{ label, cents: "9007199254740994", revenue_events: 3 }],
+    });
+    expect((await read({ group_by, page_size: 1, page: 2 })).json.rows).toEqual([
+      { label: otherLabel, cents: "-1", revenue_events: 1 },
+    ]);
+  }
+  expect((await read({ source_id: second })).json.cents).toBe("-1");
+  expect(
+    (await read({ filters: [{ property: "path", op: "eq", value: "/thanks" }] })).json.cents,
+  ).toBe("9007199254740994");
+  expect((await read({ event: "unknown" })).json).toMatchObject({
+    cents: "0",
+    revenue_events: 0,
+    rows: [],
+  });
+  expect((await read({ source_id: other.id })).status).toBe(404);
+  expect((await read({ group_by: "unknown" })).status).toBe(400);
+  expect((await read({ page: -1 })).status).toBe(400);
+});
 
 test("revenue opt-in is restricted to owners and admins over HTTP and MCP", async () => {
   const p = await project(ctx, "Restricted revenue");

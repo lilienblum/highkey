@@ -30,6 +30,10 @@ In Project settings, choose **Secret server** under Ingestion keys for a backend
 
 In Explore, choose **Sum** and the `revenue` property to chart cents, then group by `path` or filter to a source. Agent-written dashboards use an event query with `{ "signal": "events", "measure": "sum", "property": "revenue" }`; divide by 100 in a formula when displaying currency units. Refund events subtract from the total.
 
+Open **Revenue** in the project sidebar for exact net cents and revenue event counts. Group by source, page (`properties.path`), profile (`profile_id`), or session (`session_id`). Missing dimensions are shown as **Unattributed**; a zero-cent event is counted, while a missing `revenue` is not. Attribution uses the values on the payment or refund event. The report follows the selected source and date range.
+
+Use `POST /api/read/products/:project/revenue/query` with a read API key, or call the `query_revenue` MCP tool. HTTP requires `from` and `to` as RFC 3339 timestamps. Both accept `group_by` (`source`, `page`, `profile`, `session`), `source_id`, `page` (starting at 1), and `page_size` (1–100). Results include `cents` as an exact decimal integer string, `revenue_events`, group count `groups`, and `rows` with `label`, `cents`, and `revenue_events`. Overall totals cover every group, including on later pages.
+
 For that opted-in browser flow, call `tracker.beginCheckout(2950)` before navigating away, then `tracker.completeCheckout({ path: "/thanks" })` on the thank-you page. The first call stores only integer cents, an event ID and a 24-hour expiry in this tab's session storage; the second emits `purchase` through the usual filter and sanitizer. Failed delivery preserves the ID for a retry after reload; acknowledgment clears it. `cancelCheckout()` and `optOut()` discard it. Calls are refused while disabled, deferred, or blocked by privacy signals. Ordinary tracking never accesses checkout storage. Browser delivery is best effort; use server events for authoritative revenue and avoid sending both for the same purchase.
 
 ## AI generation events

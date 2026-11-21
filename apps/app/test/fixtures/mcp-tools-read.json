@@ -14,6 +14,24 @@
   },
   "tools": [
     {
+      "name": "query_revenue",
+      "description": "Net integer cents and revenue event counts by source, page, profile or session. Cents are exact decimal strings; null labels mean unattributed. Defaults to the last seven days.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "group_by": { "type": "string", "enum": ["source", "page", "profile", "session"] },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "query_profiles",
       "description": "Lists identified profiles with current typed traits after sets and increments. Filter by id or search; page_size is 1–100. Reads retained history.",
       "inputSchema": {
