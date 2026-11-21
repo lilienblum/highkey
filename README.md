@@ -21,7 +21,7 @@ When the edge routes the ingest paths to the ingest app, ingestion never passes 
 
 ## Develop locally with Tako
 
-Requires [Tako](https://tako.sh/) `0.0.0-9ae824f` or a later release with ephemeral channels, Bun 1.4+, a current stable Rust toolchain (tested with 1.95.0), a C compiler, and Docker for the local ClickHouse. No npm or Node runtime is required.
+Use the released [Tako](https://tako.sh/) CLI `0.0.0-419336e` (matching the pinned SDK), Bun 1.4+, a stable Rust toolchain, a C compiler, and Docker for local ClickHouse. The released CLI supports isolated `test-e2e` environments.
 
 ```sh
 git clone git@github.com:lilienblum/piko.git
@@ -89,7 +89,7 @@ Dashboard settings:
 
 1. **First project:** an organization without projects opens on `/new`, which creates the project, a named **source** (such as Website, iOS app, or CLI) and that source's ingestion key, then shows the snippet to paste and how to connect your agent over MCP. **Settings:** create more projects, then add more **sources**. All sources use the same analytics UI. Icons follow the source name automatically, or can be chosen from a predefined Hugeicons set; no URL is needed. Create a key for a specific source and copy it while visible. Only its SHA-256 hash and display prefix are stored.
 2. **Overview:** select a project, source (or **All sources**), and date range. Every source has the same widgets and query choices; Overview includes all event names. A combined project shares storage and retention. Missing identity or duration is shown honestly as unavailable.
-3. **Events:** select an event, measure, grouping, and optional typed property filter. Counts, distinct actors, numeric sum/average/min/max, and p50/p95 run in ClickHouse. Charts, grouping, filtering, and event pagination are server-side. Click an event for its original typed envelope.
+3. **Events:** inspect typed records and follow a value into related activity. **Analyze** opens funnels, retention, conversion and breakdown reports that you can save as views. Open **Profiles** for individual people, groups and cohorts; **Sessions** for visit timelines and correlated logs; **Revenue** for integer-cent attribution; and **AI costs** for usage, cost and traces.
 4. **Logs:** search messages, filter by severity, service, and context, inspect structured records, and follow live logs. Services send structured JSON or OTLP/HTTP with separate `pl_` log keys created in Settings → Logs. Logs live in ClickHouse apart from events, with an independent seven-day default retention. See [application logs](docs/logs.md).
 
 Everyone signs in. Signing up creates an organization you own; owners and admins invite people with a role (owner, admin, member or viewer), and one person can belong to several organizations. Scripts and local pages use API keys, and agents sign in over OAuth. See [accounts, organizations and access](docs/access.md).
@@ -121,7 +121,7 @@ Both support typed properties, batches, stable event IDs across bounded retries,
 
 Collection starts without visitor, session, or installation identifiers. The browser tracker honors DNT/GPC, leaves campaign capture off until explicitly configured, and offers pre-send filtering plus an opt-out that discards queued data. The CLI example requires an explicit opt-in. New projects start with one-year retention (365 days). Retention is configurable per project in Settings; existing projects keep their configured value.
 
-Highkey does not derive analytics identity from IP addresses or user-agent information. Paths, custom properties, and optional persistent IDs are still data you choose to collect; they are not automatically anonymized. ClickHouse is the isolation boundary between projects, so keep it upgraded. Read [the privacy model and collection controls](docs/privacy.md) before integrating private application routes.
+Visitor counting is Off by default. A source can opt into a cookieless ID derived from transient request data and a daily salt, or consented persistent browser IDs. Visitor IPs and raw user agents are not stored as analytics context. Paths and custom properties are not automatically anonymized. Read [the privacy model and collection controls](docs/privacy.md) before integrating private application routes.
 
 ## Checks
 
@@ -152,13 +152,13 @@ See [the verification record](docs/verification.md) for measured checks and thei
 
 ## Scope and limitations
 
-- External access control, one ClickHouse node, one ingest process, one dashboard process. Tako updates both apps with a rolling replacement; the old and new dashboard share the hosted database while they overlap. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference without removing it. No replication, multi-user permissions, or automatic backups yet.
-- Browser ingestion keys are intentionally public and write-only. They are not anti-abuse credentials; a key holder can submit fabricated events. There is global capacity backpressure, but no per-key fairness or bot detection.
-- Identity is explicit, optional, and project-scoped. There is no IP/user-agent fingerprinting. The browser tracker defaults to unidentified events and always honors Do Not Track and Global Privacy Control. Installations are distinct from website visitors and sessions.
+- Built-in accounts, organization roles and optional project restrictions control access. One ClickHouse node shares CPU and disk between ingestion and queries; per-project caps and ingest priority bound the interference. Back up ClickHouse and the management database separately.
+- Public browser ingestion keys are write-only. Bot labeling and global capacity limits protect reporting and availability, but a key holder can submit fabricated events.
+- Identity is optional. The tracker honors Do Not Track and Global Privacy Control in all three source modes. Installations are distinct from website visitors and sessions.
 - Settings → Display controls the event timezone for this browser, including event inspection. Stored timestamps, JSON exports, chart buckets, and date-range boundaries remain UTC. Date ranges are half-open; today is partial. Local-time/DST aggregation is not supported yet.
 - Pagination is bounded offset pagination, ordered by time and event ID. Different pages may shift when new events arrive. Top breakdowns are limited to 12 groups, event-name discovery to 100 names, filters to 8, pages to 10,001, and page size to 100.
 - Delivery from browsers/CLIs is best effort with bounded retries. A flush confirms attempted delivery, not guaranteed delivery. Deduplication is exact for 24 hours and eventual after that; see [deduplication](docs/api.md#deduplication) for the two cases where a duplicate can last.
-- No session replay, alerts, or distributed storage. Custom dashboards are written by an agent or by script, not dragged together in the UI, and their queries are Highkey's typed entities, including funnels and retention, with no SQL.
+- Project notifications, source health checks, weekly digests and private continuous export are opt-in ([configuration](docs/api.md#live-activity)). Custom dashboards are agent-written with typed entities, including funnels and retention. Share access by inviting a viewer; there are no public share links, embeds or session replay.
 
 [Liwan](https://github.com/explodingcamera/liwan) informed Highkey's early embedded-storage design. Highkey has its own implementation and product model, with equal support for websites and tools.
 

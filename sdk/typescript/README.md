@@ -50,6 +50,8 @@ Successful sends return `{ accepted, duplicates }` after the API commits. Invali
 
 ## Browser collection
 
+Visitor counting is Off by default per source. Use `identity: "cookieless"` only with the corresponding source mode, or explicitly consent to persistent tracking and set the source to Persistent. The persistent tracker checks the collector policy before touching identifier storage. Set `collectReferrerPath: true` only if the additional external referrer path is useful; query strings, credentials and fragments are discarded.
+
 For revenue, send `properties: { revenue: 2950 }` (integer cents) using a secret `sk_` event key from your backend. Zero and negative refunds are supported. Do not mix currencies in a project. Public `pk_` keys need the project's browser-revenue opt-in; the tracker refuses server keys.
 
 For a browser checkout, explicitly call `tracker.beginCheckout(2950)` before leaving the site, then `tracker.completeCheckout({ path: "/thanks" })` on the thank-you page. This stores only cents, an event ID and a 24-hour expiry in the current tab's session storage. Completion emits `purchase` through the ordinary filter/sanitizer and retains the ID across failed delivery and reloads until acknowledgment. `cancelCheckout()` or `optOut()` removes it. These methods return false when blocked, deferred, invalid, or storage is unavailable. No checkout storage is accessed during ordinary tracking. Browser checkout collection remains best effort; authoritative revenue belongs in server events.

@@ -1,14 +1,14 @@
 # Privacy model
 
-Highkey is built to minimize collection by default. It does not automatically add IP addresses, user-agent strings, geolocation, device fingerprints, form values, command output, or account information to analytics events. Page titles and URL fragments require explicit tracker options. It does not send analytics to a Highkey-operated service. Data goes to the collector you configure and remains in your self-hosted storage: your own ClickHouse server and the dashboard's SQLite file.
+Highkey does not store visitor IPs, raw user agents, or city as analytics context. At insertion, ephemeral inputs can produce country/region, browser, OS, device family and bot labels. Location stays unknown without an operator-supplied network lookup. Page titles, external referrer paths and URL fragments require explicit tracker options. Data goes to your configured collector; opt-in notifications and exports can send selected data to destinations you configure.
 
 ## Defaults and explicit choices
 
 | Surface               | Default                                      | Explicit choice                                                                 |
 | --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
-| Browser identity      | No visitor/session IDs or identifier storage | Persistent random IDs, scoped to the product                                    |
+| Browser identity      | No automatic visitor/session IDs or identifier storage | Per-source cookieless daily IDs or consented persistent random IDs             |
 | Browser page metadata | Pathname and referrer hostname only          | Omit or canonicalize paths; disable referrers; opt in to titles and hash routes |
-| Campaigns             | No campaign parameters                       | Allowlist individual UTM names                                                  |
+| Campaigns             | No campaign parameters                       | Allowlist individual UTM names or `ref`                                         |
 | Privacy signals       | DNT/GPC stop collection                      | No override; absence is not consent                                             |
 | Custom events         | Only caller-supplied scalar properties       | Filter or drop with `beforeSend`                                                |
 | CLI example           | Telemetry off; no installation ID            | `HIGHKEY_TELEMETRY=1`; optional random installation ID                          |
@@ -32,14 +32,14 @@ Pathnames can contain names, emails, order IDs, or access tokens. Hostnames can 
 
 The browser ingestion client omits cookies and Referer and rejects redirects. Copyable module snippets also use `referrerpolicy="no-referrer"` so loading the tracker does not disclose the embedding URL. Configure the same policy on the host page for other integration styles. Rust telemetry also refuses redirects.
 
-Management requests never leave the dashboard. When the edge sends ingestion to the dashboard, it forwards only the three ingest paths and `/tracker.js` to the ingest app, with only the headers ingestion reads: `Accept`, `Content-Type`, `Content-Encoding`, `Authorization` (the ingestion key), `Origin`, and the CORS preflight headers. Browser cookies, referrers, user-agent strings, forwarded client IPs, and Cloudflare user identity headers are not forwarded. Ephemeral refresh notifications have no persisted channel history and contain only a version, affected project IDs and signal names (or a full-refresh hint), never event bodies, log records or actor IDs.
+Management requests are handled by the dashboard. The gateway forwards only the ingest paths and tracker to the collector. For events it forwards the bounded user agent, fetch mode and privacy signals; a verified client address is forwarded only under the explicit trusted-proxy configuration. It never forwards cookies, Referer or edge authentication headers. Ephemeral refresh hints contain no raw records, actor IDs or credentials. Notification destinations and private export are separate, explicitly configured delivery paths.
 
 Network infrastructure still sees connection information such as IP addresses. Your hosting provider, reverse proxy, access logs, and backups have their own behavior and retention. Highkey's application defaults do not configure those systems or establish legal compliance. Everything except collection needs a signed-in person, an API key or an agent's token; see [access.md](access.md).
 
 ## What each app stores
 
 - **The ingest app** stores nothing of its own and has no data directory. It writes accepted events and logs to ClickHouse and keeps, in memory only, recent key lookups (a key's hash, project, source, allowed origins and retention) for up to five seconds.
-- **The dashboard** keeps its management database (the Tako database `highkey`, or `state.sqlite` without Tako): projects and their website addresses and cached favicons, sources, ingestion and log key hashes with their display prefixes and allowed origins, retention settings, dashboards with their revisions, and saved views. Key secrets are shown once at creation and never stored; only their SHA-256 hashes are.
+- **The dashboard** keeps project and source configuration, dashboard revisions, saved views, cohorts, exclusions, references, insight summaries and notification history in the management database. Ingestion key secrets are shown once and only their hashes and display prefixes are kept. Destination credentials are encrypted. Export streams temporarily checkpoint compressed payloads until the private object store acknowledges the upload.
 - **Accounts**, in the same database: each person's name, email address, whether it is verified, a password hash (scrypt), a profile picture address if they signed in with GitHub or Google (and that provider's account id and tokens), two-factor secrets and hashed backup codes when they turn codes on, and the server-admin role and any ban. Organizations hold their name, slug, members with their roles, and pending invitations (email, role, inviter). **Sessions** record their IP address and user agent, as Better Auth does by default, so people can recognize their sessions; they expire after 7 days of disuse. API keys are stored hashed with their first characters, owner, organization, access, request counts and last use. Agent connections store the agent's registered name and redirect addresses, the person, organization and granted scopes, and hashed refresh tokens; access tokens are signed, short-lived and not stored. Deleting an account deletes its sessions, keys, connections and memberships.
 - **ClickHouse** holds the events (`highkey.events`) and logs (`highkey.logs`) exactly as collectors sent them, plus their receipt times and expiry. It also holds the key registry `highkey.ingest_keys`, which mirrors the key hashes, sources, origins and retention from the management database so the ingest app can authorize requests, and one small database of views and one reader user per project. Its `query_log` keeps a record of recent queries for seven days, for diagnosing slow widgets.
 
@@ -51,7 +51,7 @@ All projects share ClickHouse's two physical tables. The dashboard reads a proje
 
 ## Updating an existing collector
 
-Refresh the hosted tracker or update copied SDK files. Campaign capture now requires an explicit `campaigns` list, and the `respectDoNotTrack` override has been removed. Existing integrations that explicitly request `identity: "persistent"` remain opted in; the new copyable snippet uses `none`.
+Refresh the hosted tracker or update copied SDK files. Campaign capture requires an explicit `campaigns` list. A snippet requesting `identity: "persistent"` uses identifier storage only when the collector confirms that the source allows it. A stale snippet on an Off source cannot enable persistent identity. Cookieless IDs are scoped by project, source and UTC day, and restarting the collector changes its salt.
 
 Changing identity to `none` stops using IDs but does not itself erase IDs from an earlier integration. To clear them, call `optOut()` using the same collector origin and `identityScope` (or key fallback) that created them, then start a new unidentified tracker if collection is still permitted. Previously committed events remain subject to the product's retention window.
 
