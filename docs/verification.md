@@ -1,6 +1,6 @@
 # Verification record
 
-Entries dated before 16 November 2026 verified the earlier architecture: one Rust API (`apps/api`) on DuckDB, run natively with `tako.api.toml` at `highkey-api.test`. They are kept as history. Their commands and hosts, such as `cargo build --release -p highkey` and `highkey-e2e-api.test`, no longer describe the current stack, and their counts and measurements apply to that architecture only. The [newest entry](#main-config-e2e-environments--2026-11-21), at the end, lists the current checks.
+Entries dated before 16 November 2026 verified the earlier architecture: one Rust API (`apps/api`) on DuckDB, run natively with `tako.api.toml` at `highkey-api.test`. They are kept as history. Their commands and hosts, such as `cargo build --release -p highkey` and `highkey-e2e-api.test`, no longer describe the current stack, and their counts and measurements apply to that architecture only. See [roadmap acceptance](#roadmap-acceptance) for the current two-app checks.
 
 ## 2 November 2026: compact overview and reporting periods
 
@@ -437,3 +437,20 @@ Contract 5 (`2e94941`): 407 Bun tests, the Rust suite and Clippy passed. Tested 
 The subsequent full run at `029950c` passed **243/243** in 11.6 minutes, including the narrow custom-event rule builder and all live-arrival regressions. Both ordinary apps remained registered; ingest returned healthy and sign-in returned 200. The `1f4eeff` 10M-event load run passed at p99 **125.5 ms** alone and **159.0 ms** with eight readers (98 completed reader queries; 298 refused or timed out). Rust tests and all-target Clippy passed for contract 4 at `9816e51`; the full Bun run found one outdated expected-column list for `sdk`, corrected and verified in the migration suite.
 
 On `3bcb403`, the isolated browser run passed 62 of 63 cases, including the Overview visitor chart, session → profile → session navigation, typed value → chronological events → request logs, and desktop/mobile shell checks. The one remaining case found that accepting 20 live arrivals could show the badge twice when switching back to a cached page. `1f4eeff` fixed that; the clean isolated rerun passed both the live-arrivals case and the event-catalog → conversion widget case. Teardown left only the ordinary development registrations, with ingest healthy and sign-in HTTP 200. The unit/integration suite on `3bcb403` passed all 400 tests (3,999 assertions).
+
+## Roadmap acceptance
+
+The released Tako CLI `0.0.0-419336e` ran the complete browser suite at `232215e`: **255/255 passed**. The ten-million-event load check measured ingest p99 **149.3 ms** alone and **158.3 ms** with eight readers. The test applications and their databases were removed after the run.
+
+At `bc9a49e`, four end-to-end journeys passed together: create a cohort and use it to narrow the live wall; find the same overnight referrer spike in Insights and on its chart; open a filtered chart point and see only its matching profile; and use website report tabs, a checked language filter and an agent-authored country map. Tests use the main configs’ `test-e2e` sections on the isolated HTTPS hosts.
+
+| Roadmap items                                            | Where to check the behavior                                                                                                                                                                                     |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1–11: collection                                         | [Collection guide](collection.md), `tests/privacy.spec.ts`, `apps/app/test/request-context.test.ts`, `visitor-mode.test.ts` and `ai-retention.test.ts`.                                                         |
+| 12–23: visits, Overview and report tables                | `sessions.test.ts`, `web-metrics.test.ts`, `patterns.test.ts`, `breakdown-report.test.ts` and the website reports and nightly-insights browser journeys.                                                        |
+| 24–34: events, profiles, groups and cohorts              | `event-catalog.test.ts`, `profile-attribution.test.ts`, `group-activity.test.ts`, `cohorts.test.ts` and `tests/explore-facets.spec.ts`. The Rust ingest suite covers discarded events and their dedup receipts. |
+| 35–43: analysis, references and realtime                 | `advanced-analysis.test.ts`, `report-fields.test.ts`, `references.test.ts`, `realtime.test.ts` and `tests/references.spec.ts`.                                                                                  |
+| 44–53: notifications, export, insights, MCP and AI costs | `notifications.test.ts`, `delivery.test.ts`, `continuous-export.test.ts`, `nightly.test.ts`, `mcp.test.ts` and `generations.test.ts`.                                                                           |
+| 56–65: onboarding, filters, dates and access             | `activation.test.ts`, `event-options.test.ts`, `project-access.test.ts`, `access-matrix.test.ts` and browser coverage for setup, date ranges, invitations, sign-in and two-factor authentication.               |
+
+Test names without a directory in the table are under `apps/app/test/`. Items 54–55 (public sharing and embeds) were explicitly excluded; a viewer invitation is the supported way to share. Live third-party OAuth, model and delivery accounts require operator credentials. Provider-response fixtures, a signed HTTP PUT receiver and an SMTP server exercise those integrations locally.
