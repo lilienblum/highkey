@@ -444,6 +444,8 @@ The released Tako CLI `0.0.0-419336e` ran the complete browser suite at `232215e
 
 At `bc9a49e`, four end-to-end journeys passed together: create a cohort and use it to narrow the live wall; find the same overnight referrer spike in Insights and on its chart; open a filtered chart point and see only its matching profile; and use website report tabs, a checked language filter and an agent-authored country map. Tests use the main configs’ `test-e2e` sections on the isolated HTTPS hosts.
 
+The full Bun suite found a catalog mismatch: `cohort` was advertised on `create_reference` instead of `realtime_activity`. After `0e11dde`, all **37 MCP tests** passed, followed by **422/422 Bun tests** (4,744 assertions). Formatting, typechecking and the production build passed. The Rust suite includes idle-collector UTC salt retirement, and all-target, all-feature Clippy passed with warnings denied.
+
 | Roadmap items                                            | Where to check the behavior                                                                                                                                                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1–11: collection                                         | [Collection guide](collection.md), `tests/privacy.spec.ts`, `apps/app/test/request-context.test.ts`, `visitor-mode.test.ts` and `ai-retention.test.ts`.                                                         |
