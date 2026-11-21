@@ -435,7 +435,7 @@ function ProductSettings({ product }: { product: Product }) {
             )}
             <div className="key-list" aria-busy={keyState.status === "loading"}>
               {keyState.status === "loading" ? (
-                <div role="status" aria-label="Loading ingestion keys">
+                <div data-loading-layout="" role="status" aria-label="Loading ingestion keys">
                   <span className="sr-only">Loading ingestion keys…</span>
                   {[1, 2].map((n) => (
                     <div key={n} className="key-row" aria-hidden="true">

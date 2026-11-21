@@ -2840,6 +2840,27 @@ html:has([data-page="new-project"]) {
   }
 }
 
+/* Temporary plain-loading preview. Remove the attribute on <html> to compare with skeletons. */
+html[data-plain-loading] {
+  :is(
+    [data-slot="skeleton"],
+    [skullet-loading],
+    [skullet-bar],
+    [skullet-layer],
+    [skullet-snapshot]
+  ) {
+    visibility: hidden;
+  }
+  [data-loading-layout] > :not(.sr-only),
+  .logs-placeholder,
+  .stream-table tr[aria-hidden="true"]:has([data-slot="skeleton"]) {
+    display: none;
+  }
+  [data-loading-layout] > .sr-only {
+    @apply not-sr-only text-sm text-muted-foreground;
+  }
+}
+
 /* Overview: measurement widgets with one shared date range. */
 .overview-dashboard {
   container-type: inline-size;

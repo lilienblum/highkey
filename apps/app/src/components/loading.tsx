@@ -12,7 +12,7 @@ import {
 
 export function BreakdownLoading({ rows = 5 }: { rows?: number }) {
   return (
-    <div role="status" aria-label="Loading breakdown" aria-busy="true">
+    <div data-loading-layout="" role="status" aria-label="Loading breakdown" aria-busy="true">
       <span className="sr-only">Loading breakdown…</span>
       <MeasuredSkeleton loading>
         <div className="breakdown-head">
@@ -63,7 +63,12 @@ function BreakdownCardLoading({ title, rows }: { title: string; rows?: number })
 }
 export function ExploreLoading() {
   return (
-    <section role="status" aria-label="Loading query results" aria-busy="true">
+    <section
+      data-loading-layout=""
+      role="status"
+      aria-label="Loading query results"
+      aria-busy="true"
+    >
       <span className="sr-only">Loading query results…</span>
       <div className="explore-summary" aria-hidden="true">
         <div className="explore-summary-value">
@@ -114,7 +119,13 @@ export function ExploreLoading() {
 }
 export function PageLoading({ label = "Loading page" }: { label?: string }) {
   return (
-    <div className="route-loading" role="status" aria-label={label} aria-busy="true">
+    <div
+      className="route-loading"
+      data-loading-layout=""
+      role="status"
+      aria-label={label}
+      aria-busy="true"
+    >
       <span className="sr-only">{label}…</span>
       <MeasuredSkeleton loading>
         <p>Loading your project analytics</p>

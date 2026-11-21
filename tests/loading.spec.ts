@@ -80,7 +80,9 @@ test("project pages render the catalog on the server without a workspace placeho
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("8");
 });
 
-test("date changes use stable placeholders and breakdown loading stays local", async ({ page }) => {
+test("date changes leave measurements blank and breakdown loading stays local", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.locator(".activity-widget .widget-value").first()).toHaveText("8");
   const chart = await page.locator(".activity-widget").boundingBox();
@@ -93,10 +95,10 @@ test("date changes use stable placeholders and breakdown loading stays local", a
     await expect(pending).toHaveAttribute("aria-busy", "true");
     await expect(pending).toBeVisible();
     await expect(pending.locator(".overview-widget")).toHaveCount(5);
-    await expect(pending.locator(".overview-widget .widget-value [skullet-loading]")).toHaveCount(
-      3,
-    );
-    await expect(pending.locator("[skullet-bar]").first()).toBeVisible();
+    await expect(pending.locator(".widget-value").getByText("12,345").first()).toBeHidden();
+    await expect(
+      pending.locator('[skullet-bar]:visible, [data-slot="skeleton"]:visible'),
+    ).toHaveCount(0);
     await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "true");
     const pendingChart = await pending.locator(".activity-widget").boundingBox();
     const pendingMetric = await pending.locator(".overview-widget").first().boundingBox();
@@ -131,17 +133,19 @@ test("date changes use stable placeholders and breakdown loading stays local", a
   await expect(page.getByRole("link", { name: "Filter by newsletter", exact: true })).toBeVisible();
 });
 
-test("explore loading matches results and pending query recovers after error", async ({ page }) => {
+test("explore shows a loading status until results arrive and recovers after error", async ({
+  page,
+}) => {
   const viewport = page.viewportSize();
-  let pendingStreamY: number | undefined;
   const release = await hold(page, "**/api/products/*/query");
   try {
     await page.goto("/events");
     const pending = page.getByRole("status", { name: "Loading query results", exact: true });
     await expect(pending).toBeVisible();
     await expect(pending.locator(".metrics")).toHaveCount(0);
-    await expect(pending.locator(".explore-summary")).toBeVisible();
-    await expect(pending.locator(".explore-charts")).toBeVisible();
+    await expect(pending.getByText("Loading query results…")).toBeVisible();
+    await expect(pending.locator(".explore-summary")).toBeHidden();
+    await expect(pending.locator(".explore-charts")).toBeHidden();
     await expect(page.getByRole("button", { name: "Run query", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Run query", exact: true })).toHaveAttribute(
       "aria-busy",
@@ -149,7 +153,6 @@ test("explore loading matches results and pending query recovers after error", a
     );
     await expect(page.getByText("across 0 matching events")).not.toBeVisible();
     await page.screenshot({ path: test.info().outputPath("explore-loading.png") });
-    pendingStreamY = (await pending.locator(".event-stream").boundingBox())?.y;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
     await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
@@ -157,22 +160,14 @@ test("explore loading matches results and pending query recovers after error", a
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    expect(
-      await pending
-        .locator('[data-slot="skeleton"]')
-        .first()
-        .evaluate((el) => getComputedStyle(el).animationName),
-    ).toBe("none");
+    await expect(pending.locator(".event-stream")).toBeHidden();
     await page.screenshot({ path: test.info().outputPath("explore-loading-mobile.png") });
   } finally {
     release();
   }
   await expect(page.getByText("across 8 matching events")).toBeVisible();
-  if (!viewport || pendingStreamY === undefined) throw new Error("Expected initial query geometry");
-  await page.setViewportSize(viewport);
-  const loadedStream = await page.locator(".event-stream").boundingBox();
-  if (!loadedStream) throw new Error("Expected loaded query geometry");
-  expect(Math.abs(loadedStream.y - pendingStreamY)).toBeLessThanOrEqual(12);
+  if (viewport) await page.setViewportSize(viewport);
+  await expect(page.locator(".event-stream")).toBeVisible();
   await expect(page.getByRole("button", { name: "Run query", exact: true })).toBeEnabled();
   await page.route(
     "**/api/products/*/query",

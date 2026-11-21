@@ -190,7 +190,7 @@ function WorkspaceError({ error }: { error: unknown }) {
 }
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" data-plain-loading="" suppressHydrationWarning>
       <head>
         <ScriptOnce>{sidebarScript}</ScriptOnce>
         <HeadContent />
