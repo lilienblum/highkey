@@ -201,12 +201,12 @@ function NewProject() {
             id="new-project-how"
             className="mb-5 font-pixel text-[22px] leading-tight font-normal text-heading"
           >
-            {created ? "Your project is ready" : "Projects and sources"}
+            {created ? "Your project is ready" : "Start with one source"}
           </h2>
           <p className={HINT}>
             {created
               ? "You can find the install guide again in project settings."
-              : "A project groups events from your websites, apps, and tools. Each source has its own key."}
+              : "The source you name here is created with your project. If you start with your website, you can add your mobile app later in Settings → Sources → Add source."}
           </p>
         </div>
       </aside>
