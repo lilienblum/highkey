@@ -152,7 +152,7 @@ function ProfileDirectory() {
               onValueChange={(kind) =>
                 update({
                   kind: kind === "identified" ? undefined : (kind as string),
-                  cohort: kind === "anonymous" || kind === "groups" ? undefined : s.cohort,
+                  cohort: kind === "anonymous" ? undefined : s.cohort,
                   page: undefined,
                 })
               }

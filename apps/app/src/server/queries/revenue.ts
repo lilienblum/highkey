@@ -7,6 +7,7 @@ import { readAs } from "./read";
 import { parseEventsQuery, predicate } from "./events";
 import { Params } from "./properties";
 import { customRules } from "./custom";
+import { cohortScope } from "./cohort-scope";
 
 const dimensions = new Map([
   ["source", "toString(source_id)"],
@@ -28,6 +29,7 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
       event: "string?",
       source: "string?",
       filters: "unknown",
+      cohort: "string?",
     },
     { group_by: "source", page: 1, page_size: 25 },
   );
@@ -45,6 +47,7 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
     query.event?.startsWith("@") ? await customRules(ctx.db, project) : undefined,
   );
   const dimension = dimensions.get(q.group_by);
+  const scope = await cohortScope(ctx, project, q.cohort);
   if (!dimension) throw bad("Group revenue by source, page, profile or session");
   if (q.page < 1 || q.page > 10000 || q.page_size < 1 || q.page_size > 100)
     throw bad("Use page 1–10000 and page_size 1–100");
@@ -61,7 +64,7 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
     }>(
       `WITH attributed AS (
       SELECT ${dimension} AS label, coalesce(toInt128(dynamicElement(properties.revenue, 'Int64')), toInt128(dynamicElement(properties.revenue, 'UInt64'))) AS amount
-      FROM ${q.group_by === "profile" ? "profile_events" : "events"} WHERE (${where}) AND amount BETWEEN -9007199254740991 AND 9007199254740991
+       FROM ${scope || q.group_by === "profile" ? "profile_events" : "events"} WHERE (${where}) ${scope ? `AND ${scope}` : ""} AND amount BETWEEN -9007199254740991 AND 9007199254740991
     ), grouped AS (
       SELECT label, grouping(label) AS is_total, sum(amount) AS net, count() AS n
       FROM attributed GROUP BY GROUPING SETS ((label), ())
@@ -81,6 +84,7 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
         }),
         params: {
           ...params.values,
+          cohort: q.cohort ?? "",
           start: (q.page - 1) * q.page_size + 1,
           end: q.page * q.page_size,
         },

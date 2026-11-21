@@ -1,7 +1,9 @@
 import { validId } from "./workspace-search";
+import { cohortSearch } from "./report-cohort";
 
 export type Visit = { source_id: string; actor_id: string; session_id: string };
 export type SessionsSearch = {
+  cohort?: string;
   find?: string;
   bounced?: boolean;
   views?: number;
@@ -29,6 +31,7 @@ export function sessionsSearch(s: Record<string, unknown>): SessionsSearch {
   )
     return { invalidSessions: true };
   return {
+    ...cohortSearch(s),
     find: s.find as string | undefined,
     bounced: s.bounced as boolean | undefined,
     views: s.views as number | undefined,

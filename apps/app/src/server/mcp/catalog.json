@@ -52,6 +52,7 @@
       "inputSchema": {
         "type": "object",
         "properties": {
+          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "from": { "type": "string" },
           "to": { "type": "string" },
@@ -91,6 +92,7 @@
       "inputSchema": {
         "type": "object",
         "properties": {
+          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "title": { "type": "string" },
           "description": { "type": "string" },
@@ -143,6 +145,7 @@
       "inputSchema": {
         "type": "object",
         "properties": {
+          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "from": { "type": "string" },
           "to": { "type": "string" },
@@ -225,6 +228,7 @@
       "inputSchema": {
         "type": "object",
         "properties": {
+          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "from": { "type": "string" },
           "to": { "type": "string" },
@@ -266,6 +270,7 @@
       "inputSchema": {
         "type": "object",
         "properties": {
+          "cohort": { "type": "string", "description": "Optional project cohort ID" },
           "project": { "type": "string" },
           "from": { "type": "string" },
           "to": { "type": "string" },

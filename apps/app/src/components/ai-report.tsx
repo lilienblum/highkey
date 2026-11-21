@@ -7,6 +7,7 @@ import type { generations } from "@/server/queries/generations";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { Button } from "./ui/button";
 import { ValueSelect } from "./value-select";
+import { CohortPicker } from "./cohorts";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
 
@@ -34,9 +35,20 @@ export function AIReport() {
     load,
     "generations",
     product?.id,
-    { ...range, source_id: sourceId, group_by: group, page, trace_id: s.trace },
+    { ...range, source_id: sourceId, group_by: group, page, trace_id: s.trace, cohort: s.cohort },
     refreshKey,
-    JSON.stringify([sourceId, group, page, s.trace, s.period, s.days, s.snapshot, s.from, s.to]),
+    JSON.stringify([
+      sourceId,
+      group,
+      page,
+      s.trace,
+      s.period,
+      s.days,
+      s.snapshot,
+      s.from,
+      s.to,
+      s.cohort,
+    ]),
   );
   useAnalyticsPending(report.refreshing);
   const update = (patch: Partial<typeof s>) =>
@@ -50,6 +62,11 @@ export function AIReport() {
         description="Reported generation costs, token usage and multi-step traces."
       />
       <section aria-label="AI cost report" className="grid gap-4 min-w-0">
+        <CohortPicker
+          project={product.id}
+          value={s.cohort}
+          change={(cohort) => update({ cohort, page: undefined })}
+        />
         {s.trace && (
           <div className="flex flex-wrap items-center gap-2">
             <strong className="break-all">Trace: {s.trace}</strong>

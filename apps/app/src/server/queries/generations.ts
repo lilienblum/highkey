@@ -6,6 +6,7 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery } from "./events";
 import { numeric } from "./properties";
 import { readAs } from "./read";
+import { cohortScope } from "./cohort-scope";
 
 export async function generations(ctx: ApiContext, id: string, body: unknown) {
   const q = fields(
@@ -15,6 +16,7 @@ export async function generations(ctx: ApiContext, id: string, body: unknown) {
       to: "string",
       source_id: "string?",
       group_by: "string",
+      cohort: "string?",
       trace_id: "string?",
       page: "integer",
       page_size: "integer",
@@ -41,11 +43,17 @@ export async function generations(ctx: ApiContext, id: string, body: unknown) {
   if (q.source_id) await requireSource(ctx.db, id, q.source_id);
   const options = {
     settings: runSettings({ from, to, bucket: "day", source: q.source_id ?? null }),
-    params: { trace: q.trace_id ?? "", size: q.page_size, offset: (q.page - 1) * q.page_size },
+    params: {
+      cohort: q.cohort ?? "",
+      trace: q.trace_id ?? "",
+      size: q.page_size,
+      offset: (q.page - 1) * q.page_size,
+    },
   };
   const cost = numeric("properties.cost");
   const base = `WITH if(properties.currency.:String='USD' AND ${cost}>=0,${cost},NULL) AS usd`;
-  const where = `FROM profile_events WHERE name='ai_generation' AND ({trace:String}='' OR properties.trace_id.:String={trace:String})`;
+  const scope = await cohortScope(ctx, id, q.cohort);
+  const where = `FROM profile_events WHERE name='ai_generation' AND ({trace:String}='' OR properties.trace_id.:String={trace:String})${scope ? ` AND ${scope}` : ""}`;
   return readAs(ctx, id, async (reader) => {
     const summary = (
       await reader.query<{

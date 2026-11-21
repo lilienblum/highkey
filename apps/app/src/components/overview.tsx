@@ -34,6 +34,7 @@ import { PatternReports } from "./pattern-reports";
 import { ProjectInsights } from "./insights";
 import { WebsiteReports } from "./website-reports";
 import { LanguageFilter } from "./language-filter";
+import { CohortPicker } from "./cohorts";
 import { ChartAudience } from "@/lib/chart-audience";
 import { TimelineMarkers } from "./chart-references";
 import { BreakdownReport } from "./breakdown-report";
@@ -332,6 +333,17 @@ function ProductOverview() {
         <PatternReports filters={eventFilters} />
         <ProjectInsights />
         <LanguageFilter />
+        <CohortPicker
+          project={product.id}
+          value={
+            selectedFilter?.field.startsWith("property:cohort.")
+              ? selectedFilter.field.slice(16)
+              : undefined
+          }
+          change={(v) =>
+            update({ filter: v ? { field: `property:cohort.${v}`, value: true } : undefined })
+          }
+        />
         <OverviewActions />
       </PageHeader>
       {selectedFilter && (

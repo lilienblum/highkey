@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AIReport } from "@/components/ai-report";
+import { cohortSearch } from "@/lib/report-cohort";
 export const Route = createFileRoute("/$orgSlug/$projectSlug/ai")({
   validateSearch: (
     s: Record<string, unknown>,
-  ): { aiGroup?: string; trace?: string; page?: number } => ({
+  ): { aiGroup?: string; trace?: string; page?: number; cohort?: string } => ({
+    ...cohortSearch(s),
     aiGroup: s.aiGroup === "profile" || s.aiGroup === "feature" ? s.aiGroup : undefined,
     trace:
       typeof s.trace === "string" && s.trace && new TextEncoder().encode(s.trace).length <= 128

@@ -59,6 +59,37 @@ test("cohorts qualify known profiles with zero counts, combine traits and events
     expect(events.summary.total).toBe(1);
     const detail = (await call(ctx, "POST", root + "/people/detail", { ...range, id: "a" })).json;
     expect(detail.cohorts.map((v: { id: string }) => v.id).sort()).toEqual([fixed, dynamic].sort());
+    await seedEvents(
+      p.id,
+      ["a", "outside"].map((person, i) => ({
+        event_id: "ai" + person,
+        name: "ai_generation",
+        profile_id: person,
+        groups: { team: person },
+        actor_id: person,
+        identity_kind: "visitor",
+        session_id: "s",
+        time: new Date(base + 1000),
+        properties: { cost: 2 + i, currency: "USD", revenue: 100 + i },
+      })),
+    );
+    const slice = async (path: string) => {
+      const res = await call(ctx, "POST", root + path, {
+        ...(path === "/realtime" ? {} : range),
+        cohort: fixed,
+      });
+      expect(res.status, JSON.stringify(res.json)).toBe(200);
+      return res.json;
+    };
+    expect(
+      (await slice("/sessions/query")).rows.map((r: { profile_id: string }) => r.profile_id),
+    ).toEqual(["a"]);
+    expect((await slice("/ai/generations")).cost_usd).toBe(2);
+    expect((await slice("/revenue/query")).cents).toBe("100");
+    expect((await slice("/groups/activity")).rows.map((r: { id: string }) => r.id)).toEqual(["a"]);
+    expect(
+      (await slice("/realtime")).events.map((r: { event_id: string }) => r.event_id),
+    ).not.toContain("aioutside");
     await seedEvents(p.id, [{ event_id: "again", name: "launch", profile_id: "a" }]);
     ctx.now = () => new Date(Date.now() + 1800001);
     await refreshDueCohorts(ctx);

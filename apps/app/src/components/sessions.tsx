@@ -16,6 +16,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "./ui/dropdown-menu";
 import { ValueSelect } from "./value-select";
+import { CohortPicker } from "./cohorts";
 import { queryReadOnly, type Product } from "@/lib/api";
 import { readPreference, savePreference } from "@/lib/preferences";
 import { useReportQuery } from "@/lib/use-query";
@@ -216,6 +217,7 @@ export function Sessions() {
     s.durationMs,
     s.bounced,
     s.profile,
+    s.cohort,
     s.visit,
     page,
   ]);
@@ -231,6 +233,7 @@ export function Sessions() {
       min_duration_ms: s.durationMs,
       min_page_views: s.views,
       profile_id: s.profile,
+      cohort: s.cohort,
       page,
     },
     refreshKey,
@@ -276,6 +279,13 @@ export function Sessions() {
           />
         )}
       </PageHeader>
+      {!s.visit && (
+        <CohortPicker
+          project={product.id}
+          value={s.cohort}
+          change={(cohort) => update({ cohort, page: undefined })}
+        />
+      )}
       <section
         className="grid min-w-0 gap-5"
         aria-label={s.visit ? "Session detail" : "Session report"}

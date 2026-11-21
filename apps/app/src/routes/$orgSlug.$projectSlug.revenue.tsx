@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Revenue } from "@/components/revenue";
+import { cohortSearch } from "@/lib/report-cohort";
 
 export const Route = createFileRoute("/$orgSlug/$projectSlug/revenue")({
   validateSearch: (s: Record<string, unknown>) => ({
+    ...cohortSearch(s),
     group:
       s.group === "session" || s.group === "profile" || s.group === "page" ? s.group : undefined,
     page:

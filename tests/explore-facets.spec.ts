@@ -62,4 +62,8 @@ test("filter suggestions keep dotted keys and typed values; an empty filter need
   await expect(
     page.getByRole("table", { name: "Profiles" }).getByRole("link", { name: "ada" }),
   ).toBeVisible();
+  await page.goto(`/owner/${p.slug}/realtime`);
+  await page.getByLabel("Report cohort").click();
+  await page.getByRole("option", { name: "Launchers" }).click();
+  await expect(page.getByText("1 event in the last 30 minutes", { exact: true })).toBeVisible();
 });

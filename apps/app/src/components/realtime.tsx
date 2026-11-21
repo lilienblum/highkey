@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { CohortPicker } from "./cohorts";
 import { number, queryReadOnly } from "@/lib/api";
 import { useReportQuery } from "@/lib/use-query";
 import { useWorkspaceTarget } from "@/lib/workspace-route";
@@ -17,7 +18,16 @@ const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
 export function Realtime() {
   const { product, sourceId, refresh, refreshKey } = useWorkspace(),
     target = useWorkspaceTarget();
-  const result = useReportQuery(load, "realtime", product?.id, { source_id: sourceId }, refreshKey),
+  const route = "/$orgSlug/$projectSlug/realtime",
+    s = useSearch({ from: route }),
+    nav = useNavigate({ from: route });
+  const result = useReportQuery(
+      load,
+      "realtime",
+      product?.id,
+      { source_id: sourceId, cohort: s.cohort },
+      refreshKey,
+    ),
     r = result.data;
   useAnalyticsPending(result.refreshing);
   const wall = useRef<HTMLDivElement>(null),
@@ -35,6 +45,7 @@ export function Realtime() {
     };
   }, []);
   const name = (id: string) => product?.sources.find((s) => s.id === id)?.name ?? id;
+  const total = r?.minutes.reduce((a, b) => a + b, 0) ?? 0;
   const time = (n: number) => new Date(n).toISOString().slice(11, 19) + " UTC";
   return (
     <div
@@ -61,6 +72,13 @@ export function Realtime() {
           {tv ? "Exit TV mode" : "TV mode"}
         </Button>
       </PageHeader>
+      {product && (
+        <CohortPicker
+          project={product.id}
+          value={s.cohort}
+          change={(cohort) => void nav({ search: (v) => ({ ...v, cohort }), resetScroll: false })}
+        />
+      )}
       {result.error && <ErrorState message={result.error} retry={refresh} />}
       {!r && result.loading && <PageLoading label="Loading live activity" />}
       {r && (
@@ -68,7 +86,7 @@ export function Realtime() {
           <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle>
-                {number(r.minutes.reduce((a, b) => a + b, 0))} events in the last 30 minutes
+                {number(total)} {total === 1 ? "event" : "events"} in the last 30 minutes
               </CardTitle>
             </CardHeader>
             <CardContent>

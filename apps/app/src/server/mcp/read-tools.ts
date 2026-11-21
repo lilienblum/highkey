@@ -124,8 +124,8 @@ export const readTools: Record<string, Tool> = {
   run_analysis: report(analysis),
   group_activity: report(groupActivity),
   list_cohorts: async (ctx, { project }) => listCohorts(ctx, await projectId(ctx, project)),
-  realtime_activity: async (ctx, { project, source_id }) =>
-    realtime(ctx, await projectId(ctx, project), { source_id }),
+  realtime_activity: async (ctx, { project, source_id, cohort }) =>
+    realtime(ctx, await projectId(ctx, project), { source_id, cohort }),
   list_references: async (ctx, { project, from, to }) =>
     listReferences(ctx, await projectId(ctx, project), range(from, to)),
   query_breakdown: async (ctx, { project, from, to, ...options }) =>

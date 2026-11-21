@@ -25,6 +25,27 @@ export function useCohorts(id?: string) {
   });
 }
 type Rule = Extract<CohortDefinition, { mode: "dynamic" }>["rules"][number];
+export function CohortPicker({
+  project,
+  value,
+  change,
+}: {
+  project: string;
+  value?: string;
+  change: (id?: string) => void;
+}) {
+  const q = useCohorts(project);
+  if (!q.data?.length && !value) return null;
+  return (
+    <ValueSelect
+      label="Report cohort"
+      className="max-w-xs"
+      value={value ?? "*"}
+      options={[["*", "All profiles"], ...(q.data ?? []).map((c) => [c.id, c.name] as const)]}
+      onValueChange={(v) => change(v === "*" ? undefined : v)}
+    />
+  );
+}
 const event = (): Rule => ({ event: "", days: 30, compare: "at_least", count: 1 });
 export function Cohorts({ id, select }: { id: string; select: (id: string) => void }) {
   const cohorts = useCohorts(id),

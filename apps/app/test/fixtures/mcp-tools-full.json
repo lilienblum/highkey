@@ -125,6 +125,10 @@
           },
           "search": {
             "type": "string"
+          },
+          "cohort": {
+            "type": "string",
+            "description": "Optional project cohort ID"
           }
         },
         "required": ["project"]
@@ -162,6 +166,10 @@
           },
           "source_id": {
             "type": "string"
+          },
+          "cohort": {
+            "type": "string",
+            "description": "Optional project cohort ID"
           }
         },
         "required": ["project"]
@@ -304,6 +312,10 @@
           },
           "page_size": {
             "type": "integer"
+          },
+          "cohort": {
+            "type": "string",
+            "description": "Optional project cohort ID"
           }
         },
         "required": ["project"]
@@ -490,6 +502,10 @@
           },
           "page_size": {
             "type": "integer"
+          },
+          "cohort": {
+            "type": "string",
+            "description": "Optional project cohort ID"
           }
         },
         "required": ["project"]
@@ -564,6 +580,10 @@
           },
           "page_size": {
             "type": "integer"
+          },
+          "cohort": {
+            "type": "string",
+            "description": "Optional project cohort ID"
           }
         },
         "required": ["project"]

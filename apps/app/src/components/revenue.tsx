@@ -5,6 +5,7 @@ import { PageLoading } from "./loading";
 import { Button } from "./ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { ValueSelect } from "./value-select";
+import { CohortPicker } from "./cohorts";
 import { number, queryReadOnly } from "@/lib/api";
 import { useReportQuery } from "@/lib/use-query";
 import type { revenueReport } from "@/server/queries/revenue";
@@ -38,6 +39,7 @@ export function Revenue() {
       ...range,
       source_id: sourceId,
       group_by: group,
+      cohort: search.cohort,
       page,
       page_size: size,
     },
@@ -49,6 +51,7 @@ export function Revenue() {
       search.snapshot,
       search.from,
       search.to,
+      search.cohort,
       group,
       page,
     ]),
@@ -69,6 +72,16 @@ export function Revenue() {
         description="Net revenue from purchases and refunds in the selected period."
       />
       <section className="grid gap-4" aria-label="Revenue report">
+        <CohortPicker
+          project={product.id}
+          value={search.cohort}
+          change={(cohort) =>
+            void navigate({
+              search: (s) => ({ ...s, cohort, page: undefined }),
+              resetScroll: false,
+            })
+          }
+        />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-muted-foreground text-xs">Net revenue · cents</div>

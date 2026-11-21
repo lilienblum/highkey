@@ -146,6 +146,8 @@ A visitor's explicit identify can attribute up to six hours of earlier profile-l
 
 ### Live activity
 
+**Cohort scope.** Overview, Sessions, Revenue, AI costs, Groups and Realtime can restrict a report to a saved project cohort. The dedicated read endpoints and MCP tools accept its ID as `cohort`. In event predicates (including saved dashboards and Explore analyses), use `{ "property": "cohort.<uuid>", "op": "eq", "value": true }`. Membership uses attributed profile activity; a visit or group qualifies through a member’s activity.
+
 **Chart drilldowns.** View users carries the point’s UTC range and matching event predicates into Profiles. A formula over multiple event queries shows people contributing to any of them; a logs-only chart has no event audience. Mutation-only profiles are excluded from a chart audience. Timeline references include notes and derived deploy, version, spike and insight markers.
 
 **Describe filter.** `POST /api/products/:project/language-filter` accepts `text`, `from`, `to` and optional `source_id`. It returns a single date/filter proposal after checking the observed value as that project's reader. Common device shortcuts work locally. To enable other phrases, configure `HIGHKEY_FILTER_MODEL_KEY` and optionally `HIGHKEY_FILTER_MODEL` (OpenAI chat completions). Only the submitted phrase and the fixed control vocabulary are sent to the provider; no rows or property samples are uploaded.

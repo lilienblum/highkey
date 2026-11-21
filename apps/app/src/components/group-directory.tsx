@@ -4,6 +4,7 @@ import { queryReadOnly, number } from "@/lib/api";
 import { useReportQuery } from "@/lib/use-query";
 import type { groupActivity } from "@/server/queries/group-activity";
 import { Input } from "./ui/input";
+import { CohortPicker } from "./cohorts";
 import { Button } from "./ui/button";
 import { ErrorState } from "./shared";
 import { TypedValue } from "@/lib/highlight";
@@ -29,6 +30,7 @@ export function GroupDirectory() {
       type: s.groupType,
       id: s.groupId,
       search: s.find,
+      cohort: s.cohort,
       page,
     };
   const result = useReportQuery(
@@ -37,7 +39,7 @@ export function GroupDirectory() {
     product?.id,
     body,
     refreshKey,
-    JSON.stringify([sourceId, rangeScope, s.groupType, s.groupId, s.find, page]),
+    JSON.stringify([sourceId, rangeScope, s.groupType, s.groupId, s.find, page, s.cohort]),
   );
   useAnalyticsPending(result.refreshing);
   const r = result.data;
@@ -66,6 +68,13 @@ export function GroupDirectory() {
           {s.groupId ? "All groups" : "Back to profiles"}
         </Button>
       </PageHeader>
+      {product && (
+        <CohortPicker
+          project={product.id}
+          value={s.cohort}
+          change={(cohort) => update({ cohort, page: undefined })}
+        />
+      )}
       {!s.groupId && (
         <form
           className="flex max-w-md gap-2"

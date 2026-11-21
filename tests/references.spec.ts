@@ -22,8 +22,15 @@ test("chart point notes persist across Settings and Overview; viewers can follow
         {
           event_id: crypto.randomUUID(),
           name: "deploy",
+          profile_id: "release-manager",
           source: "cli",
           properties: { version: "1.2.3" },
+        },
+        {
+          event_id: crypto.randomUUID(),
+          name: "launch",
+          profile_id: "other-profile",
+          source: "cli",
         },
       ],
     },
@@ -42,10 +49,16 @@ test("chart point notes persist across Settings and Overview; viewers can follow
   await page.goto(`/projects/${p.slug}/settings`);
   await expect(page.getByText(/New onboarding/)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/projects/${p.slug}`);
+  const search = new URLSearchParams({
+    filter: JSON.stringify({ field: "name", value: "deploy" }),
+  });
+  await page.goto(`/owner/${p.slug}?${search}`);
   await chart.press("End");
   await chart.press("Enter");
   await expect(point.getByText("New onboarding")).toBeVisible();
   await point.getByRole("link", { name: "View users" }).click();
   await expect(page).toHaveURL(/\/people\?.*from=/);
+  const profiles = page.getByRole("table", { name: "Profiles" });
+  await expect(profiles.getByRole("link", { name: "release-manager", exact: true })).toBeVisible();
+  await expect(profiles.getByRole("link", { name: "other-profile", exact: true })).toHaveCount(0);
 });

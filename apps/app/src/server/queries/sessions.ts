@@ -6,6 +6,7 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery } from "./events";
 import { Params } from "./properties";
 import { readAs } from "./read";
+import { cohortScope } from "./cohort-scope";
 
 type Session = {
   country: string;
@@ -55,6 +56,7 @@ export async function sessionList(ctx: ApiContext, id: string, body: unknown) {
       min_duration_ms: "integer",
       min_page_views: "integer",
       profile_id: "string?",
+      cohort: "string?",
       page: "integer",
       page_size: "integer",
     },
@@ -77,6 +79,11 @@ export async function sessionList(ctx: ApiContext, id: string, body: unknown) {
   if (q.source_id != null) await requireSource(ctx.db, id, q.source_id);
   const params = new Params();
   const parts = ["1"];
+  const scope = await cohortScope(ctx, id, q.cohort);
+  if (scope)
+    parts.push(
+      `(source_id,actor_id,session_id) IN (SELECT source_id,actor_id,session_id FROM profile_events WHERE ${scope} AND session_id IS NOT NULL)`,
+    );
   if (q.min_duration_ms) parts.push(`duration_ms >= ${params.add("UInt64", q.min_duration_ms)}`);
   if (q.min_page_views) parts.push(`page_views >= ${params.add("UInt64", q.min_page_views)}`);
   if (q.bounced != null) parts.push(`bounced = ${params.add("Bool", q.bounced)}`);
@@ -90,7 +97,7 @@ export async function sessionList(ctx: ApiContext, id: string, body: unknown) {
   }
   const options = {
     settings: runSettings({ from, to, source: q.source_id ?? null, bucket: "day" }),
-    params: { ...params.values, ...bounds },
+    params: { ...params.values, ...bounds, cohort: q.cohort ?? "" },
   };
   const result = await readAs(ctx, id, (r) =>
     r.query<Session>(
