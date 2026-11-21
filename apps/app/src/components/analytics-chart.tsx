@@ -6,6 +6,9 @@ import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
 import { useId, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useWorkspace } from "./app-shell";
+import { ChartPointActions, useReferences, referenceMarks } from "./chart-references";
+import type { ChartReference } from "@/server/references";
+import type { RefObject } from "react";
 import { number, type QueryResult } from "@/lib/api";
 import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
 
@@ -51,6 +54,8 @@ export function AnalyticsChart({
 }) {
   const from = range?.from;
   const to = range?.to;
+  const refs = useReferences(range).data?.rows;
+  const focus = useRef<number | null>(null);
   // Area fills use an ordered-dither screen tone instead of translucency; ids must be URL-safe.
   const toneId = `highkey-tone-${useId().replace(/[^\w-]/g, "")}`;
   const definition = useMemo(() => {
@@ -97,6 +102,7 @@ export function AnalyticsChart({
         );
         return {
           marks: [
+            ...referenceMarks(refs, bucket, series),
             // Dithered falloff: dense under the line, thinning toward the baseline.
             ...TONE_BANDS.map((band, index) =>
               decorative(
@@ -171,10 +177,20 @@ export function AnalyticsChart({
         };
       },
     });
-  }, [series, label, bucket, unit, from, to, compact, toneId]);
+  }, [series, label, bucket, unit, from, to, compact, toneId, refs]);
   return (
-    <ZoomableChart bucket={bucket} to={to} enabled={series.length >= 2}>
+    <ZoomableChart
+      bucket={bucket}
+      from={from}
+      to={to}
+      enabled={series.length >= 2}
+      refs={refs}
+      focus={focus}
+    >
       <Chart
+        onFocusChange={(point) => {
+          focus.current = point?.datum.time ?? null;
+        }}
         definition={definition}
         onRender={({ svg, interaction }) => {
           // TanStack 1.1 only handles Escape for pinned tooltips; preserve ordinary dismissal too.
@@ -185,7 +201,7 @@ export function AnalyticsChart({
         className="analytics-plot"
         style={{ height: "100%", touchAction: "pan-y pinch-zoom" }}
         ariaLabel={`${label} by UTC ${bucket === "day" ? "date" : bucket}`}
-        ariaDescription="Use Left and Right arrows to inspect values, Home and End for the first and last bucket, and Escape to dismiss."
+        ariaDescription="Use Left and Right arrows to inspect values, Home and End for the first and last bucket, Enter for point actions, and Escape to dismiss."
       />
       {/* Pattern definitions follow the plot so the chart stays the container's first SVG. */}
       <svg className="dither-defs" aria-hidden="true" focusable="false" width="0" height="0">
@@ -212,11 +228,17 @@ export function AnalyticsChart({
  */
 export function ZoomableChart({
   bucket,
+  from,
+  refs,
+  focus,
   to,
   enabled,
   children,
 }: {
   bucket: TimeBucket;
+  from?: string;
+  refs?: ChartReference[];
+  focus: RefObject<number | null>;
   /** The range end; a zoom never extends past it. */
   to?: string;
   enabled: boolean;
@@ -225,6 +247,11 @@ export function ZoomableChart({
   const { selectRange } = useWorkspace();
   const container = useRef<HTMLDivElement>(null);
   const [brush, setBrush] = useState<{ start: number; end: number }>();
+  const [point, setPoint] = useState<{ from: string; to: string }>();
+  const interval = (start: number, end: number) => ({
+    from: new Date(Math.max(start, from ? Date.parse(from) : -Infinity)).toISOString(),
+    to: new Date(Math.min(nextBucket(end, bucket), to ? Date.parse(to) : Infinity)).toISOString(),
+  });
   const buckets = () =>
     [
       ...(container.current?.querySelectorAll<SVGCircleElement>(
@@ -252,51 +279,73 @@ export function ZoomableChart({
     return point.x - left + side * half;
   };
   return (
-    <div
-      ref={container}
-      className="series-chart"
-      data-slot="chart"
-      data-chart-library="tanstack"
-      data-zooming={brush ? "" : undefined}
-      onPointerDown={(event) => {
-        if (event.button !== 0 || !enabled) return;
-        const all = buckets();
-        if (!all.length) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        const index = nearest(event, all);
-        setBrush({ start: index, end: index });
-      }}
-      onPointerMove={(event) => {
-        if (brush) setBrush({ ...brush, end: nearest(event, buckets()) });
-      }}
-      onPointerUp={() => {
-        if (!brush) return;
-        const all = buckets();
-        setBrush(undefined);
-        const first = all[Math.min(brush.start, brush.end)];
-        const last = all[Math.max(brush.start, brush.end)];
-        if (!first || !last) return;
-        const end = Math.min(
-          nextBucket(last.time, bucket),
-          to ? Date.parse(to) : Number.POSITIVE_INFINITY,
-        );
-        selectRange({ from: new Date(first.time).toISOString(), to: new Date(end).toISOString() });
-      }}
-      onPointerCancel={() => setBrush(undefined)}
-    >
-      {brush && points.length > 0 && (
-        <span
-          className="chart-brush"
-          aria-hidden="true"
-          style={{
-            left: edge(Math.min(brush.start, brush.end), -1),
-            width:
-              edge(Math.max(brush.start, brush.end), 1) -
-              edge(Math.min(brush.start, brush.end), -1),
-          }}
+    <>
+      <div
+        ref={container}
+        className="series-chart"
+        data-slot="chart"
+        data-chart-library="tanstack"
+        data-zooming={brush ? "" : undefined}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          const all = buckets();
+          if (!all.length) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const index = nearest(event, all);
+          setBrush({ start: index, end: index });
+        }}
+        onPointerMove={(event) => {
+          if (brush) setBrush({ ...brush, end: nearest(event, buckets()) });
+        }}
+        onPointerUp={() => {
+          if (!brush) return;
+          const all = buckets();
+          setBrush(undefined);
+          const first = all[Math.min(brush.start, brush.end)];
+          const last = all[Math.max(brush.start, brush.end)];
+          if (!first || !last) return;
+          const dates = interval(first.time, last.time);
+          if (dates.from >= dates.to) return;
+          if (first.time === last.time) setPoint(dates);
+          else if (enabled) selectRange(dates);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && focus.current !== null) {
+            e.preventDefault();
+            setPoint(interval(focus.current, focus.current));
+          }
+        }}
+        onPointerCancel={() => setBrush(undefined)}
+      >
+        {brush && points.length > 0 && (
+          <span
+            className="chart-brush"
+            aria-hidden="true"
+            style={{
+              left: edge(Math.min(brush.start, brush.end), -1),
+              width:
+                edge(Math.max(brush.start, brush.end), 1) -
+                edge(Math.min(brush.start, brush.end), -1),
+            }}
+          />
+        )}
+        {children}
+      </div>
+      {point && (
+        <ChartPointActions
+          range={point}
+          rows={refs ?? []}
+          close={() => setPoint(undefined)}
+          zoom={
+            enabled
+              ? () => {
+                  selectRange(point);
+                  setPoint(undefined);
+                }
+              : undefined
+          }
         />
       )}
-      {children}
-    </div>
+    </>
   );
 }

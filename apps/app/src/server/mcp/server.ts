@@ -68,6 +68,7 @@ const TOOL_NEEDS: Record<string, Permission> = {
   list_keys: { read: ["all"] },
   list_log_keys: { read: ["all"] },
   save_dashboard: { dashboard: ["write"] },
+  create_reference: { dashboard: ["write"] },
   restore_revision: { dashboard: ["write"] },
   delete_dashboard: { dashboard: ["write"] },
   save_view: { dashboard: ["write"] },

@@ -26,6 +26,8 @@ import {
 } from "@/lib/dashboards";
 import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
 import { formatDate, TONE_BANDS, ZoomableChart } from "../analytics-chart";
+import { useRef } from "react";
+import { useReferences, referenceMarks } from "../chart-references";
 
 /** Palette tokens as CSS colors; data never uses orange, which marks actions and selection. */
 export const colorVar: Record<Color, string> = {
@@ -106,6 +108,8 @@ export function WidgetChart({
   const previous = result.series[0]?.previous_points;
   const compare = comparesPreviousPeriod(view) && !!previous && series.length > 0;
   const { from, to } = range;
+  const refs = useReferences(range).data?.rows,
+    focus = useRef<number | null>(null);
   const buckets = useMemo(() => {
     const times = [...new Set(series.flatMap((s) => [...s.points.keys()]))].sort((a, b) => a - b);
     return times.map((time, index): Bucket => {
@@ -306,6 +310,7 @@ export function WidgetChart({
         const pad = kind === "bar" ? step / 2 : 0;
         return {
           marks: [
+            ...referenceMarks(refs, bucket, buckets),
             ...rules,
             ...ghost,
             ...marks,
@@ -355,11 +360,21 @@ export function WidgetChart({
         };
       },
     });
-  }, [buckets, series, kind, stacked, compare, bucket, from, to, toneId, view]);
+  }, [buckets, series, kind, stacked, compare, bucket, from, to, toneId, view, refs]);
 
   return (
-    <ZoomableChart bucket={bucket} to={to} enabled={zoom && buckets.length >= 2}>
+    <ZoomableChart
+      bucket={bucket}
+      from={from}
+      to={to}
+      enabled={zoom && buckets.length >= 2}
+      refs={refs}
+      focus={focus}
+    >
       <Chart
+        onFocusChange={(point) => {
+          focus.current = point?.datum.time ?? null;
+        }}
         definition={definition}
         onRender={({ svg, interaction }) => {
           svg.onkeydown = (event) => {

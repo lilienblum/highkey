@@ -14,23 +14,120 @@
   },
   "tools": [
     {
+      "name": "list_references",
+      "description": "List dated notes, deployments and first known CLI versions for the project, newest first. Defaults to the past week.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": ["project"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "query_breakdown",
+      "description": "Rank typed report rows with previous-period changes, trend bins and exact net cents. Use property:path for visit-derived page metrics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "dimension": {
+            "type": "string"
+          },
+          "search": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "sort": {
+            "enum": ["volume", "label", "growth", "trend", "revenue"],
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        },
+        "required": ["project"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
       "name": "query_generations",
       "description": "List AI calls and their reported USD costs by model, feature or profile. An optional trace ID shows its steps in chronological order. A missing cost is not zero; prompt text is not returned.",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "group_by": { "type": "string", "enum": ["model", "feature", "profile"] },
-          "trace_id": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": ["model", "feature", "profile"]
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "query_patterns",
@@ -38,22 +135,55 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "mode": { "enum": ["weekly", "flow", "distribution"], "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "source": { "type": "string" },
-          "event": { "type": "string" },
-          "filters": { "type": "array", "items": { "type": "object" } },
-          "identity_kind": { "type": "string" },
-          "steps": { "type": "integer", "minimum": 2, "maximum": 10 },
-          "start_path": { "type": "string" },
-          "end_path": { "type": "string" }
+          "project": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": ["weekly", "flow", "distribution"],
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "identity_kind": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 10
+          },
+          "start_path": {
+            "type": "string"
+          },
+          "end_path": {
+            "type": "string"
+          }
         },
         "required": ["project", "mode"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "list_people",
@@ -61,20 +191,44 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "kind": { "type": "string", "enum": ["identified", "anonymous", "power"] },
-          "search": { "type": "string" },
-          "group_type": { "type": "string" },
-          "group_id": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["identified", "anonymous", "power"]
+          },
+          "search": {
+            "type": "string"
+          },
+          "group_type": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "get_profile",
@@ -82,18 +236,37 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "id": { "type": "string" },
-          "anonymous": { "type": "boolean" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project", "id"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "query_sessions",
@@ -101,21 +274,46 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "profile_id": { "type": "string" },
-          "search": { "type": "string" },
-          "bounced": { "type": "boolean" },
-          "min_page_views": { "type": "integer" },
-          "min_duration_ms": { "type": "integer" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "search": {
+            "type": "string"
+          },
+          "bounced": {
+            "type": "boolean"
+          },
+          "min_page_views": {
+            "type": "integer"
+          },
+          "min_duration_ms": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "get_session",
@@ -123,18 +321,37 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "actor_id": { "type": "string" },
-          "session_id": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project", "source_id", "actor_id", "session_id"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "query_revenue",
@@ -142,17 +359,35 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "source_id": { "type": "string" },
-          "group_by": { "type": "string", "enum": ["source", "page", "profile", "session"] },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": ["source", "page", "profile", "session"]
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "query_profiles",
@@ -160,15 +395,28 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "id": { "type": "string" },
-          "search": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "search": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "query_groups",
@@ -176,16 +424,31 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "project": { "type": "string" },
-          "id": { "type": "string" },
-          "type": { "type": "string" },
-          "search": { "type": "string" },
-          "page": { "type": "integer" },
-          "page_size": { "type": "integer" }
+          "project": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "search": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
         },
         "required": ["project"]
       },
-      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
     },
     {
       "name": "describe_project",

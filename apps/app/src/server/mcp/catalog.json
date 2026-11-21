@@ -1,6 +1,58 @@
 {
   "tools": [
     {
+      "name": "create_reference",
+      "description": "Add a dated project note to time charts. The timestamp must include a timezone.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "at": { "type": "string" }
+        },
+        "required": ["project", "title", "at"]
+      },
+      "annotations": { "readOnlyHint": false, "destructiveHint": false }
+    },
+    {
+      "name": "list_references",
+      "description": "List dated notes, deployments and first known CLI versions for the project, newest first. Defaults to the past week.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "query_breakdown",
+      "description": "Rank typed report rows with previous-period changes, trend bins and exact net cents. Use property:path for visit-derived page metrics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "source": { "type": "string" },
+          "event": { "type": "string" },
+          "dimension": { "type": "string" },
+          "search": { "type": "string" },
+          "filters": { "type": "array", "items": { "type": "object" } },
+          "sort": { "enum": ["volume", "label", "growth", "trend", "revenue"], "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "query_generations",
       "description": "List AI calls and their reported USD costs by model, feature or profile. An optional trace ID shows its steps in chronological order. A missing cost is not zero; prompt text is not returned.",
       "inputSchema": {

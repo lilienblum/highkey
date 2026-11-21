@@ -47,6 +47,7 @@ import { SettingsNav } from "./settings/settings-nav";
 import { RevenueSettings } from "./settings/revenue";
 import { Activation } from "./activation";
 import { ErrorState } from "./shared";
+import { ReferenceSettings } from "./chart-references";
 import { SourceSettings } from "./source-settings";
 import { SourceIcon } from "./source-icon";
 import { LogSettings } from "./log-settings";
@@ -247,6 +248,7 @@ export function Settings() {
       {product ? (
         <>
           <ProductSettings key={product.id} product={product} />
+          <ReferenceSettings key={`references-${product.id}`} />
           <Activation
             key={`activation-${product.id}`}
             id={product.id}

@@ -3,6 +3,7 @@
 // live hints behave identically; MCP writes record the `mcp` origin.
 import { createFor, removeFor, restoreFor, updateFor } from "../dashboards/routes";
 import { getDashboard } from "../dashboards/storage";
+import { createReference } from "../references";
 import { createFor as createView, deleteFor, getView, replaceFor } from "../views";
 import { badArgument, confirmMismatch, projectId, type Tool } from "./common";
 
@@ -16,6 +17,8 @@ const summary = (saved: Awaited<ReturnType<typeof createFor>>) => ({
 });
 
 export const writeTools: Record<string, Tool> = {
+  create_reference: async (ctx, { project, ...note }) =>
+    createReference(ctx, await projectId(ctx, project), note),
   save_dashboard: async (ctx, a) => {
     const id = await projectId(ctx, a.project);
     if (a.dashboard == null) {

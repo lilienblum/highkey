@@ -14,6 +14,8 @@ import { parseEntityQuery, runEntityQuery } from "../queries/entities";
 import { readAs } from "../queries/read";
 import { revenueReport } from "../queries/revenue";
 import { patterns } from "../queries/patterns";
+import { listReferences } from "../references";
+import { breakdownReport } from "../queries/breakdowns";
 import { generations } from "../queries/generations";
 import { personDetail, peopleList } from "../queries/people";
 import { sessionList, sessionDetail } from "../queries/sessions";
@@ -110,6 +112,10 @@ const report =
   };
 
 export const readTools: Record<string, Tool> = {
+  list_references: async (ctx, { project, from, to }) =>
+    listReferences(ctx, await projectId(ctx, project), range(from, to)),
+  query_breakdown: async (ctx, { project, from, to, ...options }) =>
+    breakdownReport(ctx, await projectId(ctx, project), { ...range(from, to), ...options }),
   query_generations: report(generations),
   query_patterns: report(patterns),
   list_people: report(peopleList),

@@ -297,6 +297,10 @@ export function AppShell({
   // A dashboard, view or source changed elsewhere (or while disconnected): refresh the sidebar's
   // lists and the open dashboard or saved view in the background. A failed read keeps what is shown.
   const dashboardsChanged = () => {
+    void queryClient.refetchQueries({
+      queryKey: ["chart-references", product?.id],
+      type: "active",
+    });
     void queryClient.refetchQueries({ queryKey: ["event-catalog", product?.id], type: "active" });
     void reload().catch(() => undefined);
     void queryClient.refetchQueries({ queryKey: dashboardQueries, type: "active" });
