@@ -6,6 +6,7 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery } from "./events";
 import { runEntityQuery, parseEntityQuery } from "./entities";
 import { readAs } from "./read";
+import { all } from "../db/db";
 
 // Mutation-only profiles also have a place in the directory. Names and emails are text traits.
 const names = `SELECT profile_id AS id,
@@ -108,9 +109,16 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
     throw bad("Invalid profile id or page");
   if (q.source_id != null) await requireSource(ctx.db, id, q.source_id);
   const settings = runSettings({ from, to, source: q.source_id ?? null, bucket: "day" });
+  const conversions = (
+    await all<{ name: string }>(
+      ctx.db,
+      "SELECT name FROM event_catalog WHERE product_id=? AND conversion=1",
+      [id],
+    )
+  ).map((r) => r.name);
   const options = {
     settings,
-    params: { id: q.id, size: q.page_size, offset: (q.page - 1) * q.page_size },
+    params: { id: q.id, size: q.page_size, offset: (q.page - 1) * q.page_size, conversions },
   };
   const where = q.anonymous
     ? "profile_id IS NULL AND identity_kind='visitor' AND actor_id={id:String}"
@@ -121,10 +129,11 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
         events: number;
         page_views: number;
         days_active: number;
+        conversions: number;
         revenue_cents: string;
         groups: [string, string][];
       }>(
-        `SELECT count() AS events,countIf(name='page_view') AS page_views,uniqExact(toDate(event_time)) AS days_active,
+        `SELECT count() AS events,countIf(name='page_view') AS page_views,uniqExact(toDate(event_time)) AS days_active,countIf(has({conversions:Array(String)},name)) AS conversions,
        toString(sumIf(cents,abs(cents)<=9007199254740991)) AS revenue_cents,
        groupUniqArrayArray(100)(arrayZip(mapKeys(groups),mapValues(groups))) AS groups
        FROM (SELECT *,coalesce(toInt128(properties.revenue.:Int64),toInt128(properties.revenue.:UInt64),0) AS cents FROM profile_events WHERE ${where})`,

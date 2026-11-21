@@ -2315,6 +2315,24 @@ p {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.event-ink-neutral {
+  color: var(--foreground);
+}
+.event-ink-yellow {
+  color: var(--data);
+}
+.event-ink-violet {
+  color: var(--data-secondary);
+}
+.event-ink-aqua {
+  color: var(--data-tertiary);
+}
+.event-ink-green {
+  color: var(--success);
+}
+.event-ink-red {
+  color: var(--destructive);
+}
 .workspace-navigation {
   flex-shrink: 0;
   padding-block: 12px;

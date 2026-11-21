@@ -24,8 +24,13 @@ export function numeric(expression: string): string {
 
 /** Bound parameters collected while building a query. */
 export class Params {
-  readonly values: Record<string, string | number | boolean | null> = {};
+  readonly values: Record<string, string | number | boolean | null | readonly string[]> = {};
   private next = 0;
+  addList(values: readonly string[]): string {
+    const name = `p${this.next++}`;
+    this.values[name] = values;
+    return `{${name}:Array(String)}`;
+  }
 
   add(type: string, value: string | number | boolean | null): string {
     const name = `p${this.next++}`;

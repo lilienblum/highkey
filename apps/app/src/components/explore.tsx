@@ -32,6 +32,7 @@ import { ValueSelect } from "./value-select";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
+import { EventCatalog } from "./event-catalog";
 import { useQuery } from "@/lib/use-query";
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
 import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared";
@@ -232,6 +233,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
           />
         )}
         {product && !openView && <SaveEventViewButton product={product} spec={applied} />}
+        {product && <EventCatalog id={product.id} observed={data?.event_names ?? []} />}
       </PageHeader>
       {drilldown && (
         <section className="drilldown-context" aria-label="Overview selection">

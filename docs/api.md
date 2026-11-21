@@ -146,6 +146,8 @@ A visitor's explicit identify can attribute up to six hours of earlier profile-l
 
 ### Live activity
 
+The project event catalog holds optional display and conversion definitions by event name. Read it with `GET /api/products/:project/event-catalog` (also `/api/read`). `PUT` on the management path upserts `{name, icon, color, description, sentence, conversion}`; `DELETE` accepts `{name}`. Members and project managers can edit. Sentences replace `{property}` with the event's scalar value; missing values display `—`. Definitions never change the raw event. The Events catalog has a Conversions tab; marking an event adds it to the Overview conversion report and profile conversion totals.
+
 `POST /api/products/:project/activity` returns `{active, events, minutes}` for the instant `to` (RFC 3339). `active` is the number of distinct identified actors in the last five minutes, `events` counts all matching events in that window, and `minutes` contains thirty one-minute distinct actor counts, oldest first. The source, event, and typed property filters work as in the events query. The same endpoint is available under `/api/read`.
 
 ### Sessions

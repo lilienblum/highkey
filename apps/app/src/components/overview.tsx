@@ -28,6 +28,7 @@ import { ValueSelect } from "./value-select";
 import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { useOrganizationSlug } from "@/lib/workspace-route";
+import { useEventCatalog } from "@/lib/use-event-catalog";
 
 type ChartChoice = {
   id: string;
@@ -174,6 +175,14 @@ function ProductOverview() {
     selectedFilter,
   ]);
   const query = useQuery(product?.id, body, refreshKey, scope);
+  const catalog = useEventCatalog(product?.id);
+  const conversionNames = catalog.data?.filter((d) => d.conversion).map((d) => d.name) ?? [];
+  const conversions = useQuery(
+    conversionNames.length ? product?.id : undefined,
+    { ...body, names: conversionNames, page_size: 1 },
+    refreshKey,
+    `${scope}:conversions:${JSON.stringify(conversionNames)}`,
+  );
   const canCompareSources = !sourceId && (product?.sources.length ?? 0) > 1;
   const needsSourceQuery = canCompareSources || dimension === "source_id";
   const sources = useQuery(
@@ -246,7 +255,8 @@ function ProductOverview() {
       (separateChart && chartQuery.refreshing) ||
       previous.refreshing ||
       (choice.id !== "count" && previousChart.refreshing) ||
-      active.refreshing,
+      active.refreshing ||
+      (conversionNames.length > 0 && conversions.refreshing),
   );
   const sourceSlices = useMemo(
     () =>
@@ -659,6 +669,40 @@ function ProductOverview() {
               />
             </WidgetContent>
           </OverviewWidget>
+          {conversionNames.length > 0 && (
+            <OverviewWidget
+              title="Conversions"
+              error={conversions.error}
+              retry={refresh}
+              footer="Events marked as conversions in the event catalog"
+            >
+              <WidgetValue
+                label="conversion events"
+                value={number(conversions.data?.summary.total)}
+                loading={conversions.loading}
+              />
+              <WidgetContent
+                label="conversion events"
+                loading={conversions.loading}
+                empty={
+                  conversions.data?.summary.total === 0
+                    ? "No conversions in this range."
+                    : undefined
+                }
+              >
+                <div className="widget-ranking">
+                  <BreakdownRows
+                    title="Conversion"
+                    groups={conversions.data?.groups ?? []}
+                    total={conversions.data?.summary.total}
+                    destination="overview"
+                    sources={product.sources}
+                    drilldown={(g) => drilldown("name", g)}
+                  />
+                </div>
+              </WidgetContent>
+            </OverviewWidget>
+          )}
         </div>
       </div>
     </>

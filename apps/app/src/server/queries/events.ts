@@ -22,6 +22,7 @@ export interface Filter {
 }
 
 export interface EventsQuery {
+  names?: string[];
   order?: string;
   from: Date;
   to: Date;
@@ -72,6 +73,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       to: "string",
       bucket: "string",
       event: "string?",
+      names: "string[]",
       source: "string?",
       source_id: "string?",
       identity_kind: "string?",
@@ -82,7 +84,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       page: "integer",
       page_size: "integer",
     },
-    { bucket: "day", measure: "count", page: 0, page_size: 25, order: "newest" },
+    { bucket: "day", measure: "count", page: 0, page_size: 25, order: "newest", names: [] },
   );
   const query: EventsQuery = {
     ...input,
@@ -111,6 +113,8 @@ export function validateEventsQuery(q: EventsQuery): void {
   )
     throw bad(LIMITS);
   if (!MEASURES.includes(q.measure)) throw bad("Unsupported measure");
+  if (q.names && (q.names.length > 500 || q.names.some((name) => !validKey(name))))
+    throw bad("Use up to 500 valid event names");
   if (q.order !== undefined && !["oldest", "newest"].includes(q.order))
     throw bad("Order must be oldest or newest");
   if (NUMERIC.includes(q.measure)) {
@@ -150,6 +154,7 @@ export function measure(q: { measure: string; property?: string | null }): strin
 /** The WHERE clause for the query's own filters; the view already holds its range and source. */
 export function predicate(q: EventsQuery, params: Params): string {
   const parts = ["1"];
+  if (q.names?.length) parts.push(`name IN ${params.addList(q.names)}`);
   for (const [column, value] of [
     ["name", q.event],
     ["source", q.source],

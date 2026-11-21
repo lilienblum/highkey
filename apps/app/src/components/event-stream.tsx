@@ -53,6 +53,9 @@ import { useWorkspace } from "./app-shell";
 import { Link } from "@tanstack/react-router";
 import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { defaultSpec } from "@/lib/explore-search";
+import { useEventCatalog } from "@/lib/use-event-catalog";
+import { eventSentence } from "@/lib/event-catalog";
+import { SourceIcon } from "./source-icon";
 import { queryReadOnly } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
@@ -135,6 +138,8 @@ export function EventStream({
   onFollow,
 }: EventStreamProps) {
   const { product } = useWorkspace();
+  const catalog = useEventCatalog(product?.id);
+  const definitions = useMemo(() => new Map(catalog.data?.map((d) => [d.name, d])), [catalog.data]);
   const { timeZone } = useDisplayPreferences();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<{ rows: EventRow[]; total: number }>();
@@ -170,6 +175,7 @@ export function EventStream({
         header: "Event",
         cell: ({ row, table }) => {
           const event = row.original;
+          const def = definitions.get(event.name);
           const icon =
             event.name === "page_view"
               ? Globe02Icon
@@ -194,13 +200,21 @@ export function EventStream({
                   setSelectedId(event.event_id);
                 }}
               >
-                <HugeiconsIcon
-                  icon={icon}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                  data-icon="inline-start"
-                />
-                <span>{event.name}</span>
+                {def ? (
+                  <span className={`event-ink-${def.color}`}>
+                    <SourceIcon name={event.name} icon={def.icon} />
+                  </span>
+                ) : (
+                  <HugeiconsIcon
+                    icon={icon}
+                    strokeWidth={2}
+                    aria-hidden="true"
+                    data-icon="inline-start"
+                  />
+                )}
+                <span title={def?.description || event.name}>
+                  {def?.sentence ? eventSentence(def.sentence, event.properties) : event.name}
+                </span>
                 <HugeiconsIcon
                   icon={ArrowRight01Icon}
                   strokeWidth={2}
@@ -284,7 +298,7 @@ export function EventStream({
         ),
       },
     ],
-    [product?.sources, timeZone],
+    [product?.sources, timeZone, definitions],
   );
   const table = useReactTable({
     data: events,

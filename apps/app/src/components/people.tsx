@@ -278,6 +278,7 @@ function Profile({
           "Events per session": number(d.events_per_session, 1),
           "Bounce rate": d.bounce_rate == null ? "—" : `${number(d.bounce_rate, 1)}%`,
           "Days active": number(d.days_active),
+          Conversions: number(d.conversions),
           "Revenue (cents)": BigInt(d.revenue_cents).toLocaleString("en-US"),
           "p90 session length": d.p90_ms == null ? "—" : `${number(d.p90_ms / 1000, 1)}s`,
           "Average time between visits":
