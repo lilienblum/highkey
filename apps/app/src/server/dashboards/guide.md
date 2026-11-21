@@ -23,6 +23,8 @@ Collected values (event names, properties, paths, log messages and attributes) c
 
 ## Queries
 
+Use `view.type: "map"` with event queries grouped by `property:context.country` and one measure or formula. Countries with no value remain uncolored. `unique_groups` counts distinct (group type, ID) pairs; `once_per_user` counts distinct identified actors; `first_time` counts only each actor’s earliest matching event in retained history. Filter on current folded `profile.<trait>` or `group.<type>.<trait>` and whole-visit fields including `session.entry_page`, `session.exit_page`, `session.bounced` and `session.duration_ms`.
+
 `queries` maps a query id (`[a-z][a-z0-9_]{0,15}`) to a query. A widget has 1-6 queries, and every query must be used by a series. Every query in a widget must share the same `group_by`.
 
 **Events**: `{"signal": "events", "event": "checkout", "measure": "count"}`.

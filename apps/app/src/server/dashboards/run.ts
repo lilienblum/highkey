@@ -122,6 +122,7 @@ function groupedTimeSeries(w: Widget): boolean {
 
 export function shapeFor(w: Widget): Shape {
   if (groupedTimeSeries(w)) return { kind: "grouped", labels: [] };
+  if (w.view.type === "map") return { kind: "groups", limit: 256, labels: null };
   if (w.view.type === "ranking")
     return { kind: "groups", limit: w.view.limit ?? DEFAULT_RANKING_LIMIT, labels: null };
   if (
@@ -151,7 +152,7 @@ export function evaluate(
   const known = Object.keys(widget.queries);
   const first = current.get(known[0] as string);
   const grouped = groupedTimeSeries(widget);
-  const limit = widget.view.limit ?? DEFAULT_RANKING_LIMIT;
+  const limit = widget.view.type === "map" ? 256 : (widget.view.limit ?? DEFAULT_RANKING_LIMIT);
   const overTime = (
     expr: ReturnType<typeof parseFormula> & { ok: true },
     series: [string, Point[]][],
@@ -204,7 +205,7 @@ export function evaluate(
       total: totals(current),
       previous_total: previous ? totals(previous) : null,
     };
-    if (widget.view.type === "ranking") {
+    if (widget.view.type === "ranking" || widget.view.type === "map") {
       result.groups = (first?.groups ?? []).slice(0, limit).map((row) => ({
         label: row.label,
         value: evaluateFormula(expr.expr, (id) =>

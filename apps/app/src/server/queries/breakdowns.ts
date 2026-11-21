@@ -16,6 +16,7 @@ export async function breakdownReport(ctx: ApiContext, id: string, body: unknown
       to: "string",
       source_id: "string?",
       event: "string?",
+      names: "string[]?",
       source: "string?",
       filters: "unknown",
       dimension: "string",
@@ -30,6 +31,7 @@ export async function breakdownReport(ctx: ApiContext, id: string, body: unknown
     from: q.from,
     to: q.to,
     event: q.event,
+    names: q.names,
     source: q.source,
     filters: q.filters,
   });
@@ -60,7 +62,9 @@ export async function breakdownReport(ctx: ApiContext, id: string, body: unknown
     where = predicate(
       spec,
       params,
-      spec.event?.startsWith("@") ? await customRules(ctx.db, id) : undefined,
+      spec.event?.startsWith("@") || spec.names?.some((n) => n.startsWith("@"))
+        ? await customRules(ctx.db, id)
+        : undefined,
     );
   const isPage = q.dimension === "property:path";
   const from = +spec.from,

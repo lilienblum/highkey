@@ -32,6 +32,8 @@ import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
 import { PatternReports } from "./pattern-reports";
 import { ProjectInsights } from "./insights";
+import { WebsiteReports } from "./website-reports";
+import { LanguageFilter } from "./language-filter";
 import { BreakdownReport } from "./breakdown-report";
 import { useWebMetrics, WebChart, WebTiles } from "./web-metrics";
 import { webMetric, type WebMetric } from "@/lib/web-metrics";
@@ -327,6 +329,7 @@ function ProductOverview() {
       >
         <PatternReports filters={eventFilters} />
         <ProjectInsights />
+        <LanguageFilter />
         <OverviewActions />
       </PageHeader>
       {selectedFilter && (
@@ -727,6 +730,7 @@ function ProductOverview() {
               />
             </WidgetContent>
           </OverviewWidget>
+          {websiteMetric && <WebsiteReports filters={eventFilters} goals={conversionNames} />}
           {conversionNames.length > 0 && (
             <OverviewWidget
               title="Conversions"

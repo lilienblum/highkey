@@ -7,6 +7,7 @@ test("request inputs are ephemeral, bots excluded by default, and a visit retain
     // A documentation network in the disposable test dictionary.
     await ctx.admin.insert("highkey.geo_networks", [
       { cidr: "192.0.2.5/32", country: "CA", region: "CA-ON", hosting: 0 },
+      { cidr: "2001:db8:12::/48", country: "DE", region: "DE-BE", hosting: 1 },
     ]);
     await ctx.admin.command("SYSTEM RELOAD DICTIONARY highkey.geo_lookup");
     const now = new Date(Date.now() - 1000).toISOString().replace("T", " ").replace("Z", "");
@@ -73,6 +74,47 @@ test("request inputs are ephemeral, bots excluded by default, and a visit retain
     ).data;
     expect(columns.length).toBeGreaterThanOrEqual(5);
     expect(columns.every((c) => c.default_kind === "EPHEMERAL")).toBe(true);
+    const additions = [
+      {
+        event_id: "hosting",
+        request_ip: "2001:db8:12::c",
+        request_ua: "Mozilla/5.0",
+        request_fetch: 1,
+        properties: { referrer: "search.test", ref: "claude.ai" },
+      },
+      {
+        event_id: "no-fetch",
+        request_ip: "",
+        request_ua: "Mozilla/5.0 Firefox/123",
+        request_fetch: 0,
+        properties: { referrer: "APP.TEST" },
+      },
+      {
+        event_id: "paid",
+        request_ip: "",
+        request_ua: "Mozilla/5.0",
+        request_fetch: 1,
+        properties: { referrer: "google.com", ref: "other", utm_source: "ad", utm_medium: "cpc" },
+      },
+    ].map((r) => ({ ...base, ...r }));
+    await ctx.admin.command(
+      `INSERT INTO highkey.events (${Object.keys(additions[0]).join(",")}) FORMAT JSONEachRow\n${additions.map((r) => JSON.stringify(r)).join("\n")}`,
+    );
+    const records = (await query({ include_bots: true })).json.events;
+    for (const row of [
+      {
+        event_id: "hosting",
+        country: "DE",
+        region: "DE-BE",
+        bot: "suspected",
+        referrer_name: "claude.ai",
+        referrer_type: "ai",
+      },
+      { event_id: "no-fetch", bot: "suspected", referrer_name: "", referrer_type: "direct" },
+      { event_id: "paid", bot: "", referrer_name: "ad", referrer_type: "paid" },
+    ])
+      expect(records).toContainEqual(expect.objectContaining(row));
+    expect(JSON.stringify(records)).not.toMatch(/2001:db8|Mozilla\/|192\.0\.2\.5/);
   } finally {
     ctx.cleanup();
   }

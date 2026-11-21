@@ -400,6 +400,12 @@ function checkShape(w: Widget, base: string, r: Report) {
       if (typed(q) && groupBy(q) === null)
         r.error(`${qpath}/${id}/group_by`, "Ranking widgets need a group_by");
   const series = seriesOrDefault(w);
+  if (kind === "map") {
+    for (const [id, q] of entries)
+      if (q.signal !== "events" || q.group_by !== "property:context.country")
+        r.error(`${qpath}/${id}/group_by`, "Maps need events grouped by property:context.country");
+    if (series.length !== 1) r.error(`${base}/series`, "Choose one measure or formula for the map");
+  }
   const spath = `${base}/series`;
   if (w.series != null && (series.length < 1 || series.length > Limits.MAX_SERIES_PER_WIDGET))
     r.error(spath, "A widget needs 1–6 series");

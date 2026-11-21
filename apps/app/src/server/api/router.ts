@@ -70,6 +70,7 @@ async function ensureRoutes(): Promise<void> {
   registerExports();
   registerNotifications();
   (await import("../insights")).registerInsights();
+  (await import("../language-filter")).registerLanguageFilter();
   registerAnalysisViews();
   registerDashboards();
   registerViews();

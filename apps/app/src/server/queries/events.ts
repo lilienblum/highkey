@@ -3,13 +3,13 @@
 import { bad } from "../api/errors";
 import { fields } from "../api/body";
 import { filterOps } from "../../lib/filter-ops";
-import { type Bucket, runSettings } from "../clickhouse/access";
+import { type Bucket, runSettings, SOURCE_SCOPE } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
 import { anyNamedEvent, namedEvent, type Rules, validEvent } from "./custom";
 import {
   bucketGrid,
   distinctValues,
-  filterCondition,
+  eventFilter,
   numeric,
   Params,
   path,
@@ -46,7 +46,14 @@ const LIMITS =
   "Use minute/hour/day/week/month buckets, a positive range ≤366 days (per minute ≤1 hour, hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters";
 const NUMERIC = ["sum", "avg", "p50", "p95", "p99", "min", "max"];
 /** The measures the Events page runs. */
-export const MEASURES = ["count", "actors", ...NUMERIC];
+export const MEASURES = [
+  "count",
+  "actors",
+  "unique_groups",
+  "first_time",
+  "once_per_user",
+  ...NUMERIC,
+];
 /** The filter ops the Events page runs. */
 export const EVENTS_PAGE_OPS: string[] = filterOps.map(([op]) => op);
 const DAY = 86_400_000;
@@ -140,7 +147,12 @@ export function measure(q: { measure: string; property?: string | null }): strin
   const number = () => numeric(path("properties", q.property as string));
   switch (q.measure) {
     case "actors":
+    case "once_per_user":
       return "uniqExactIf((identity_kind, actor_id), actor_id IS NOT NULL)";
+    case "unique_groups":
+      return "uniqExactArray(arrayZip(mapKeys(groups),mapValues(groups)))";
+    case "first_time":
+      return "count()";
     case "sum":
     case "avg":
     case "min":
@@ -173,10 +185,7 @@ export function predicate(q: EventsQuery, params: Params, rules?: Rules): string
     ["identity_kind", q.identity_kind],
   ] as const)
     if (value != null) parts.push(`${column} = ${params.add("String", value)}`);
-  for (const filter of q.filters)
-    parts.push(
-      filterCondition(path("properties", filter.property), filter.op, filter.value, params),
-    );
+  for (const filter of q.filters) parts.push(eventFilter(filter, params));
   return parts.join(" AND ");
 }
 
@@ -215,7 +224,9 @@ export async function runEventsQuery(
 ): Promise<QueryResult> {
   validateEventsQuery(q);
   const params = new Params();
-  const where = predicate(q, params, rules);
+  let where = predicate(q, params, rules);
+  if (q.measure === "first_time")
+    where = `event_id IN (SELECT argMin(event_id,tuple(event_time,event_id)) FROM all_events WHERE actor_id IS NOT NULL AND ${SOURCE_SCOPE} AND ${where} GROUP BY identity_kind,actor_id)`;
   const value = `toNullable(toFloat64(${measure(q)}))`;
   const grouping = group(q);
   const duration = numeric(path("properties", "duration_ms"));
@@ -262,7 +273,16 @@ export async function runEventsQuery(
     },
   );
   const measured = new Map(buckets.data.map((row) => [Number(row.time), row.value]));
-  const missing = ["count", "actors", "sum"].includes(q.measure) ? 0 : null;
+  const missing = [
+    "count",
+    "actors",
+    "unique_groups",
+    "first_time",
+    "once_per_user",
+    "sum",
+  ].includes(q.measure)
+    ? 0
+    : null;
   return {
     summary: summary.data[0] as Record<string, number | null>,
     series: bucketGrid(q.from, q.to, q.bucket).map((time) => ({

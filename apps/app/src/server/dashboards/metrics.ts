@@ -49,6 +49,9 @@ export const COUNTING = [
   "actors",
   "sessions",
   "new_actors",
+  "unique_groups",
+  "first_time",
+  "once_per_user",
   "returning_actors",
   "unique",
   "sum",
@@ -91,7 +94,18 @@ interface Compiled {
 const ACTOR = "(identity_kind, actor_id)";
 
 function compileEvents(q: EventsQuery, rules?: Rules): Compiled {
-  if (!["count", "actors", "sessions", "new_actors", "returning_actors"].includes(q.measure)) {
+  if (
+    ![
+      "count",
+      "actors",
+      "sessions",
+      "new_actors",
+      "returning_actors",
+      "unique_groups",
+      "first_time",
+      "once_per_user",
+    ].includes(q.measure)
+  ) {
     if (!q.property) throw bad("This measure needs a property");
     path("properties", q.property);
   }
@@ -128,7 +142,10 @@ function compileEvents(q: EventsQuery, rules?: Rules): Compiled {
     table: "events",
     time: "event_time",
     measure: eventMeasure(q),
-    where,
+    where:
+      q.measure === "first_time"
+        ? `event_id IN (SELECT argMin(event_id,tuple(event_time,event_id)) FROM all_events WHERE actor_id IS NOT NULL AND ${SOURCE_SCOPE} AND ${where} GROUP BY identity_kind,actor_id)`
+        : where,
     label,
     missingZero: missingIsZero(q.measure),
     params,

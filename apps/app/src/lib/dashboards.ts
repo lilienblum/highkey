@@ -5,7 +5,7 @@ export type { DashboardLink };
 export type Color = "yellow" | "violet" | "aqua" | "green" | "red" | "neutral";
 export type Unit = "number" | "percent" | "ratio" | "ms" | "seconds" | "bytes";
 export type ViewKind =
-  "stat" | "line" | "area" | "bar" | "ranking" | "table" | "events" | "logs" | "text";
+  "stat" | "line" | "area" | "bar" | "ranking" | "map" | "table" | "events" | "logs" | "text";
 export type Size = { w: 3 | 4 | 6 | 8 | 12; h: 1 | 2 | 3 };
 export type Threshold = { at: number; color: Color };
 
@@ -48,6 +48,9 @@ export type EventMeasure =
   | "actors"
   | "sessions"
   | "new_actors"
+  | "unique_groups"
+  | "first_time"
+  | "once_per_user"
   | "returning_actors"
   | "unique"
   | "sum"

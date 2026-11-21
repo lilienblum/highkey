@@ -1,7 +1,7 @@
 // The `highkey.dashboard/v1` document, as parsed (schema defaults filled in).
 
 export type ViewKind =
-  "stat" | "line" | "area" | "bar" | "ranking" | "events" | "logs" | "text" | "table";
+  "stat" | "line" | "area" | "bar" | "ranking" | "map" | "events" | "logs" | "text" | "table";
 export type Unit = "number" | "percent" | "ratio" | "ms" | "seconds" | "bytes";
 export type Color = "yellow" | "violet" | "aqua" | "green" | "red" | "neutral";
 
@@ -63,6 +63,9 @@ export interface EventsQuery {
     | "actors"
     | "sessions"
     | "new_actors"
+    | "unique_groups"
+    | "first_time"
+    | "once_per_user"
     | "returning_actors"
     | "unique"
     | "sum"

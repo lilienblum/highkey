@@ -4,6 +4,7 @@ import type { Bucket } from "../clickhouse/access";
 import { bad } from "../api/errors";
 import { contextColumn } from "../../lib/event-context";
 import { validRegex } from "../../lib/filter-ops";
+import { sessionFields } from "../../lib/session-fields";
 import { bucketStart, nextBucket } from "../../lib/time-buckets";
 
 const KEY = /^[A-Za-z0-9_\-./]{1,64}$/;
@@ -18,6 +19,12 @@ export function path(column: "properties" | "attributes", key: string): string {
   const derived = column === "properties" ? contextColumn(key) : undefined;
   if (derived) return `CAST(nullIf(${derived},''),'Dynamic')`;
   if (column === "properties") {
+    if (key === "outbound.url")
+      return "CAST(if(name='link_out',properties.url.:String,NULL),'Dynamic')";
+    if (key === "page.entry" || key === "page.exit") {
+      const pick = key === "page.entry" ? "argMin" : "argMax";
+      return `CAST(if(event_id IN (SELECT ${pick}(event_id,tuple(event_time,event_id)) FROM all_events WHERE identity_kind='visitor' AND actor_id IS NOT NULL AND session_id IS NOT NULL AND name='page_view' AND NOT backfill GROUP BY source_id,actor_id,session_id),properties.path.:String,NULL),'Dynamic')`;
+    }
     if (key === "event.id") return "CAST(event_id,'Dynamic')";
     if (/^cohort\.[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(key))
       return `CAST(toBool(event_id IN (SELECT event_id FROM profile_events WHERE profile_id IN (SELECT profile_id FROM cohort_members WHERE cohort_id=toUUID('${key.slice(7)}')))),'Dynamic')`;
@@ -64,6 +71,49 @@ export function scalarEquals(expression: string, value: unknown, params: Params)
 }
 
 const ORDERED: Record<string, string> = { gt: ">", gte: ">=", lt: "<", lte: "<=" };
+
+/** Use a semi-join for entity and whole-visit fields; ordinary predicates stay on the event view. */
+export function eventFilter(f: { property: string; op: string; value?: unknown }, p: Params) {
+  const { property: key, op, value } = f;
+  if (!validKey(key)) throw bad("Invalid property key");
+  const [kind, field, ...suffix] = key.split(".");
+  const missing = op === "not_exists" || op === "empty";
+  const match = (expr: string) => filterCondition(expr, op, value, p);
+  // NOT IN the entities failing the comparison also includes events without a related entity.
+  const members = (outer: string, inner: string, table: string, expr: string) =>
+    `${outer} ${missing ? "NOT IN" : "IN"} (SELECT ${inner} FROM ${table} WHERE ${missing ? "NOT" : ""} (${match(expr)}))`;
+  if (kind === "session" && sessionFields.some((v) => v === field) && !suffix.length) {
+    const expr =
+      field === "revenue_cents"
+        ? "toFloat64(revenue_cents)"
+        : field === "bounced"
+          ? "toBool(bounced)"
+          : field;
+    return members(
+      "tuple(source_id,ifNull(actor_id,''),ifNull(session_id,''))",
+      "source_id,actor_id,session_id",
+      "visit_fields",
+      `CAST(${expr},'Dynamic')`,
+    );
+  }
+  const group = kind === "group" && suffix.length > 0;
+  if ((kind === "profile" && field && field !== "id") || group) {
+    const trait = group ? suffix.join(".") : key.slice(8);
+    const groupType = group ? p.add("String", field) : "";
+    const table = group ? "group_records" : "profile_records",
+      id = group ? "group_id" : "profile_id";
+    const relation = `(SELECT first.1 AS entity_id,arrayFold((m,row)->highkey_apply_traits(m,row.3,row.4),arraySort(row->(row.1,row.2),groupArray(tuple(first.2,event_id,first.3,first.4))),CAST(map(),'Map(String,String)')) AS vals
+    FROM (SELECT event_id,argMin(tuple(${id},event_time,toJSONString(traits),toJSONString(increments)),received_at) AS first FROM ${table} ${group ? `WHERE group_type=${groupType}` : ""} GROUP BY event_id) GROUP BY entity_id)`;
+    const test = members(
+      group ? `groups[${groupType}]` : "ifNull(profile_id,'')",
+      "entity_id",
+      relation,
+      `JSONExtract(ifNull(nullIf(vals[${p.add("String", trait)}],''),'null'),'Dynamic')`,
+    );
+    return group ? test : `event_id IN (SELECT event_id FROM profile_events WHERE ${test})`;
+  }
+  return match(path("properties", key));
+}
 
 /**
  * One filter on a typed JSON value. A negated op (ne, not_in, not_contains) never matches an

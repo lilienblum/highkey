@@ -8,7 +8,7 @@ import { anyNamedEvent, customRules, namedEvent, validEvent } from "./custom";
 import { bucketGrid, Params, path, validKey } from "./properties";
 import { readAs } from "./read";
 import { periodStart } from "../dashboards/retention";
-import { filterCondition } from "./properties";
+import { eventFilter } from "./properties";
 
 export function analysisSpec(input: unknown) {
   const q = fields(
@@ -64,8 +64,7 @@ export function analysisSpec(input: unknown) {
     );
   const filters = parseFilters(q.filters);
   if (filters.length > 8) throw bad("Use up to eight filters");
-  for (const f of filters)
-    filterCondition(path("properties", f.property), f.op, f.value, new Params());
+  for (const f of filters) eventFilter(f, new Params());
   return { ...q, period: q.period as "day" | "week" | "month", filters };
 }
 export async function analysis(ctx: ApiContext, id: string, body: unknown) {

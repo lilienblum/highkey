@@ -27,7 +27,7 @@ import { PageLoading } from "./loading";
 
 type Report = Awaited<ReturnType<typeof breakdownReport>>;
 type Row = Report["rows"][number];
-const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
+export const loadBreakdown = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Report>(`/products/${id}/breakdown`, body, signal);
 function Spark({ values }: { values: number[] }) {
   const max = Math.max(1, ...values);
@@ -58,7 +58,7 @@ export function BreakdownReport({
     [search, setSearch] = useState("");
   const { product, range, sourceId, refreshKey, refresh } = useWorkspace();
   const data = useReportQuery(
-    load,
+    loadBreakdown,
     "breakdown",
     open ? product?.id : undefined,
     { ...range, source_id: sourceId, ...filters, dimension, sort, page, search },

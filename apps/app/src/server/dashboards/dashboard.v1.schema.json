@@ -27,6 +27,9 @@
         "actors",
         "sessions",
         "new_actors",
+        "unique_groups",
+        "first_time",
+        "once_per_user",
         "returning_actors",
         "unique",
         "sum",
@@ -429,7 +432,7 @@
     "ViewKind": {
       "oneOf": [
         {
-          "enum": ["stat", "line", "area", "bar", "ranking", "events", "logs", "text"],
+          "enum": ["stat", "line", "area", "bar", "ranking", "map", "events", "logs", "text"],
           "type": "string"
         },
         {

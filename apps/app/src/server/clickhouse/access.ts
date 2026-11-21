@@ -126,6 +126,12 @@ export function accessStatements(productId: string, secret: string): string[] {
     view("logs", LOG_COLUMNS, "highkey.logs", `${project} AND ${scoped("timestamp")}`),
     view("all_logs", LOG_COLUMNS, "highkey.logs", project),
     view(
+      "visit_fields",
+      "source_id,actor_id,session_id,started_at,ended_at,entry_page,exit_page,duration_ms,events,page_views,bounced,first_referrer AS referrer,toString(net_cents) AS revenue_cents,context.1 AS country,context.2 AS region,context.3 AS device,context.4 AS browser,context.5 AS browser_version,context.6 AS os_family,context.7 AS os_version,context.8 AS referrer_type",
+      "highkey.sessions",
+      project,
+    ),
+    view(
       "sessions",
       "source_id, actor_id, session_id, started_at, ended_at, entry_page, exit_page, events, page_views, duration_ms, bounced, first_referrer AS referrer, first_campaign AS campaign, profile AS profile_id, toString(net_cents) AS revenue_cents,context.1 AS country,context.2 AS region,context.3 AS device,context.4 AS browser,context.5 AS browser_version,context.6 AS os_family,context.7 AS os_version,context.8 AS referrer_type",
       "highkey.sessions",
@@ -168,7 +174,7 @@ export function accessVersion(secret: string): string {
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions','event_facets','cohort_members') GROUP BY database HAVING count() = 10
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'profile_events','group_records','sessions','visit_fields','event_facets','cohort_members') GROUP BY database HAVING count() = 11
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );

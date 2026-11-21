@@ -1,0 +1,18 @@
+export const sessionFields = [
+  "entry_page",
+  "exit_page",
+  "duration_ms",
+  "events",
+  "page_views",
+  "bounced",
+  "referrer",
+  "country",
+  "region",
+  "device",
+  "browser",
+  "browser_version",
+  "os_family",
+  "os_version",
+  "referrer_type",
+  "revenue_cents",
+] as const;

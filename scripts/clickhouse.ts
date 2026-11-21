@@ -22,6 +22,7 @@ const config = `${root}deploy/clickhouse/config.d/highkey.xml`;
 const users = `${root}deploy/clickhouse/users.d/highkey.xml`;
 
 export interface ServerOptions {
+  image?: string;
   name: string;
   port: number;
   tmpfs: boolean;
@@ -121,7 +122,7 @@ export async function startClickHouse(options: ServerOptions): Promise<{ url: st
         ? ["--tmpfs", "/var/lib/clickhouse"]
         : ["--volume", `${options.volume}:/var/lib/clickhouse`]),
       ...(options.memory ? ["--memory", options.memory] : []),
-      CLICKHOUSE_IMAGE,
+      options.image ?? CLICKHOUSE_IMAGE,
     ];
     const run = await docker(args);
     if (run.code !== 0) throw new Error(`docker run ${options.name}: ${run.stderr}`);

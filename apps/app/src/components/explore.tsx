@@ -41,6 +41,7 @@ import { useCohorts } from "./cohorts";
 import { useQuery, useReportQuery } from "@/lib/use-query";
 import { queryReadOnly } from "@/lib/api";
 import { eventContext } from "@/lib/event-context";
+import { sessionFields } from "@/lib/session-fields";
 import type { eventOptions } from "@/server/queries/event-options";
 const loadOptions = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Awaited<ReturnType<typeof eventOptions>>>(
@@ -159,6 +160,11 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
     ...new Set([
       ...(options.data?.keys ?? []),
       ...Object.keys(eventContext).map((k) => `context.${k}`),
+      ...sessionFields.map((k) => `session.${k}`),
+      "profile.name",
+      "profile.email",
+      "profile.id",
+      "session.id",
     ]),
   ];
   useEffect(() => {
@@ -240,6 +246,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const measureLabels: Record<string, string> = {
     count: "Event count",
     actors: "Distinct actors",
+    unique_groups: "Unique groups",
+    first_time: "First-time only",
+    once_per_user: "One per user",
     sum: "Numeric sum",
     avg: "Numeric average",
     p50: "Duration p50",
@@ -410,7 +419,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                     options={Object.entries(measureLabels)}
                   />
                 </Field>
-                {!["count", "actors"].includes(draft.measure) && (
+                {!["count", "actors", "unique_groups", "first_time", "once_per_user"].includes(
+                  draft.measure,
+                ) && (
                   <Field>
                     <FieldLabel htmlFor="measure-property">Numeric property</FieldLabel>
                     <Input
@@ -620,7 +631,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                 <strong>
                   {number(data.summary.value, 2)}
                   {applied.property === "duration_ms" &&
-                  !["count", "actors"].includes(applied.measure)
+                  !["count", "actors", "unique_groups", "first_time", "once_per_user"].includes(
+                    applied.measure,
+                  )
                     ? " ms"
                     : ""}
                 </strong>
@@ -637,7 +650,9 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                     title="Results over time"
                     bucket={bucket}
                     description={
-                      ["count", "actors"].includes(applied.measure)
+                      ["count", "actors", "unique_groups", "first_time", "once_per_user"].includes(
+                        applied.measure,
+                      )
                         ? `One point per ${bucket} · UTC`
                         : `One point per ${bucket} · UTC · missing numeric values are excluded`
                     }

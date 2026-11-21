@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
+import { WorldMap } from "../world-map";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
 import {
@@ -165,6 +166,27 @@ function QueryWidget({ widget: given, product, logRetentionDays, onPendingChange
         return <ChartBody {...shared} span={span} />;
       case "ranking":
         return <RankingBody {...shared} />;
+      case "map": {
+        const rows =
+          result?.series[0]?.groups?.flatMap((g) =>
+            typeof g.label === "string" && typeof g.value === "number"
+              ? [{ label: g.label, count: g.value }]
+              : [],
+          ) ?? [];
+        return (
+          <div>
+            <WorldMap rows={rows} label={widget.title} />
+            <details>
+              <summary>Country values</summary>
+              {rows.map((r) => (
+                <div key={r.label}>
+                  {r.label} · {number(r.count, 2)}
+                </div>
+              ))}
+            </details>
+          </div>
+        );
+      }
       case "table":
         return <DataTableBody {...shared} />;
       case "events":
