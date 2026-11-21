@@ -4,17 +4,17 @@ Highkey does not store visitor IPs, raw user agents, or city as analytics contex
 
 ## Defaults and explicit choices
 
-| Surface               | Default                                      | Explicit choice                                                                 |
-| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
-| Browser identity      | No automatic visitor/session IDs or identifier storage | Per-source cookieless daily IDs or consented persistent random IDs             |
-| Browser page metadata | Pathname and referrer hostname only          | Omit or canonicalize paths; disable referrers; opt in to titles and hash routes |
-| Campaigns             | No campaign parameters                       | Allowlist individual UTM names or `ref`                                         |
-| Privacy signals       | DNT/GPC stop collection                      | No override; absence is not consent                                             |
-| Custom events         | Only caller-supplied scalar properties       | Filter or drop with `beforeSend`                                                |
-| CLI example           | Telemetry off; no installation ID            | `HIGHKEY_TELEMETRY=1`; optional random installation ID                          |
-| CLI opt-out           | `DO_NOT_TRACK=1` takes precedence            | Host application owns its persistent preference                                 |
-| Retention             | New Settings projects start at 365 days      | Set a project-specific window between 1 and 3650 days                           |
-| Log retention         | Seven days, independently of events          | Set 1–365 days in Settings → Logs                                               |
+| Surface               | Default                                                | Explicit choice                                                                 |
+| --------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Browser identity      | No automatic visitor/session IDs or identifier storage | Per-source cookieless daily IDs or consented persistent random IDs              |
+| Browser page metadata | Pathname and referrer hostname only                    | Omit or canonicalize paths; disable referrers; opt in to titles and hash routes |
+| Campaigns             | No campaign parameters                                 | Allowlist individual UTM names or `ref`                                         |
+| Privacy signals       | DNT/GPC stop collection                                | No override; absence is not consent                                             |
+| Custom events         | Only caller-supplied scalar properties                 | Filter or drop with `beforeSend`                                                |
+| CLI example           | Telemetry off; no installation ID                      | `HIGHKEY_TELEMETRY=1`; optional random installation ID                          |
+| CLI opt-out           | `DO_NOT_TRACK=1` takes precedence                      | Host application owns its persistent preference                                 |
+| Retention             | New Settings projects start at 365 days                | Set a project-specific window between 1 and 3650 days                           |
+| Log retention         | Seven days, independently of events                    | Set 1–365 days in Settings → Logs                                               |
 
 Persistent random IDs are pseudonymous, not anonymous. Highkey separates visitor/session identities from CLI installations, and all identities are scoped to a product in queries. Do not use emails, account names, machine names, or credentials as IDs or properties.
 

@@ -36,9 +36,42 @@ use tower_http::cors::{Any, CorsLayer};
 /// How long `start` keeps retrying an unreachable ClickHouse before giving up.
 const STARTUP_WAIT: Duration = Duration::from_secs(60);
 
+type DaySalt = Arc<std::sync::Mutex<Option<(chrono::NaiveDate, String)>>>;
+
+fn current_salt(state: &DaySalt) -> String {
+    let mut slot = state.lock().expect("day salt");
+    let now = chrono::Utc::now();
+    let today = now.date_naive();
+    if let Some((date, salt)) = slot.as_ref()
+        && *date == today
+    {
+        return salt.clone();
+    }
+    let salt = uuid::Uuid::new_v4().to_string();
+    *slot = Some((today, salt.clone()));
+    // A quiet source must not leave yesterday's secret resident until its next request.
+    let weak = Arc::downgrade(state);
+    let midnight = today
+        .succ_opt()
+        .expect("next day")
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc();
+    tokio::spawn(async move {
+        tokio::time::sleep((midnight - now).to_std().unwrap_or_default()).await;
+        if let Some(state) = weak.upgrade() {
+            let mut slot = state.lock().expect("day salt");
+            if slot.as_ref().is_some_and(|(date, _)| *date == today) {
+                *slot = None;
+            }
+        }
+    });
+    salt
+}
+
 #[derive(Clone)]
 pub struct AppState {
-    day_salt: Arc<std::sync::Mutex<(chrono::NaiveDate, String)>>,
+    day_salt: DaySalt,
     pub gateway_secret: Option<Arc<str>>,
     pub trust_proxy_ip: bool,
     pub clickhouse: ClickHouse,
@@ -72,10 +105,7 @@ pub async fn start(config: Config) -> anyhow::Result<AppState> {
     }
     let changes = changes::Changes::default();
     Ok(AppState {
-        day_salt: Arc::new(std::sync::Mutex::new((
-            chrono::Utc::now().date_naive(),
-            uuid::Uuid::new_v4().to_string(),
-        ))),
+        day_salt: DaySalt::default(),
         gateway_secret: None,
         trust_proxy_ip: std::env::var("HIGHKEY_TRUST_PROXY_IP").as_deref() == Ok("1"),
         keys: Keys::new(clickhouse.clone()),
@@ -205,11 +235,7 @@ async fn ingest_events(
         && !request_context.ip.is_empty()
         && !request_context.ua.is_empty()
     {
-        let mut day = state.day_salt.lock().expect("day salt");
-        if day.0 != now.date_naive() {
-            *day = (now.date_naive(), uuid::Uuid::new_v4().to_string());
-        }
-        Some(day.1.clone())
+        Some(current_salt(&state.day_salt))
     } else {
         None
     };
@@ -328,4 +354,20 @@ async fn security_headers(req: Request, next: Next) -> Response {
         }
     }
     response
+}
+
+#[cfg(test)]
+mod salt_tests {
+    use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn idle_collectors_discard_the_day_key_without_another_request() {
+        let state = DaySalt::default();
+        let first = current_salt(&state);
+        assert_eq!(first, current_salt(&state));
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(86400)).await;
+        tokio::task::yield_now().await;
+        assert!(state.lock().unwrap().is_none());
+        assert_ne!(first, current_salt(&state));
+    }
 }

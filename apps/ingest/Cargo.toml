@@ -32,6 +32,7 @@ flate2 = "1"
 base64 = "0.22"
 
 [dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
 highkey-sdk = { path = "../../sdk/rust" }
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
