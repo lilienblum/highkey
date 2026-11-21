@@ -44,6 +44,7 @@ import { Route as SettingsKeysRouteImport } from './routes/settings_.keys'
 import { Route as SettingsMembersRouteImport } from './routes/settings_.members'
 import { Route as SettingsOrganizationRouteImport } from './routes/settings_.organization'
 import { Route as OrgSlugProjectSlugIndexRouteImport } from './routes/$orgSlug.$projectSlug.index'
+import { Route as OrgSlugProjectSlugAiRouteImport } from './routes/$orgSlug.$projectSlug.ai'
 import { Route as OrgSlugProjectSlugEventsRouteImport } from './routes/$orgSlug.$projectSlug.events'
 import { Route as OrgSlugProjectSlugExploreRouteImport } from './routes/$orgSlug.$projectSlug.explore'
 import { Route as OrgSlugProjectSlugLogsRouteImport } from './routes/$orgSlug.$projectSlug.logs'
@@ -229,6 +230,11 @@ const OrgSlugProjectSlugIndexRoute = OrgSlugProjectSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => OrgSlugProjectSlugRoute,
 } as any)
+const OrgSlugProjectSlugAiRoute = OrgSlugProjectSlugAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => OrgSlugProjectSlugRoute,
+} as any)
 const OrgSlugProjectSlugEventsRoute =
   OrgSlugProjectSlugEventsRouteImport.update({
     id: '/events',
@@ -317,6 +323,7 @@ export interface FileRoutesByFullPath {
   '/settings/members': typeof SettingsMembersRoute
   '/settings/organization': typeof SettingsOrganizationRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/settings/members': typeof SettingsMembersRoute
   '/settings/organization': typeof SettingsOrganizationRoute
   '/$orgSlug': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
@@ -408,6 +416,7 @@ export interface FileRoutesById {
   '/settings_/members': typeof SettingsMembersRoute
   '/settings_/organization': typeof SettingsOrganizationRoute
   '/$orgSlug/': typeof OrgSlugIndexRoute
+  '/$orgSlug/$projectSlug/ai': typeof OrgSlugProjectSlugAiRoute
   '/$orgSlug/$projectSlug/events': typeof OrgSlugProjectSlugEventsRoute
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
@@ -456,6 +465,7 @@ export interface FileRouteTypes {
     | '/settings/members'
     | '/settings/organization'
     | '/$orgSlug/'
+    | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
@@ -500,6 +510,7 @@ export interface FileRouteTypes {
     | '/settings/members'
     | '/settings/organization'
     | '/$orgSlug'
+    | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/settings_/members'
     | '/settings_/organization'
     | '/$orgSlug/'
+    | '/$orgSlug/$projectSlug/ai'
     | '/$orgSlug/$projectSlug/events'
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
@@ -841,6 +853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugProjectSlugIndexRouteImport
       parentRoute: typeof OrgSlugProjectSlugRoute
     }
+    '/$orgSlug/$projectSlug/ai': {
+      id: '/$orgSlug/$projectSlug/ai'
+      path: '/ai'
+      fullPath: '/$orgSlug/$projectSlug/ai'
+      preLoaderRoute: typeof OrgSlugProjectSlugAiRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
     '/$orgSlug/$projectSlug/events': {
       id: '/$orgSlug/$projectSlug/events'
       path: '/events'
@@ -908,6 +927,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface OrgSlugProjectSlugRouteChildren {
+  OrgSlugProjectSlugAiRoute: typeof OrgSlugProjectSlugAiRoute
   OrgSlugProjectSlugEventsRoute: typeof OrgSlugProjectSlugEventsRoute
   OrgSlugProjectSlugExploreRoute: typeof OrgSlugProjectSlugExploreRoute
   OrgSlugProjectSlugLogsRoute: typeof OrgSlugProjectSlugLogsRoute
@@ -920,6 +940,7 @@ interface OrgSlugProjectSlugRouteChildren {
 }
 
 const OrgSlugProjectSlugRouteChildren: OrgSlugProjectSlugRouteChildren = {
+  OrgSlugProjectSlugAiRoute: OrgSlugProjectSlugAiRoute,
   OrgSlugProjectSlugEventsRoute: OrgSlugProjectSlugEventsRoute,
   OrgSlugProjectSlugExploreRoute: OrgSlugProjectSlugExploreRoute,
   OrgSlugProjectSlugLogsRoute: OrgSlugProjectSlugLogsRoute,

@@ -288,6 +288,7 @@ export function AppShell({
       "/revenue": "Revenue",
       "/sessions": "Sessions",
       "/people": "Profiles",
+      "/ai": "AI costs",
       "/logs": "Logs",
       "/settings": "Settings",
       "/dashboards": "Dashboard",

@@ -391,6 +391,21 @@ function VisitDetails({ d, p }: { d: Detail; p: Product }) {
                     .filter(Boolean)
                     .map(String)
                     .join(" · ")}
+                  {typeof e.properties.trace_id === "string" && e.properties.trace_id && (
+                    <>
+                      {" · "}
+                      <Link
+                        {...target("/ai", p.slug)}
+                        search={{
+                          trace: e.properties.trace_id,
+                          from: new Date(d.session.start).toISOString(),
+                          to: new Date(d.session.end + 1).toISOString(),
+                        }}
+                      >
+                        View AI trace
+                      </Link>
+                    </>
+                  )}
                 </span>
               )}
               <details>

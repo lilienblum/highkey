@@ -7,6 +7,7 @@ import {
   Cancel01Icon,
   ComputerTerminal02Icon,
   Coins01Icon,
+  AiBrain01Icon,
   Clock01Icon,
   UserGroupIcon,
   CubeIcon,
@@ -164,6 +165,7 @@ export function WorkspaceSidebar({
                       ["/sessions", "Sessions", Clock01Icon],
                       ["/people", "Profiles", UserGroupIcon],
                       ["/revenue", "Revenue", Coins01Icon],
+                      ["/ai", "AI costs", AiBrain01Icon],
                       ["/logs", "Logs", ComputerTerminal02Icon],
                       ["/settings", "Settings", Settings02Icon],
                     ] as const

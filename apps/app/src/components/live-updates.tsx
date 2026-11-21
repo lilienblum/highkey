@@ -18,7 +18,7 @@ interface Props {
 }
 
 const EVENTS: Signal[] = ["events"];
-const REFRESH_VIEWS = ["/", "/events", "/dashboards", "/revenue", "/sessions", "/people"];
+const REFRESH_VIEWS = ["/", "/events", "/dashboards", "/revenue", "/sessions", "/people", "/ai"];
 
 export function LiveUpdates(props: Props) {
   const [enabled, setEnabled] = useState(false);

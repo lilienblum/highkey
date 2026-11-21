@@ -1,6 +1,25 @@
 {
   "tools": [
     {
+      "name": "query_generations",
+      "description": "List AI calls and their reported USD costs by model, feature or profile. An optional trace ID shows its steps in chronological order. A missing cost is not zero; prompt text is not returned.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "group_by": { "type": "string", "enum": ["model", "feature", "profile"] },
+          "trace_id": { "type": "string" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "query_patterns",
       "description": "Report weekly activity (UTC weekday and hour), flows of 2–10 pages before, after or between paths, or an event-count distribution by identified actor. Defaults to the past seven days.",
       "inputSchema": {

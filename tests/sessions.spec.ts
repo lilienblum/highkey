@@ -88,6 +88,15 @@ test("sessions remember columns and open a visit with its events, AI calls and c
     "Related payment log",
   );
   await page.screenshot({ path: test.info().outputPath("session-desktop.png"), fullPage: true });
+  await page.getByRole("link", { name: "View AI trace" }).click();
+  const ai = page.getByRole("region", { name: "AI cost report" });
+  await expect(ai.getByRole("table", { name: "AI generations" })).toContainText("session-test");
+  await expect(ai).toContainText("1 of 1 calls reported a cost");
+  await ai.getByRole("combobox", { name: "Group AI costs by" }).click();
+  await page.getByRole("option", { name: "Profile", exact: true }).click();
+  await expect(ai.getByRole("table", { name: "AI cost breakdown" })).toContainText("buyer");
+  await page.goBack();
+  await page.goBack();
   await page.getByRole("link", { name: "buyer", exact: true }).click();
   const profile = page.getByRole("region", { name: "Profile detail" });
   await expect(profile).toContainText("Revenue (cents)");

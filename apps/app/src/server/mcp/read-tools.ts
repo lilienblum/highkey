@@ -14,6 +14,7 @@ import { parseEntityQuery, runEntityQuery } from "../queries/entities";
 import { readAs } from "../queries/read";
 import { revenueReport } from "../queries/revenue";
 import { patterns } from "../queries/patterns";
+import { generations } from "../queries/generations";
 import { personDetail, peopleList } from "../queries/people";
 import { sessionList, sessionDetail } from "../queries/sessions";
 import { type Args, badArgument, projectId, type Tool } from "./common";
@@ -109,6 +110,7 @@ const report =
   };
 
 export const readTools: Record<string, Tool> = {
+  query_generations: report(generations),
   query_patterns: report(patterns),
   list_people: report(peopleList),
   get_profile: report(personDetail),
