@@ -1,13 +1,9 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Admin } from "@/components/settings/admin";
-import { managementSearch } from "@/lib/route-search";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ACCOUNT_SETTINGS } from "@/lib/auth-routes";
 
-// The server admin's page; for anyone else it does not exist.
+// Old bookmarks open ordinary account settings without carrying over report filters.
 export const Route = createFileRoute("/admin")({
-  search: managementSearch,
-  beforeLoad: ({ context }) => {
-    if (!context.viewer?.user.serverAdmin) throw notFound();
+  beforeLoad: () => {
+    throw redirect({ to: ACCOUNT_SETTINGS, replace: true });
   },
-  head: () => ({ meta: [{ title: "Server · Highkey" }] }),
-  component: Admin,
 });

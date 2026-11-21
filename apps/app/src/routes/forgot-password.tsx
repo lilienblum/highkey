@@ -33,10 +33,7 @@ function ForgotPassword() {
     return (
       <AuthFrame title="Reset your password" footer={back}>
         <AuthNotice>
-          <p>
-            This server doesn’t send email. Ask your server admin for a reset link; they can make
-            one for your account from the admin page.
-          </p>
+          <p>This server doesn’t send email. Ask your server admin for a password reset link.</p>
         </AuthNotice>
       </AuthFrame>
     );

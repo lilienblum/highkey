@@ -144,7 +144,7 @@ export function useWorkspaceTarget() {
  * instead of being sent to the saved project's address, and show under Settings.
  */
 export function isOrganizationPage(path: string): boolean {
-  return /^\/(settings\/(organization|members|keys|agents|account)|admin)\/?$/.test(path);
+  return /^\/settings\/(organization|members|keys|agents|account)\/?$/.test(path);
 }
 
 export function workspaceView(path: string): WorkspaceView {

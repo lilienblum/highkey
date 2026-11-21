@@ -1,4 +1,4 @@
-// Settings for people, keys, agents and accounts, and the server admin's page.
+// Settings for people, keys, agents and accounts.
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, type Page, request, test } from "@playwright/test";
@@ -168,19 +168,13 @@ test("turn on two-factor", async ({ browser }) => {
   await context.close();
 });
 
-test("the server admin bans a user", async ({ page }) => {
-  const email = `troublemaker-${run}@example.com`;
-  await account(email);
-  await page.goto("/admin");
-  await page.getByRole("searchbox", { name: "Search people and organizations" }).fill(email);
-  await page.getByRole("button", { name: "Search" }).click();
-  await page.getByRole("button", { name: `Actions for ${email}` }).click();
-  await page.getByRole("menuitem", { name: "Ban" }).click();
-  await expect(page.getByText("Banned")).toBeVisible();
-  const signIn = await fetch(`${base}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base },
-    body: JSON.stringify({ email, password: PASSWORD }),
-  });
-  expect(signIn.status).toBe(403);
+test("an old admin bookmark opens account settings without report filters", async ({ page }) => {
+  await page.goto("/admin?source=all&days=7");
+  await expect(page).toHaveURL(`${base}/settings/account`);
+  const nav = page.getByRole("navigation", { name: "Settings", exact: true });
+  await expect(nav.getByRole("link", { name: "Account", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(nav.getByRole("link", { name: "Server", exact: true })).toHaveCount(0);
 });

@@ -14,7 +14,7 @@ export interface ViewerOrganization {
 }
 
 export interface Viewer {
-  user: { id: string; name: string; email: string; serverAdmin: boolean; twoFactor: boolean };
+  user: { id: string; name: string; email: string; twoFactor: boolean };
   activeOrganizationId: string | null;
   organizations: ViewerOrganization[];
 }
@@ -72,7 +72,6 @@ export const getViewer = createServerFn({ method: "GET" }).handler(
       requireTwoFactor: Boolean(required),
     }));
     const user = session.user as typeof session.user & {
-      role?: string | null;
       twoFactorEnabled?: boolean | null;
     };
     return {
@@ -80,7 +79,6 @@ export const getViewer = createServerFn({ method: "GET" }).handler(
         id: user.id,
         name: user.name,
         email: user.email,
-        serverAdmin: user.role === "admin",
         twoFactor: Boolean(user.twoFactorEnabled),
       },
       activeOrganizationId: session.session.activeOrganizationId ?? null,

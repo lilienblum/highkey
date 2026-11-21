@@ -3595,8 +3595,3 @@ button.workspace-dashboards-menu-link {
   gap: 8px;
   margin-top: 16px;
 }
-.admin-search {
-  display: flex;
-  gap: 8px;
-  max-width: 480px;
-}

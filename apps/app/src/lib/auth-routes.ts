@@ -75,7 +75,11 @@ const ORGANIZATION_PAGES = [
 
 /** Pages that act in an open organization (the workspace, and creating a project in it). */
 export function needsOrganization(pathname: string): boolean {
-  return (!isAccountScreen(pathname) || pathname === NEW_PROJECT) && pathname !== ACCOUNT_SETTINGS;
+  return (
+    (!isAccountScreen(pathname) || pathname === NEW_PROJECT) &&
+    pathname !== ACCOUNT_SETTINGS &&
+    pathname !== "/admin"
+  );
 }
 
 /** Workspace pages that show a project; with none in the organization, they create one first. */

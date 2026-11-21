@@ -3,11 +3,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * The parts of Settings: the open project's, then the organization's (its details, people,
- * API keys and agents), then the person's own account, and the server admin's page for them.
+ * API keys and agents), then the person's own account.
  */
 export function SettingsNav() {
   const path = useLocation({ select: (location) => location.pathname });
-  const { viewer } = useRouteContext({ from: "__root__" });
   const items: [string, string, boolean][] = [
     ["/settings", "Project", /^(\/[^/]+\/[^/]+)?\/settings\/?$/.test(path)],
     ["/settings/organization", "Organization", path.startsWith("/settings/organization")],
@@ -16,7 +15,6 @@ export function SettingsNav() {
     ["/settings/agents", "Agents", path.startsWith("/settings/agents")],
     ["/settings/account", "Account", path.startsWith("/settings/account")],
   ];
-  if (viewer?.user.serverAdmin) items.push(["/admin", "Server", path.startsWith("/admin")]);
   return (
     <nav className="settings-nav" aria-label="Settings">
       {items.map(([to, label, active]) => (
