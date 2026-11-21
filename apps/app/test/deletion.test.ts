@@ -162,12 +162,17 @@ describe("deleting", () => {
 
   test("a_wipe_leaves_no_events_logs_reader_views_or_rows", async () => {
     const shop = await furnished();
-    await seedEvents(shop.id, [{ event_id: "e1" }, { event_id: "e2" }]);
+    await seedEvents(shop.id, [
+      { event_id: "e1", actor_id: "v", identity_kind: "visitor", session_id: "s" },
+      { event_id: "e2" },
+    ]);
+    expect(await count("highkey.session_events", shop.id)).toBe(1);
     await seedLogs(shop.id, [{ log_id: "l1" }]);
     await call(ctx, "DELETE", `/api/products/${shop.id}`);
     const payload = await age(shop.id, 8);
     expect(await wipeProject(ctx, payload)).toBe("wiped");
     expect(await count("highkey.events", shop.id)).toBe(0);
+    expect(await count("highkey.session_events", shop.id)).toBe(0);
     expect(await count("highkey.logs", shop.id)).toBe(0);
     expect(await count("highkey.ingest_keys", shop.id)).toBe(0);
     expect(await count("highkey.ingest_key_policies", shop.id)).toBe(0);
@@ -222,6 +227,7 @@ describe("deleting", () => {
       "logs",
       "profiles",
       "groups",
+      "session_events",
       "access",
       "rows",
       "keys",

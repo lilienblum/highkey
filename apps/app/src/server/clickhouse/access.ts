@@ -101,6 +101,12 @@ export function accessStatements(productId: string, secret: string): string[] {
     ),
     view("logs", LOG_COLUMNS, "highkey.logs", `${project} AND ${scoped("timestamp")}`),
     view("all_logs", LOG_COLUMNS, "highkey.logs", project),
+    view(
+      "sessions",
+      "source_id, actor_id, session_id, started_at, ended_at, entry_page, exit_page, events, page_views, duration_ms, bounced, first_referrer AS referrer, first_campaign AS campaign, profile AS profile_id, toString(net_cents) AS revenue_cents",
+      "highkey.sessions",
+      `${project} AND ${scoped("started_at")}`,
+    ),
     `CREATE USER IF NOT EXISTS ${user} ${identified} ${options}`,
     `ALTER USER ${user} ${identified} ${options}`,
     `GRANT SELECT ON ${database}.* TO ${user}`,
@@ -138,7 +144,7 @@ export function accessVersion(secret: string): string {
  */
 export async function provisionedProjects(admin: ClickHouse): Promise<Set<string>> {
   const result = await admin.query<{ id: string }>(
-    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'group_records') GROUP BY database HAVING count() = 6
+    `SELECT substring(database, ${DATABASE_PREFIX.length + 1}) AS id FROM system.tables WHERE startsWith(database, '${DATABASE_PREFIX}') AND name IN ('events', 'all_events', 'logs', 'all_logs', 'profile_records', 'group_records','sessions') GROUP BY database HAVING count() = 7
      INTERSECT
      SELECT substring(user_name, ${READER_PREFIX.length + 1}) AS id FROM system.grants WHERE startsWith(user_name, '${READER_PREFIX}') AND access_type = 'SELECT' AND database = concat('${DATABASE_PREFIX}', substring(user_name, ${READER_PREFIX.length + 1})) AND table IS NULL`,
   );

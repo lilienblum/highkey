@@ -118,6 +118,8 @@ describe("project readers", () => {
   test("the physical tables and other projects are unreachable", async () => {
     for (const table of [
       "highkey.events",
+      "highkey.sessions",
+      "highkey.session_events",
       "highkey.logs",
       "highkey.ingest_keys",
       `${projectDatabase(B)}.events`,

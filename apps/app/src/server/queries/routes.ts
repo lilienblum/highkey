@@ -9,6 +9,7 @@ import { parseLogsQuery, runLogsQuery } from "./logs";
 import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
+import { sessionList, sessionDetail } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
@@ -33,5 +34,12 @@ export function registerQueries(): void {
       if (query.source_id) await requireSource(ctx.db, product.id, query.source_id);
       return json(await readAs(ctx, product.id, (reader) => runLogsQuery(reader, query)));
     });
+    for (const [path, run] of [
+      ["query", sessionList],
+      ["detail", sessionDetail],
+    ] as const)
+      route("POST", `${prefix}/sessions/${path}`, READ, async (request, ctx, { project }) =>
+        json(await run(ctx, project as string, await readJson(request))),
+      );
   }
 }

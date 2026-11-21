@@ -138,6 +138,14 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 `POST /api/products/:project/profiles/query` and `/groups/query` return current traits from retained mutation history. Both are also available under `/api/read/products/:project` with an API key, and through MCP as `query_profiles` and `query_groups`.
 
+### Sessions
+
+`POST /api/products/:project/sessions/query` returns `{ rows, page, page_size, has_more }`, newest first. `from` and `to` select sessions **starting** in the half-open UTC range; a session ending outside it still shows its full retained activity. Optional filters: `source_id`, `profile_id`, `search` (visited path or first referrer), `bounced` (boolean), `min_duration_ms`, `min_page_views`. Page numbers start at 1; page size is 1–100.
+
+`POST /api/products/:project/sessions/detail` takes the same range plus `source_id`, `actor_id` and `session_id`. It returns the summary, a chronological page of events, top ten paths and event names, and up to 50 logs matching an explicit request or trace ID in the session's time window. `more_logs` signals truncation. Both endpoints are also under `/api/read/products/:project` for API-key clients.
+
+Only events with an explicit visitor and session ID contribute. Project, source, visitor and session together identify a visit. Non-backfilled events establish its start, end, entry/exit pages, and acquisition fields. Backfills can contribute activity and revenue, but a backfill alone never creates a visit. A bounce means exactly one retained page view. All monetary totals are exact integer cents returned as decimal strings.
+
 The body accepts optional `id`, `search`, `page` (1–10000), and `page_size` (1–100, default 50); group reads also accept `type`. The response is `{rows, total, page, page_size}`. Rows contain the ID, first/last mutation time and typed `traits`; groups also include `type` and `name`. Project isolation is enforced by the reader's database views. Retention and project deletion apply to mutation history and materialized copies.
 
 ### Deduplication
