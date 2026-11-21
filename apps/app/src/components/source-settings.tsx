@@ -167,15 +167,10 @@ export function SourceFields({
     <>
       <Field data-disabled={disabled}>
         <FieldLabel htmlFor="source-name">{label}</FieldLabel>
-        <div className="flex items-center gap-2">
-          <SourceIconPicker
-            name={value.name}
-            value={value.icon}
-            onChange={(icon) => onChange({ ...value, icon })}
-            disabled={disabled}
-          />
+        <div className="relative">
           <Input
             id="source-name"
+            className="pe-11"
             value={value.name}
             onChange={(e) => onChange({ ...value, name: e.target.value })}
             placeholder="e.g. Website, iOS app, CLI"
@@ -183,6 +178,13 @@ export function SourceFields({
             required
             maxLength={80}
             disabled={disabled}
+          />
+          <SourceIconPicker
+            name={value.name}
+            value={value.icon}
+            onChange={(icon) => onChange({ ...value, icon })}
+            disabled={disabled}
+            className="absolute end-1 top-1/2 -translate-y-1/2"
           />
         </div>
         {hint ? <FieldDescription id="source-name-hint">{hint}</FieldDescription> : null}
@@ -202,10 +204,10 @@ export function SourceFields({
         />
         <FieldDescription>
           {value.visitor_mode === "persistent"
-            ? "Only start persistent tracking after consent. Browser storage keeps the visitor and session IDs."
+            ? "Recognizes returning visitors across days. Ask for consent first."
             : value.visitor_mode === "cookieless"
-              ? "Counts visitors for one UTC day using a rotating salt. A visit lasts for this page or SPA tab, without device storage."
-              : "Events still count. No automatic visitor or session ID is collected."}
+              ? "Counts visitors without storing anything on their device. Someone who returns another day counts again."
+              : "Counts events without counting visitors."}
         </FieldDescription>
       </Field>
     </>

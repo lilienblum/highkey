@@ -251,7 +251,7 @@ test.describe("no dead ends", () => {
 
 // An organization without projects opens on creating its first one, wherever the person goes.
 test.describe("first project", () => {
-  test("an organization without projects opens the new-project page", async ({ browser }) => {
+  test("an organization without projects opens the new-project page", async ({ browser }, info) => {
     const email = `first-light-${run}@example.com`;
     const api = await signUp(email);
     const [org] = (await (await api.get("/api/auth/organization/list")).json()) as {
@@ -270,10 +270,21 @@ test.describe("first project", () => {
     await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
     await page.getByLabel("Project name").fill(`First light ${run}`);
     // Its source is named on the same screen, with an icon of its own.
-    await page.getByLabel("Source", { exact: true }).fill("Website");
-    await page
-      .getByRole("button", { name: "Source icon: Automatic · Website", exact: true })
-      .click();
+    const input = page.getByLabel("Source", { exact: true });
+    await input.fill("Website");
+    const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page
+        .locator("form.auth-form")
+        .screenshot({ path: info.outputPath(`source-form-${width}.png`) });
+      const field = (await input.boundingBox())!,
+        button = (await icon.boundingBox())!;
+      expect(button.x).toBeGreaterThan(field.x + field.width / 2);
+      expect(button.x + button.width).toBeLessThanOrEqual(field.x + field.width);
+    }
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await icon.click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByRole("button", { name: "Create project" }).click();
     // The same page then shows how to connect it: the source's new key in a snippet, and the

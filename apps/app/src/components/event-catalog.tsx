@@ -139,7 +139,7 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
                 <SourceIconPicker
                   name={draft.name}
                   value={draft.icon}
-                  onChange={(icon) => set({ icon: icon ?? "generic" })}
+                  onChange={(icon) => set({ icon })}
                 />
                 <Field>
                   <FieldLabel htmlFor="catalog-color">Color</FieldLabel>

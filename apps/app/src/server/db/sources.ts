@@ -148,8 +148,15 @@ export async function saveSource(
     // Renames keep the slug, so workspace links stay valid.
     try {
       await db.execute(
-        "UPDATE sources SET name = ?3, icon = ?4,visitor_mode=coalesce(?5,visitor_mode) WHERE product_id = ?1 AND id = ?2",
-        [productId, id, name, input.icon ?? null, input.visitor_mode ?? null],
+        "UPDATE sources SET name = ?3, icon = CASE WHEN ?4 THEN ?5 ELSE icon END, visitor_mode=coalesce(?6,visitor_mode) WHERE product_id = ?1 AND id = ?2",
+        [
+          productId,
+          id,
+          name,
+          Number(input.icon !== undefined),
+          input.icon ?? null,
+          input.visitor_mode ?? null,
+        ],
       );
     } catch (error) {
       duplicateName(error);

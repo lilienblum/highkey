@@ -99,6 +99,10 @@ describe("management API", () => {
       icon: "android",
     });
     expect(renamed.json).toMatchObject({ id: source, icon: "android", slug: "ios" });
+    expect(
+      (await call(ctx, "PATCH", `/api/products/${id}/sources/${source}`, { name: "Website" })).json
+        .icon,
+    ).toBe("android");
     const listed = await call(ctx, "GET", `/api/products/${id}/sources`);
     expect(listed.json.map((s: { slug: string }) => s.slug)).toEqual(["events", "ios"]);
     expect((await call(ctx, "DELETE", `/api/products/${id}/keys/${key.json.id}`)).status).toBe(204);

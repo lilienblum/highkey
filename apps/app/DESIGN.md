@@ -349,7 +349,7 @@ Contained editing cards use the card and card-foreground pair, a fine border, th
 
 ### Inputs / Fields
 
-Source names share one row with a small square icon button on the left. It opens a four-column icon palette, with named choices, a visible selected state, and Automatic to follow the name. Arrow keys, Home and End move through the icons; choosing one or pressing Escape returns focus to the square. The same fields appear in project onboarding and source settings.
+The source name field spans the column, with an icon picker inset at its right edge. The icon follows the name until someone chooses one. The four-column palette opens focused on the current icon; arrow keys, Home and End move between choices. Selecting an icon or pressing Escape returns focus to the trigger. Onboarding and source settings use the same field.
 
 Clear, compact instruments. Inputs and select triggers share the inset surface, field stroke, and medium corner. Input text uses (14px) at desktop widths and (16px) below the medium breakpoint. Selects place a small arrow inline after their label; no separate arrow compartment or divider appears. Labels retain leading icons, truncate safely, and keep existing widths and nonmodal behavior. Hover strengthens the border; an open select uses the hover surface and ring-colored border without moving its anchor or removing the page scrollbar.
 

@@ -16,13 +16,7 @@ import {
 import { resolveSourceIcon, sourceIcons, type SourceIconId } from "@/lib/source-icons";
 import { Button } from "./ui/button";
 import { FieldSet } from "./ui/field";
-import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverTitle,
-  PopoverTrigger,
-} from "./ui/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "./ui/popover";
 
 const icons = {
   website: Globe02Icon,
@@ -53,33 +47,35 @@ export function SourceIconPicker({
   value,
   onChange,
   disabled,
+  className,
 }: {
   name: string;
   value: SourceIconId | null;
-  onChange: (icon: SourceIconId | null) => void;
+  onChange: (icon: SourceIconId) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useRef<HTMLButtonElement>(null);
   const choices = useRef<(HTMLButtonElement | null)[]>([]);
-  const automatic = resolveSourceIcon({ name });
-  const label = sourceIcons.find(([id]) => id === (value ?? automatic))?.[1];
-  function choose(icon: SourceIconId | null) {
+  const current = resolveSourceIcon({ name, icon: value });
+  const label = sourceIcons.find(([id]) => id === current)?.[1];
+  function choose(icon: SourceIconId) {
     onChange(icon);
     setOpen(false);
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={<Button variant="outline" size="icon" />}
-        className="source-icon-trigger"
-        aria-label={`Source icon: ${value ? label : `Automatic · ${label}`}`}
+        render={<Button type="button" variant="ghost" size="icon-sm" />}
+        className={className}
+        aria-label={`Source icon: ${label}`}
         title="Choose source icon"
         disabled={disabled}
       >
         <SourceIcon name={name} icon={value} />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 gap-3 p-3" initialFocus={selected}>
+      <PopoverContent align="end" className="w-56 gap-3 p-3" initialFocus={selected}>
         <PopoverTitle>Source icon</PopoverTitle>
         <FieldSet className="grid grid-cols-4 gap-2" aria-label="Source icons">
           {sourceIcons.map(([id, title], index) => (
@@ -87,7 +83,7 @@ export function SourceIconPicker({
               key={id}
               ref={(element) => {
                 choices.current[index] = element;
-                if (value === id) selected.current = element;
+                if (current === id) selected.current = element;
               }}
               type="button"
               variant="ghost"
@@ -95,7 +91,7 @@ export function SourceIconPicker({
               className="source-icon-choice"
               aria-label={title}
               title={title}
-              aria-pressed={value === id}
+              aria-pressed={current === id}
               onClick={() => choose(id)}
               onKeyDown={(event) => {
                 const next = {
@@ -115,20 +111,6 @@ export function SourceIconPicker({
             </Button>
           ))}
         </FieldSet>
-        <Button
-          ref={value === null ? selected : undefined}
-          type="button"
-          variant="ghost"
-          className="source-icon-choice w-full justify-start"
-          aria-pressed={value === null}
-          onClick={() => choose(null)}
-        >
-          <SourceIcon name={name} />
-          Automatic
-        </Button>
-        <PopoverDescription>
-          Automatic follows the source name. Icons only change its appearance.
-        </PopoverDescription>
       </PopoverContent>
     </Popover>
   );

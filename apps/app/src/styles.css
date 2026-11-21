@@ -375,13 +375,6 @@ p {
 ):active {
   --button-tone: var(--tone-75);
 }
-.source-icon-trigger[data-variant] {
-  --button-face: var(--surface-inset);
-  --button-drop: 0 0 #0000;
-  --button-bevel: inset 0 1px 2px rgb(0 0 0 / 20%);
-  border-color: var(--input);
-  border-radius: var(--radius-md);
-}
 .source-icon-choice[data-variant] {
   border-radius: var(--radius-md);
 }

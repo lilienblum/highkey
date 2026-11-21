@@ -61,7 +61,7 @@ The **Breakdown** selector offers Top events, Sources, Clients, Pages, Commands,
 
 ## Source icons
 
-Settings lets you name sources and choose an optional icon from Hugeicons. **Automatic** follows common platform words in the name (iOS, Android, website, CLI, API, desktop, mobile, SDK, code, game); unrecognized names use a cube. Choosing an icon pins it across renames. Return to Automatic to follow the name again. Icons appear in the source list and source selector and never change analytics behavior. Integration language tabs are available for every source and remain under your control.
+Highkey suggests a source icon from its name: for example, “iOS app” gets the Apple icon and “CLI” gets a terminal. Unrecognized names use a cube. To choose an icon yourself, click the icon at the right of the name field. Your choice stays selected when you rename the source. Icons appear in the source list and source selector and never change analytics behavior. Integration language tabs are available for every source and remain under your control.
 
 ## Design notes
 
@@ -117,7 +117,7 @@ All sources share the same analytics interface. The optional icon is visual meta
 
 ## Source management
 
-Settings lists sources with their name and icon. Automatic chooses an icon from the name; an explicit choice stays fixed after renaming. Add or edit a source there, then choose it in **Key source** before creating an ingestion key. Each key belongs permanently to one source. Integration snippets use the selected source's key; Browser, TypeScript, Rust CLI, and HTTP / Mobile examples are available for every source. Renaming a source changes its display name without moving historical events. Sources share the project's retention policy and optional identity namespace. Revoke its keys to stop intake; source deletion and merging are outside v1.
+Settings lists sources with their name and icon. Add or edit a source there, then choose it in **Key source** before creating an ingestion key. Each key belongs permanently to one source. Integration snippets use the selected source's key; Browser, TypeScript, Rust CLI, and HTTP / Mobile examples are available for every source. Renaming a source changes its display name without moving historical events. Sources share the project's retention policy and optional identity namespace. Revoke its keys to stop intake; source deletion and merging are outside v1.
 
 ## Chart inspection
 

@@ -66,12 +66,13 @@ test("nested source icon picker closes before its dialog and restores keyboard f
   const dialog = page.getByRole("dialog", { name: "Add a source", exact: true });
   await dialog.getByLabel("Source name").fill("iOS client");
   const icon = dialog.getByRole("button", { name: /^Source icon:/ });
-  await expect(icon).toHaveAccessibleName("Source icon: Automatic · iOS");
+  await expect(icon).toHaveAccessibleName("Source icon: iOS");
   await icon.press("Enter");
   const picker = page.getByRole("dialog", { name: "Source icon", exact: true });
-  await picker.getByRole("button", { name: "Website", exact: true }).focus();
+  await expect(picker.getByRole("button", { name: "iOS", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(icon).toHaveAccessibleName("Source icon: Website");
+  await dialog.getByLabel("Source name").fill("Website");
+  await expect(icon).toHaveAccessibleName("Source icon: iOS");
   await icon.press("Enter");
   await page.keyboard.press("Escape");
   await expect(picker).not.toBeVisible();
@@ -79,9 +80,9 @@ test("nested source icon picker closes before its dialog and restores keyboard f
   await expect(icon).toBeFocused();
   await dialog.getByRole("button", { name: "Close", exact: true }).focus();
   await page.keyboard.press("Tab");
-  await expect(icon).toBeFocused();
-  await page.keyboard.press("Tab");
   await expect(dialog.getByLabel("Source name")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(icon).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
