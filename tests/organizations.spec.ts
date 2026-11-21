@@ -313,8 +313,11 @@ test.describe("first project", () => {
     expect(project.website_urls).toEqual([]);
     await expect(page).toHaveURL(`${base}/new`);
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
+    await expect(page.getByRole("heading", { name: "SDK install guide" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
     await expect(page.locator(".integration-code")).toBeHidden();
-    await page.getByText("View SDK install guide", { exact: true }).click();
+    await expect(page.locator(".setup-curl")).toBeHidden();
+    await page.getByText("Install manually", { exact: true }).click();
     expect(key).toMatch(/^pk_/);
     await expect(page.locator(".integration-code")).toContainText(key);
     await expect(page.locator(".integration-code")).toContainText("registerAnalyticsConsent");
@@ -346,6 +349,23 @@ test.describe("first project", () => {
     expect(website).not.toHaveProperty("consent_theme");
     await expect(connection).toContainText("Waiting for the first event from Website");
     await page.setViewportSize({ width: 390, height: 844 });
+    const tabs = page.getByRole("tablist", { name: "Integration language" });
+    const http = tabs.getByRole("tab", { name: "HTTP / Mobile" });
+    await http.click();
+    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
+    await expect(page.locator(".integration-code")).toBeHidden();
+    await page.getByText("Install manually", { exact: true }).click();
+    await expect(page.locator(".integration-code")).toBeVisible();
+    expect(
+      await tabs.evaluate(
+        (el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight + 2,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await tabs.screenshot({ path: info.outputPath("sdk-tabs-390.png") });
+    await tabs.getByRole("tab", { name: "Browser" }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: info.outputPath("connect-390.png") });
     await expect(connection).toBeInViewport();
@@ -353,8 +373,8 @@ test.describe("first project", () => {
     await page.screenshot({ path: info.outputPath("connect-1280.png") });
     await page.getByRole("combobox", { name: "Install framework" }).click();
     await page.getByRole("option", { name: "Next.js", exact: true }).click();
+    await page.getByText("Install manually", { exact: true }).click();
     await expect(page.getByText(/Save the module below as public\/highkey.mjs/)).toBeVisible();
-    await page.getByText("Install with AI", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
     const ingested = await fetch(`${process.env.HIGHKEY_API_URL}/api/ingest`, {
       method: "POST",

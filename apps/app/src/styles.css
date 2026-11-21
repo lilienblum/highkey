@@ -1465,6 +1465,29 @@ p {
 .integration-card [data-slot="card-title"] svg {
   width: 16px;
 }
+.integration-guide {
+  container-type: inline-size;
+}
+.integration-guide [data-slot="tabs-list"][data-variant="line"] {
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.integration-guide [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"] {
+  height: 2.5rem;
+  flex: none;
+}
+@container (max-width: 26rem) {
+  .integration-guide [data-slot="tabs-list"][data-variant="line"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+}
+.integration-guide :is(.integration-code, .setup-curl) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .code-toolbar {
   display: flex;
   align-items: center;

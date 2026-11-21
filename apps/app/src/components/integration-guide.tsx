@@ -144,18 +144,22 @@ export function IntegrationTabs({
         : "Keep anonymous collection; do not enable identity.";
   const prompt = `Install Highkey analytics in this ${value === "browser" ? placements[framework][0] : value} project using ${origin} as the endpoint. ${server ? "Read HIGHKEY_SERVER_KEY only from the backend environment." : "Read the source's public ingestion key from the project's configuration."} Inspect the existing framework and install once. ${identityInstruction} Honor DNT/GPC, exclude private routes, secrets and personal data, and keep campaign capture off. Send one setup_check event and verify the acknowledgment and source in Highkey.`;
   return (
-    <Tabs value={value} onValueChange={(next) => onValueChange(next as Integration)}>
+    <Tabs
+      className="integration-guide min-w-0"
+      value={value}
+      onValueChange={(next) => onValueChange(next as Integration)}
+    >
       <TabsList
         variant="line"
         aria-label="Integration language"
-        className="mb-4 w-full justify-start overflow-x-auto sm:w-auto"
+        className="mb-2 w-full justify-start"
       >
         {!server && <TabsTrigger value="browser">Browser</TabsTrigger>}
         <TabsTrigger value="typescript">TypeScript</TabsTrigger>
         {!server && <TabsTrigger value="rust">Rust CLI</TabsTrigger>}
         <TabsTrigger value="http">{server ? "HTTP / Server" : "HTTP / Mobile"}</TabsTrigger>
       </TabsList>
-      <TabsContent value={value} key={value}>
+      <TabsContent value={value} key={value} className="min-w-0">
         {value === "browser" && (
           <div className="mb-3 grid gap-2">
             <ValueSelect
@@ -172,7 +176,6 @@ export function IntegrationTabs({
               ]}
               onValueChange={(v) => setFramework(v as keyof typeof placements)}
             />
-            <p className="quiet">{placements[framework][1]}</p>
             {visitorMode === "persistent" && (
               <details className="my-2">
                 <summary className="w-fit cursor-pointer">Customize consent snippet</summary>
@@ -231,37 +234,52 @@ export function IntegrationTabs({
             )}
           </div>
         )}
-        <div className="code-toolbar">
-          <span>
-            {value === "browser"
-              ? framework === "next"
-                ? "public/highkey.mjs"
-                : placements[framework][0]
-              : CAPTION[value]}
-          </span>
-          <CopyButton variant="ghost" content={snippet} onCopyError={onCopyError}>
-            Copy snippet
-          </CopyButton>
-        </div>
-        <pre className="integration-code">
-          <code>
-            {highlight(
-              snippet,
-              value === "browser" && framework === "next" ? "js" : LANGUAGE[value],
-            )}
-          </code>
-        </pre>
-        <p className="quiet">
-          {server
-            ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
-            : value === "browser" && visitorMode === "persistent"
-              ? builtIn
-                ? "Highkey asks before counting visits. Add a Privacy preferences button to your footer so visitors can change their choice."
-                : "Connect this function to your site's analytics consent manager."
-              : value === "browser" && visitorMode === "cookieless"
-                ? "No device storage. Anonymous visitor hashes expire at UTC midnight."
-                : NOTE[value]}
-        </p>
+        <section className="mb-4 grid min-w-0 gap-2 rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Install with AI</h3>
+            <CopyButton size="sm" content={prompt} onCopyError={onCopyError}>
+              Copy install prompt
+            </CopyButton>
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+            {prompt}
+          </p>
+        </section>
+        <details>
+          <summary className="w-fit cursor-pointer">Install manually</summary>
+          {value === "browser" && <p className="quiet my-2">{placements[framework][1]}</p>}
+          <div className="code-toolbar mt-2">
+            <span>
+              {value === "browser"
+                ? framework === "next"
+                  ? "public/highkey.mjs"
+                  : placements[framework][0]
+                : CAPTION[value]}
+            </span>
+            <CopyButton variant="ghost" content={snippet} onCopyError={onCopyError}>
+              Copy snippet
+            </CopyButton>
+          </div>
+          <pre className="integration-code">
+            <code>
+              {highlight(
+                snippet,
+                value === "browser" && framework === "next" ? "js" : LANGUAGE[value],
+              )}
+            </code>
+          </pre>
+          <p className="quiet">
+            {server
+              ? "Store your secret as HIGHKEY_SERVER_KEY on the backend. Reuse the payment event ID and timestamp on retries. Revenue is integer cents; use negative cents for refunds."
+              : value === "browser" && visitorMode === "persistent"
+                ? builtIn
+                  ? "Highkey asks before counting visits. Add a Privacy preferences button to your footer so visitors can change their choice."
+                  : "Connect this function to your site's analytics consent manager."
+                : value === "browser" && visitorMode === "cookieless"
+                  ? "No device storage. Anonymous visitor hashes expire at UTC midnight."
+                  : NOTE[value]}
+          </p>
+        </details>
         <details className="mt-3">
           <summary>Test with curl</summary>
           <p className="quiet">Run from a terminal. Keep the same event ID if you retry.</p>
@@ -270,13 +288,6 @@ export function IntegrationTabs({
           </pre>
           <CopyButton content={curl} onCopyError={onCopyError}>
             Copy curl command
-          </CopyButton>
-        </details>
-        <details className="mt-3">
-          <summary>Install with AI</summary>
-          <p className="quiet">{prompt}</p>
-          <CopyButton content={prompt} onCopyError={onCopyError}>
-            Copy install prompt
           </CopyButton>
         </details>
       </TabsContent>

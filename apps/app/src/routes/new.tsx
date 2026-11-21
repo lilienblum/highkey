@@ -242,18 +242,18 @@ function Connect({ created }: { created: Created }) {
         </p>
       </section>
       <FirstEventNotice id={project.id} source={source} />
-      <details className={`pt-4 ${SEAM}`}>
-        <summary className="w-fit cursor-pointer font-semibold text-primary">
-          View SDK install guide
-        </summary>
-        <div className="mt-4 grid min-w-0 gap-4">
+      <section aria-labelledby="sdk-install-guide" className={`min-w-0 pt-4 ${SEAM}`}>
+        <h2 id="sdk-install-guide" className="font-semibold">
+          SDK install guide
+        </h2>
+        <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
           <Lead>
-            Choose your platform and copy the snippet for {source.name}. You can also find these
-            instructions in project settings.
+            Choose your platform, then copy the prompt into your coding assistant or install
+            manually. You can return to this guide in project settings.
           </Lead>
           {copyFailed ? (
             <p className={HINT} role="alert">
-              Clipboard unavailable. Select the snippet and copy it manually.
+              Clipboard unavailable. Select the text and copy it manually.
             </p>
           ) : null}
           <IntegrationTabs
@@ -274,7 +274,7 @@ function Connect({ created }: { created: Created }) {
             <ConnectAgent />
           </details>
         </div>
-      </details>
+      </section>
     </main>
   );
 }
