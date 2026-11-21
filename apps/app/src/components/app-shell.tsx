@@ -287,6 +287,7 @@ export function AppShell({
       "/events": "Events",
       "/revenue": "Revenue",
       "/sessions": "Sessions",
+      "/realtime": "Realtime",
       "/people": "Profiles",
       "/ai": "AI costs",
       "/logs": "Logs",
@@ -420,7 +421,7 @@ export function AppShell({
               <div className="mobile-project-picker">{projectPicker}</div>
               <span className="workspace-source-name">{source?.name ?? "All sources"}</span>
             </div>
-            {view !== "/settings" && view !== "/logs" && (
+            {view !== "/settings" && view !== "/logs" && view !== "/realtime" && (
               <div className="workspace-toolbar">
                 <div className="workspace-toolbar-actions">
                   <DateRangePicker

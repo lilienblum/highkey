@@ -146,6 +146,8 @@ A visitor's explicit identify can attribute up to six hours of earlier profile-l
 
 ### Live activity
 
+**Realtime.** `POST /api/products/:project/realtime` (also under `/api/read`) accepts optional `source_id` and always looks back 30 minutes from the server clock. It returns 30 event-count bins, the latest 20 events and active visits, and counts by country, page and project source. No location is inferred for unknown countries. The dashboard's Realtime page refreshes from native change hints with visible-tab polling as a fallback and supports fullscreen TV mode.
+
 **Website metrics.** `POST /api/products/:project/web-metrics` (also under `/api/read`) accepts `from`, `to`, `bucket`, optional `event`, `source`, `source_id`, and typed `filters`. `current`, `previous` and the UTC `series` include visitors, sessions started, page views, pages per session, bounce percentage, average visit length in seconds, and exact net `revenue` in decimal-string cents. Session filters qualify whole visits. The **Metric set → Website metrics** control switches Overview to these tiles; selecting a tile changes the chart.
 
 **Chart references.** `POST /api/products/:project/references` accepts `title`, optional `description`, and an RFC 3339 `at` timestamp with a timezone. Delete a manual note at `DELETE /api/products/:project/references/:reference`. `POST /api/products/:project/references/query` (also under `/api/read`) takes `from` and `to`, and lists the latest 250 dated notes, `deploy`/`deployment` events, and the first retained sighting of each CLI `properties.version`. The result reports truncation. Agents have `create_reference`, `list_references`, and `query_breakdown`. Only project editors may create notes.

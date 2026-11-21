@@ -9,6 +9,7 @@ import {
   Coins01Icon,
   AiBrain01Icon,
   Clock01Icon,
+  Pulse01Icon,
   UserGroupIcon,
   CubeIcon,
   DashboardSquare01Icon,
@@ -161,6 +162,7 @@ export function WorkspaceSidebar({
                   {(
                     [
                       ["/", "Overview", DashboardSquare01Icon],
+                      ["/realtime", "Realtime", Pulse01Icon],
                       ["/events", "Events", Search01Icon],
                       ["/sessions", "Sessions", Clock01Icon],
                       ["/people", "Profiles", UserGroupIcon],

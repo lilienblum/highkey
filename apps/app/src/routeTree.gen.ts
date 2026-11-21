@@ -49,6 +49,7 @@ import { Route as OrgSlugProjectSlugEventsRouteImport } from './routes/$orgSlug.
 import { Route as OrgSlugProjectSlugExploreRouteImport } from './routes/$orgSlug.$projectSlug.explore'
 import { Route as OrgSlugProjectSlugLogsRouteImport } from './routes/$orgSlug.$projectSlug.logs'
 import { Route as OrgSlugProjectSlugPeopleRouteImport } from './routes/$orgSlug.$projectSlug.people'
+import { Route as OrgSlugProjectSlugRealtimeRouteImport } from './routes/$orgSlug.$projectSlug.realtime'
 import { Route as OrgSlugProjectSlugRevenueRouteImport } from './routes/$orgSlug.$projectSlug.revenue'
 import { Route as OrgSlugProjectSlugSessionsRouteImport } from './routes/$orgSlug.$projectSlug.sessions'
 import { Route as OrgSlugProjectSlugSettingsRouteImport } from './routes/$orgSlug.$projectSlug.settings'
@@ -258,6 +259,12 @@ const OrgSlugProjectSlugPeopleRoute =
     path: '/people',
     getParentRoute: () => OrgSlugProjectSlugRoute,
   } as any)
+const OrgSlugProjectSlugRealtimeRoute =
+  OrgSlugProjectSlugRealtimeRouteImport.update({
+    id: '/realtime',
+    path: '/realtime',
+    getParentRoute: () => OrgSlugProjectSlugRoute,
+  } as any)
 const OrgSlugProjectSlugRevenueRoute =
   OrgSlugProjectSlugRevenueRouteImport.update({
     id: '/revenue',
@@ -328,6 +335,7 @@ export interface FileRoutesByFullPath {
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
   '/$orgSlug/$projectSlug/people': typeof OrgSlugProjectSlugPeopleRoute
+  '/$orgSlug/$projectSlug/realtime': typeof OrgSlugProjectSlugRealtimeRoute
   '/$orgSlug/$projectSlug/revenue': typeof OrgSlugProjectSlugRevenueRoute
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
@@ -373,6 +381,7 @@ export interface FileRoutesByTo {
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
   '/$orgSlug/$projectSlug/people': typeof OrgSlugProjectSlugPeopleRoute
+  '/$orgSlug/$projectSlug/realtime': typeof OrgSlugProjectSlugRealtimeRoute
   '/$orgSlug/$projectSlug/revenue': typeof OrgSlugProjectSlugRevenueRoute
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
@@ -421,6 +430,7 @@ export interface FileRoutesById {
   '/$orgSlug/$projectSlug/explore': typeof OrgSlugProjectSlugExploreRoute
   '/$orgSlug/$projectSlug/logs': typeof OrgSlugProjectSlugLogsRoute
   '/$orgSlug/$projectSlug/people': typeof OrgSlugProjectSlugPeopleRoute
+  '/$orgSlug/$projectSlug/realtime': typeof OrgSlugProjectSlugRealtimeRoute
   '/$orgSlug/$projectSlug/revenue': typeof OrgSlugProjectSlugRevenueRoute
   '/$orgSlug/$projectSlug/sessions': typeof OrgSlugProjectSlugSessionsRoute
   '/$orgSlug/$projectSlug/settings': typeof OrgSlugProjectSlugSettingsRoute
@@ -470,6 +480,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
     | '/$orgSlug/$projectSlug/people'
+    | '/$orgSlug/$projectSlug/realtime'
     | '/$orgSlug/$projectSlug/revenue'
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
@@ -515,6 +526,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
     | '/$orgSlug/$projectSlug/people'
+    | '/$orgSlug/$projectSlug/realtime'
     | '/$orgSlug/$projectSlug/revenue'
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
@@ -562,6 +574,7 @@ export interface FileRouteTypes {
     | '/$orgSlug/$projectSlug/explore'
     | '/$orgSlug/$projectSlug/logs'
     | '/$orgSlug/$projectSlug/people'
+    | '/$orgSlug/$projectSlug/realtime'
     | '/$orgSlug/$projectSlug/revenue'
     | '/$orgSlug/$projectSlug/sessions'
     | '/$orgSlug/$projectSlug/settings'
@@ -888,6 +901,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgSlugProjectSlugPeopleRouteImport
       parentRoute: typeof OrgSlugProjectSlugRoute
     }
+    '/$orgSlug/$projectSlug/realtime': {
+      id: '/$orgSlug/$projectSlug/realtime'
+      path: '/realtime'
+      fullPath: '/$orgSlug/$projectSlug/realtime'
+      preLoaderRoute: typeof OrgSlugProjectSlugRealtimeRouteImport
+      parentRoute: typeof OrgSlugProjectSlugRoute
+    }
     '/$orgSlug/$projectSlug/revenue': {
       id: '/$orgSlug/$projectSlug/revenue'
       path: '/revenue'
@@ -932,6 +952,7 @@ interface OrgSlugProjectSlugRouteChildren {
   OrgSlugProjectSlugExploreRoute: typeof OrgSlugProjectSlugExploreRoute
   OrgSlugProjectSlugLogsRoute: typeof OrgSlugProjectSlugLogsRoute
   OrgSlugProjectSlugPeopleRoute: typeof OrgSlugProjectSlugPeopleRoute
+  OrgSlugProjectSlugRealtimeRoute: typeof OrgSlugProjectSlugRealtimeRoute
   OrgSlugProjectSlugRevenueRoute: typeof OrgSlugProjectSlugRevenueRoute
   OrgSlugProjectSlugSessionsRoute: typeof OrgSlugProjectSlugSessionsRoute
   OrgSlugProjectSlugSettingsRoute: typeof OrgSlugProjectSlugSettingsRoute
@@ -945,6 +966,7 @@ const OrgSlugProjectSlugRouteChildren: OrgSlugProjectSlugRouteChildren = {
   OrgSlugProjectSlugExploreRoute: OrgSlugProjectSlugExploreRoute,
   OrgSlugProjectSlugLogsRoute: OrgSlugProjectSlugLogsRoute,
   OrgSlugProjectSlugPeopleRoute: OrgSlugProjectSlugPeopleRoute,
+  OrgSlugProjectSlugRealtimeRoute: OrgSlugProjectSlugRealtimeRoute,
   OrgSlugProjectSlugRevenueRoute: OrgSlugProjectSlugRevenueRoute,
   OrgSlugProjectSlugSessionsRoute: OrgSlugProjectSlugSessionsRoute,
   OrgSlugProjectSlugSettingsRoute: OrgSlugProjectSlugSettingsRoute,

@@ -8,6 +8,7 @@ export type WorkspaceView =
   | "/settings"
   | "/dashboards"
   | "/revenue"
+  | "/realtime"
   | "/sessions"
   | "/people"
   | "/ai";
@@ -16,6 +17,7 @@ const routes = {
   "/events": "/$orgSlug/$projectSlug/events",
   "/logs": "/$orgSlug/$projectSlug/logs",
   "/revenue": "/$orgSlug/$projectSlug/revenue",
+  "/realtime": "/$orgSlug/$projectSlug/realtime",
   "/sessions": "/$orgSlug/$projectSlug/sessions",
   "/people": "/$orgSlug/$projectSlug/people",
   "/ai": "/$orgSlug/$projectSlug/ai",
@@ -44,7 +46,11 @@ export function workspaceTarget(
     ? { to: routes[view], params: { orgSlug, projectSlug } }
     : {
         to:
-          view === "/revenue" || view === "/sessions" || view === "/people" || view === "/ai"
+          view === "/revenue" ||
+          view === "/realtime" ||
+          view === "/sessions" ||
+          view === "/people" ||
+          view === "/ai"
             ? "/"
             : view,
       };
@@ -83,6 +89,7 @@ export function isOrganizationPage(path: string): boolean {
 }
 
 export function workspaceView(path: string): WorkspaceView {
+  if (/^\/[^/]+\/[^/]+\/realtime\/?$/.test(path)) return "/realtime";
   if (isOrganizationPage(path)) return "/settings";
   if (/^\/[^/]+\/[^/]+\/ai\/?$/.test(path)) return "/ai";
   if (/^\/[^/]+\/[^/]+\/revenue\/?$/.test(path)) return "/revenue";
