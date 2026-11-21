@@ -8,7 +8,6 @@ import {
   redirect,
   Scripts,
   ScriptOnce,
-  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -81,7 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     return { viewer };
   },
   // The project catalog renders on the server and is reused by client navigation; mutations
-  // refresh it in the shell, and the workspace error screen retries it with router.invalidate().
+  // refresh it in the shell. The root error screen retries with a fresh document request.
   // Account screens show no workspace, so they load none (the new-project page excepted);
   // account settings open without one.
   loader: async ({ location }) => {
@@ -165,7 +164,6 @@ function Root() {
   );
 }
 function WorkspaceError({ error }: { error: unknown }) {
-  const router = useRouter();
   const message = error instanceof Error ? error.message : null;
   const code = Object.values(Err).find((value) => value === message) ?? Err.UnexpectedAppError;
   return (
@@ -186,7 +184,9 @@ function WorkspaceError({ error }: { error: unknown }) {
         Error code: <code>{code}</code>
       </small>
       <div className="flex flex-wrap justify-center gap-3">
-        <Button onClick={() => void router.invalidate()}>Try again</Button>
+        <Button nativeButton={false} role="link" render={<a href="" />}>
+          Try again
+        </Button>
         <Button variant="outline" nativeButton={false} role="link" render={<a href="/" />}>
           Go home
         </Button>

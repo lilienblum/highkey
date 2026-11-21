@@ -31,7 +31,7 @@ test("a failed workspace load shows its support code and retries after recovery"
     );
     await expect(page.getByRole("link", { name: "Go home" })).toHaveAttribute("href", "/");
     setWebsites.run("[]", id);
-    await page.getByRole("button", { name: "Try again" }).click();
+    await page.getByRole("link", { name: "Try again" }).click();
     await expect(page.getByRole("link", { name: "Overview", exact: true })).toBeVisible();
   } finally {
     setWebsites.run("[]", id);
