@@ -16,6 +16,7 @@ import { webMetrics } from "./web-metrics";
 import { realtime } from "./realtime";
 import { eventOptions } from "./event-options";
 import { groupActivity } from "./group-activity";
+import { analysis } from "./analysis";
 import { generations } from "./generations";
 import { customRules } from "./custom";
 import { peopleList, personDetail } from "./people";
@@ -23,6 +24,9 @@ import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/analysis`, READ, async (req, ctx, { project }) =>
+      json(await analysis(ctx, project!, await readJson(req))),
+    );
     route("POST", `${prefix}/groups/activity`, READ, async (req, ctx, { project }) =>
       json(await groupActivity(ctx, project!, await readJson(req))),
     );

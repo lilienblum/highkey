@@ -35,6 +35,7 @@ import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
 import { EventCatalog } from "./event-catalog";
 import { PatternReports } from "./pattern-reports";
+import { AdvancedAnalysis } from "./advanced-analysis";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { useCohorts } from "./cohorts";
 import { useQuery, useReportQuery } from "@/lib/use-query";
@@ -276,6 +277,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
           />
         )}
         {product && !openView && <SaveEventViewButton product={product} spec={applied} />}
+        {product && <AdvancedAnalysis names={data?.event_names ?? []} filters={allFilters} />}
         {product && <EventCatalog id={product.id} observed={data?.event_names ?? []} />}
         {product && (
           <PatternReports

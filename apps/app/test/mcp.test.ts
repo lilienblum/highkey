@@ -165,6 +165,10 @@ async function registered(secret: string) {
 
 /** Every tool the read path may list, as a deliberate read-only decision. */
 const READ_TOOLS = [
+  "run_analysis",
+  "group_activity",
+  "list_cohorts",
+  "realtime_activity",
   "list_references",
   "query_breakdown",
   "query_generations",
@@ -254,6 +258,15 @@ describe("MCP", () => {
       expect(result).toEqual({ rows: [], total: 0, page: 1, page_size: 5 });
       expect((await toolOn(READ, name, { project: "entities", page_size: 101 }))[0]).toBe(true);
     }
+  });
+  test("read tools run a typed nested analysis without dropping its spec", async () => {
+    await project(ctx, "Analysis");
+    const [error, data] = await toolOn(READ, "run_analysis", {
+      project: "analysis",
+      spec: { mode: "conversion", steps: ["visit", "pay"] },
+    });
+    expect(error, JSON.stringify(data)).toBe(false);
+    expect(data).toEqual({ mode: "conversion", lines: [] });
   });
   test("every_tool_states_its_need_and_unknown_ones_get_none", () => {
     const reads = new Set(readFixture.tools.map((t: { name: string }) => t.name));

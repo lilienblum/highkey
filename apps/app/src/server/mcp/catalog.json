@@ -1,6 +1,64 @@
 {
   "tools": [
     {
+      "name": "run_analysis",
+      "description": "Run a funnel, retention, conversion or breakdown analysis. spec.steps contains event names including @custom names. spec.returns lists retention return events. Optional step and drop inspect reached or dropped actors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "spec": { "type": "object", "additionalProperties": {} },
+          "step": { "type": "integer" },
+          "drop": { "type": "boolean" },
+          "page": { "type": "integer" }
+        },
+        "required": ["project", "spec"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "group_activity",
+      "description": "List active and declared groups or inspect one type and ID: members, new members over time, events and metrics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "source_id": { "type": "string" },
+          "type": { "type": "string" },
+          "id": { "type": "string" },
+          "page": { "type": "integer" },
+          "search": { "type": "string" }
+        },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "list_cohorts",
+      "description": "List project cohort definitions, membership counts and refresh times. Filter typed queries with the boolean cohort.<id> property.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "project": { "type": "string" } },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "realtime_activity",
+      "description": "Inspect the last 30 minutes of event and session activity, country, page and source counts.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "project": { "type": "string" }, "source_id": { "type": "string" } },
+        "required": ["project"]
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
       "name": "create_reference",
       "description": "Add a dated project note to time charts. The timestamp must include a timezone.",
       "inputSchema": {
