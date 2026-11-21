@@ -314,7 +314,9 @@ test.describe("first project", () => {
     await expect(page).toHaveURL(`${base}/new`);
     const key = (await page.getByTestId("ingestion-key").textContent()) as string;
     await expect(page.getByRole("heading", { name: "SDK install guide" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
+    const ai = page.getByRole("region", { name: "Install with AI" });
+    const copyPrompt = ai.getByRole("button", { name: "Copy prompt" });
+    await expect(copyPrompt).toBeVisible();
     await expect(page.locator(".integration-code")).toBeHidden();
     await expect(page.locator(".setup-curl")).toBeHidden();
     await page.getByText("Install manually", { exact: true }).click();
@@ -341,6 +343,16 @@ test.describe("first project", () => {
     );
     await customize.click();
     const connection = page.getByRole("status", { name: "Source connection" });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
+    await copyPrompt.click();
+    const preview = ai.getByRole("button", { name: "Preview prompt" });
+    await expect(preview).toHaveAttribute("aria-expanded", "false");
+    await preview.click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain("corner layout and light theme");
+    await expect(ai.getByText(copied, { exact: true })).toBeVisible();
+    await ai.getByRole("button", { name: "Hide prompt" }).click();
+    await ai.screenshot({ path: info.outputPath("install-ai-desktop.png") });
     const sourcesAfterPreview = await (await api.get(`/api/products/${project.id}/sources`)).json();
     const website = sourcesAfterPreview.find((s: { name: string }) => s.name === "Website");
     expect(website.visitor_mode).toBe("persistent");
@@ -352,7 +364,8 @@ test.describe("first project", () => {
     const tabs = page.getByRole("tablist", { name: "Integration language" });
     const http = tabs.getByRole("tab", { name: "HTTP / Mobile" });
     await http.click();
-    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
+    await expect(copyPrompt).toBeVisible();
+    await ai.screenshot({ path: info.outputPath("install-ai-mobile.png") });
     await expect(page.locator(".integration-code")).toBeHidden();
     await page.getByText("Install manually", { exact: true }).click();
     await expect(page.locator(".integration-code")).toBeVisible();
@@ -375,7 +388,7 @@ test.describe("first project", () => {
     await page.getByRole("option", { name: "Next.js", exact: true }).click();
     await page.getByText("Install manually", { exact: true }).click();
     await expect(page.getByText(/Save the module below as public\/highkey.mjs/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copy install prompt" })).toBeVisible();
+    await expect(copyPrompt).toBeVisible();
     const ingested = await fetch(`${process.env.HIGHKEY_API_URL}/api/ingest`, {
       method: "POST",
       headers: {

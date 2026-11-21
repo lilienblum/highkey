@@ -248,8 +248,7 @@ function Connect({ created }: { created: Created }) {
         </h2>
         <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
           <Lead>
-            Choose your platform, then copy the prompt into your coding assistant or install
-            manually. You can return to this guide in project settings.
+            Choose your platform to get started. This guide is also available in project settings.
           </Lead>
           {copyFailed ? (
             <p className={HINT} role="alert">

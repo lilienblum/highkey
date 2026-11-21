@@ -1468,6 +1468,12 @@ p {
 .integration-guide {
   container-type: inline-size;
 }
+.install-summary::-webkit-details-marker {
+  display: none;
+}
+details[open] > .install-summary > svg {
+  transform: rotate(90deg);
+}
 .integration-guide [data-slot="tabs-list"][data-variant="line"] {
   height: auto;
   flex-wrap: wrap;

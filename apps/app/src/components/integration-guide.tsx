@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { mountConsentPrompt, type ConsentAppearance } from "../../../../sdk/typescript/consent-ui";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { highlight } from "@/lib/highlight";
 import { ValueSelect } from "./value-select";
@@ -109,6 +112,8 @@ export function IntegrationTabs({
   const [siteConsent, setSiteConsent] = useState(false);
   const [layout, setLayout] = useState<NonNullable<ConsentAppearance["layout"]>>("bar");
   const [theme, setTheme] = useState<NonNullable<ConsentAppearance["theme"]>>("auto");
+  const [showPrompt, setShowPrompt] = useState(false);
+  const promptId = useId();
   const server = ingestionKey?.startsWith("sk_");
   if (server && (value === "browser" || value === "rust")) value = "typescript";
   const key = ingestionKey || "YOUR_INGESTION_KEY";
@@ -142,7 +147,14 @@ export function IntegrationTabs({
       : value === "browser" && visitorMode === "cookieless"
         ? "Use cookieless daily visitor counting."
         : "Keep anonymous collection; do not enable identity.";
-  const prompt = `Install Highkey analytics in this ${value === "browser" ? placements[framework][0] : value} project using ${origin} as the endpoint. ${server ? "Read HIGHKEY_SERVER_KEY only from the backend environment." : "Read the source's public ingestion key from the project's configuration."} Inspect the existing framework and install once. ${identityInstruction} Honor DNT/GPC, exclude private routes, secrets and personal data, and keep campaign capture off. Send one setup_check event and verify the acknowledgment and source in Highkey.`;
+  const prompt = [
+    `Add Highkey analytics to this project using ${value === "browser" ? placements[framework][0] : value === "rust" ? "the Rust CLI SDK" : value === "typescript" ? "the TypeScript SDK" : "HTTP"}. Use ${origin} as the endpoint and initialize the integration once.`,
+    server
+      ? "Read HIGHKEY_SERVER_KEY only from the backend environment."
+      : "Read the source’s public ingestion key from the project configuration.",
+    `${identityInstruction} Honor DNT/GPC, exclude private routes, secrets and personal data, and leave campaign capture off.`,
+    "Send one setup_check event and verify its acknowledgment and source in Highkey.",
+  ].join("\n\n");
   return (
     <Tabs
       className="integration-guide min-w-0"
@@ -234,19 +246,47 @@ export function IntegrationTabs({
             )}
           </div>
         )}
-        <section className="mb-4 grid min-w-0 gap-2 rounded-lg border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Install with AI</h3>
-            <CopyButton size="sm" content={prompt} onCopyError={onCopyError}>
-              Copy install prompt
-            </CopyButton>
+        <section aria-label="Install with AI" className="grid min-w-0 gap-3 py-4">
+          <div className="grid gap-1">
+            <h3 className="font-semibold">Install with AI</h3>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Paste the prompt into your coding assistant to install Highkey and send a test event.
+            </p>
           </div>
-          <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+          <div className="flex flex-wrap items-center gap-3">
+            <CopyButton
+              size="sm"
+              className="rounded-full"
+              content={prompt}
+              onCopyError={() => {
+                setShowPrompt(true);
+                onCopyError();
+              }}
+            >
+              Copy prompt
+            </CopyButton>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="px-0"
+              aria-expanded={showPrompt}
+              aria-controls={promptId}
+              onClick={() => setShowPrompt(!showPrompt)}
+            >
+              {showPrompt ? "Hide prompt" : "Preview prompt"}
+            </Button>
+          </div>
+          <p
+            id={promptId}
+            hidden={!showPrompt}
+            className="rounded-md border bg-surface-inset p-3 text-[13px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+          >
             {prompt}
           </p>
         </section>
-        <details>
-          <summary className="w-fit cursor-pointer">Install manually</summary>
+        <details className="border-t border-border">
+          <InstallSummary>Install manually</InstallSummary>
           {value === "browser" && <p className="quiet my-2">{placements[framework][1]}</p>}
           <div className="code-toolbar mt-2">
             <span>
@@ -280,8 +320,8 @@ export function IntegrationTabs({
                   : NOTE[value]}
           </p>
         </details>
-        <details className="mt-3">
-          <summary>Test with curl</summary>
+        <details className="border-t border-border">
+          <InstallSummary>Test with curl</InstallSummary>
           <p className="quiet">Run from a terminal. Keep the same event ID if you retry.</p>
           <pre className="setup-curl">
             <code>{highlight(curl, "shell")}</code>
@@ -292,6 +332,20 @@ export function IntegrationTabs({
         </details>
       </TabsContent>
     </Tabs>
+  );
+}
+
+function InstallSummary({ children }: { children: string }) {
+  return (
+    <summary className="install-summary flex min-h-10 cursor-pointer items-center justify-between gap-3 py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:text-foreground">
+      {children}
+      <HugeiconsIcon
+        icon={ArrowRight01Icon}
+        aria-hidden="true"
+        strokeWidth={2}
+        className="size-4 shrink-0"
+      />
+    </summary>
   );
 }
 
