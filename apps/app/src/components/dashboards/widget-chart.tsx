@@ -294,7 +294,7 @@ export function WidgetChart({
       },
       chart: ({ width }) => {
         // As many date labels as fit (hours read longer), at most seven like Overview's chart.
-        const room = Math.floor(width / (bucket === "hour" ? 140 : 76));
+        const room = Math.floor(width / (bucket === "hour" || bucket === "minute" ? 140 : 76));
         const count = Math.min(buckets.length, Math.max(2, Math.min(room, 7)));
         const ticks = Array.from(
           { length: count },

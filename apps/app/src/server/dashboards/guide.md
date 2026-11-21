@@ -62,7 +62,7 @@ A grouped time series (`group_by` on a line, area or bar) allows one series and 
 `view.type` is one of:
 
 - `stat`: one headline number, with an optional `sparkline`.
-- `line`, `area`, `bar`: a time series; `stacked` for area and bar; `bucket` is `auto`, `hour`, `day`, `week` or `month`.
+- `line`, `area`, `bar`: a time series; `stacked` for area and bar; `bucket` is `auto`, `minute`, `hour`, `day`, `week` or `month`. Minute buckets cover windows of up to an hour.
 - `ranking`: the top groups, or a funnel's steps; `limit` is 1-50 (default 10).
 - `table`: one retention or funnel query, or typed queries that share a `group_by`. With typed queries each group is a row (the top `limit`, default 10) and each query is a column, named by its id after the group's column. A table takes no series.
 - `events`, `logs`: a list of the newest rows. They take exactly one query of their own signal, count measure, no `group_by` and no series.

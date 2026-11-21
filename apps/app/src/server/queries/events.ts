@@ -38,7 +38,7 @@ export interface EventsQuery {
 }
 
 const LIMITS =
-  "Use hour/day/week/month buckets, a positive range ≤366 days (hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters";
+  "Use minute/hour/day/week/month buckets, a positive range ≤366 days (per minute ≤1 hour, hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters";
 const NUMERIC = ["sum", "avg", "p50", "p95", "min", "max"];
 /** The measures the Events page runs. */
 export const MEASURES = ["count", "actors", ...NUMERIC];
@@ -98,7 +98,8 @@ export function validateEventsQuery(q: EventsQuery): void {
   if (
     span <= 0 ||
     span > 366 * DAY ||
-    !["hour", "day", "week", "month"].includes(q.bucket) ||
+    !["minute", "hour", "day", "week", "month"].includes(q.bucket) ||
+    (q.bucket === "minute" && span > 3_600_000) ||
     (q.bucket === "hour" && span > 31 * DAY) ||
     q.page_size === 0 ||
     q.page_size > 100 ||

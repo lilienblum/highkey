@@ -32,7 +32,8 @@ export function readerPassword(productId: string, secret: string): string {
     .digest("hex");
 }
 
-export type Bucket = "hour" | "day" | "week" | "month";
+export type { TimeBucket as Bucket } from "../../lib/time-buckets";
+import type { TimeBucket as Bucket } from "../../lib/time-buckets";
 
 export interface RunScope {
   from: Date;

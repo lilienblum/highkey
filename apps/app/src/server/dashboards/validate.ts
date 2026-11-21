@@ -290,8 +290,13 @@ function checkView(w: Widget, base: string, range: number | null, r: Report) {
       r.error(`${vp}/${name}`, `${name} is limited to 8 characters`);
   }
   if (v.bucket != null) {
-    if (!["auto", "hour", "day", "week", "month"].includes(v.bucket))
-      r.error(`${vp}/bucket`, "bucket must be auto, hour, day, week or month");
+    if (!["auto", "minute", "hour", "day", "week", "month"].includes(v.bucket))
+      r.error(`${vp}/bucket`, "bucket must be auto, minute, hour, day, week or month");
+    else if (v.bucket === "minute" && range !== null && range > 1)
+      r.warn(
+        `${vp}/bucket`,
+        "Minute buckets need a range of at most one hour; the bucket falls back to auto",
+      );
     else if (v.bucket === "hour" && range !== null && range > Limits.MAX_HOURLY_RANGE_DAYS * 24)
       r.warn(
         `${vp}/bucket`,

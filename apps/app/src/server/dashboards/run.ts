@@ -45,7 +45,7 @@ const GROUPED_SERIES = 6;
 const DEFAULT_RANKING_LIMIT = 10;
 const LIST_ROWS = 50;
 const CYCLE: Color[] = ["yellow", "violet", "aqua"];
-const BUCKETS = ["auto", "hour", "day", "week", "month"];
+const BUCKETS = ["auto", "minute", "hour", "day", "week", "month"];
 
 export interface EffectiveWindow {
   window: Window;
@@ -80,14 +80,16 @@ export function effectiveWindow(
   const auto = autoBucket(span);
   const explicit = [widget.view.bucket, bucket].find((b) => b != null && b !== "auto") ?? null;
   let chosen: Bucket = auto;
-  if (explicit === "hour" && span > HOURLY_RANGE_DAYS * DAY)
+  if (
+    (explicit === "hour" && span > HOURLY_RANGE_DAYS * DAY) ||
+    (explicit === "minute" && span > 3600000)
+  )
     warnings.push({
       path: "/view/bucket",
-      message: `Bucket hour is not allowed for this range; using ${auto}`,
+      message: `Bucket ${explicit} is not allowed for this range; using ${auto}`,
       hint: null,
     });
-  else if (explicit && ["hour", "day", "week", "month"].includes(explicit))
-    chosen = explicit as Bucket;
+  else if (explicit && BUCKETS.includes(explicit)) chosen = explicit as Bucket;
   return { window: { from, to, bucket: chosen }, requested, clamped, warnings };
 }
 
@@ -381,7 +383,7 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
   const to = time(request.to, "to");
   if (to <= from) throw bad("`to` must be after `from`");
   if (request.bucket != null && !BUCKETS.includes(request.bucket))
-    throw bad("bucket must be auto, hour, day, week or month");
+    throw bad("bucket must be auto, minute, hour, day, week or month");
   const timeoutMs = widget.timeout_ms ?? Limits.DEFAULT_TIMEOUT_MS;
   const deadline = started + timeoutMs;
   const product = (await resolveProduct(ctx.db, project)).id;

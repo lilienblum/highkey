@@ -68,6 +68,8 @@ The project’s Revenue report shows exact net cents grouped by source, page, pr
 
 Choose the reporting period in one grouped shadcn Base UI menu with visible keycaps and a custom-range calendar; applicable previous/next arrows navigate calendar periods or fixed ranges. Chart buckets follow the range automatically. Active now counts opt-in identified actors over the last five minutes, independently of the selected reporting period, while respecting project, source, and applied filter. Visitors and installations retain distinct meanings; anonymous events still count as activity.
 
+The small chart beside Active now shows distinct identified actors per minute over the last thirty minutes. The date menu also offers Last 30 minutes, Last hour, Last 3 months and Last 6 months. Overview, Events and dashboard charts switch to UTC minute buckets for ranges up to one hour.
+
 Report rows filter Overview in place with one validated string, number, or boolean filter alongside source scope. View matching events opens Events with that context. An independent external-link icon appears for supported page/referrer destinations on hover or keyboard focus and remains visible on touch. Website and CLI sources remain equally supported.
 
 Date shortcuts work on Overview and Events: D/E for today/yesterday, H for the rolling last 24 hours, W/F/N for 7/30/90 days, M/P for this/last month, Y/L for year to date/12 months, C for the calendar, and brackets for applicable previous/next periods. Ignore typing, composition, repeats, modified keys, and other open overlays. Settings can disable these shortcuts for this browser. Ordinary menu and calendar keyboard navigation remains available.

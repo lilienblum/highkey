@@ -409,3 +409,11 @@ Verified against the local build from [Tako PR #244](https://github.com/tako-sh/
 - Full Chromium run: 231 passed; one OAuth fixture still used the old database path, and editing its shared module during the run caused one Settings import failure and four unrun cases.
 - After fixing the fixtures, a clean run of `tests/auth.spec.ts` and `tests/settings.spec.ts` passed all 10 cases. All 237 browser cases passed across the two runs, including the previously failing log-view test, realtime channels, tracker privacy, shell geometry, and URL state.
 - Teardown removed the isolated databases and ClickHouse; `tako dev list --env test-e2e --json` returned no apps.
+
+## Published Tako toolchain, revenue and sessions — 2026-11-21
+
+Highkey pins the published `tako.sh@0.0.0-419336e`. The matching installed CLI replaced the older daemon; the ordinary dashboard and ingest app both returned HTTP 200 over trusted local HTTPS.
+
+The full isolated Chromium run on the release passed 240/241 tests. The keyboard-focused source row was clipped at a 360px viewport height. After fixing the collapsed rail, a clean run passed both short-rail tests and the revenue and session report flows (4/4). Desktop and 390px screenshots show session entry/exit, event mix, AI spend and related logs, and positive/negative revenue rows. The rerun started and finished with both ordinary development apps registered; `test-e2e` listed no apps after teardown. Dashboard sign-in and ingest health then returned HTTP 200.
+
+The session foundation passed 397 Bun tests (3,889 assertions), the production build and typecheck. With ten million events preloaded, the ingest load test measured p99 117.9 ms without readers and 129.4 ms with eight readers (120 successful reader queries and 185 refused or timed out). The session tests separately exercise materialized visits, isolated source/actor keys, first/last non-backfilled activity, refunds, correlated logs and deletion.

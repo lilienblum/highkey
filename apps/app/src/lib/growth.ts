@@ -19,6 +19,8 @@ export function previousRange(range: AnalyticsRange): AnalyticsRange {
 function periodLength(range?: AnalyticsRange) {
   const span = range ? Date.parse(range.to) - Date.parse(range.from) : Number.NaN;
   if (!(span > 0)) return;
+  if (span < HOUR_MS)
+    return { count: Math.max(1, Math.ceil(span / 60000 - EPSILON)), unit: "minute" as const };
   if (span <= 2 * DAY_MS)
     return { count: Math.max(1, Math.ceil(span / HOUR_MS - EPSILON)), unit: "hour" as const };
   return { count: Math.ceil(span / DAY_MS - EPSILON), unit: "day" as const };
@@ -36,7 +38,9 @@ export function previousPeriodLabel(range?: AnalyticsRange) {
 /** The same label in a few characters: "prior 7d", "prior 24h". */
 export function priorPeriodLabel(range?: AnalyticsRange) {
   const length = periodLength(range);
-  return length ? `prior ${length.count}${length.unit === "hour" ? "h" : "d"}` : "prior period";
+  return length
+    ? `prior ${length.count}${{ minute: "m", hour: "h", day: "d" }[length.unit]}`
+    : "prior period";
 }
 
 const format = (value: number) =>

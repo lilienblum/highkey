@@ -2,6 +2,7 @@
 // their JSON type: a number filter matches only numbers, a string filter only strings.
 import type { Bucket } from "../clickhouse/access";
 import { bad } from "../api/errors";
+import { bucketStart, nextBucket } from "../../lib/time-buckets";
 
 const KEY = /^[A-Za-z0-9_\-./]{1,64}$/;
 
@@ -110,20 +111,7 @@ export function typedValue(type: string, text: string | null): unknown {
 
 /** The start of each UTC bucket from the one containing `from` up to `to`. Weeks start Monday. */
 export function bucketGrid(from: Date, to: Date, bucket: Bucket): number[] {
-  const start = new Date(from.getTime());
-  if (bucket === "hour") start.setUTCMinutes(0, 0, 0);
-  else {
-    start.setUTCHours(0, 0, 0, 0);
-    if (bucket === "week") start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
-    if (bucket === "month") start.setUTCDate(1);
-  }
   const times: number[] = [];
-  for (const time = start; time.getTime() < to.getTime();) {
-    times.push(time.getTime());
-    if (bucket === "hour") time.setUTCHours(time.getUTCHours() + 1);
-    else if (bucket === "day") time.setUTCDate(time.getUTCDate() + 1);
-    else if (bucket === "week") time.setUTCDate(time.getUTCDate() + 7);
-    else time.setUTCMonth(time.getUTCMonth() + 1);
-  }
+  for (let t = bucketStart(+from, bucket); t < +to; t = nextBucket(t, bucket)) times.push(t);
   return times;
 }

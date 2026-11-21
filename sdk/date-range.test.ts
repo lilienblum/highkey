@@ -45,6 +45,10 @@ test("relative periods and arrows respect UTC calendar boundaries", async () => 
   expect(presetRange("last-month", now)).toEqual(rangeFromDays("2024-02-01", "2024-02-29"));
   expect(presetRange("year", now).from).toBe("2024-01-01T00:00:00.000Z");
   expect(presetRange("12months", now).from).toBe("2023-04-01T00:00:00.000Z");
+  expect(presetRange("6months", now).from).toBe("2023-10-01T00:00:00.000Z");
+  expect(presetRange("3months", now).from).toBe("2024-01-01T00:00:00.000Z");
+  expect(presetRange("1h", now).from).toBe("2024-03-15T11:00:00.000Z");
+  expect(presetRange("30m", now).from).toBe("2024-03-15T11:30:00.000Z");
   const february = shiftRange(presetRange("month", now), -1, now, "month");
   expect(february).toEqual(rangeFromDays("2024-02-01", "2024-02-29"));
   if (!february) throw new Error("Missing previous month");

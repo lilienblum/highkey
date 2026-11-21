@@ -52,6 +52,8 @@ const presetGroups = [
   {
     label: "Rolling",
     items: [
+      { value: "30m", key: "3" },
+      { value: "1h", key: "1" },
       { value: "24h", key: "h" },
       { value: 7, key: "w" },
       { value: 30, key: "f" },
@@ -63,6 +65,8 @@ const presetGroups = [
     items: [
       { value: "month", key: "m" },
       { value: "last-month", key: "p" },
+      { value: "3months", key: "q" },
+      { value: "6months", key: "6" },
     ],
   },
   {
@@ -110,7 +114,8 @@ export function DateRangePicker({
   const error = draft.start && draft.end ? rangeError(draft.start, draft.end, today) : undefined;
   const complete = !!from && !!to && !error;
   const label = fixed ? rangeLabel(range) : period ? periodLabels[period] : `Last ${days} days`;
-  const navigable = fixed || (period && period !== "12months" && period !== "24h");
+  const navigable =
+    fixed || (period && ["today", "yesterday", "month", "last-month", "year"].includes(period));
   const now = Date.now();
   const step = rangeStep(range, fixed ? undefined : period);
   function move(direction: -1 | 1) {

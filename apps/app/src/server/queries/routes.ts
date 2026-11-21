@@ -9,10 +9,14 @@ import { parseLogsQuery, runLogsQuery } from "./logs";
 import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
+import { liveActivity } from "./activity";
 import { sessionList, sessionDetail } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/activity`, READ, async (request, ctx, { project }) =>
+      json(await liveActivity(ctx, project as string, await readJson(request))),
+    );
     route("POST", `${prefix}/revenue/query`, READ, async (request, ctx, { project }) =>
       json(await revenueReport(ctx, project as string, await readJson(request))),
     );

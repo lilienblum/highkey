@@ -15,13 +15,7 @@ export interface Window {
 }
 
 /** The dashboard's automatic bucket for a span. */
-export function autoBucket(spanMs: number): Bucket {
-  const day = 86_400_000;
-  if (spanMs <= 2 * day) return "hour";
-  if (spanMs <= 31 * day) return "day";
-  if (spanMs <= 180 * day) return "week";
-  return "month";
-}
+export { bucketForSpan as autoBucket } from "../../lib/time-buckets";
 
 export type Shape =
   | { kind: "total" }

@@ -51,10 +51,14 @@ export function rangeLabel(range: AnalyticsRange) {
 
 export const periodLabels = {
   today: "Today",
+  "30m": "Last 30 minutes",
+  "1h": "Last hour",
   "24h": "Last 24 hours",
   yesterday: "Yesterday",
   month: "Month to date",
   "last-month": "Last month",
+  "3months": "Last 3 months",
+  "6months": "Last 6 months",
   year: "Year to date",
   "12months": "Last 12 months",
 } as const;
@@ -65,17 +69,24 @@ export function presetRange(period: DatePeriod, now: number): AnalyticsRange {
   const end = new Date(now);
   const start = new Date(now);
   start.setUTCHours(0, 0, 0, 0);
-  if (period === "24h") {
-    start.setTime(now - DAY_MS);
+  if (period === "24h" || period === "1h" || period === "30m") {
+    start.setTime(now - { "24h": DAY_MS, "1h": 3600000, "30m": 1800000 }[period]);
   } else if (period === "yesterday") {
     end.setTime(start.getTime());
     start.setUTCDate(start.getUTCDate() - 1);
-  } else if (period === "month" || period === "last-month" || period === "12months") {
+  } else if (
+    period === "month" ||
+    period === "last-month" ||
+    period === "12months" ||
+    period === "3months" ||
+    period === "6months"
+  ) {
     start.setUTCDate(1);
     if (period === "last-month") {
       end.setTime(start.getTime());
       start.setUTCMonth(start.getUTCMonth() - 1);
-    } else if (period === "12months") start.setUTCMonth(start.getUTCMonth() - 11);
+    } else if (period !== "month")
+      start.setUTCMonth(start.getUTCMonth() - (parseInt(period, 10) - 1));
   } else if (period === "year") start.setUTCMonth(0, 1);
   return {
     from: start.toISOString(),

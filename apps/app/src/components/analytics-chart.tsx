@@ -28,7 +28,7 @@ export function formatDate(time: number, bucket: TimeBucket, full = false) {
     month: "short",
     ...(full || bucket === "month" ? { year: "numeric" as const } : {}),
     ...(bucket !== "month" ? { day: "numeric" as const } : {}),
-    ...(bucket === "hour"
+    ...(bucket === "hour" || bucket === "minute"
       ? { hour: "2-digit" as const, minute: "2-digit" as const, hourCycle: "h23" as const }
       : {}),
   });
@@ -86,7 +86,10 @@ export function AnalyticsChart({
         },
       },
       chart: ({ width }) => {
-        const count = Math.min(series.length, width < 480 ? (bucket === "hour" ? 2 : 3) : 7);
+        const count = Math.min(
+          series.length,
+          width < 480 ? (bucket === "hour" || bucket === "minute" ? 2 : 3) : 7,
+        );
         const ticks = Array.from(
           { length: count },
           (_, index) =>

@@ -150,14 +150,14 @@ A **funnel** counts how many actors reach each of its steps in order:
 
 `view.type` is one of:
 
-| Type                  | Shows                                                                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------- |
-| `stat`                | One headline number, with an optional `sparkline`                                               |
-| `line`, `area`, `bar` | A time series. `stacked` for area and bar. `bucket` is `auto`, `hour`, `day`, `week` or `month` |
-| `ranking`             | The top groups, or a funnel's steps; `limit` is 1-50 (default 10)                               |
-| `events`, `logs`      | The newest rows. Exactly one query of its own signal, count measure, no `group_by`, no series   |
-| `table`               | A retention grid or funnel, or a row per group of typed queries with a column each; no series   |
-| `text`                | Markdown in `view.markdown` (up to 2,000 characters), no queries                                |
+| Type                  | Shows                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `stat`                | One headline number, with an optional `sparkline`                                                                          |
+| `line`, `area`, `bar` | A time series. `stacked` for area and bar. `bucket` is `auto`, `minute` (up to one hour), `hour`, `day`, `week` or `month` |
+| `ranking`             | The top groups, or a funnel's steps; `limit` is 1-50 (default 10)                                                          |
+| `events`, `logs`      | The newest rows. Exactly one query of its own signal, count measure, no `group_by`, no series                              |
+| `table`               | A retention grid or funnel, or a row per group of typed queries with a column each; no series                              |
+| `text`                | Markdown in `view.markdown` (up to 2,000 characters), no queries                                                           |
 
 Display options: `unit` (`number`, `percent`, `ratio`, `ms`, `seconds`, `bytes`), `decimals` (0-4), and `prefix` and `suffix` (up to 8 characters each). A series' own `unit` wins over the view's.
 

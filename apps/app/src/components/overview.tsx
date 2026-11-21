@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
-import { useQuery } from "@/lib/use-query";
+import { useQuery, useReportQuery } from "@/lib/use-query";
 import { growth, previousRange } from "@/lib/growth";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DashboardNameDialog } from "./dashboards/new-dashboard-dialog";
-import { number, sourceGroups, type Group } from "@/lib/api";
+import { number, sourceGroups, type Group, queryReadOnly } from "@/lib/api";
+import type { liveActivity } from "@/server/queries/activity";
 import { sourceDistribution } from "@/lib/overview-widgets";
 import type { OverviewSearch } from "@/lib/workspace-search";
 import type { ExploreDrilldown } from "@/lib/explore-search";
@@ -79,6 +80,9 @@ const dimensions = [
   ["property:os", "OS"],
   ["property:arch", "Architecture"],
 ] as const;
+
+const loadActivity = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
+  queryReadOnly<Awaited<ReturnType<typeof liveActivity>>>(`/products/${id}/activity`, body, signal);
 
 export function Overview() {
   const orgSlug = useOrganizationSlug();
@@ -227,13 +231,11 @@ function ProductOverview() {
   const s = query.data?.summary;
   const p = previous.data?.summary;
   const hasDuration = s?.avg_duration != null;
-  const activeRange = {
-    from: new Date(now - 5 * 60_000).toISOString(),
-    to: new Date(now).toISOString(),
-  };
-  const active = useQuery(
+  const active = useReportQuery(
+    loadActivity,
+    "live-activity",
     product?.id,
-    { ...activeRange, ...eventFilters, source_id: sourceId, measure: "actors", page_size: 1 },
+    { to: new Date(now).toISOString(), ...eventFilters, source_id: sourceId },
     refreshKey,
     `active:${sourceId ?? "all"}:${JSON.stringify(selectedFilter)}`,
   );
@@ -341,15 +343,35 @@ function ProductOverview() {
               value={
                 active.error
                   ? "—"
-                  : active.data?.summary.total && !active.data.summary.actors
+                  : active.data?.events && !active.data.active
                     ? "—"
-                    : number(active.data?.summary.actors)
+                    : number(active.data?.active)
               }
               label={
                 active.error ? "Live activity unavailable" : "Identified actors · last 5 minutes"
               }
               loading={active.loading}
             />
+            <div
+              className="flex h-7 shrink-0 items-end gap-px"
+              role="img"
+              aria-label={
+                active.data
+                  ? `Active actors per minute over the last 30 minutes, oldest first: ${active.data.minutes.join(", ")}`
+                  : "Live activity chart unavailable"
+              }
+            >
+              {active.data?.minutes.map((n, i) => (
+                <span
+                  key={i}
+                  className="min-w-0 flex-1 bg-data-tertiary"
+                  style={{
+                    height: `${Math.max(n ? 4 : 0, (n / Math.max(1, ...active.data!.minutes)) * 100)}%`,
+                  }}
+                  title={`${30 - i} min ago: ${n}`}
+                />
+              ))}
+            </div>
           </article>
           {[
             {

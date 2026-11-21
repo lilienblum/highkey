@@ -41,6 +41,8 @@ describe("UTC chart calendar buckets", () => {
 test("chart detail follows the selected range at each boundary", () => {
   const from = "2026-01-01T00:00:00.000Z";
   for (const [days, expected] of [
+    [1 / 24, "minute"],
+    [(3600000 + 1) / 86400000, "hour"],
     [1, "hour"],
     [2, "hour"],
     [2 + 1 / 86400000, "day"],

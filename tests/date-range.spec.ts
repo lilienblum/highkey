@@ -284,7 +284,7 @@ for (const size of [
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
       }),
     );
-    expect(rows).toHaveLength(11);
+    expect(rows).toHaveLength(15);
     for (let index = 1; index < rows.length; index++) {
       expect(rows[index].y).toBeGreaterThanOrEqual(rows[index - 1].y + rows[index - 1].height - 1);
       expect(Math.abs(rows[index].x - rows[0].x)).toBeLessThan(1);
@@ -293,7 +293,7 @@ for (const size of [
     const box = await menu.boundingBox();
     expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(size.height);
     const last = options.getByRole("menuitemradio", { name: "Last 12 months", exact: true });
-    if (size.height >= 800) {
+    if (size.height >= 1100) {
       await expect(last).toBeInViewport();
       await expect(
         menu.getByRole("menuitemradio", { name: "Custom range", exact: true }),
@@ -323,7 +323,7 @@ for (const size of [
       true,
     );
     await trigger(page).click();
-    await expect(options.getByRole("menuitemradio")).toHaveCount(11);
+    await expect(options.getByRole("menuitemradio")).toHaveCount(15);
     await expect(menu).toHaveCSS("opacity", "1");
     await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
     await page.screenshot({ path: `/tmp/highkey-date-menu-${size.width}x${size.height}.png` });
@@ -348,6 +348,10 @@ test("visible preset shortcuts select periods and bracket keys navigate without 
   await expect(page.getByText(/One point per hour/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Previous period", exact: true })).toHaveCount(0);
   for (const [key, value, label] of [
+    ["3", "30m", "Last 30 minutes"],
+    ["1", "1h", "Last hour"],
+    ["q", "3months", "Last 3 months"],
+    ["6", "6months", "Last 6 months"],
     ["d", "today", "Today"],
     ["e", "yesterday", "Yesterday"],
     ["w", "7", "Last 7 days"],

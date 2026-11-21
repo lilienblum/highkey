@@ -140,6 +140,8 @@ Successful response: **200 `{ "accepted": 2, "duplicates": 1 }`**, sent only aft
 
 ### Sessions
 
+`POST /api/products/:project/activity` returns `{active, events, minutes}` for the instant `to` (RFC 3339). `active` is the number of distinct identified actors in the last five minutes, `events` counts all matching events in that window, and `minutes` contains thirty one-minute distinct actor counts, oldest first. The source, event, and typed property filters work as in the events query. The same endpoint is available under `/api/read`.
+
 `POST /api/products/:project/sessions/query` returns `{ rows, page, page_size, has_more }`, newest first. `from` and `to` select sessions **starting** in the half-open UTC range; a session ending outside it still shows its full retained activity. Optional filters: `source_id`, `profile_id`, `search` (visited path or first referrer), `bounced` (boolean), `min_duration_ms`, `min_page_views`. Page numbers start at 1; page size is 1–100.
 
 `POST /api/products/:project/sessions/detail` takes the same range plus `source_id`, `actor_id` and `session_id`. It returns the summary, a chronological page of events, top ten paths and event names, and up to 50 logs matching an explicit request or trace ID in the session's time window. `more_logs` signals truncation. Both endpoints are also under `/api/read/products/:project` for API-key clients.

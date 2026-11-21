@@ -36,6 +36,48 @@ function command(id: string, duration: unknown, extra: Record<string, unknown> =
 }
 
 describe("Explore queries", () => {
+  test("live activity distinguishes thirty minute buckets from distinct actors in the last five", async () => {
+    const { id } = await project(ctx),
+      end = Date.now();
+    await seedEvents(
+      id,
+      [0, 60000, 1500000, 1560000, 1799999, 1800000].map((offset, i) => ({
+        event_id: `a${i}`,
+        time: new Date(end - 1800000 + offset),
+        actor_id: i === 4 ? "two" : "one",
+        identity_kind: "visitor",
+      })),
+    );
+    const r = await call(ctx, "POST", `/api/products/${id}/activity`, {
+      to: new Date(end).toISOString(),
+    });
+    expect(r.json).toMatchObject({ active: 2, events: 3 });
+    expect(r.json.minutes).toEqual(
+      Array.from({ length: 30 }, (_, i) => ([0, 1, 25, 26, 29].includes(i) ? 1 : 0)),
+    );
+  });
+  test("minute buckets align to UTC and include zero minutes across midnight", async () => {
+    const p = await project(ctx);
+    const day = new Date();
+    day.setUTCHours(0, 0, 0, 0);
+    await seedEvents(p.id, [
+      { event_id: "one", time: new Date(+day - 1) },
+      { event_id: "two", time: new Date(+day + 60000) },
+    ]);
+    const body = {
+      from: new Date(+day - 1).toISOString(),
+      to: new Date(+day + 60001).toISOString(),
+      bucket: "minute",
+    };
+    expect((await run(p.id, body)).json.series).toEqual([
+      { time: +day - 60000, value: 1 },
+      { time: +day, value: 0 },
+      { time: +day + 60000, value: 1 },
+    ]);
+    expect(
+      (await run(p.id, { ...body, from: new Date(+day - 3600000).toISOString() })).status,
+    ).toBe(400);
+  });
   test("durable_deduplicated_scoped_typed_queries", async () => {
     const a = await project(ctx, "A");
     const b = await project(ctx, "B");
@@ -262,10 +304,11 @@ describe("Explore queries", () => {
     for (const [bucket, days] of [
       ["day", 366],
       ["hour", 31],
+      ["minute", 1 / 24],
     ] as const) {
       expect((await run(id, at(days, bucket))).status).toBe(200);
       expect((await run(id, at(days, bucket, 1))).json.error).toBe(
-        "Use hour/day/week/month buckets, a positive range ≤366 days (hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters",
+        "Use minute/hour/day/week/month buckets, a positive range ≤366 days (per minute ≤1 hour, hourly ≤31 days), page ≤10000, page_size 1–100, and ≤8 filters",
       );
     }
     expect((await run(id, { ...at(1, "day"), measure: "min" })).json.error).toBe(

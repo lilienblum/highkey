@@ -141,7 +141,7 @@ describe("widget runs", () => {
     const w = window(7);
     for (const request of [
       { widget: errorRate(), from: w.to, to: w.from },
-      { widget: errorRate(), ...w, bucket: "minute" },
+      { widget: errorRate(), ...w, bucket: "second" },
     ]) {
       const reply = await run("invalid", request);
       expect(reply.status).toBe(400);
