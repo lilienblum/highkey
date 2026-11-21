@@ -88,10 +88,12 @@ function NewProject() {
   return (
     <div
       data-page="new-project"
-      className="grid min-h-svh grid-cols-[minmax(0,1fr)] bg-background lg:grid-cols-[minmax(0,3fr)_minmax(380px,2fr)]"
+      className="grid min-h-svh grid-cols-[minmax(0,1fr)] bg-background lg:grid-cols-[minmax(0,min(60%,52rem))_minmax(0,1fr)]"
     >
-      <div className="grid min-h-svh min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto] px-6 lg:px-[clamp(32px,6vw,96px)]">
-        <header className="flex h-22 items-center">
+      <div
+        className={`mx-auto grid min-h-svh w-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto] px-6 sm:px-10 ${created ? "max-w-[50rem]" : "max-w-[42rem]"}`}
+      >
+        <header className="flex h-20 items-center">
           <a href="/" className="brand-link" aria-label="Highkey">
             <span className="brand">
               <img className="brand-mark" src="/favicon.svg?v=7" width="30" height="30" alt="" />
@@ -102,7 +104,7 @@ function NewProject() {
         {created ? (
           <Connect organization={organization.slug} created={created} />
         ) : (
-          <main className="flex w-full min-w-0 max-w-[460px] flex-col justify-center gap-5 pt-6 pb-16">
+          <main className="flex min-w-0 flex-col gap-5 pt-4 pb-10 sm:pt-8">
             {creates ? (
               <>
                 <h1 className="text-[34px] leading-[1.1] lg:text-[40px]">

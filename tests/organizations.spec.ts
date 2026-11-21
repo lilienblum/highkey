@@ -274,11 +274,13 @@ test.describe("first project", () => {
     await input.fill("Website");
     await page.getByLabel("Websites", { exact: true }).fill("*.example.com\n*.example.org");
     const icon = page.getByRole("button", { name: "Source icon: Website", exact: true });
-    for (const width of [1280, 390]) {
+    for (const width of [1600, 1024, 840, 390]) {
       await page.setViewportSize({ width, height: 844 });
-      await page
-        .locator("form.auth-form")
-        .screenshot({ path: info.outputPath(`source-form-${width}.png`) });
+      await page.screenshot({ path: info.outputPath(`new-project-${width}.png`) });
+      const main = (await page.getByRole("main").boundingBox())!;
+      const rail = page.locator('aside[aria-labelledby="new-project-how"]');
+      const panelWidth = (await rail.boundingBox())?.x ?? width;
+      expect(Math.abs(main.x - (panelWidth - main.x - main.width))).toBeLessThan(2);
       const field = (await input.boundingBox())!,
         button = (await icon.boundingBox())!;
       expect(button.x).toBeGreaterThan(field.x + field.width / 2);
