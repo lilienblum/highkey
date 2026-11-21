@@ -146,8 +146,9 @@ export function EventStream({
   const incoming = snapshot ? Math.max(0, total - snapshot.total) : 0;
   const events = incoming && snapshot ? snapshot.rows : latest;
   useEffect(() => {
-    if (!loading && !error && !incoming) setSnapshot({ rows: latest, total });
-  }, [latest, loading, error, incoming, total]);
+    // A cached page can predate the arrivals the reader just accepted on another page.
+    if (!loading && !refreshing && !error && !incoming) setSnapshot({ rows: latest, total });
+  }, [latest, loading, refreshing, error, incoming, total]);
   // The inspector owns the page it opened from. Incoming events can update the
   // table without changing its record, adjacent-event navigation, or property search.
   const inspectionEvents = useRef<EventRow[]>([]);
