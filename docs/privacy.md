@@ -24,7 +24,9 @@ Choose a collection policy before loading the tracker. `enabled: false` starts i
 
 `collectTitle: true` adds the current page title, and `trackHashChanges: true` appends the fragment to the collected path and counts hash navigation. Both are off by default. Titles and fragments can contain account names or tokens; use `beforeSend` to review titles and `sanitizePath` to review the whole opted-in route.
 
-Use `optOut()` for withdrawal. It stops future collection, discards the pending queue, aborts delivery, and clears that tracker's stored identity. Persist the user's choice in your application and honor it on subsequent loads. An abort cannot retract an event the collector has already received. Normal `shutdown()` attempts queued batches within one total deadline and is not an opt-out.
+For returning visitors, **Ask with Highkey** makes a read-only source-policy check before it shows the consent prompt. It saves the visitor’s allow or decline choice on the site’s origin and starts analytics only after Allow. Add a **Privacy preferences** button to let visitors withdraw at any time. The prompt collects no events to replay later. Off and Daily visitors do not need this prompt.
+
+With your own consent manager, use `optOut()` for withdrawal. It stops future collection, discards the pending queue, aborts delivery, and clears that tracker's stored identity. Persist the user's choice in your application and honor it on subsequent loads. An abort cannot retract an event the collector has already received. Normal `shutdown()` attempts queued batches within one total deadline and is not an opt-out.
 
 Pathnames can contain names, emails, order IDs, or access tokens. Hostnames can identify private tenants. Even a UTM value can contain personal data. Highkey deliberately avoids unreliable heuristic redaction. Use canonical routes and an allowlist of product categories, booleans, and numeric measurements that you actually need. The generic ingestion API preserves the events you explicitly submit; it cannot determine whether a string is personal information.
 
