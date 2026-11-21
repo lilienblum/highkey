@@ -1,5 +1,9 @@
 import type { SourceIconId } from "./source-icons";
 export const eventColors = ["neutral", "yellow", "violet", "aqua", "green", "red"] as const;
+export type CustomClause = {
+  event: string;
+  filters: { property: string; op: string; value?: string | number | boolean }[];
+};
 export type EventDefinition = {
   name: string;
   icon: SourceIconId;
@@ -7,6 +11,7 @@ export type EventDefinition = {
   description: string;
   sentence: string;
   conversion: boolean;
+  rules?: CustomClause[];
 };
 export function eventSentence(template: string, properties: Record<string, unknown>) {
   return template.replace(/\{([a-zA-Z0-9_./-]{1,64})\}/g, (_match, k: string) => {

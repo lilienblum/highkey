@@ -9,6 +9,7 @@ import { resolveProduct } from "../db/products";
 import { getSource } from "../db/sources";
 import { readAs } from "../queries/read";
 import { unknownEvents } from "./catalog";
+import { customRules } from "../queries/custom";
 import { detailed, invalid, timedOut } from "./errors";
 import { evaluate as evaluateFormula, parseFormula } from "./formula";
 import { measureFunnel } from "./funnel";
@@ -418,8 +419,15 @@ export async function runWidget(ctx: ApiContext, project: string, request: RunRe
       const signal = AbortSignal.timeout(left);
       const settings = { max_execution_time: Math.min(10, Math.max(1, Math.ceil(left / 1000))) };
       await readAs(ctx, product, async (reader) => {
-        const run: RunOptions = { reader, source: request.source_id ?? null, signal, settings };
-        ran.push(...(await unknownEvents(reader, widget, settings, signal)));
+        const rules = events ? await customRules(ctx.db, product) : undefined;
+        const run: RunOptions = {
+          reader,
+          source: request.source_id ?? null,
+          signal,
+          settings,
+          rules,
+        };
+        ran.push(...(await unknownEvents(reader, widget, settings, signal, rules)));
         if (widget.view.type === "events" || widget.view.type === "logs") {
           const first = queries[0];
           if (first && typed(first)) listRows = await rows(first, effective.window, LIST_ROWS, run);

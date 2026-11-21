@@ -6,6 +6,7 @@ import { requireSource } from "../db/sources";
 import { readAs } from "./read";
 import { parseEventsQuery, predicate } from "./events";
 import { Params } from "./properties";
+import { customRules } from "./custom";
 
 const dimensions = new Map([
   ["source", "toString(source_id)"],
@@ -38,7 +39,11 @@ export async function revenueReport(ctx: ApiContext, project: string, body: unkn
     filters: q.filters,
   });
   const params = new Params();
-  const where = predicate(query, params);
+  const where = predicate(
+    query,
+    params,
+    query.event?.startsWith("@") ? await customRules(ctx.db, project) : undefined,
+  );
   const dimension = dimensions.get(q.group_by);
   if (!dimension) throw bad("Group revenue by source, page, profile or session");
   if (q.page < 1 || q.page > 10000 || q.page_size < 1 || q.page_size > 100)

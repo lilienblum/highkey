@@ -2,16 +2,18 @@
 // first step. Compiled to ClickHouse's windowFunnel over the project's scoped `events` view.
 import { predicate } from "../queries/events";
 import { Params } from "../queries/properties";
+import type { Rules } from "../queries/custom";
 import type { GroupValue, RunOptions, Window } from "./metrics";
 import { scoped } from "./metrics";
 import type { FunnelQuery, Step } from "./spec";
 import { rangeHours } from "./validate";
 
 /** A step as a condition on one event row. */
-export function stepCondition(step: Step, params: Params): string {
+export function stepCondition(step: Step, params: Params, rules?: Rules): string {
   return predicate(
     { event: step.event, source: null, identity_kind: null, filters: step.filters ?? [] } as never,
     params,
+    rules,
   );
 }
 
@@ -30,7 +32,7 @@ export async function measureFunnel(
   run: RunOptions,
 ): Promise<GroupValue[]> {
   const params = new Params();
-  const conditions = q.steps.map((step) => stepCondition(step, params));
+  const conditions = q.steps.map((step) => stepCondition(step, params, run.rules));
   const windowMs = (rangeHours(q.window) ?? 168) * 3_600_000;
   const key =
     q.by === "session"

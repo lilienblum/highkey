@@ -40,8 +40,8 @@ export async function measureRetention(
   run: RunOptions,
 ): Promise<Table> {
   const params = new Params();
-  const start = stepCondition(q.start, params);
-  const back = stepCondition(q.return, params);
+  const start = stepCondition(q.start, params, run.rules);
+  const back = stepCondition(q.return, params, run.rules);
   const of = START[q.period];
   const conditions = [`${of} = c.cohort AND (${start})`];
   for (let k = 1; k <= q.periods; k++)

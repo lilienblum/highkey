@@ -10,6 +10,7 @@ import { resolveProduct } from "../db/products";
 import { listSources } from "../db/sources";
 import { facets, LEVELS } from "../queries/logs";
 import { readAs } from "../queries/read";
+import { customRules, type Rules } from "../queries/custom";
 import type { Document, Filter, QuerySpec, Widget } from "./spec";
 import { nearest } from "./suggest";
 import { type Issue, limitsJson, type Report } from "./validate";
@@ -69,6 +70,7 @@ export async function unknownEvents(
   widget: Widget,
   settings: Record<string, string | number> = {},
   signal?: AbortSignal,
+  rules?: Rules,
 ): Promise<Issue[]> {
   const named = Object.entries(widget.queries).flatMap(([id, q]) =>
     namedEvents(q).map((n) => [`${id}${n.path}`, n.event] as const),
@@ -77,6 +79,7 @@ export async function unknownEvents(
   const issues: Issue[] = [];
   let known: string[] | null = null;
   for (const [at, name] of named) {
+    if (rules?.has(name)) continue;
     if (!missing.has(name)) {
       const found = await reader.query(
         "SELECT 1 FROM all_events WHERE name = {name:String} LIMIT 1",
@@ -101,6 +104,7 @@ export async function catalog(ctx: ApiContext, project: string) {
   const sources = await listSources(ctx.db, product.id);
   const logsDays = await logRetention(ctx.db, product.id);
   const revenue = await revenueSettings(ctx.db, product.id);
+  const custom = await customRules(ctx.db, product.id);
   const now = Date.now();
   return readAs(ctx, product.id, async (reader) => {
     const cutoff = now - product.retention_days * DAY;
@@ -147,7 +151,7 @@ export async function catalog(ctx: ApiContext, project: string) {
     );
     return {
       project: { id: product.id, slug: product.slug, name: product.name },
-      events: { names: names.data.map((r) => r.name), properties },
+      events: { names: [...names.data.map((r) => r.name), ...custom.keys()], properties },
       logs: { ...logFacets, levels: LEVELS.filter((l) => present.has(l)) },
       sources: sources.map((s) => ({ id: s.id, name: s.name })),
       retention: { events_days: product.retention_days, logs_days: logsDays },

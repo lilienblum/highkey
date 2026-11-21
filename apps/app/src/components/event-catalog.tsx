@@ -20,6 +20,7 @@ import { Switch } from "./ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ErrorState } from "./shared";
 import { ValueSelect } from "./value-select";
+import { CustomEventRules, typedRules } from "./custom-event-rules";
 
 const blank = (name = ""): EventDefinition => ({
   name,
@@ -51,7 +52,9 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
       await api(
         `/products/${id}/event-catalog`,
         remove ? "DELETE" : "PUT",
-        remove ? { name: draft.name } : draft,
+        remove
+          ? { name: draft.name }
+          : { ...draft, ...(draft.rules ? { rules: typedRules(draft.rules) } : {}) },
       );
       await client.invalidateQueries({ queryKey: ["event-catalog", id] });
       setDraft(undefined);
@@ -102,10 +105,17 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
                   id="catalog-name"
                   required
                   maxLength={64}
-                  value={draft.name}
-                  onChange={(e) => set({ name: e.target.value })}
+                  value={draft.rules ? draft.name.slice(1) : draft.name}
+                  onChange={(e) => set({ name: (draft.rules ? "@" : "") + e.target.value })}
                 />
               </Field>
+              {draft.rules && (
+                <CustomEventRules
+                  rules={draft.rules}
+                  change={(rules) => set({ rules })}
+                  observed={observed}
+                />
+              )}
               <Field>
                 <FieldLabel htmlFor="catalog-description">Description</FieldLabel>
                 <Input
@@ -196,7 +206,22 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
                           <Button
                             variant="ghost"
                             aria-label={`Edit ${name}`}
-                            onClick={() => setDraft({ ...def })}
+                            onClick={() =>
+                              setDraft({
+                                ...def,
+                                ...(def.rules
+                                  ? {
+                                      rules: def.rules.map((r) => ({
+                                        ...r,
+                                        filters: r.filters.map((f) => ({
+                                          ...f,
+                                          value: JSON.stringify(f.value),
+                                        })),
+                                      })),
+                                    }
+                                  : {}),
+                              })
+                            }
                           >
                             Edit
                           </Button>
@@ -215,9 +240,17 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
               </TabsContent>
             </Tabs>
             {editable && (
-              <Button variant="outline" onClick={() => setDraft(blank())}>
-                New definition
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => setDraft(blank())}>
+                  New definition
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setDraft({ ...blank("@"), rules: [{ event: "", filters: [] }] })}
+                >
+                  New custom event
+                </Button>
+              </div>
             )}
           </>
         )}

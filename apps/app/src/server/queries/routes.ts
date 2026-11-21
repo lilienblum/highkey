@@ -10,6 +10,7 @@ import { readAs } from "./read";
 import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
 import { liveActivity } from "./activity";
+import { customRules } from "./custom";
 import { peopleList, personDetail } from "./people";
 import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
@@ -38,7 +39,8 @@ export function registerQueries(): void {
       const product = await resolveProduct(ctx.db, project as string);
       const query = parseEventsQuery(await readJson(request));
       if (query.source_id) await requireSource(ctx.db, product.id, query.source_id);
-      return json(await readAs(ctx, product.id, (reader) => runEventsQuery(reader, query)));
+      const rules = await customRules(ctx.db, product.id);
+      return json(await readAs(ctx, product.id, (reader) => runEventsQuery(reader, query, rules)));
     });
     route("POST", `${prefix}/logs/query`, READ, async (request, ctx, { project }) => {
       const product = await resolveProduct(ctx.db, project as string);

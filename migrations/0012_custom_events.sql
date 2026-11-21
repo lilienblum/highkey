@@ -1,0 +1,1 @@
+ALTER TABLE event_catalog ADD COLUMN rules TEXT NOT NULL DEFAULT '[]';

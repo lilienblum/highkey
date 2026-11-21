@@ -5,6 +5,7 @@ import { requireSource } from "../db/sources";
 import { parseEventsQuery, predicate } from "./events";
 import { Params } from "./properties";
 import { readAs } from "./read";
+import { customRules } from "./custom";
 
 /** Thirty adjacent one-minute windows ending at `to`, plus the distinct actors over the last five. */
 export async function liveActivity(ctx: ApiContext, project: string, body: unknown) {
@@ -23,7 +24,11 @@ export async function liveActivity(ctx: ApiContext, project: string, body: unkno
   });
   if (q.source_id != null) await requireSource(ctx.db, project, q.source_id);
   const params = new Params(),
-    where = predicate(query, params);
+    where = predicate(
+      query,
+      params,
+      query.event?.startsWith("@") ? await customRules(ctx.db, project) : undefined,
+    );
   const result = await readAs(ctx, project, (r) =>
     r.query<{ slot: number; is_total: number; actors: number; recent: number; activity: number }>(
       `SELECT intDiv(toUnixTimestamp64Milli(event_time)-{start:Int64},60000) AS slot,grouping(slot) AS is_total,

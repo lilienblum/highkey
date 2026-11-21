@@ -141,7 +141,7 @@ export function validateExploreSearch(search: Record<string, unknown>): ExploreS
     }
   }
   if (
-    (spec.event && !validKey(spec.event)) ||
+    (spec.event && !validKey(spec.event.replace(/^@/, ""))) ||
     (spec.source && !validKey(spec.source)) ||
     !["count", "actors", "sum", "avg", "p50", "p95", "min", "max"].includes(spec.measure) ||
     !validKey(spec.property) ||

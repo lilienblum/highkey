@@ -86,6 +86,11 @@ export function filterCondition(
       const at = `positionCaseInsensitiveUTF8(dynamicElement(${expression}, 'String'), ${params.add("String", value)})`;
       return `(dynamicType(${expression}) = 'String' AND ${at} ${op === "contains" ? "> 0" : "= 0"})`;
     }
+    case "starts_with":
+    case "ends_with": {
+      if (typeof value !== "string") throw bad("Prefix and suffix filters need text");
+      return `(dynamicType(${expression})='String' AND ${op === "starts_with" ? "startsWith" : "endsWith"}(dynamicElement(${expression},'String'),${params.add("String", value)}))`;
+    }
     default: {
       const ordered = ORDERED[op as string];
       if (!ordered) throw bad("Unknown filter op");

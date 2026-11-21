@@ -1,6 +1,7 @@
 // Typed widget queries (events and logs) compiled to ClickHouse SQL over the project's scoped
 // views, and measured as a total, buckets, groups or grouped buckets.
 import { bad } from "../api/errors";
+import type { Rules } from "../queries/custom";
 import { type Bucket, RANGE_FROM, runSettings, SOURCE_SCOPE } from "../clickhouse/access";
 import type { ClickHouse, QueryOptions } from "../clickhouse/client";
 import { measure as eventMeasure, predicate as eventPredicate } from "../queries/events";
@@ -89,7 +90,7 @@ interface Compiled {
 
 const ACTOR = "(identity_kind, actor_id)";
 
-function compileEvents(q: EventsQuery): Compiled {
+function compileEvents(q: EventsQuery, rules?: Rules): Compiled {
   if (!["count", "actors", "sessions", "new_actors", "returning_actors"].includes(q.measure)) {
     if (!q.property) throw bad("This measure needs a property");
     path("properties", q.property);
@@ -103,6 +104,7 @@ function compileEvents(q: EventsQuery): Compiled {
       filters: q.filters ?? [],
     } as Parameters<typeof eventPredicate>[0],
     params,
+    rules,
   );
   const by = q.group_by ?? "name";
   let label: string;
@@ -181,6 +183,7 @@ function compileLogs(q: LogsQuery): Compiled {
 }
 
 export interface RunOptions {
+  rules?: Rules;
   reader: ClickHouse;
   source: string | null;
   signal?: AbortSignal;
@@ -242,7 +245,7 @@ export async function measure(
   shape: Shape,
   run: RunOptions,
 ): Promise<Measured> {
-  const c = q.signal === "events" ? compileEvents(q) : compileLogs(q);
+  const c = q.signal === "events" ? compileEvents(q, run.rules) : compileLogs(q);
   const source = q.source_id ?? run.source;
   const value = `toNullable(toFloat64(${atWindow(c.measure)}))`;
   const total = await run.reader.query<{ value: number | null }>(
@@ -284,7 +287,7 @@ export async function rows(
   limit: number,
   run: RunOptions,
 ): Promise<Record<string, unknown>[]> {
-  const c = q.signal === "events" ? compileEvents(q) : compileLogs(q);
+  const c = q.signal === "events" ? compileEvents(q, run.rules) : compileLogs(q);
   const source = q.source_id ?? run.source;
   const sql =
     q.signal === "events"

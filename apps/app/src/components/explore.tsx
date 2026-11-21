@@ -33,6 +33,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { number, sourceGroups, type QueryResult } from "@/lib/api";
 import { EventStream } from "./event-stream";
 import { EventCatalog } from "./event-catalog";
+import { useEventCatalog } from "@/lib/use-event-catalog";
 import { useQuery } from "@/lib/use-query";
 import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-shell";
 import { Breakdown, ErrorState, NoEvents, PinChips, SeriesChart } from "./shared";
@@ -116,6 +117,7 @@ const eventViews: SavedViewPage<EventViewDocument> = {
 function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
   const workspaceTarget = useWorkspaceTarget();
   const { product, source, sourceId, range, refresh, refreshKey } = useWorkspace();
+  const catalog = useEventCatalog(product?.id);
   const search = useSearch({ strict: false });
   const navigate = useNavigate({ from: "/$orgSlug/$projectSlug/events" });
   const applied: Spec = appliedSpec({ query: search.query, drilldown });
@@ -324,6 +326,7 @@ function ExploreProduct({ drilldown }: { drilldown?: ExploreDrilldown }) {
                       ...Array.from(
                         new Set([
                           ...(data?.event_names ?? []),
+                          ...(catalog.data ?? []).filter((d) => d.rules).map((d) => d.name),
                           ...(draft.event ? [draft.event] : []),
                         ]),
                       ).map((name): [string, string] => [name, name]),

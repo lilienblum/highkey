@@ -4,6 +4,7 @@ import { bad } from "../api/errors";
 import { fields } from "../api/body";
 import { type Bucket, runSettings } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
+import { anyNamedEvent, namedEvent, type Rules, validEvent } from "./custom";
 import {
   bucketGrid,
   distinctValues,
@@ -113,7 +114,7 @@ export function validateEventsQuery(q: EventsQuery): void {
   )
     throw bad(LIMITS);
   if (!MEASURES.includes(q.measure)) throw bad("Unsupported measure");
-  if (q.names && (q.names.length > 500 || q.names.some((name) => !validKey(name))))
+  if (q.names && (q.names.length > 500 || q.names.some((name) => !validEvent(name))))
     throw bad("Use up to 500 valid event names");
   if (q.order !== undefined && !["oldest", "newest"].includes(q.order))
     throw bad("Order must be oldest or newest");
@@ -152,11 +153,11 @@ export function measure(q: { measure: string; property?: string | null }): strin
 }
 
 /** The WHERE clause for the query's own filters; the view already holds its range and source. */
-export function predicate(q: EventsQuery, params: Params): string {
+export function predicate(q: EventsQuery, params: Params, rules?: Rules): string {
   const parts = ["1"];
-  if (q.names?.length) parts.push(`name IN ${params.addList(q.names)}`);
+  if (q.names?.length) parts.push(anyNamedEvent(q.names, params, rules));
+  if (q.event != null) parts.push(namedEvent(q.event, params, rules));
   for (const [column, value] of [
-    ["name", q.event],
     ["source", q.source],
     ["identity_kind", q.identity_kind],
   ] as const)
@@ -196,10 +197,14 @@ export interface QueryResult {
   timezone: "UTC";
 }
 
-export async function runEventsQuery(reader: ClickHouse, q: EventsQuery): Promise<QueryResult> {
+export async function runEventsQuery(
+  reader: ClickHouse,
+  q: EventsQuery,
+  rules?: Rules,
+): Promise<QueryResult> {
   validateEventsQuery(q);
   const params = new Params();
-  const where = predicate(q, params);
+  const where = predicate(q, params, rules);
   const value = `toNullable(toFloat64(${measure(q)}))`;
   const grouping = group(q);
   const duration = numeric(path("properties", "duration_ms"));
@@ -256,7 +261,7 @@ export async function runEventsQuery(reader: ClickHouse, q: EventsQuery): Promis
       count: Number(row.count),
     })),
     events: events.data,
-    event_names: names.data.map((row) => row.name),
+    event_names: [...names.data.map((row) => row.name), ...(rules?.keys() ?? [])],
     page: q.page,
     page_size: q.page_size,
     timezone: "UTC",

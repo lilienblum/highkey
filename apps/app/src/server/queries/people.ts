@@ -7,6 +7,8 @@ import { parseEventsQuery } from "./events";
 import { runEntityQuery, parseEntityQuery } from "./entities";
 import { readAs } from "./read";
 import { all } from "../db/db";
+import { customRules, anyNamedEvent } from "./custom";
+import { Params } from "./properties";
 
 // Mutation-only profiles also have a place in the directory. Names and emails are text traits.
 const names = `SELECT profile_id AS id,
@@ -116,9 +118,19 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
       [id],
     )
   ).map((r) => r.name);
+  const custom = conversions.some((n) => n.startsWith("@"))
+    ? await customRules(ctx.db, id)
+    : undefined;
+  const conversionParams = new Params();
+  const conversionPredicate = anyNamedEvent(conversions, conversionParams, custom);
   const options = {
     settings,
-    params: { id: q.id, size: q.page_size, offset: (q.page - 1) * q.page_size, conversions },
+    params: {
+      id: q.id,
+      size: q.page_size,
+      offset: (q.page - 1) * q.page_size,
+      ...conversionParams.values,
+    },
   };
   const where = q.anonymous
     ? "profile_id IS NULL AND identity_kind='visitor' AND actor_id={id:String}"
@@ -133,7 +145,7 @@ export async function personDetail(ctx: ApiContext, id: string, body: unknown) {
         revenue_cents: string;
         groups: [string, string][];
       }>(
-        `SELECT count() AS events,countIf(name='page_view') AS page_views,uniqExact(toDate(event_time)) AS days_active,countIf(has({conversions:Array(String)},name)) AS conversions,
+        `SELECT count() AS events,countIf(name='page_view') AS page_views,uniqExact(toDate(event_time)) AS days_active,countIf(${conversionPredicate}) AS conversions,
        toString(sumIf(cents,abs(cents)<=9007199254740991)) AS revenue_cents,
        groupUniqArrayArray(100)(arrayZip(mapKeys(groups),mapValues(groups))) AS groups
        FROM (SELECT *,coalesce(toInt128(properties.revenue.:Int64),toInt128(properties.revenue.:UInt64),0) AS cents FROM profile_events WHERE ${where})`,

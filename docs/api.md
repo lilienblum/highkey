@@ -148,6 +148,8 @@ A visitor's explicit identify can attribute up to six hours of earlier profile-l
 
 The project event catalog holds optional display and conversion definitions by event name. Read it with `GET /api/products/:project/event-catalog` (also `/api/read`). `PUT` on the management path upserts `{name, icon, color, description, sentence, conversion}`; `DELETE` accepts `{name}`. Members and project managers can edit. Sentences replace `{property}` with the event's scalar value; missing values display `—`. Definitions never change the raw event. The Events catalog has a Conversions tab; marking an event adds it to the Overview conversion report and profile conversion totals.
 
+Use **New custom event** to name a combination of raw events. For example, `{"name":"@activation","rules":[{"event":"signup"},{"event":"page_view","filters":[{"property":"path","op":"starts_with","value":"/docs"}]}]}` matches signups or docs page views. Filters within one alternative all have to match; a row that satisfies two alternatives still counts once. Use the `@` name in an Events query, saved view, agent-authored dashboard, funnel step, retention start/return, or revenue query. Changing the definition takes effect when the report next runs.
+
 `POST /api/products/:project/activity` returns `{active, events, minutes}` for the instant `to` (RFC 3339). `active` is the number of distinct identified actors in the last five minutes, `events` counts all matching events in that window, and `minutes` contains thirty one-minute distinct actor counts, oldest first. The source, event, and typed property filters work as in the events query. The same endpoint is available under `/api/read`.
 
 ### Sessions
