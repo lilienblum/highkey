@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/errkit/schema.json",
+  "outputs": [
+    {
+      "path": "apps/app/src/lib/error-codes.ts"
+    }
+  ],
+  "common": {
+    "workspace_load_failed": {
+      "description": "The workspace project list could not be loaded.",
+      "code": "K7NGF6"
+    },
+    "workspace_invalid_response": {
+      "description": "The workspace API returned an invalid project list.",
+      "code": "EWEP8U"
+    },
+    "unexpected_app_error": {
+      "description": "An unexpected route error reached the app's root error page.",
+      "code": "6HRPHX"
+    }
+  }
+}

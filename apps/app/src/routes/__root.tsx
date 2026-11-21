@@ -12,6 +12,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Err } from "@/lib/error-codes";
 import { getWorkspace } from "@/server/workspace";
 import { activateOrganization, getViewer, type Viewer } from "@/server/viewer";
 import {
@@ -87,7 +88,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     const path = location.pathname;
     if (isAccountScreen(path) && path !== NEW_PROJECT)
       return { initialProducts: [], serverNow: Date.now() };
-    const workspace = await getWorkspace();
+    const workspace = await getWorkspace().catch((cause) => {
+      console.error(`[${Err.WorkspaceLoadFailed}] Workspace request failed`, cause);
+      throw new Error(Err.WorkspaceLoadFailed);
+    });
+    if ("errorCode" in workspace) throw new Error(workspace.errorCode);
     if ("blocked" in workspace) {
       if (path !== ACCOUNT_SETTINGS)
         throw redirect({
@@ -159,8 +164,10 @@ function Root() {
     </QueryClientProvider>
   );
 }
-function WorkspaceError() {
+function WorkspaceError({ error }: { error: unknown }) {
   const router = useRouter();
+  const message = error instanceof Error ? error.message : null;
+  const code = Object.values(Err).find((value) => value === message) ?? Err.UnexpectedAppError;
   return (
     <main className="workspace-error">
       <img src="/favicon.svg?v=7" width="40" height="40" alt="Highkey" />
@@ -169,12 +176,15 @@ function WorkspaceError() {
         If this keeps happening, email{" "}
         <a
           className="text-primary underline underline-offset-4"
-          href="mailto:support@usehighkey.com"
+          href={`mailto:support@usehighkey.com?subject=${encodeURIComponent(`Highkey error ${code}`)}`}
         >
           support@usehighkey.com
         </a>
         .
       </p>
+      <small className="text-muted-foreground">
+        Error code: <code>{code}</code>
+      </small>
       <div className="flex flex-wrap justify-center gap-3">
         <Button onClick={() => void router.invalidate()}>Try again</Button>
         <Button variant="outline" nativeButton={false} role="link" render={<a href="/" />}>
