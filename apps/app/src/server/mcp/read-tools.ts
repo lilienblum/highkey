@@ -7,7 +7,7 @@ import { validateFor } from "../dashboards/routes";
 import { runWidget } from "../dashboards/run";
 import { getDashboard, listDashboards, listRevisions } from "../dashboards/storage";
 import { logRetention } from "../db/keys";
-import { products } from "../db/products";
+import { visibleProjects } from "../auth/project-access";
 import { listSources } from "../db/sources";
 import { getView, listViews } from "../views";
 import { parseEntityQuery, runEntityQuery } from "../queries/entities";
@@ -128,7 +128,7 @@ export const readTools: Record<string, Tool> = {
     return readAs(ctx, id, (reader) => runEntityQuery(reader, "groups", parseEntityQuery(query)));
   },
   list_projects: async (ctx) =>
-    (await products(ctx.db, requireActor(ctx).orgId)).map((p) => ({
+    (await visibleProjects(ctx, requireActor(ctx))).map((p) => ({
       id: p.id,
       slug: p.slug,
       name: p.name,

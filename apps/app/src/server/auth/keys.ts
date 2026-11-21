@@ -14,6 +14,7 @@ export function keyFrom(headers: Headers): string | null {
 
 /** What a key's metadata holds. */
 export interface KeyMetadata {
+  projectId?: string;
   orgId: string;
   access: "read" | "write";
 }
@@ -23,7 +24,17 @@ export function keyMetadata(value: unknown): KeyMetadata | null {
     typeof value === "string" ? safeParse(value) : value
   ) as Partial<KeyMetadata> | null;
   if (!meta || typeof meta.orgId !== "string") return null;
-  return { orgId: meta.orgId, access: meta.access === "write" ? "write" : "read" };
+  if (
+    "projectId" in meta &&
+    (typeof meta.projectId !== "string" ||
+      !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(meta.projectId))
+  )
+    return null;
+  return {
+    orgId: meta.orgId,
+    access: meta.access === "write" ? "write" : "read",
+    ...(meta.projectId ? { projectId: meta.projectId } : {}),
+  };
 }
 
 function safeParse(text: string): unknown {

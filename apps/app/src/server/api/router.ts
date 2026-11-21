@@ -6,7 +6,7 @@ import { type Actor, resolveActor, withAccessToken } from "../auth/actor";
 import { oauthAvailable } from "../auth/auth";
 import { keyFrom } from "../auth/keys";
 import { can, type Permission } from "../auth/roles";
-import { resolveProduct } from "../db/products";
+import { scopedProject, forbiddenScope } from "../auth/project-access";
 import type { ApiContext } from "./context";
 import { preflight, withReadCors } from "./cors";
 import { dashboardResponse } from "../dashboards/errors";
@@ -46,6 +46,7 @@ async function ensureRoutes(): Promise<void> {
   const { registerViews } = await import("../views");
   const { registerMcp } = await import("../mcp/server");
   const { registerApiKeys } = await import("../auth/key-routes");
+  const { registerProjectAccess } = await import("../auth/project-access-routes");
   const { registerConnections } = await import("../auth/connections");
   const { registerAdmin } = await import("../admin");
   const { registerDeletion } = await import("../deletion");
@@ -53,6 +54,7 @@ async function ensureRoutes(): Promise<void> {
   registerAdmin();
   registerDeletion();
   registerApiKeys();
+  registerProjectAccess();
   registerConnections();
   registerQueries();
   registerEventCatalog();
@@ -151,6 +153,23 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
         candidate.need === "server-admin" ? actor.serverAdmin : can(actor.role, candidate.need);
       // A read-only credential (a read key, or any key of a viewer) only reaches read routes.
       const changes = candidate.need === "server-admin" || !("read" in candidate.need);
+      if (actor.tokenProject && !mcp) {
+        const list =
+          candidate.method === "GET" &&
+          ["/api/products", "/api/read/products", "/api/read/schemas/dashboard.v1.json"].includes(
+            candidate.pattern,
+          );
+        const project = params.id ?? params.project;
+        const writeDashboard =
+          candidate.pattern.startsWith("/api/products/:id/dashboards") &&
+          ["POST", "PUT"].includes(candidate.method);
+        if (
+          !list &&
+          (!project ||
+            (changes ? !writeDashboard : !candidate.pattern.startsWith("/api/read/products/")))
+        )
+          throw forbiddenScope();
+      }
       if (!allowed || (changes && actor.access === "read"))
         throw new ApiError(
           403,
@@ -159,8 +178,11 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
           "forbidden",
         );
       for (const name of ["id", "project"])
-        if (params[name] !== undefined)
-          params[name] = (await resolveProduct(ctx.db, params[name] as string, actor.orgId)).id;
+        if (params[name] !== undefined) {
+          const scoped = await scopedProject(ctx, actor, params[name] as string);
+          if (changes && scoped.access === "read") throw forbiddenScope();
+          params[name] = scoped.id;
+        }
       return candidate.handler(request, { ...ctx, actor }, params);
     };
     let response: Response;

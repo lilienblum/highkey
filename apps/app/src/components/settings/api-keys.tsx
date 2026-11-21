@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { type FormEvent, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, useWorkspace } from "@/components/app-shell";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { formatDate, oversees, SettingsNav, useOrganizationRole } from "./settin
 import { useLoaded } from "./use-loaded";
 
 interface ApiKey {
+  project_id?: string;
   id: string;
   name: string | null;
   start: string | null;
@@ -51,6 +52,7 @@ const EXPIRY = [
 ] as const;
 
 export function ApiKeys() {
+  const { products } = useWorkspace();
   const role = useOrganizationRole();
   const keys = useLoaded((signal) => api<ApiKey[]>("/keys", "GET", undefined, signal));
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export function ApiKeys() {
                     <TableHead>Name</TableHead>
                     <TableHead>Key</TableHead>
                     <TableHead>Access</TableHead>
+                    <TableHead>Scope</TableHead>
                     {oversees(role) ? <TableHead>Owner</TableHead> : null}
                     <TableHead>Last used</TableHead>
                     <TableHead>Expires</TableHead>
@@ -121,6 +124,12 @@ export function ApiKeys() {
                       </TableCell>
                       <TableCell>
                         {key.access === "write" ? "Read and write" : "Read only"}
+                      </TableCell>
+                      <TableCell>
+                        {key.project_id
+                          ? (products.find((p) => p.id === key.project_id)?.name ??
+                            "Selected project")
+                          : "Organization"}
                       </TableCell>
                       {oversees(role) ? <TableCell>{key.user.email}</TableCell> : null}
                       <TableCell>{formatDate(key.last_used_at)}</TableCell>
@@ -151,6 +160,8 @@ export function ApiKeys() {
 }
 
 function CreateKey({ readOnly, onCreated }: { readOnly: boolean; onCreated: () => void }) {
+  const { products, product } = useWorkspace();
+  const [scope, setScope] = useState(product?.id ?? "all");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [access, setAccess] = useState<"read" | "write">("read");
@@ -162,6 +173,7 @@ function CreateKey({ readOnly, onCreated }: { readOnly: boolean; onCreated: () =
     setName("");
     setAccess("read");
     setExpiry("0");
+    setScope(product?.id ?? "all");
     setError(null);
     setCreated(null);
   };
@@ -175,6 +187,7 @@ function CreateKey({ readOnly, onCreated }: { readOnly: boolean; onCreated: () =
       const result = await api<{ key: string }>("/keys", "POST", {
         name: name.trim(),
         access,
+        ...(scope !== "all" ? { project_id: scope } : {}),
         ...(days ? { expires_in_days: days } : {}),
       });
       setCreated(result.key);
@@ -250,6 +263,23 @@ function CreateKey({ readOnly, onCreated }: { readOnly: boolean; onCreated: () =
                 {readOnly ? (
                   <FieldDescription>Viewers can create read-only keys.</FieldDescription>
                 ) : null}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="key-scope">Project scope</FieldLabel>
+                <ValueSelect
+                  id="key-scope"
+                  value={scope}
+                  options={[
+                    ...products.map((p) => [p.id, p.name] as const),
+                    ["all", "All accessible projects"],
+                  ]}
+                  onValueChange={setScope}
+                />
+                <FieldDescription>
+                  {scope === "all"
+                    ? "Acts within your organization role."
+                    : "Reads only this project. Write access also lets the token create and edit its dashboards."}
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="key-expiry">Expires</FieldLabel>

@@ -255,7 +255,7 @@ export const projectOrganizations = createServerFn({ method: "GET" })
       ctx.db,
       `SELECT o.slug FROM products p JOIN organization o ON o.id = p.org_id
        JOIN member m ON m."organizationId" = o.id AND m."userId" = ?
-       WHERE p.slug = ? AND p.deleted_at IS NULL ORDER BY o.slug`,
+       WHERE p.slug = ? AND p.deleted_at IS NULL AND (m.role IN ('admin','owner') OR NOT EXISTS (SELECT 1 FROM restricted_members r WHERE r.member_id=m.id) OR EXISTS(SELECT 1 FROM member_projects g WHERE g.member_id=m.id AND g.project_id=p.id)) ORDER BY o.slug`,
       [session.user.id, slug],
     );
     return rows.map((row) => row.slug);

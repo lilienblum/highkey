@@ -50,6 +50,50 @@ async function personWithTwoOrganizations() {
 }
 
 test.describe("organizations", () => {
+  test("selected projects limit a member and a project token lists just its project", async ({
+    browser,
+  }) => {
+    const { api: owner, home, homeProject } = await personWithTwoOrganizations();
+    const email = `selected-${run}@example.com`;
+    const invitation = await invite(owner, home.id, email),
+      member = await signUp(email);
+    expect(
+      (
+        await member.post("/api/auth/organization/accept-invitation", {
+          data: { invitationId: invitation.id },
+        })
+      ).ok(),
+    ).toBe(true);
+    const second = (await (
+      await owner.post("/api/products", { data: { name: `Hidden ${run}`, retention_days: 30 } })
+    ).json()) as { id: string };
+    const c = await browser.newContext({ storageState: await owner.storageState() });
+    const page = await c.newPage();
+    await page.goto("/settings/members");
+    await page.getByRole("button", { name: `Projects for ${email}` }).click();
+    const d = page.getByRole("dialog");
+    await d.getByRole("combobox", { name: "Project access mode" }).click();
+    await page.getByRole("option", { name: "Selected projects only" }).click();
+    await d.getByRole("combobox", { name: `Access to ${homeProject.name}` }).click();
+    await page.getByRole("option", { name: "Read only", exact: true }).click();
+    await d.getByRole("button", { name: "Save project access" }).click();
+    await expect(d).toBeHidden();
+    const list = await (await member.get("/api/products")).json();
+    expect(list.map((p: { id: string }) => p.id)).toEqual([homeProject.id]);
+    expect((await member.get(`/api/products/${second.id}/sources`)).status()).toBe(404);
+    await page.goto("/settings/keys");
+    await page.getByRole("button", { name: "New API key" }).click();
+    await d.getByRole("textbox", { name: "Name", exact: true }).fill("One project");
+    await d.getByRole("combobox", { name: "Project scope" }).click();
+    await page.getByRole("option", { name: homeProject.name, exact: true }).click();
+    await d.getByRole("button", { name: "Create key" }).click();
+    const key = await d.locator(".settings-secret code").innerText();
+    const res = await fetch(`${base}/api/read/products`, {
+      headers: { authorization: `Bearer ${key}` },
+    });
+    expect((await res.json()).map((p: { id: string }) => p.id)).toEqual([homeProject.id]);
+    await c.close();
+  });
   test("switching organizations shows only that organization's projects", async ({ browser }) => {
     const { api, home, second, homeProject, sideProject } = await personWithTwoOrganizations();
     const context = await browser.newContext({ storageState: await api.storageState() });

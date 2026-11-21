@@ -31,6 +31,7 @@ import {
   useOrganizationRole,
 } from "./settings-nav";
 import { useLoaded } from "./use-loaded";
+import { MemberProjects } from "./project-access";
 
 interface Member {
   id: string;
@@ -92,7 +93,7 @@ export function Members() {
       <SettingsNav />
       <PageHeader
         title="Members"
-        description="Everyone in this organization, with the role that covers all its projects."
+        description="Organization roles and the projects each member can open or edit."
       />
       <div className="settings-stack">
         {manage ? <InviteCard roleOptions={roleOptions} onInvited={org.reload} /> : null}
@@ -156,6 +157,9 @@ export function Members() {
                       </TableCell>
                       <TableCell>
                         <div className="settings-row-actions">
+                          {manage && ["member", "viewer"].includes(member.role) && (
+                            <MemberProjects member={member.id} email={member.user.email} />
+                          )}
                           {manage &&
                           member.userId !== viewer?.user.id &&
                           (member.role !== "owner" || role === "owner") ? (

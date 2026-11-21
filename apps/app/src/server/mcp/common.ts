@@ -8,7 +8,7 @@ import { ApiError } from "../api/errors";
 import { DashboardError, detailed, notFound, parts } from "../dashboards/errors";
 import { missingHint } from "../dashboards/suggest";
 import type { Issue } from "../dashboards/validate";
-import { products, resolveProduct } from "../db/products";
+import { scopedProject, visibleProjects } from "../auth/project-access";
 import { listSources, resolveSource } from "../db/sources";
 
 export type Args = Record<string, any>;
@@ -107,10 +107,10 @@ export async function orMissing<T>(what: string, hint: string, work: () => Promi
 /** The id of the project named by id or slug. A miss names the nearest slugs. */
 export async function projectId(ctx: ApiContext, key: string): Promise<string> {
   try {
-    return (await resolveProduct(ctx.db, key, requireActor(ctx).orgId)).id;
+    return (await scopedProject(ctx, requireActor(ctx), key)).id;
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error;
-    const slugs = (await products(ctx.db, requireActor(ctx).orgId)).map((p) => p.slug);
+    const slugs = (await visibleProjects(ctx, requireActor(ctx))).map((p) => p.slug);
     throw notFound("Project", missingHint(key, slugs, "projects"));
   }
 }

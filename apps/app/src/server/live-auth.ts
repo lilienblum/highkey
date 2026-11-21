@@ -5,6 +5,7 @@ import type { ApiContext } from "./api/context";
 import { memberRole, resolveActor } from "./auth/actor";
 import { sessionCookieName } from "./auth/cookie";
 import { KEY_PREFIX } from "./auth/keys";
+import { grants } from "./auth/project-access";
 
 export async function verifyChannel(
   ctx: ApiContext,
@@ -22,12 +23,17 @@ export async function verifyChannel(
       headers: { authorization: `Bearer ${key}` },
     });
     const actor = await resolveActor(ctx, request).catch(() => null);
-    return actor && actor.orgId === org ? { subject: actor.userId } : false;
+    return actor && !actor.tokenProject && !actor.projects && actor.orgId === org
+      ? { subject: actor.userId }
+      : false;
   }
   if (!input.cookie) return false;
   const auth = await ctx.auth();
   const cookie = `${sessionCookieName(ctx.publicUrl)}=${input.cookie}`;
   const session = await auth.api.getSession({ headers: new Headers({ cookie }) }).catch(() => null);
   if (!session) return false;
-  return (await memberRole(ctx, org, session.user.id)) ? { subject: session.user.id } : false;
+  const role = await memberRole(ctx, org, session.user.id);
+  return role && !(await grants(ctx.db, org, session.user.id, role))
+    ? { subject: session.user.id }
+    : false;
 }

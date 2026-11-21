@@ -67,14 +67,15 @@ export async function product(db: Db, id: string): Promise<Product> {
  * An organization's projects (never deleted ones), or (without `orgId`) every project, deleted ones
  * included, for background work.
  */
-export async function products(db: Db, orgId?: string): Promise<Product[]> {
+export async function products(db: Db, orgId?: string, allowed?: string[]): Promise<Product[]> {
+  if (allowed?.length === 0) return [];
   const rows =
     orgId === undefined
       ? await all<Row>(db, `SELECT ${ROW} FROM products ORDER BY created_at, id`)
       : await all<Row>(
           db,
-          `SELECT ${ROW} FROM products WHERE org_id = ? AND deleted_at IS NULL ORDER BY created_at, id`,
-          [orgId],
+          `SELECT ${ROW} FROM products WHERE org_id = ? AND deleted_at IS NULL ${allowed ? "AND id IN (SELECT value FROM json_each(?))" : ""} ORDER BY created_at, id`,
+          allowed ? [orgId, JSON.stringify(allowed)] : [orgId],
         );
   return Promise.all(rows.map((row) => withLinks(db, row)));
 }

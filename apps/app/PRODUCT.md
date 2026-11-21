@@ -34,6 +34,8 @@ One fixed Kanagawa Wave theme, Hugeicons, accessible shadcn Base UI primitives, 
 
 ## Brand Commitments
 
+Project access may be restricted to selected projects for members and viewers; owners and admins oversee the organization. Project keys grant read access to one project and optionally dashboard creation and editing. Project restrictions apply to the session and its API and OAuth credentials on every request.
+
 Highkey is the working name. The user selected Kanagawa colors and one theme without an appearance selector. Use Wave's sumi-ink surfaces and warm text, with Surimi Orange for primary actions, Carp Yellow highlights, violet/aqua chart categories, and green outcomes; avoid making the interface uniformly blue. The user requested a rebuild of the shared shadcn theme, then an ordered-dither direction modelled on tripwire.sh and dither-kit: glossy pill actions and segmented choices, inset fields, Geist Pixel page titles and measurements, 2px Bayer screen tones in place of translucent tints, dithered chart and report fills, and an animated dither field behind the sidebar identity, with restrained overlay elevation. Preserve Geist typography for interface text, the straight three-bar mark and matching favicon, flat analytical surfaces. Overview follows the user-selected Plausible-style hierarchy: small iOS-style square metrics, one wide activity chart, and paired reports. Sources use a ranked report only when multiple sources contribute; otherwise that report slot shows identified actors. Accessible shadcn Base UI primitives remain. Use straightforward product language and accurate analytics terminology.
 
 ## Evidence on Hand

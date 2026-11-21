@@ -5,6 +5,7 @@
 // takes API keys and lists only the read tools. No browser may call MCP: a request that carries
 // an Origin is refused, so the read path's CORS cannot reach it.
 import { requireActor } from "../auth/actor";
+import { scopedProject, forbiddenScope } from "../auth/project-access";
 import { can, type Permission } from "../auth/roles";
 import type { ApiContext } from "../api/context";
 import { READ, route } from "../api/router";
@@ -89,6 +90,12 @@ const TOOL_NEEDS: Record<string, Permission> = {
 export function toolNeed(name: string): Permission | null {
   return TOOL_NEEDS[name] ?? (READ_TOOLS.has(name) ? { read: ["all"] } : null);
 }
+function tokenTool(name: string, access: "read" | "write") {
+  return (
+    READ_TOOLS.has(name) ||
+    (access === "write" && (name === "save_dashboard" || name === "restore_revision"))
+  );
+}
 
 async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
   const name = String(params.name ?? "");
@@ -118,6 +125,14 @@ async function callTool(ctx: ApiContext, mode: "read" | "full", params: Args) {
       isError: true,
     };
   try {
+    if (actor.tokenProject && !tokenTool(name, actor.access)) throw forbiddenScope();
+    if (
+      writes &&
+      actor.projects &&
+      typeof args.project === "string" &&
+      (await scopedProject(ctx, actor, args.project)).access === "read"
+    )
+      throw forbiddenScope();
     const result = await (HANDLERS[name] as Tool)(ctx, args);
     if (typeof args.project === "string") {
       // One onboarding milestone, without retaining which agent, credential or user called.
@@ -150,7 +165,11 @@ async function dispatch(ctx: ApiContext, mode: "read" | "full", method: string, 
       return {};
     case "tools/list":
       return {
-        tools: catalog.tools.filter((t) => mode === "full" || READ_TOOLS.has(t.name)),
+        tools: catalog.tools.filter(
+          (t) =>
+            (mode === "full" || READ_TOOLS.has(t.name)) &&
+            (!ctx.actor?.tokenProject || tokenTool(t.name, ctx.actor.access)),
+        ),
       };
     case "tools/call":
       return callTool(ctx, mode, params);

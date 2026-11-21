@@ -8,8 +8,10 @@ import { all, changes } from "../db/db";
 import { type Actor, requireActor } from "./actor";
 import { keyMetadata } from "./keys";
 import { maxAccess, oversees } from "./roles";
+import { scopedProject, forbiddenScope } from "./project-access";
 
 export interface ApiKeyListing {
+  project_id?: string;
   id: string;
   name: string | null;
   /** The first characters, to tell keys apart. */
@@ -58,6 +60,9 @@ async function listKeys(actor: Actor, db: Parameters<typeof all>[0]): Promise<Ap
     name: row.name,
     start: row.start,
     access: keyMetadata(row.metadata)?.access ?? "read",
+    ...(keyMetadata(row.metadata)?.projectId
+      ? { project_id: keyMetadata(row.metadata)!.projectId }
+      : {}),
     user: { id: row.user_id, name: row.user_name, email: row.user_email },
     created_at: at(row.created_at) as string,
     expires_at: at(row.expires_at),
@@ -75,7 +80,7 @@ export function registerApiKeys(): void {
     fromSession(actor);
     const input = fields(
       await readJson(request),
-      { name: "string", access: "string", expires_in_days: "integer" },
+      { name: "string", access: "string", expires_in_days: "integer", project_id: "string?" },
       { expires_in_days: 0 },
     );
     const name = input.name.trim();
@@ -84,6 +89,9 @@ export function registerApiKeys(): void {
       throw unprocessable("Use access `read` or `write`");
     if (input.access === "write" && maxAccess(actor.role) === "read")
       throw new ApiError(403, "A viewer can create read-only keys only", {}, "forbidden");
+    const scope =
+      input.project_id != null ? await scopedProject(ctx, actor, input.project_id) : null;
+    if (scope?.access === "read" && input.access === "write") throw forbiddenScope();
     const days = input.expires_in_days;
     if (days !== 0 && (days < 1 || days > 365))
       throw bad("Use expires_in_days 1–365, or leave it out for a key that does not expire");
@@ -92,7 +100,11 @@ export function registerApiKeys(): void {
       body: {
         name,
         userId: actor.userId,
-        metadata: { orgId: actor.orgId, access: input.access },
+        metadata: {
+          orgId: actor.orgId,
+          access: input.access,
+          ...(scope ? { projectId: scope.id } : {}),
+        },
         ...(days ? { expiresIn: days * 86_400 } : {}),
       },
     });
@@ -100,6 +112,7 @@ export function registerApiKeys(): void {
       id: created.id,
       key: created.key,
       name,
+      ...(scope ? { project_id: scope.id } : {}),
       access: input.access,
       expires_at: created.expiresAt ? new Date(created.expiresAt).toISOString() : null,
     });

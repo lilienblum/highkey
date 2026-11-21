@@ -9,8 +9,11 @@ import { one, StorageUnavailable } from "../db/db";
 import { mcpResource } from "./auth";
 import { keyFrom, keyMetadata } from "./keys";
 import { isRole, maxAccess, type Role } from "./roles";
+import { grants, type ProjectGrants } from "./project-access";
 
 export interface Actor {
+  projects?: ProjectGrants;
+  tokenProject?: string;
   userId: string;
   orgId: string;
   role: Role;
@@ -124,6 +127,8 @@ async function keyActor(ctx: ApiContext, key: string): Promise<Actor> {
   return {
     userId,
     orgId: meta.orgId,
+    projects: await grants(ctx.db, meta.orgId, userId, role),
+    tokenProject: meta.projectId,
     role,
     access: meta.access === "write" ? maxAccess(role) : "read",
     via: "key",
@@ -158,6 +163,7 @@ export async function resolveActor(ctx: ApiContext, request: Request): Promise<A
     role,
     access: "write",
     via: "session",
+    projects: await grants(ctx.db, orgId, session.user.id, role),
     serverAdmin: (session.user as { role?: string | null }).role === "admin",
   };
 }
@@ -206,6 +212,7 @@ export async function tokenActor(ctx: ApiContext, claims: Claims): Promise<Actor
     role,
     access: scopes.has("mcp:write") ? maxAccess(role) : "read",
     via: "mcp",
+    projects: await grants(ctx.db, orgId, userId, role),
     serverAdmin: false,
   };
 }

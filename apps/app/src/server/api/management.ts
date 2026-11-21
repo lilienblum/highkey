@@ -2,6 +2,7 @@
 // Every change tells open dashboards through the dashboards signal, so a sidebar showing the
 // project refreshes without a reload.
 import { requireActor } from "../auth/actor";
+import { visibleProjects } from "../auth/project-access";
 import { activation } from "../activation";
 import { favicon, products, requireProduct, productRow } from "../db/products";
 import { listKeys, listLogKeys, logRetention } from "../db/keys";
@@ -49,10 +50,10 @@ export function registerManagement(): void {
   route("POST", "/api/cleanup", "server-admin", async (_r, ctx) => json(await cleanup(ctx)));
 
   route("GET", "/api/products", READ, async (_r, ctx) =>
-    json(await products(ctx.db, requireActor(ctx).orgId)),
+    json(await visibleProjects(ctx, requireActor(ctx))),
   );
   route("GET", "/api/read/products", READ, async (_r, ctx) =>
-    json(await products(ctx.db, requireActor(ctx).orgId)),
+    json(await visibleProjects(ctx, requireActor(ctx))),
   );
 
   route("POST", "/api/products", { project: ["create"] }, async (request, ctx) =>
