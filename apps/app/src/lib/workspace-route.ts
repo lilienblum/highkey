@@ -1,4 +1,11 @@
-import { useLocation, useParams, useRouteContext, useSearch } from "@tanstack/react-router";
+import {
+  useLocation,
+  useMatches,
+  useParams,
+  useRouteContext,
+  type MakeRouteMatch,
+  type RegisteredRouter,
+} from "@tanstack/react-router";
 import { useCallback } from "react";
 import type { WorkspaceSearch } from "./workspace-search";
 
@@ -80,18 +87,37 @@ export function useOrganizationSlug(): string | undefined {
   );
 }
 
+type WorkspaceMatch = Pick<
+  MakeRouteMatch<RegisteredRouter["routeTree"], string, false>,
+  "pathname" | "params" | "search"
+>;
+
+/** Read path, params and validated search from the same committed page during navigation. */
+export function useWorkspaceMatch() {
+  return useMatches({
+    select: (matches): WorkspaceMatch => {
+      const { pathname, params, search } = matches[matches.length - 1]!;
+      return { pathname, params, search };
+    },
+    structuralSharing: true,
+  });
+}
+
 /** `workspaceTarget` for the organization the page shows. */
 export function useWorkspaceTarget() {
   const orgSlug = useOrganizationSlug();
-  const currentProject = useParams({ strict: false }).projectSlug;
-  const { pathname, state } = useLocation();
+  const {
+    pathname,
+    params: { projectSlug: currentProject },
+    search: { source, days, period, from, to, snapshot },
+  } = useWorkspaceMatch();
+  const reportScope = useLocation({ select: (location) => location.state.reportScope });
   const here = workspaceView(pathname);
-  const { source, days, period, from, to, snapshot } = useSearch({ strict: false });
   return useCallback(
     (view: WorkspaceView, projectSlug?: string, dashboardSlug?: string) => {
       const target = workspaceTarget(orgSlug, view, projectSlug, dashboardSlug);
       const project = `${orgSlug}/${projectSlug}`;
-      const parked = state.reportScope?.project === project ? state.reportScope.filters : undefined;
+      const parked = reportScope?.project === project ? reportScope.filters : undefined;
       if (!projectSlug || (currentProject !== projectSlug && !parked))
         return { ...target, search: undefined };
       const filters = hasReportDates(here)
@@ -104,7 +130,7 @@ export function useWorkspaceTarget() {
         search: view === "/settings" || hasReportDates(here) ? undefined : filters,
       };
     },
-    [orgSlug, currentProject, here, state.reportScope, source, days, period, from, to, snapshot],
+    [orgSlug, currentProject, here, reportScope, source, days, period, from, to, snapshot],
   );
 }
 

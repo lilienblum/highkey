@@ -6,6 +6,7 @@ import { DateRangePicker } from "./date-range-picker";
 import {
   hasReportDates,
   isOrganizationPage,
+  useWorkspaceMatch,
   useWorkspaceTarget,
   workspaceView,
 } from "@/lib/workspace-route";
@@ -23,7 +24,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Outlet, useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -101,12 +102,14 @@ export function AppShell({
     setRefreshKey((key) => key + 1);
   }, []);
   const [error, setError] = useState("");
-  const path = useLocation({ select: (l) => l.pathname });
+  const {
+    pathname: path,
+    params: { projectSlug, dashboardSlug },
+    search,
+  } = useWorkspaceMatch();
   const view = workspaceView(path);
-  const { projectSlug, dashboardSlug } = useParams({ strict: false });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const search = useSearch({ strict: false });
   const drilldown = view === "/events" ? search.drilldown : undefined;
   const reportDates = hasReportDates(view);
   const requestedProject = projectSlug ?? search.project;

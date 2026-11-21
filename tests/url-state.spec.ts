@@ -127,6 +127,7 @@ test("workspace links carry only the filters their destination uses", async ({ p
     expect(Object.fromEntries(url.searchParams)).toEqual(expected);
   }
   await nav.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === `${path}/settings` && !url.search);
   await page.reload();
   await page
     .getByRole("navigation", { name: "Settings", exact: true })
