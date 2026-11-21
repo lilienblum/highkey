@@ -446,6 +446,10 @@ At `bc9a49e`, four end-to-end journeys passed together: create a cohort and use 
 
 The full Bun suite found a catalog mismatch: `cohort` was advertised on `create_reference` instead of `realtime_activity`. After `0e11dde`, all **37 MCP tests** passed, followed by **422/422 Bun tests** (4,744 assertions). Formatting, typechecking and the production build passed. The Rust suite includes idle-collector UTC salt retirement, and all-target, all-feature Clippy passed with warnings denied.
 
+The load rerun with the final ingest code passed on 10 million events: p99 **171.6 ms** alone and **150.4 ms** with eight readers. The readers completed 125 queries; 511 were refused or timed out. The first browser run of the updated live wall passed 255/256: the accessibility snapshot showed the correct singular “1 event”, while the old test expected “1 events”. `04c1ac1` corrected the assertion.
+
+**Final acceptance at `04c1ac1`: 256/256 isolated Chromium tests passed in 12.8 minutes on the released CLI.** After teardown, only `highkey` and `highkey-ingest` were registered, both in `development`. The `test-e2e` data directory and runner lock were absent. Over trusted local HTTPS, the ordinary dashboard sign-in returned 200 and ingest health returned 200 with `{"status":"ok"}`.
+
 | Roadmap items                                            | Where to check the behavior                                                                                                                                                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1–11: collection                                         | [Collection guide](collection.md), `tests/privacy.spec.ts`, `apps/app/test/request-context.test.ts`, `visitor-mode.test.ts` and `ai-retention.test.ts`.                                                         |
