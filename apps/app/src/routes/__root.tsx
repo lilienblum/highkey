@@ -164,7 +164,7 @@ function WorkspaceError() {
   return (
     <main className="workspace-error">
       <img src="/favicon.svg?v=7" width="40" height="40" alt="Highkey" />
-      <h1>Couldn’t open your workspace</h1>
+      <h1>Something went wrong</h1>
       <p>Please try again in a moment.</p>
       <Button onClick={() => void router.invalidate()}>Try again</Button>
     </main>
