@@ -32,6 +32,19 @@ test("from Overview and Events, inspect a weekly pattern and follow the paths be
     { "content-type": "application/json", authorization: `Bearer ${key}` },
   );
   await page.goto(`/projects/${p.slug}`);
+  await page.getByRole("combobox", { name: "Breakdown", exact: true }).click();
+  await page.getByRole("option", { name: "Pages", exact: true }).click();
+  await page
+    .getByRole("region", { name: "Breakdown", exact: true })
+    .getByRole("button", { name: "Details", exact: true })
+    .click();
+  const table = page.getByRole("table", { name: "Pages report" });
+  await table.getByRole("button", { name: "/cart", exact: true }).click();
+  const rowPanel = page.getByRole("dialog", { name: "/cart", exact: true });
+  await expect(rowPanel.getByRole("combobox", { name: "Row breakdown" })).toBeVisible();
+  await rowPanel.getByRole("button", { name: "Filter Overview" }).click();
+  await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("/cart");
+  await page.getByRole("button", { name: "Remove filter" }).click();
   await page.getByRole("button", { name: "Analyze patterns" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("table")).toHaveAccessibleName(/Visitors by weekday/);

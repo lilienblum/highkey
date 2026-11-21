@@ -31,6 +31,7 @@ import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
 import { PatternReports } from "./pattern-reports";
+import { BreakdownReport } from "./breakdown-report";
 
 type ChartChoice = {
   id: string;
@@ -509,7 +510,17 @@ function ProductOverview() {
             }
             error={breakdown.error}
             retry={refresh}
-            footer={<span>{number(s?.total)} events in this range</span>}
+            footer={
+              <div className="flex items-center justify-between">
+                <span>{number(s?.total)} events in this range</span>
+                <BreakdownReport
+                  key={dimension}
+                  title={dimensionLabel}
+                  dimension={dimension}
+                  filters={eventFilters}
+                />
+              </div>
+            }
           >
             <WidgetContent
               label="breakdown"

@@ -11,6 +11,7 @@ import { parseEntityQuery, runEntityQuery } from "./entities";
 import { revenueReport } from "./revenue";
 import { liveActivity } from "./activity";
 import { patterns } from "./patterns";
+import { breakdownReport } from "./breakdowns";
 import { generations } from "./generations";
 import { customRules } from "./custom";
 import { peopleList, personDetail } from "./people";
@@ -18,6 +19,9 @@ import { sessionList, sessionDetail, sessionSummary } from "./sessions";
 
 export function registerQueries(): void {
   for (const prefix of ["/api/products/:project", "/api/read/products/:project"]) {
+    route("POST", `${prefix}/breakdown`, READ, async (request, ctx, { project }) =>
+      json(await breakdownReport(ctx, project as string, await readJson(request))),
+    );
     route("POST", `${prefix}/ai/generations`, READ, async (request, ctx, { project }) =>
       json(await generations(ctx, project as string, await readJson(request))),
     );
