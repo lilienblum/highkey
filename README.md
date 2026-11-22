@@ -32,6 +32,16 @@ bun dev
 
 Open **https://highkey.test**. The ingest app runs at **https://highkey-ingest.test**. `bun dev` starts a local ClickHouse in Docker (`bun scripts/clickhouse.ts dev-up`: port 8123 on 127.0.0.1, data in the `highkey-dev-clickhouse` volume) and migrates it, builds the browser tracker, then starts both apps through Tako (`tako.ingest.toml` and `tako.app.toml`). It also creates a shared development notification secret if absent, encrypted by Tako under the ignored `.tako/` directory. Sign in or create an account to open the app. `bun run dev:stop` stops the two apps; ClickHouse keeps running until `bun scripts/clickhouse.ts dev-down`.
 
+To preview the UI in your local account, run the following from the running development checkout, using your organization's slug:
+
+```sh
+tako -c tako.app.toml run --env development scripts/seed-preview.ts YOUR_ORG_SLUG
+```
+
+This creates **Fieldwork Demo** and prints its link. It contains 30 days of synthetic website, iOS and CLI activity, profiles, workspaces, sessions, purchases, AI calls, recent correlated logs, a **Repeat CLI users** cohort, saved views and a **Release pulse** dashboard. Rerunning targets the same demo project and refreshes recent activity; it does not select an existing project by name.
+
+For the smaller API-key-based seed, export `HIGHKEY_API_KEY` (an owner or admin write key), then run:
+
 ```sh
 SSL_CERT_FILE=.tako/dev-ca.pem HIGHKEY_API_URL=https://highkey.test bun seed
 ```
