@@ -10,7 +10,7 @@ import { ChartPointActions, useReferences, referenceMarks } from "./chart-refere
 import type { ChartReference } from "@/server/references";
 import type { RefObject } from "react";
 import { number, type QueryResult } from "@/lib/api";
-import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
+import { nextBucket, timeAxisTicks, type TimeBucket } from "@/lib/time-buckets";
 
 // Bayer 4×4 screen tones at 2px per dither pixel (8px tiles), from the line down to the baseline.
 // `from`/`to` are offsets below each value as a share of the series peak.
@@ -93,15 +93,7 @@ export function AnalyticsChart({
         },
       },
       chart: ({ width }) => {
-        const count = Math.min(
-          series.length,
-          width < 480 ? (bucket === "hour" || bucket === "minute" ? 2 : 3) : 7,
-        );
-        const ticks = Array.from(
-          { length: count },
-          (_, index) =>
-            series[count === 1 ? 0 : Math.round((index * (series.length - 1)) / (count - 1))].time,
-        );
+        const ticks = timeAxisTicks(series, bucket, width);
         return {
           marks: [
             ...referenceMarks(refs, bucket, series),
@@ -114,7 +106,6 @@ export function AnalyticsChart({
                       x: "time",
                       y: "value",
                       fill: "var(--data)",
-                      inset: 1,
                     }),
                   ),
                 ]
@@ -165,10 +156,10 @@ export function AnalyticsChart({
                 line: false,
                 tickLabels: { fontSize: 12, opacity: 1 },
                 ticks: {
-                  values: ticks,
+                  values: ticks.values,
                   size: 0,
                   padding: 12,
-                  format: (time) => formatDate(time, bucket),
+                  format: (time) => formatDate(time, ticks.labelBucket),
                 },
               },
             },

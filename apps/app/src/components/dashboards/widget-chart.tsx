@@ -24,7 +24,7 @@ import {
   type Threshold,
   type View,
 } from "@/lib/dashboards";
-import { nextBucket, type TimeBucket } from "@/lib/time-buckets";
+import { nextBucket, timeAxisTicks, type TimeBucket } from "@/lib/time-buckets";
 import { formatDate, TONE_BANDS, ZoomableChart } from "../analytics-chart";
 import { useRef } from "react";
 import { useReferences, referenceMarks } from "../chart-references";
@@ -175,7 +175,6 @@ export function WidgetChart({
               y2: top,
               fill: (row) =>
                 s.dither ? fill(s, 50) : colorVar[thresholdColor(row.value, s.thresholds, s.color)],
-              inset: 1,
             }),
           ),
         ];
@@ -297,15 +296,7 @@ export function WidgetChart({
         },
       },
       chart: ({ width }) => {
-        // As many date labels as fit (hours read longer), at most seven like Overview's chart.
-        const room = Math.floor(width / (bucket === "hour" || bucket === "minute" ? 140 : 76));
-        const count = Math.min(buckets.length, Math.max(2, Math.min(room, 7)));
-        const ticks = Array.from(
-          { length: count },
-          (_, index) =>
-            buckets[count === 1 ? 0 : Math.round((index * (buckets.length - 1)) / (count - 1))]
-              .time,
-        );
+        const ticks = timeAxisTicks(buckets, bucket, width);
         // Bars need half a bucket of room at each end of the time axis.
         const pad = kind === "bar" ? step / 2 : 0;
         return {
@@ -332,10 +323,10 @@ export function WidgetChart({
                 line: false,
                 tickLabels: { fontSize: 11, opacity: 1 },
                 ticks: {
-                  values: ticks,
+                  values: ticks.values,
                   size: 0,
                   padding: 10,
-                  format: (time) => formatDate(time, bucket),
+                  format: (time) => formatDate(time, ticks.labelBucket),
                 },
               },
             },

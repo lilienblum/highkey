@@ -52,7 +52,7 @@ One outlined date trigger opens a preset/custom-range popover. Presets include T
 
 Custom range switches within the same popover to calendar and date inputs: two months on desktop, one on mobile, inclusive UTC calendar days, and at most 366 days. Apply range commits; dismissal discards drafts. Keep the popover nonmodal and avoid scrollbar/layout shifts.
 
-Buckets derive automatically from the selected duration: up to two days hourly, up to 31 days daily, up to 180 days weekly, otherwise monthly. Weeks begin Monday and all chart/calendar labels stay UTC. There is no manual interval selector; legacy interval URL state is ignored.
+Buckets derive automatically from the selected duration: minute through one hour, hourly through two days, then daily through a full year. Axis labels fit the plot width; month labels on an annual chart still represent an axis over daily points. All chart/calendar labels stay UTC. There is no manual interval selector; legacy interval URL state is ignored.
 
 ## Filtering and external links
 

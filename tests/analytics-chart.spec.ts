@@ -133,16 +133,28 @@ for (const sample of [
   });
 }
 
-for (const interval of ["Hourly", "Monthly"]) {
+for (const interval of ["Hourly", "Daily"]) {
   test(`TanStack keeps ${interval.toLowerCase()} endpoint labels inside a narrow plot`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const from = interval === "Hourly" ? "2026-10-31T12:00:00.000Z" : "2026-01-01T00:00:00.000Z";
+    if (interval === "Daily")
+      await page.route("**/api/products/*/query", (route) =>
+        route.fulfill({
+          json: {
+            ...fixture,
+            series: Array.from({ length: 305 }, (_, i) => ({
+              time: Date.UTC(2026, 0, 1 + i),
+              value: i,
+            })),
+          },
+        }),
+      );
     await page.goto(`/?from=${encodeURIComponent(from)}&to=2026-11-02T00%3A00%3A00.000Z`);
     const plot = page.locator(".activity-widget .analytics-plot");
     await expect(plot.locator("svg.ts-chart")).toHaveAccessibleName(
-      interval === "Hourly" ? /UTC hour/ : /UTC month/,
+      interval === "Hourly" ? /UTC hour/ : /UTC date/,
     );
     await expect
       .poll(() =>

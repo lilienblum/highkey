@@ -15,11 +15,40 @@ export function automaticBucket(range: AnalyticsRange): TimeBucket {
 }
 export function bucketForSpan(span: number): TimeBucket {
   if (span <= 3_600_000) return "minute";
-  const days = span / DAY_MS;
-  if (days <= 2) return "hour";
-  if (days <= 31) return "day";
-  if (days <= 180) return "week";
-  return "month";
+  return span <= 2 * DAY_MS ? "hour" : "day";
+}
+
+/** Thin the UTC axis labels, never the points available to the plot, tooltip or keyboard. */
+export function timeAxisTicks(
+  points: readonly { time: number }[],
+  bucket: TimeBucket,
+  width: number,
+) {
+  const spacing = bucket === "hour" || bucket === "minute" ? 132 : 76;
+  const room = Math.max(2, Math.floor((width - 40) / spacing));
+  if (bucket === "day" && points.length / room > 16) {
+    const months = points.filter(({ time }) => new Date(time).getUTCDate() === 1);
+    if (months.length >= 2) {
+      const step = [1, 2, 3, 6, 12].find((n) => months.length <= room * n) ?? 12;
+      const values = months.filter(({ time }) => new Date(time).getUTCMonth() % step === 0);
+      return { values: values.map(({ time }) => time), labelBucket: "month" as const };
+    }
+  }
+  if (bucket === "day" && points.length / room >= 6) {
+    const weeks = points.filter(({ time }) => new Date(time).getUTCDay() === 1);
+    const step = Math.max(1, Math.ceil(weeks.length / room));
+    if (weeks.length >= 2)
+      return {
+        values: weeks.filter((_, i) => i % step === 0).map(({ time }) => time),
+        labelBucket: bucket,
+      };
+  }
+  const count = Math.min(points.length, room);
+  const values = Array.from(
+    { length: count },
+    (_, i) => points[Math.round((i * (points.length - 1)) / Math.max(1, count - 1))].time,
+  );
+  return { values, labelBucket: bucket };
 }
 
 /** Mirrors DuckDB date_trunc: UTC calendar months and Monday-based weeks. */

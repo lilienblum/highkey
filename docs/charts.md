@@ -3,7 +3,7 @@
 Overview and Events use **TanStack Charts 1.1.0** (`@tanstack/charts/react`). The shared adapter is `apps/app/src/components/analytics-chart.tsx`. It renders the server's query buckets; it never re-aggregates or interpolates missing measurements.
 
 - Native SVG line and area marks use straight segments and a zero baseline, including negative values. Null numeric values break the line and area; measured zero remains zero. A single valid point has a visible marker.
-- Grouping is selected automatically from the report range: hourly through two days, daily through 31 days, weekly through 180 days, monthly after that. There is one date control rather than a separate interval picker.
+- Grouping is automatic: minute points through one hour, hourly through two days, and daily through the full supported year. Axis labels thin with the plot width; a yearly view uses calendar month labels while each day remains inspectable. Custom dashboards can still request weekly or monthly data explicitly.
 - X coordinates are UTC epoch milliseconds. Tick labels use actual bucket timestamps and explicit UTC formatting, including weekly/monthly buckets and partial-period tooltip labels. Duration axes and tooltips include `ms`.
 - The library handles responsive sizing, SSR, pointer/touch focus, keyboard navigation, tooltips, and accessible value announcements. Left/Right, Home/End, and Escape inspect or dismiss values. Invisible bucket targets make null values keyboard-accessible without drawing them as zero; the tooltip reports “No numeric value.”
 - Escape also clears ordinary focus through TanStack's interaction controller because 1.1.0 only dismisses pinned tooltips itself.

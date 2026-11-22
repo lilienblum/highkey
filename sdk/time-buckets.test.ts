@@ -4,6 +4,7 @@ import {
   bucketStart,
   nextBucket,
   partialBucketNote,
+  timeAxisTicks,
 } from "../apps/app/src/lib/time-buckets";
 const time = Date.parse;
 
@@ -49,13 +50,21 @@ test("chart detail follows the selected range at each boundary", () => {
     [7, "day"],
     [30, "day"],
     [31, "day"],
-    [31 + 1 / 86400000, "week"],
-    [90, "week"],
-    [180, "week"],
-    [180 + 1 / 86400000, "month"],
-    [366, "month"],
+    [90, "day"],
+    [180, "day"],
+    [366, "day"],
   ] as const) {
     const to = new Date(Date.parse(from) + days * 86400000).toISOString();
     expect(automaticBucket({ from, to })).toBe(expected);
   }
+});
+
+test("a leap year keeps daily detail with calendar labels that fit the plot", () => {
+  const days = Array.from({ length: 366 }, (_, i) => ({ time: Date.UTC(2024, 0, 1 + i) }));
+  const wide = timeAxisTicks(days, "day", 1200);
+  expect(wide.labelBucket).toBe("month");
+  expect(wide.values).toEqual(Array.from({ length: 12 }, (_, m) => Date.UTC(2024, m, 1)));
+  expect(timeAxisTicks(days, "day", 390).values).toEqual(
+    [0, 3, 6, 9].map((m) => Date.UTC(2024, m, 1)),
+  );
 });

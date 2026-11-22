@@ -157,12 +157,12 @@ test("visitor chart excludes installation identities without shrinking overview 
     page.locator('.activity-widget svg[aria-label="Unique visitors by UTC hour"]'),
   ).toBeVisible();
   await expect(page.locator(".chart-period-note")).toContainText("Last hour is partial");
-  const wider = chartResponse(page, "actors", "week");
+  const wider = chartResponse(page, "actors", "day");
   await page.getByRole("button", { name: "Choose date range", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Last 90 days", exact: true }).click();
   await result(wider);
   await expect(
-    page.locator('.activity-widget svg[aria-label="Unique visitors by UTC week"]'),
+    page.locator('.activity-widget svg[aria-label="Unique visitors by UTC date"]'),
   ).toBeVisible();
   await expect(page.getByRole("group", { name: "Chart interval" })).toHaveCount(0);
 });
@@ -283,33 +283,54 @@ test("anonymous CLI data has honest empty states and narrow duration axes remain
   await page.screenshot({ path: test.info().outputPath("cli-chart-mobile.png") });
 });
 
-test("dates automatically choose raw weekly and monthly aggregates and retain the range", async ({
+test("long ranges retain daily detail, calendar labels and raw period aggregates", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator(".page-content")).toHaveAttribute("aria-busy", "false");
-  const weekly = chartResponse(page, "count", "week");
   await page.getByRole("button", { name: "Choose date range", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Last 90 days", exact: true }).click();
-  const weeks = await result(weekly);
-  expect(weeks.series.every((point) => new Date(point.time).getUTCDay() === 1)).toBe(true);
-  expect(weeks.series.reduce((sum, point) => sum + (point.value ?? 0), 0)).toBe(6);
-  await expect(page.locator(".chart-period-note")).toContainText("One point per week");
-  await expect(page.locator(".chart-period-note")).toContainText("Monday start");
+  await expect(
+    page.locator(".activity-widget").locator('circle[data-ts-key^="buckets:"]').first(),
+  ).toBeAttached();
+  await expect
+    .poll(() => page.locator('.activity-widget circle[data-ts-key^="buckets:"]').count())
+    .toBeGreaterThanOrEqual(90);
+  await expect(page.locator(".chart-period-note")).toContainText("One point per day");
   await expect(page.getByRole("group", { name: "Chart interval" })).toHaveCount(0);
   const from = new Date(Date.now() - 365 * 86400000).toISOString();
   const to = new Date().toISOString();
   const url = `/owner/${products.tool.slug}?source=all&metric=p95&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-  const monthly = chartResponse(page, "p95", "month");
+  const yearly = chartResponse(page, "p95", "day");
   await page.goto(url);
-  const months = await result(monthly);
-  expect(months.series.every((point) => new Date(point.time).getUTCDate() === 1)).toBe(true);
-  expect(months.summary.value).toBe(290);
-  expect(months.series.find((point) => point.value !== null)?.value).toBe(290);
+  const data = await result(yearly);
+  expect(data.series.length).toBeGreaterThanOrEqual(365);
+  expect(
+    data.series.slice(1).every((point, i) => point.time - data.series[i].time === 86_400_000),
+  ).toBe(true);
+  expect(data.summary.value).toBe(290);
+  expect(data.series.find((point) => point.value !== null)?.value).toBe(290);
   await expect(page.locator(".activity-widget .chart-period-note")).toContainText(
-    "One point per month",
+    "One point per day",
   );
-  const reloaded = chartResponse(page, "p95", "month");
+  const chart = page.locator(".activity-widget .series-chart");
+  await expect(
+    chart
+      .locator("svg text")
+      .filter({ hasText: /^[A-Z][a-z]{2} \d{4}$/ })
+      .first(),
+  ).toBeVisible();
+  const plot = chart.locator("svg.ts-chart");
+  await plot.press("Home");
+  await plot.press("ArrowRight");
+  const secondDay = new Date(data.series[1].time).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  await expect(chart.locator(".ts-chart-tooltip__title")).toContainText(`${secondDay} UTC`);
+  const reloaded = chartResponse(page, "p95", "day");
   await page.reload();
   expect((await result(reloaded)).summary.value).toBe(290);
   expect(new URL(page.url()).searchParams.get("from")).toBe(from);
