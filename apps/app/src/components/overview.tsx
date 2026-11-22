@@ -287,20 +287,7 @@ function ProductOverview() {
         title={source ? `${product.name} / ${source.name}` : product.name}
         description="Usage, reach, and performance at a glance."
       >
-        <div className="ml-auto flex max-w-full items-center gap-2">
-          <CohortPicker
-            project={product.id}
-            value={
-              selectedFilter?.field.startsWith("property:cohort.")
-                ? selectedFilter.field.slice(16)
-                : undefined
-            }
-            change={(v) =>
-              update({ filter: v ? { field: `property:cohort.${v}`, value: true } : undefined })
-            }
-          />
-          <OverviewActions filters={eventFilters} />
-        </div>
+        <OverviewActions filters={eventFilters} />
       </PageHeader>
       {selectedFilter && (
         <section className="overview-filter-bar" aria-label="Applied filter">
@@ -334,16 +321,29 @@ function ProductOverview() {
       )}
       <ChartAudience value={[eventFilters]}>
         <div className="overview-dashboard">
-          <ValueSelect
-            className="w-fit"
-            label="Metric set"
-            value={websiteMetric ? "web" : "general"}
-            onValueChange={(v) => setChartMetric(v === "web" ? "web_page_views" : "count")}
-            options={[
-              ["general", "Product metrics"],
-              ["web", "Website metrics"],
-            ]}
-          />
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <ValueSelect
+              className="w-fit"
+              label="Metric set"
+              value={websiteMetric ? "web" : "general"}
+              onValueChange={(v) => setChartMetric(v === "web" ? "web_page_views" : "count")}
+              options={[
+                ["general", "Product metrics"],
+                ["web", "Website metrics"],
+              ]}
+            />
+            <CohortPicker
+              project={product.id}
+              value={
+                selectedFilter?.field.startsWith("property:cohort.")
+                  ? selectedFilter.field.slice(16)
+                  : undefined
+              }
+              change={(v) =>
+                update({ filter: v ? { field: `property:cohort.${v}`, value: true } : undefined })
+              }
+            />
+          </div>
           {websiteMetric ? (
             <WebTiles result={website} selected={websiteMetric} select={selectWeb} />
           ) : (

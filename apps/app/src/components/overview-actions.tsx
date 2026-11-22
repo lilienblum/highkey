@@ -43,7 +43,7 @@ export function OverviewActions({ filters }: { filters: Record<string, unknown> 
         >
           <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} aria-hidden="true" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-52">
+        <DropdownMenuContent align="end" className="w-max max-w-[calc(100vw-2rem)]">
           <DropdownMenuItem onClick={() => setAction("patterns")}>
             Activity patterns
           </DropdownMenuItem>

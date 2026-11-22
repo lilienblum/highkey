@@ -36,27 +36,6 @@ test("website entry tabs, typed row filters and a verified plain-English date/de
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Version/17.2 Mobile Safari/605.1",
     },
   );
-  await page.goto(`/owner/${p.slug}?source=all&metric=web_page_views`);
-  const pages = page.getByRole("region", { name: "Pages", exact: true });
-  await pages.getByRole("tab", { name: "Entry", exact: true }).click();
-  await expect(pages.getByRole("button", { name: "/start", exact: true })).toBeVisible();
-  await expect(pages.getByRole("button", { name: "/pay", exact: true })).toHaveCount(0);
-  await pages.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath("website-tabs-desktop.png") });
-  await pages.getByRole("button", { name: "Details" }).click();
-  await expect(page.getByRole("table", { name: "Pages: Entry report" })).toContainText("/start");
-  await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await pages.getByRole("button", { name: "/start", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("/start");
-  await page.getByRole("button", { name: "Overview actions" }).click();
-  await page.screenshot({ path: info.outputPath("overview-menu-mobile.png") });
-  await page.getByRole("menuitem", { name: "Describe a filter" }).click();
-  await page.getByLabel("Filter phrase").fill("last 7 days, mobile only");
-  await page.screenshot({ path: info.outputPath("describe-filter-mobile.png") });
-  await page.getByRole("button", { name: "Apply filter", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("Mobile");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const board = await post(`products/${p.id}/dashboards`, {
     document: {
       version: 1,
@@ -73,6 +52,30 @@ test("website entry tabs, typed row filters and a verified plain-English date/de
       ],
     },
   });
+  await page.goto(`/owner/${p.slug}?source=all&metric=web_page_views`);
+  const pages = page.getByRole("region", { name: "Pages", exact: true });
+  await pages.getByRole("tab", { name: "Entry", exact: true }).click();
+  await expect(pages.getByRole("button", { name: "/start", exact: true })).toBeVisible();
+  await expect(pages.getByRole("button", { name: "/pay", exact: true })).toHaveCount(0);
+  await pages.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath("website-tabs-desktop.png") });
+  await pages.getByRole("button", { name: "Details" }).click();
+  await expect(page.getByRole("table", { name: "Pages: Entry report" })).toContainText("/start");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await pages.getByRole("button", { name: "/start", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("/start");
+  await page.getByRole("button", { name: "Overview actions" }).click();
+  await page.screenshot({
+    path: info.outputPath("overview-menu-mobile.png"),
+    animations: "disabled",
+  });
+  await page.getByRole("menuitem", { name: "Describe a filter" }).click();
+  await page.getByLabel("Filter phrase").fill("last 7 days, mobile only");
+  await page.screenshot({ path: info.outputPath("describe-filter-mobile.png") });
+  await page.getByRole("button", { name: "Apply filter", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("Mobile");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.goto(`/owner/${p.slug}/dashboards/${board.slug}`);
   await expect(page.getByRole("img", { name: "Active groups" })).toBeVisible();
   await page.getByText("Country values", { exact: true }).click();

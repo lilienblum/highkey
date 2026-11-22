@@ -2660,6 +2660,12 @@ html:has([data-page="new-project"]) {
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
+.page-content[data-page="overview"] > .page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  overflow-wrap: anywhere;
+}
 .page-content > .workspace-toolbar {
   grid-row: 2;
   margin-bottom: 24px;
