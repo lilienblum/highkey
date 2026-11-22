@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { growth, previousPeriodLabel, previousRange } from "../apps/app/src/lib/growth";
+import {
+  growth,
+  previousPeriodLabel,
+  previousRange,
+  retainedComparison,
+} from "../apps/app/src/lib/growth";
 
 const DAY = 86_400_000;
 const hours = (n: number) => ({
@@ -102,4 +107,15 @@ test("the previous window is the equal span just before the range", () => {
     from: new Date(Date.UTC(2026, 10, 1) - 7 * DAY).toISOString(),
     to: current.from,
   });
+});
+
+test("comparison gaps distinguish expired history from measured zero", () => {
+  const current = range(2);
+  const start = Date.parse(current.from);
+  const points = [
+    { time: start, value: 2 },
+    { time: start + DAY, value: 0 },
+  ];
+  expect(retainedComparison(points, current, start - DAY)).toEqual([points[1]]);
+  expect(retainedComparison(points, current, start)).toBeUndefined();
 });

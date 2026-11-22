@@ -7,7 +7,7 @@ import { type Bucket, runSettings, SOURCE_SCOPE } from "../clickhouse/access";
 import type { ClickHouse } from "../clickhouse/client";
 import { anyNamedEvent, namedEvent, type Rules, validEvent } from "./custom";
 import {
-  bucketGrid,
+  chartBins,
   distinctValues,
   eventFilter,
   numeric,
@@ -24,6 +24,7 @@ export interface Filter {
 }
 
 export interface EventsQuery {
+  align_to_next_period?: boolean;
   include_bots?: boolean;
   names?: string[];
   order?: string;
@@ -85,6 +86,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       event: "string?",
       names: "string[]",
       include_bots: "boolean",
+      align_to_next_period: "boolean",
       source: "string?",
       source_id: "string?",
       identity_kind: "string?",
@@ -103,6 +105,7 @@ export function parseEventsQuery(body: unknown): EventsQuery {
       order: "newest",
       names: [],
       include_bots: false,
+      align_to_next_period: false,
     },
   );
   const query: EventsQuery = {
@@ -248,8 +251,9 @@ export async function runEventsQuery(
     `SELECT count() AS total, uniqExactIf((identity_kind, actor_id), actor_id IS NOT NULL) AS actors, uniqExactIf(actor_id, identity_kind = 'visitor') AS visitors, uniqExactIf(actor_id, identity_kind = 'installation') AS installations, uniqExactIf((actor_id, session_id), session_id IS NOT NULL AND identity_kind = 'visitor') AS sessions, avgOrNullIf(if(dynamicElement(${success}, 'Bool'), 100., 0.), dynamicType(${success}) = 'Bool') AS success_rate, avgOrNull(${duration}) AS avg_duration, quantileExactInclusiveOrNull(0.95)(${duration}) AS p95_duration, ${value} AS value, countIf(session_id IS NOT NULL AND identity_kind = 'visitor') AS session_views FROM events WHERE ${where}`,
     options,
   );
+  const bins = chartBins(q.from, q.to, q.bucket, q.align_to_next_period);
   const buckets = await reader.query<{ time: number; value: number | null }>(
-    `SELECT toUnixTimestamp64Milli(bucket(event_time)) AS time, ${value} AS value FROM events WHERE ${where} GROUP BY time`,
+    `SELECT ${bins.sql("event_time")} AS time, ${value} AS value FROM events WHERE ${where} GROUP BY time`,
     options,
   );
   const groups = await reader.query<{
@@ -285,7 +289,7 @@ export async function runEventsQuery(
     : null;
   return {
     summary: summary.data[0] as Record<string, number | null>,
-    series: bucketGrid(q.from, q.to, q.bucket).map((time) => ({
+    series: bins.times.map((time) => ({
       time,
       value: measured.has(time) ? (measured.get(time) ?? null) : missing,
     })),

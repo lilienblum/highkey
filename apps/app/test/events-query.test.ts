@@ -267,6 +267,15 @@ describe("Explore queries", () => {
     expect(avg.json.series[1].value).toBe(40);
     expect(avg.json.series[2].value).toBeNull();
     expect((await query("month", "p95")).json.series[1].value).toBe(49);
+    // The 18-hour baseline crosses midnight. Both events belong in one following-day
+    // bucket, where the same installation still counts once.
+    const aligned = await query("day", "actors", {
+      from: "2024-01-31T12:00:00Z",
+      to: "2024-02-01T06:00:00Z",
+      align_to_next_period: true,
+    });
+    expect(aligned.json.summary.total).toBe(2);
+    expect(aligned.json.series).toEqual([point("2024-02-01T00:00:00Z", 1)]);
     const actors = (await query("week", "actors")).json.series;
     expect(actors).toHaveLength(9);
     expect(actors[0]).toEqual(point("2024-01-29T00:00:00Z", 1));

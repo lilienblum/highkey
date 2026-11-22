@@ -54,6 +54,8 @@ Custom range switches within the same popover to calendar and date inputs: two m
 
 Buckets derive automatically from the selected duration: minute through one hour, hourly through two days, then daily through a full year. Axis labels fit the plot width; month labels on an annual chart still represent an axis over daily points. All chart/calendar labels stay UTC. There is no manual interval selector; legacy interval URL state is ignored.
 
+The activity chart compares one selected metric across two equal spans. A solid yellow line (bars for revenue) shows the current period; a dashed violet line shows its predecessor on the same scale. A compact key labels both periods; point inspection includes the prior interval and value. Unavailable history does not draw a zero line.
+
 ## Filtering and external links
 
 Report rows filter Overview in place. Validated URL state carries one string, number, or boolean filter alongside source scope. Source rows change source scope; the visible applied-filter action clears the filter. View matching events opens Explore with the current scope, period, and filter. Invalid filters show an explicit unavailable-filter state rather than silently changing scope.

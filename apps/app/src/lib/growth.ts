@@ -15,6 +15,18 @@ export function previousRange(range: AnalyticsRange): AnalyticsRange {
   return { from: new Date(from - span).toISOString(), to: range.from };
 }
 
+/** Prior points use the current x coordinates. Expired buckets cannot establish a zero baseline. */
+export function retainedComparison<T extends { time: number; value: number | null }>(
+  points: T[] | undefined,
+  range: AnalyticsRange,
+  oldest: number,
+): T[] | undefined {
+  const start = Date.parse(range.from);
+  const offset = Date.parse(range.to) - start;
+  const retained = points?.filter((p) => Math.max(start, p.time) - offset >= oldest);
+  return retained?.some((p) => p.value !== null) ? retained : undefined;
+}
+
 /** The previous period's length in whole hours (up to two days) or days, rounding a partial one up. */
 function periodLength(range?: AnalyticsRange) {
   const span = range ? Date.parse(range.to) - Date.parse(range.from) : Number.NaN;

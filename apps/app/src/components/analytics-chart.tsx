@@ -37,8 +37,19 @@ export function formatDate(time: number, bucket: TimeBucket, full = false) {
   });
 }
 
+type SeriesPoint = QueryResult["series"][number] & { exact?: string };
+const priorDates = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 export function AnalyticsChart({
   series,
+  comparison,
   label,
   bucket,
   unit,
@@ -46,7 +57,8 @@ export function AnalyticsChart({
   compact = false,
   bars = false,
 }: {
-  series: (QueryResult["series"][number] & { exact?: string })[];
+  series: SeriesPoint[];
+  comparison?: SeriesPoint[];
   bars?: boolean;
   label: string;
   bucket: TimeBucket;
@@ -64,6 +76,11 @@ export function AnalyticsChart({
     const markers =
       (!compact && Boolean(unit)) || series.filter((point) => point.value !== null).length === 1;
     const peak = Math.max(0, ...series.map((point) => point.value ?? 0));
+    const prior = new Map(comparison?.map((p) => [p.time, p]));
+    const format = (p: SeriesPoint) =>
+      p.value === null
+        ? "No numeric value"
+        : `${p.exact === undefined ? number(p.value, 2) : BigInt(p.exact).toLocaleString("en-US")}${unit ? ` ${unit}` : ""}`;
     return defineChart({
       svgAnimation: false,
       focus: "nearest-x",
@@ -72,10 +89,18 @@ export function AnalyticsChart({
       tooltip: {
         use: tooltip,
         motion: false,
-        content: (points: readonly ChartPoint<QueryResult["series"][number], number, number>[]) => {
+        content: (points: readonly ChartPoint<SeriesPoint, number, number>[]) => {
           const point = points[0];
           if (!point) return { rows: [] };
-          const { time, value } = point.datum;
+          const { time } = point.datum;
+          const other = prior.get(time);
+          const shift = from && to ? Date.parse(to) - Date.parse(from) : 0;
+          const start = from ? Math.max(time, Date.parse(from)) : time;
+          const end = Math.min(nextBucket(time, bucket), to ? Date.parse(to) : Infinity);
+          const priorLabel =
+            other && start < end
+              ? `Prior · ${priorDates.formatRange(start - shift, end - shift - 1)} UTC`
+              : "Previous period";
           const partial =
             from && to && (time < Date.parse(from) || nextBucket(time, bucket) > Date.parse(to));
           return {
@@ -83,11 +108,11 @@ export function AnalyticsChart({
             rows: [
               {
                 label,
-                value:
-                  value === null
-                    ? "No numeric value"
-                    : `${"exact" in point.datum && typeof point.datum.exact === "string" ? BigInt(point.datum.exact).toLocaleString("en-US") : number(value, 2)}${unit ? ` ${unit}` : ""}`,
+                value: format(point.datum),
               },
+              ...(comparison
+                ? [{ label: priorLabel, value: other ? format(other) : "Unavailable" }]
+                : []),
             ],
           };
         },
@@ -133,7 +158,23 @@ export function AnalyticsChart({
                       points: markers,
                     }),
                   ),
-                ]), // Invisible focus targets let missing buckets be inspected without drawing a zero.
+                ]),
+            ...(comparison
+              ? [
+                  decorative(
+                    lineY(comparison, {
+                      id: "previous-period",
+                      x: "time",
+                      y: "value",
+                      stroke: "var(--data-secondary)",
+                      strokeWidth: 1.5,
+                      strokeDasharray: "4 4",
+                      points: comparison.filter((p) => p.value !== null).length === 1,
+                    }),
+                  ),
+                ]
+              : []),
+            // Invisible focus targets let missing buckets be inspected without drawing a zero.
             dot(series, {
               id: "buckets",
               key: "time",
@@ -189,7 +230,7 @@ export function AnalyticsChart({
         };
       },
     });
-  }, [series, label, bucket, unit, from, to, compact, toneId, refs, bars]);
+  }, [series, comparison, label, bucket, unit, from, to, compact, toneId, refs, bars]);
   return (
     <ZoomableChart
       bucket={bucket}

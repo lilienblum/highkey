@@ -21,6 +21,13 @@ test("website tiles compare whole sessions, render net revenue bars, and explain
       events: [
         {
           event_id: crypto.randomUUID(),
+          name: "refund",
+          source: "server",
+          timestamp: new Date(Date.now() - 9 * 86400000).toISOString(),
+          properties: { revenue: -350 },
+        },
+        {
+          event_id: crypto.randomUUID(),
           name: "page_view",
           source: "server",
           actor_id: "a",
@@ -43,6 +50,10 @@ test("website tiles compare whole sessions, render net revenue bars, and explain
   await tiles.getByRole("button", { name: "Revenue", exact: true }).click();
   await expect(page.locator(".activity-widget .widget-value")).toHaveText("1,400 ¢");
   await expect(page.locator('.activity-widget svg[aria-label^="Revenue by UTC"]')).toBeVisible();
+  await expect(
+    page.locator(".activity-widget").getByRole("group", { name: "Chart periods" }),
+  ).toContainText("Previous period");
+  await expect(page.locator('.activity-widget path[stroke-dasharray="4 4"]').first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects/${p.slug}?source=${p.sources[0].slug}&metric=web_bounce_rate`);
   await expect(

@@ -199,3 +199,13 @@ export function bucketGrid(from: Date, to: Date, bucket: Bucket): number[] {
   for (let t = bucketStart(+from, bucket); t < +to; t = nextBucket(t, bucket)) times.push(t);
   return times;
 }
+
+/** Align prior observations to the following window before aggregating, including partial buckets. */
+export function chartBins(from: Date, to: Date, bucket: Bucket, compare = false) {
+  const shift = compare ? +to - +from : 0;
+  return {
+    times: bucketGrid(new Date(+from + shift), new Date(+to + shift), bucket),
+    sql: (column: "event_time" | "started_at") =>
+      `toUnixTimestamp64Milli(bucket(${shift ? `addMilliseconds(${column},${shift})` : column}))`,
+  };
+}

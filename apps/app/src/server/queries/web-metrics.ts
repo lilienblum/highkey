@@ -4,7 +4,7 @@ import { requireSource } from "../db/sources";
 import { runSettings } from "../clickhouse/access";
 import { parseEventsQuery, predicate } from "./events";
 import { customRules } from "./custom";
-import { bucketGrid, Params } from "./properties";
+import { chartBins, Params } from "./properties";
 import { readAs } from "./read";
 
 const zero = {
@@ -44,16 +44,15 @@ export async function webMetrics(ctx: ApiContext, id: string, body: unknown) {
       ? ""
       : `WHERE (source_id,actor_id,session_id) IN (SELECT source_id,actor_id,session_id FROM events WHERE identity_kind='visitor' AND session_id IS NOT NULL AND ${where})`;
   return readAs(ctx, id, async (r) => {
-    async function window(from: Date, to: Date, withBuckets: boolean) {
+    async function window(from: Date, to: Date, compare = false) {
       const opts = {
         settings: runSettings({ from, to, bucket: spec.bucket, source: q.source_id ?? null }),
         params: params.values,
       };
-      const by = (time: string) =>
-        withBuckets
-          ? `toUnixTimestamp64Milli(bucket(${time})) AS bin,grouping(bin) AS total`
-          : "0 AS bin,1 AS total";
-      const group = withBuckets ? " GROUP BY GROUPING SETS ((bin),())" : "";
+      const grid = chartBins(from, to, spec.bucket, compare);
+      const by = (time: "event_time" | "started_at") =>
+        `${grid.sql(time)} AS bin,grouping(bin) AS total`;
+      const group = " GROUP BY GROUPING SETS ((bin),())";
       const events = await r.query<
         { bin: number; total: number } & Pick<Metrics, "visitors" | "page_views" | "revenue">
       >(
@@ -75,17 +74,21 @@ export async function webMetrics(ctx: ApiContext, id: string, body: unknown) {
         if (total) Object.assign(summary, metrics);
         else bins.set(bin, { ...zero, ...bins.get(bin), ...metrics });
       }
-      return { summary, bins };
+      return {
+        summary,
+        series:
+          compare && !bins.size
+            ? []
+            : grid.times.map((time) => ({ time, ...(bins.get(time) ?? zero) })),
+      };
     }
-    const current = await window(spec.from, spec.to, true),
-      prior = await window(new Date(+spec.from - (+spec.to - +spec.from)), spec.from, false);
+    const current = await window(spec.from, spec.to),
+      prior = await window(new Date(+spec.from - (+spec.to - +spec.from)), spec.from, true);
     return {
       current: current.summary,
       previous: prior.summary,
-      series: bucketGrid(spec.from, spec.to, spec.bucket).map((time) => ({
-        time,
-        ...(current.bins.get(time) ?? zero),
-      })),
+      series: current.series,
+      previous_series: prior.series,
     };
   });
 }

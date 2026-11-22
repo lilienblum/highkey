@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { number, queryReadOnly } from "@/lib/api";
-import { growth } from "@/lib/growth";
+import { growth, retainedComparison } from "@/lib/growth";
+import { DAY_MS } from "@/lib/date-range";
 import { useWorkspaceTarget } from "@/lib/workspace-route";
 import { useReportQuery } from "@/lib/use-query";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
 import { webMetricLabels, type WebMetric } from "@/lib/web-metrics";
 import type { webMetrics } from "@/server/queries/web-metrics";
 import { useWorkspace } from "./app-shell";
-import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
+import { ActivityChartKey, OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { AnalyticsChart } from "./analytics-chart";
 import { ValueSelect } from "./value-select";
 
@@ -107,15 +108,20 @@ export function WebChart({
   selected: WebMetric;
   select: (m: WebMetric) => void;
 }) {
-  const { range, refresh, source } = useWorkspace(),
+  const { range, refresh, source, product, now } = useWorkspace(),
     bucket = automaticBucket(range),
     off = source?.visitor_mode === "off" && needsIdentity(selected);
-  const series =
-    result.data?.series.map((row) => ({
-      time: row.time,
-      value: row[selected] === null ? null : Number(row[selected]),
-      exact: selected === "revenue" ? row.revenue : undefined,
-    })) ?? [];
+  const point = (row: NonNullable<Data["data"]>["series"][number]) => ({
+    time: row.time,
+    value: row[selected] === null ? null : Number(row[selected]),
+    exact: selected === "revenue" ? row.revenue : undefined,
+  });
+  const series = result.data?.series.map(point) ?? [];
+  const comparison = retainedComparison(
+    result.data?.previous_series?.map(point),
+    range,
+    now - (product?.retention_days ?? 0) * DAY_MS,
+  );
   return (
     <OverviewWidget
       title="Activity over time"
@@ -142,6 +148,14 @@ export function WebChart({
           options={metrics.map((m) => [m, webMetricLabels[m]])}
         />
       </div>
+      {!off && (
+        <ActivityChartKey
+          range={range}
+          available={!!comparison}
+          pending={result.loading}
+          failed={!!result.error}
+        />
+      )}
       <div className="widget-plot chart-plot">
         <WidgetContent
           label="chart"
@@ -149,13 +163,14 @@ export function WebChart({
           empty={
             off
               ? "Visitor counting is off for this source."
-              : series.every((r) => r.value === null)
+              : !comparison && series.every((r) => r.value === null)
                 ? "No matching observations."
                 : undefined
           }
         >
           <AnalyticsChart
             series={series}
+            comparison={comparison}
             label={webMetricLabels[selected]}
             range={range}
             bucket={bucket}

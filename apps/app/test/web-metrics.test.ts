@@ -44,6 +44,13 @@ test("web KPIs use distinct whole visits, exact refund-aware cents and a separat
     expect(
       got.json.series.reduce((n: bigint, v: { revenue: string }) => n + BigInt(v.revenue), 0n),
     ).toBe(18014398509481972n);
+    expect(got.json.previous_series.map((v: { time: number }) => v.time)).toEqual(
+      got.json.series.map((v: { time: number }) => v.time),
+    );
+    const aligned = Math.floor((t - 1000 + 120000) / 60000) * 60000;
+    expect(
+      got.json.previous_series.find((v: { time: number }) => v.time === aligned),
+    ).toMatchObject({ revenue: "300", sessions: 1 });
   } finally {
     ctx.cleanup();
   }

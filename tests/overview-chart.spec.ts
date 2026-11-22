@@ -23,7 +23,12 @@ function chartResponse(page: Page, measure: string, bucket = "day") {
     // The client retries advertised query-capacity responses; observe the completed attempt.
     if (response.status() === 503 && response.headers()["retry-after"]) return false;
     const body = response.request().postDataJSON();
-    return body.page_size === 1 && body.measure === measure && body.bucket === bucket;
+    return (
+      !body.align_to_next_period &&
+      body.page_size === 1 &&
+      body.measure === measure &&
+      body.bucket === bucket
+    );
   });
 }
 async function result(response: Promise<Response>) {

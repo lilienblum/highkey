@@ -1,6 +1,42 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import type { Growth } from "@/lib/growth";
+import { previousRange, type Growth } from "@/lib/growth";
+import { rangeLabel, type AnalyticsRange } from "@/lib/date-range";
+
+export function ActivityChartKey({
+  range,
+  available,
+  pending,
+  failed,
+}: {
+  range: AnalyticsRange;
+  available: boolean;
+  pending: boolean;
+  failed?: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground"
+      aria-label="Chart periods"
+    >
+      <span className="inline-flex items-center gap-1.5" title={rangeLabel(range)}>
+        <i aria-hidden="true" className="w-4 border-t-2 border-data" />
+        Selected period
+      </span>
+      {available ? (
+        <span className="inline-flex items-center gap-1.5" title={rangeLabel(previousRange(range))}>
+          <i aria-hidden="true" className="w-4 border-t-2 border-dashed border-data-secondary" />
+          Previous period
+        </span>
+      ) : (
+        <span>
+          {pending ? "Loading comparison…" : failed ? "Comparison unavailable" : "No previous data"}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function OverviewWidget({
   title,

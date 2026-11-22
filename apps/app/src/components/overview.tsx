@@ -6,7 +6,8 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
 import { useQuery, useReportQuery } from "@/lib/use-query";
-import { growth, previousRange } from "@/lib/growth";
+import { growth, previousRange, retainedComparison } from "@/lib/growth";
+import { DAY_MS } from "@/lib/date-range";
 import { OverviewActions } from "./overview-actions";
 import { number, sourceGroups, type Group, queryReadOnly } from "@/lib/api";
 import type { liveActivity } from "@/server/queries/activity";
@@ -17,7 +18,7 @@ import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-
 import { BreakdownRows } from "./shared";
 import { AnalyticsChart } from "./analytics-chart";
 import { ValueSelect } from "./value-select";
-import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
+import { ActivityChartKey, OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
@@ -197,22 +198,30 @@ function ProductOverview() {
   const before = previousRange(range);
   const previous = useQuery(
     product?.id,
-    { ...body, ...before, page_size: 1 },
+    { ...body, ...before, bucket, align_to_next_period: true, page_size: 1 },
     refreshKey,
-    `${scope}:previous`,
+    `${scope}:${bucket}:previous`,
   );
   const previousChart = useQuery(
     choice.id !== "count" ? product?.id : undefined,
     {
       ...body,
       ...before,
+      bucket,
+      align_to_next_period: true,
       measure: choice.measure,
       identity_kind: choice.identity_kind,
       property: choice.property,
       page_size: 1,
     },
     refreshKey,
-    `${scope}:${choice.id}:previous`,
+    `${scope}:${choice.id}:${bucket}:previous`,
+  );
+  const baseline = choice.id === "count" ? previous : previousChart;
+  const comparison = retainedComparison(
+    baseline.data?.summary.total ? baseline.data.series : undefined,
+    range,
+    now - (product?.retention_days ?? 0) * DAY_MS,
   );
   const s = query.data?.summary;
   const p = previous.data?.summary;
@@ -262,14 +271,16 @@ function ProductOverview() {
       ? "No events in this range. Try another date range or connect a source in Project settings."
       : undefined;
   const chartEmpty =
-    noEvents ??
-    (!activity.data
-      ? "Chart unavailable."
-      : choice.measure === "actors" && !activity.data.summary.value
-        ? `No ${choice.identity_kind === "visitor" ? "visitor" : choice.identity_kind === "installation" ? "installation" : "actor"} IDs received in this range.`
-        : choice.unit && activity.data.summary.value === null
-          ? "No numeric durations received in this range."
-          : undefined);
+    comparison && activity.data
+      ? undefined
+      : (noEvents ??
+        (!activity.data
+          ? "Chart unavailable."
+          : choice.measure === "actors" && !activity.data.summary.value
+            ? `No ${choice.identity_kind === "visitor" ? "visitor" : choice.identity_kind === "installation" ? "installation" : "actor"} IDs received in this range.`
+            : choice.unit && activity.data.summary.value === null
+              ? "No numeric durations received in this range."
+              : undefined));
   const actorGroups: Group[] = [
     { label: "Visitors", value: s?.visitors ?? 0, count: s?.visitors ?? 0 },
     { label: "Installations", value: s?.installations ?? 0, count: s?.installations ?? 0 },
@@ -473,15 +484,12 @@ function ProductOverview() {
                   <WidgetValue
                     value={`${number(activity.data?.summary.value, 0)}${choice.unit ? " ms" : ""}`}
                     label={choice.label}
-                    growth={growth(
-                      activity.data?.summary.value,
-                      (choice.id === "count" ? previous : previousChart).data?.summary.value,
-                      { range, lowerIsBetter: choice.lowerIsBetter },
-                    )}
+                    growth={growth(activity.data?.summary.value, baseline.data?.summary.value, {
+                      range,
+                      lowerIsBetter: choice.lowerIsBetter,
+                    })}
                     loading={activity.loading}
-                    growthLoading={
-                      activity.loading || (choice.id === "count" ? previous : previousChart).loading
-                    }
+                    growthLoading={activity.loading || baseline.loading}
                   />
                   <ValueSelect
                     label="Chart metric"
@@ -491,6 +499,12 @@ function ProductOverview() {
                     options={chartChoices.map((option) => [option.id, option.label])}
                   />
                 </div>
+                <ActivityChartKey
+                  range={range}
+                  available={!!comparison}
+                  pending={baseline.loading}
+                  failed={!!baseline.error}
+                />
                 <div className="widget-plot chart-plot" aria-busy={activity.loading}>
                   <WidgetContent label="chart" loading={activity.loading} empty={chartEmpty}>
                     <ChartAudience
@@ -498,6 +512,7 @@ function ProductOverview() {
                     >
                       <AnalyticsChart
                         series={activity.data?.series ?? []}
+                        comparison={comparison}
                         label={choice.label}
                         bucket={bucket}
                         unit={choice.unit}

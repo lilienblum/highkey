@@ -134,6 +134,16 @@ test("Overview tiles and the activity headline show growth against the previous 
   await expect(page.locator(".activity-widget .widget-growth")).toHaveText(
     "+100% vs previous 7 days",
   );
+  const chart = page.locator(".activity-widget");
+  await expect(chart.getByRole("group", { name: "Chart periods" })).toContainText(
+    "Previous period",
+  );
+  await expect(chart.locator('path[stroke-dasharray="4 4"]').first()).toBeVisible();
+  await chart.locator("svg.ts-chart").press("End");
+  await expect(
+    chart.locator(".ts-chart-tooltip__row").filter({ hasText: /Prior ·.*UTC/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   // One line that fits its tile on wide and narrow screens.
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
