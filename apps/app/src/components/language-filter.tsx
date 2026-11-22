@@ -1,23 +1,16 @@
 import { useState } from "react";
+import type { ReportDialogProps } from "./overview-actions";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import type { DatePeriod } from "@/lib/date-range";
 import type { languageFilter } from "@/server/language-filter";
 import { useWorkspace } from "./app-shell";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-export function LanguageFilter() {
+export function LanguageFilter({ open, onOpenChange, finalFocus }: ReportDialogProps) {
   const { product, range, sourceId } = useWorkspace(),
     navigate = useNavigate({ from: "/$orgSlug/$projectSlug/" }),
-    [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
@@ -25,13 +18,12 @@ export function LanguageFilter() {
       open={open}
       onOpenChange={(v) => {
         if (!busy) {
-          setOpen(v);
+          onOpenChange(v);
           setError("");
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" />}>Describe filter</DialogTrigger>
-      <DialogContent>
+      <DialogContent finalFocus={finalFocus}>
         <DialogHeader>
           <DialogTitle>Describe a filter</DialogTitle>
           <DialogDescription>
@@ -70,7 +62,7 @@ export function LanguageFilter() {
                 }),
                 resetScroll: false,
               });
-              setOpen(false);
+              onOpenChange(false);
             } catch (e) {
               setError((e as Error).message);
             } finally {

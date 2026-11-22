@@ -1,22 +1,13 @@
-import { useState } from "react";
+import type { ReportDialogProps } from "./overview-actions";
 import { useReportQuery } from "@/lib/use-query";
 import { queryReadOnly } from "@/lib/api";
 import type { insights } from "@/server/insights";
 import { useWorkspace } from "./app-shell";
-import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 const load = (id: string, body: Record<string, unknown>, signal: AbortSignal) =>
   queryReadOnly<Awaited<ReturnType<typeof insights>>>(`/products/${id}/insights`, body, signal);
-export function ProjectInsights() {
-  const { product, range, refreshKey } = useWorkspace(),
-    [open, setOpen] = useState(false);
+export function ProjectInsights({ open, onOpenChange, finalFocus }: ReportDialogProps) {
+  const { product, range, refreshKey } = useWorkspace();
   const q = useReportQuery(
     load,
     "daily-insights",
@@ -25,11 +16,10 @@ export function ProjectInsights() {
     refreshKey,
   );
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>Insights</DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent finalFocus={finalFocus} className="max-h-[85dvh] overflow-auto">
         <DialogHeader>
-          <DialogTitle>Project insights</DialogTitle>
+          <DialogTitle>Significant changes</DialogTitle>
           <DialogDescription>
             Nightly changes across all sources. Each compares a completed UTC period with the
             preceding period.

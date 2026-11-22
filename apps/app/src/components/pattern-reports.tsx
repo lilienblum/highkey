@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import type { ReportDialogProps } from "./overview-actions";
 import type { patterns } from "@/server/queries/patterns";
 import { queryReadOnly, number } from "@/lib/api";
 import { useReportQuery } from "@/lib/use-query";
@@ -169,9 +170,25 @@ function FlowDiagram({ data }: { data: Flow }) {
   );
 }
 export function PatternReports({ filters }: { filters: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <PatternReportsDialog filters={filters} open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" />}>Analyze patterns</DialogTrigger>
+    </PatternReportsDialog>
+  );
+}
+export function PatternReportsDialog({
+  filters,
+  open,
+  onOpenChange,
+  finalFocus,
+  children,
+}: ReportDialogProps & {
+  filters: Record<string, unknown>;
+  children?: ReactNode;
+}) {
   const { product, sourceId, range, refreshKey, refresh } = useWorkspace();
-  const [open, setOpen] = useState(false),
-    [mode, setMode] = useState("weekly"),
+  const [mode, setMode] = useState("weekly"),
     [metric, setMetric] = useState<Metric>("visitors");
   const [flow, setFlow] = useState({ steps: 5, start_path: "", end_path: "" });
   const query = useReportQuery(
@@ -183,9 +200,12 @@ export function PatternReports({ filters }: { filters: Record<string, unknown> }
   );
   const data = query.data;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>Analyze patterns</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto p-4 sm:max-w-4xl sm:p-6">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {children}
+      <DialogContent
+        finalFocus={finalFocus}
+        className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto p-4 sm:max-w-4xl sm:p-6"
+      >
         <DialogHeader>
           <DialogTitle>Activity patterns</DialogTitle>
           <DialogDescription>

@@ -45,7 +45,11 @@ test("from Overview and Events, inspect a weekly pattern and follow the paths be
   await rowPanel.getByRole("button", { name: "Filter Overview" }).click();
   await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("/cart");
   await page.getByRole("button", { name: "Remove filter" }).click();
-  await page.getByRole("button", { name: "Analyze patterns" }).click();
+  const actions = page.getByRole("button", { name: "Overview actions" });
+  await actions.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath("overview-header-desktop.png") });
+  await actions.press("Enter");
+  await page.getByRole("menuitem", { name: "Activity patterns" }).press("Enter");
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("table")).toHaveAccessibleName(/Visitors by weekday/);
   await dialog.getByRole("tab", { name: "Page flow" }).click();
@@ -56,6 +60,7 @@ test("from Overview and Events, inspect a weekly pattern and follow the paths be
   await expect(dialog.getByRole("listitem")).toHaveText("/cart → /thanks · 1");
   await page.screenshot({ path: test.info().outputPath("page-flow-desktop.png") });
   await page.keyboard.press("Escape");
+  await expect(actions).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects/${p.slug}/events`);
   await page.getByRole("button", { name: "Analyze patterns" }).click();

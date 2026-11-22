@@ -46,6 +46,8 @@ Project/source/date context follows sidebar navigation. Each route owns its char
 
 ## Overview widgets
 
+The **Overview actions** menu (••• beside the project heading) opens **Activity patterns** for weekly activity and page flows, **Significant changes** for nightly comparisons across the project, and **Describe a filter** to apply a date or filter from a phrase.
+
 Overview starts with six small square metric tiles: **Active now**, **Events**, **Visitors**, **Installations**, **Success rate**, and **Avg. duration**. They form six, three, or two columns depending on available width.
 
 **Active now** counts distinct optional identities with events in the last five minutes. It follows the project, source, and Overview filter, independently of the historical report dates. Visitor and installation identities remain separate, even if their ID strings match. Unidentified events are never turned into people through fingerprinting. The widget shows an unavailable value when activity has no IDs or its query fails; existing live hints and visible-page refresh keep it current.

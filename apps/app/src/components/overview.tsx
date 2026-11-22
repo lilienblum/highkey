@@ -1,21 +1,13 @@
 import { displayGroups, displayValue } from "@/lib/display-values";
 import { reportLink, sourceWebsite } from "@/lib/report-link";
-import { useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { automaticBucket, partialBucketNote } from "@/lib/time-buckets";
 import { useQuery, useReportQuery } from "@/lib/use-query";
 import { growth, previousRange } from "@/lib/growth";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { DashboardNameDialog } from "./dashboards/new-dashboard-dialog";
+import { OverviewActions } from "./overview-actions";
 import { number, sourceGroups, type Group, queryReadOnly } from "@/lib/api";
 import type { liveActivity } from "@/server/queries/activity";
 import { sourceDistribution } from "@/lib/overview-widgets";
@@ -25,15 +17,11 @@ import { useWorkspace, useAnalyticsPending, PageHeader, NoProduct } from "./app-
 import { BreakdownRows } from "./shared";
 import { AnalyticsChart } from "./analytics-chart";
 import { ValueSelect } from "./value-select";
-import { overviewTemplate } from "@/lib/dashboards";
 import { OverviewWidget, WidgetContent, WidgetValue } from "./overview-widgets";
 import { useOrganizationSlug } from "@/lib/workspace-route";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { eventContext } from "@/lib/event-context";
-import { PatternReports } from "./pattern-reports";
-import { ProjectInsights } from "./insights";
 import { WebsiteReports } from "./website-reports";
-import { LanguageFilter } from "./language-filter";
 import { CohortPicker } from "./cohorts";
 import { ChartAudience } from "@/lib/chart-audience";
 import { TimelineMarkers } from "./chart-references";
@@ -123,37 +111,6 @@ export function Overview() {
       </>
     );
   return product ? <ProductOverview key={`${product.id}:${sourceId ?? "all"}`} /> : <NoProduct />;
-}
-/** Overview's heading menu: its widgets, kept as an editable dashboard. */
-function OverviewActions() {
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button ref={trigger} variant="outline" size="icon" aria-label="Overview actions" />
-          }
-        >
-          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-52">
-          <DropdownMenuItem onClick={() => setOpen(true)}>Duplicate as dashboard</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <DashboardNameDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Duplicate Overview"
-        description="The copy keeps Overview's widgets as a dashboard your agent can change."
-        initialName="Overview copy"
-        submitLabel="Duplicate"
-        build={overviewTemplate}
-        finalFocus={trigger}
-      />
-    </>
-  );
 }
 function ProductOverview() {
   const orgSlug = useOrganizationSlug();
@@ -330,21 +287,20 @@ function ProductOverview() {
         title={source ? `${product.name} / ${source.name}` : product.name}
         description="Usage, reach, and performance at a glance."
       >
-        <PatternReports filters={eventFilters} />
-        <ProjectInsights />
-        <LanguageFilter />
-        <CohortPicker
-          project={product.id}
-          value={
-            selectedFilter?.field.startsWith("property:cohort.")
-              ? selectedFilter.field.slice(16)
-              : undefined
-          }
-          change={(v) =>
-            update({ filter: v ? { field: `property:cohort.${v}`, value: true } : undefined })
-          }
-        />
-        <OverviewActions />
+        <div className="ml-auto flex max-w-full items-center gap-2">
+          <CohortPicker
+            project={product.id}
+            value={
+              selectedFilter?.field.startsWith("property:cohort.")
+                ? selectedFilter.field.slice(16)
+                : undefined
+            }
+            change={(v) =>
+              update({ filter: v ? { field: `property:cohort.${v}`, value: true } : undefined })
+            }
+          />
+          <OverviewActions filters={eventFilters} />
+        </div>
       </PageHeader>
       {selectedFilter && (
         <section className="overview-filter-bar" aria-label="Applied filter">
