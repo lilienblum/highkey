@@ -29,17 +29,19 @@ export function CohortPicker({
   project,
   value,
   change,
+  className = "max-w-xs",
 }: {
   project: string;
   value?: string;
   change: (id?: string) => void;
+  className?: string;
 }) {
   const q = useCohorts(project);
   if (!q.data?.length && !value) return null;
   return (
     <ValueSelect
       label="Report cohort"
-      className="max-w-xs"
+      className={className}
       value={value ?? "*"}
       options={[["*", "All profiles"], ...(q.data ?? []).map((c) => [c.id, c.name] as const)]}
       onValueChange={(v) => change(v === "*" ? undefined : v)}

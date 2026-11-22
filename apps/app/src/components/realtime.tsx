@@ -74,6 +74,7 @@ export function Realtime() {
       </PageHeader>
       {product && (
         <CohortPicker
+          className="mb-4 w-fit max-w-full rounded-full sm:max-w-xs"
           project={product.id}
           value={s.cohort}
           change={(cohort) =>
