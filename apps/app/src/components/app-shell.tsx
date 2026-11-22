@@ -1,6 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { validateExploreSearch } from "@/lib/explore-search";
-import { validateLogsSearch } from "@/lib/logs";
 import { presetRange } from "@/lib/date-range";
 import { DateRangePicker } from "./date-range-picker";
 import {
@@ -24,7 +22,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Outlet, useNavigate } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -110,6 +108,7 @@ export function AppShell({
   } = useWorkspaceMatch();
   const view = workspaceView(path);
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const drilldown = view === "/events" ? search.drilldown : undefined;
   const reportDates = hasReportDates(view, search);
@@ -398,24 +397,31 @@ export function AppShell({
           onSourceChange={(id) => {
             if (!product) return;
             rememberSource(product.id, id);
-            const target = workspaceTarget(
-              view === "/settings" ? "/" : view,
-              product.slug,
-              dashboardSlug,
-            );
-            void navigate({
-              ...target,
-              search: {
-                ...target.search,
-                // The Events query and open view, or the log filters, carry over to the new
-                // source; a page number or log cursor does not.
-                ...(view === "/events" ? eventFilters(search) : {}),
-                ...(view === "/logs" ? logFilters(search) : {}),
-                project: undefined,
-                source: undefined,
-              },
-              resetScroll: false,
-            });
+            // The sidebar stays interactive while a destination loads. Never reopen the old page.
+            if (router.state.isLoading) return;
+            if (view === "/settings") {
+              void navigate({ ...workspaceTarget("/", product.slug), resetScroll: false });
+            } else if (
+              search.source ||
+              search.drilldown ||
+              search.invalidDrilldown ||
+              search.page ||
+              search.logBefore
+            ) {
+              void navigate({
+                ...workspaceTarget(view, product.slug, dashboardSlug),
+                search: (previous) => ({
+                  ...previous,
+                  source: undefined,
+                  drilldown: undefined,
+                  invalidDrilldown: undefined,
+                  page: undefined,
+                  logBefore: undefined,
+                }),
+                state: true,
+                resetScroll: false,
+              });
+            }
           }}
         />
         <SidebarInset id="main-content" tabIndex={-1} className="min-w-0">
@@ -534,14 +540,6 @@ export function AppShell({
       </SidebarProvider>
     </Workspace.Provider>
   );
-}
-function eventFilters(current: Record<string, unknown>) {
-  const { query, view, viewAt, pageSize } = validateExploreSearch(current);
-  return { query, view, viewAt, pageSize };
-}
-function logFilters(current: Record<string, unknown>) {
-  const { logBefore: _cursor, invalidLogs: _invalid, ...filters } = validateLogsSearch(current);
-  return filters;
 }
 export function PageHeader({
   title,
