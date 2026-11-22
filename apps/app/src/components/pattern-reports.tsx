@@ -1,18 +1,10 @@
-import { useState, type ReactNode } from "react";
-import type { ReportDialogProps } from "./overview-actions";
+import { useState } from "react";
+import { ReportPanel } from "./report-panel";
 import type { patterns } from "@/server/queries/patterns";
 import { queryReadOnly, number } from "@/lib/api";
 import { useReportQuery } from "@/lib/use-query";
 import { useWorkspace } from "./app-shell";
 import { ErrorState } from "./shared";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogHeader,
-  DialogTrigger,
-} from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
@@ -171,22 +163,6 @@ function FlowDiagram({ data }: { data: Flow }) {
 }
 export function PatternReports({ filters }: { filters: Record<string, unknown> }) {
   const [open, setOpen] = useState(false);
-  return (
-    <PatternReportsDialog filters={filters} open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>Analyze patterns</DialogTrigger>
-    </PatternReportsDialog>
-  );
-}
-export function PatternReportsDialog({
-  filters,
-  open,
-  onOpenChange,
-  finalFocus,
-  children,
-}: ReportDialogProps & {
-  filters: Record<string, unknown>;
-  children?: ReactNode;
-}) {
   const { product, sourceId, range, refreshKey, refresh } = useWorkspace();
   const [mode, setMode] = useState("weekly"),
     [metric, setMetric] = useState<Metric>("visitors");
@@ -200,115 +176,106 @@ export function PatternReportsDialog({
   );
   const data = query.data;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {children}
-      <DialogContent
-        finalFocus={finalFocus}
-        className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto p-4 sm:max-w-4xl sm:p-6"
-      >
-        <DialogHeader>
-          <DialogTitle>Activity patterns</DialogTitle>
-          <DialogDescription>
-            Uses the current project, source, dates and event filters.
-          </DialogDescription>
-        </DialogHeader>
-        <Tabs value={mode} onValueChange={(v) => setMode(String(v))}>
-          <TabsList variant="line" aria-label="Analysis reports" className="max-w-full">
-            {reports.map(([k, label]) => (
-              <TabsTrigger key={k} value={k}>
-                <span className="sm:hidden">{k === "weekly" ? "Weekly" : label}</span>
-                <span className="hidden sm:inline">{label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value={mode} className="grid min-w-0 gap-3">
-            {mode === "weekly" && (
-              <ValueSelect
-                label="Weekly measure"
-                value={metric}
-                options={metrics}
-                onValueChange={(v) => setMetric(v as Metric)}
-              />
-            )}
-            {mode === "flow" && (
-              <form
-                className="flex flex-wrap gap-2 items-end"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const f = new FormData(e.currentTarget);
-                  setFlow({
-                    steps: Number(f.get("steps")),
-                    start_path: String(f.get("from") || ""),
-                    end_path: String(f.get("to") || ""),
-                  });
-                }}
-              >
-                <label>
-                  From page
-                  <Input
-                    name="from"
-                    placeholder="Any entry"
-                    defaultValue={flow.start_path}
-                    maxLength={2048}
-                  />
-                </label>
-                <label>
-                  To page
-                  <Input
-                    name="to"
-                    placeholder="Any exit"
-                    defaultValue={flow.end_path}
-                    maxLength={2048}
-                  />
-                </label>
-                <label>
-                  Steps
-                  <Input
-                    name="steps"
-                    type="number"
-                    required
-                    min={2}
-                    max={10}
-                    defaultValue={flow.steps}
-                  />
-                </label>
-                <Button type="submit">Apply path</Button>
-              </form>
-            )}
-            {query.error && <ErrorState message={query.error} retry={refresh} />}
-            {query.loading ? (
-              <PageLoading label="Loading report" />
-            ) : data?.mode === "weekly" ? (
-              <Heatmap data={data} metric={metric} />
-            ) : data?.mode === "flow" ? (
-              <FlowDiagram data={data} />
-            ) : data?.mode === "distribution" ? (
-              <>
-                <p>Events per identified actor in this selection</p>
-                <dl>
-                  {data.buckets.map((b) => (
+    <ReportPanel
+      open={open}
+      onOpenChange={setOpen}
+      wide
+      title="Activity patterns"
+      description="Uses the current project, source, dates and event filters."
+    >
+      <Tabs value={mode} onValueChange={(v) => setMode(String(v))}>
+        <TabsList variant="line" aria-label="Analysis reports" className="max-w-full">
+          {reports.map(([k, label]) => (
+            <TabsTrigger key={k} value={k}>
+              <span className="sm:hidden">{k === "weekly" ? "Weekly" : label}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={mode} className="grid min-w-0 gap-3">
+          {mode === "weekly" && (
+            <ValueSelect
+              label="Weekly measure"
+              value={metric}
+              options={metrics}
+              onValueChange={(v) => setMetric(v as Metric)}
+            />
+          )}
+          {mode === "flow" && (
+            <form
+              className="flex flex-wrap gap-2 items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                setFlow({
+                  steps: Number(f.get("steps")),
+                  start_path: String(f.get("from") || ""),
+                  end_path: String(f.get("to") || ""),
+                });
+              }}
+            >
+              <label>
+                From page
+                <Input
+                  name="from"
+                  placeholder="Any entry"
+                  defaultValue={flow.start_path}
+                  maxLength={2048}
+                />
+              </label>
+              <label>
+                To page
+                <Input
+                  name="to"
+                  placeholder="Any exit"
+                  defaultValue={flow.end_path}
+                  maxLength={2048}
+                />
+              </label>
+              <label>
+                Steps
+                <Input
+                  name="steps"
+                  type="number"
+                  required
+                  min={2}
+                  max={10}
+                  defaultValue={flow.steps}
+                />
+              </label>
+              <Button type="submit">Apply path</Button>
+            </form>
+          )}
+          {query.error && <ErrorState message={query.error} retry={refresh} />}
+          {query.loading ? (
+            <PageLoading label="Loading report" />
+          ) : data?.mode === "weekly" ? (
+            <Heatmap data={data} metric={metric} />
+          ) : data?.mode === "flow" ? (
+            <FlowDiagram data={data} />
+          ) : data?.mode === "distribution" ? (
+            <>
+              <p>Events per identified actor in this selection</p>
+              <dl>
+                {data.buckets.map((b) => (
+                  <div className="grid grid-cols-[4rem_1fr_5rem] items-center gap-3" key={b.label}>
+                    <dt>{b.label}</dt>
                     <div
-                      className="grid grid-cols-[4rem_1fr_5rem] items-center gap-3"
-                      key={b.label}
-                    >
-                      <dt>{b.label}</dt>
-                      <div
-                        aria-hidden="true"
-                        style={{
-                          width: `${(100 * b.actors) / Math.max(1, ...data.buckets.map((r) => r.actors))}%`,
-                          height: 10,
-                          background: "var(--data)",
-                        }}
-                      />
-                      <dd>{number(b.actors)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </>
-            ) : null}
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+                      aria-hidden="true"
+                      style={{
+                        width: `${(100 * b.actors) / Math.max(1, ...data.buckets.map((r) => r.actors))}%`,
+                        height: 10,
+                        background: "var(--data)",
+                      }}
+                    />
+                    <dd>{number(b.actors)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : null}
+        </TabsContent>
+      </Tabs>
+    </ReportPanel>
   );
 }

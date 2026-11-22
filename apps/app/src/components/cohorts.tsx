@@ -5,14 +5,7 @@ import type { Cohort, CohortDefinition } from "@/server/cohorts";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ValueSelect } from "./value-select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from "./ui/dialog";
+import { ReportPanel } from "./report-panel";
 import { useOrganizationRole } from "./settings/settings-nav";
 import { useEventCatalog } from "@/lib/use-event-catalog";
 import { filterOps, unaryFilter, textFilter } from "@/lib/filter-ops";
@@ -120,7 +113,10 @@ export function Cohorts({ id, select }: { id: string; select: (id: string) => vo
   const update = (i: number, patch: Partial<Rule>) =>
     setRules((rows) => rows.map((r, n) => (n === i ? { ...r, ...patch } : r)));
   return (
-    <Dialog
+    <ReportPanel
+      label="Cohorts"
+      title={edit === undefined ? "Cohorts" : edit ? "Edit cohort" : "New cohort"}
+      description="Save a set of profiles by ID, or use event and profile rules to update membership every 30 minutes."
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
@@ -130,224 +126,207 @@ export function Cohorts({ id, select }: { id: string; select: (id: string) => vo
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" />}>Cohorts</DialogTrigger>
-      <DialogContent className="grid-cols-[minmax(0,1fr)] max-h-[85dvh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {edit === undefined ? "Cohorts" : edit ? "Edit cohort" : "New cohort"}
-          </DialogTitle>
-          <DialogDescription>
-            Save a set of profiles by ID, or use event and profile rules to update membership every
-            30 minutes.
-          </DialogDescription>
-        </DialogHeader>
-        {edit === undefined ? (
-          <>
-            {cohorts.error && <p role="alert">{cohorts.error.message}</p>}
-            {cohorts.data?.map((c) => (
-              <div key={c.id} className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="link"
-                  onClick={() => {
-                    select(c.id);
-                    setOpen(false);
-                  }}
-                >
-                  {c.name}
-                </Button>
-                <span>{c.member_count} members</span>
-                {role !== "viewer" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Edit ${c.name}`}
-                    onClick={() => start(c)}
-                  >
-                    Edit
-                  </Button>
-                )}
-              </div>
-            ))}
-            {!cohorts.data?.length && !cohorts.isFetching && <p>No cohorts yet.</p>}
-            {role !== "viewer" && <Button onClick={() => start()}>New cohort</Button>}
-          </>
-        ) : (
-          <form
-            className="grid gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-          >
-            <label>
-              Name
-              <Input
-                value={name}
-                maxLength={80}
-                required
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <ValueSelect
-              label="Membership"
-              value={mode}
-              onValueChange={setMode}
-              options={[
-                ["dynamic", "Rules"],
-                ["static", "Static list"],
-              ]}
-            />
-            {mode === "static" ? (
-              <label>
-                Profile IDs, one per line
-                <textarea
-                  className="block min-h-28 w-full rounded-md border bg-background p-2"
-                  value={members}
-                  onChange={(e) => setMembers(e.target.value)}
-                />
-              </label>
-            ) : (
-              <>
-                <ValueSelect
-                  label="Match rules"
-                  value={match}
-                  onValueChange={(v) => setMatch(v as "all" | "any")}
-                  options={[
-                    ["all", "Match all rules"],
-                    ["any", "Match any rule"],
-                  ]}
-                />
-                <datalist id="cohort-event-options">
-                  {catalog.data?.map((d) => (
-                    <option key={d.name} value={d.name} />
-                  ))}
-                </datalist>
-                {rules.map((r, i) => (
-                  <fieldset key={i} className="grid min-w-0 gap-2 rounded-md border p-3">
-                    <legend>
-                      {i + 1}. {"event" in r ? "Event count" : "Profile property"}
-                    </legend>
-                    {"event" in r ? (
-                      <>
-                        <Input
-                          aria-label="Event name"
-                          list="cohort-event-options"
-                          placeholder="Event or @custom"
-                          value={r.event}
-                          required
-                          maxLength={65}
-                          onChange={(e) => update(i, { event: e.target.value })}
-                        />
-                        <ValueSelect
-                          label="Compare count"
-                          value={r.compare}
-                          onValueChange={(v) =>
-                            update(i, { compare: v as "at_least" | "at_most" | "exactly" })
-                          }
-                          options={[
-                            ["at_least", "At least"],
-                            ["exactly", "Exactly"],
-                            ["at_most", "At most"],
-                          ]}
-                        />
-                        <label>
-                          Times
-                          <Input
-                            required
-                            type="number"
-                            min={0}
-                            max={1000000}
-                            value={r.count}
-                            onChange={(e) => update(i, { count: e.target.valueAsNumber })}
-                          />
-                        </label>
-                        <label>
-                          In the last (days)
-                          <Input
-                            required
-                            type="number"
-                            min={7}
-                            max={365}
-                            value={r.days}
-                            onChange={(e) => update(i, { days: e.target.valueAsNumber })}
-                          />
-                        </label>
-                      </>
-                    ) : (
-                      <>
-                        <Input
-                          required
-                          aria-label="Profile property"
-                          value={r.property}
-                          onChange={(e) => update(i, { property: e.target.value })}
-                        />
-                        <ValueSelect
-                          label="Property condition"
-                          value={r.op}
-                          onValueChange={(v) => update(i, { op: v })}
-                          options={filterOps}
-                        />
-                        {!unaryFilter(r.op) && (
-                          <Input
-                            aria-label="Trait value"
-                            value={String(r.value ?? "")}
-                            onChange={(e) => update(i, { value: e.target.value })}
-                          />
-                        )}
-                      </>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={rules.length === 1}
-                      onClick={() => setRules(rules.filter((_, j) => j !== i))}
-                    >
-                      Remove rule
-                    </Button>
-                  </fieldset>
-                ))}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={rules.length >= 8}
-                    onClick={() => setRules([...rules, event()])}
-                  >
-                    Add event rule
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={rules.length >= 8}
-                    onClick={() => setRules([...rules, { property: "", op: "eq", value: "" }])}
-                  >
-                    Add trait rule
-                  </Button>
-                </div>
-              </>
-            )}
-            {error && <p role="alert">{error}</p>}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy}>
-                Save cohort
+      {edit === undefined ? (
+        <>
+          {cohorts.error && <p role="alert">{cohorts.error.message}</p>}
+          {cohorts.data?.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="link"
+                onClick={() => {
+                  select(c.id);
+                  setOpen(false);
+                }}
+              >
+                {c.name}
               </Button>
-              <Button type="button" variant="outline" onClick={() => setEdit(undefined)}>
-                Cancel
-              </Button>
-              {edit && (
+              <span>{c.member_count} members</span>
+              {role !== "viewer" && (
                 <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() => void save(true)}
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Edit ${c.name}`}
+                  onClick={() => start(c)}
                 >
-                  Delete cohort
+                  Edit
                 </Button>
               )}
             </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+          ))}
+          {!cohorts.data?.length && !cohorts.isFetching && <p>No cohorts yet.</p>}
+          {role !== "viewer" && <Button onClick={() => start()}>New cohort</Button>}
+        </>
+      ) : (
+        <form
+          className="grid gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label>
+            Name
+            <Input value={name} maxLength={80} required onChange={(e) => setName(e.target.value)} />
+          </label>
+          <ValueSelect
+            label="Membership"
+            value={mode}
+            onValueChange={setMode}
+            options={[
+              ["dynamic", "Rules"],
+              ["static", "Static list"],
+            ]}
+          />
+          {mode === "static" ? (
+            <label>
+              Profile IDs, one per line
+              <textarea
+                className="block min-h-28 w-full rounded-md border bg-background p-2"
+                value={members}
+                onChange={(e) => setMembers(e.target.value)}
+              />
+            </label>
+          ) : (
+            <>
+              <ValueSelect
+                label="Match rules"
+                value={match}
+                onValueChange={(v) => setMatch(v as "all" | "any")}
+                options={[
+                  ["all", "Match all rules"],
+                  ["any", "Match any rule"],
+                ]}
+              />
+              <datalist id="cohort-event-options">
+                {catalog.data?.map((d) => (
+                  <option key={d.name} value={d.name} />
+                ))}
+              </datalist>
+              {rules.map((r, i) => (
+                <fieldset key={i} className="grid min-w-0 gap-2 rounded-md border p-3">
+                  <legend>
+                    {i + 1}. {"event" in r ? "Event count" : "Profile property"}
+                  </legend>
+                  {"event" in r ? (
+                    <>
+                      <Input
+                        aria-label="Event name"
+                        list="cohort-event-options"
+                        placeholder="Event or @custom"
+                        value={r.event}
+                        required
+                        maxLength={65}
+                        onChange={(e) => update(i, { event: e.target.value })}
+                      />
+                      <ValueSelect
+                        label="Compare count"
+                        value={r.compare}
+                        onValueChange={(v) =>
+                          update(i, { compare: v as "at_least" | "at_most" | "exactly" })
+                        }
+                        options={[
+                          ["at_least", "At least"],
+                          ["exactly", "Exactly"],
+                          ["at_most", "At most"],
+                        ]}
+                      />
+                      <label>
+                        Times
+                        <Input
+                          required
+                          type="number"
+                          min={0}
+                          max={1000000}
+                          value={r.count}
+                          onChange={(e) => update(i, { count: e.target.valueAsNumber })}
+                        />
+                      </label>
+                      <label>
+                        In the last (days)
+                        <Input
+                          required
+                          type="number"
+                          min={7}
+                          max={365}
+                          value={r.days}
+                          onChange={(e) => update(i, { days: e.target.valueAsNumber })}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        required
+                        aria-label="Profile property"
+                        value={r.property}
+                        onChange={(e) => update(i, { property: e.target.value })}
+                      />
+                      <ValueSelect
+                        label="Property condition"
+                        value={r.op}
+                        onValueChange={(v) => update(i, { op: v })}
+                        options={filterOps}
+                      />
+                      {!unaryFilter(r.op) && (
+                        <Input
+                          aria-label="Trait value"
+                          value={String(r.value ?? "")}
+                          onChange={(e) => update(i, { value: e.target.value })}
+                        />
+                      )}
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={rules.length === 1}
+                    onClick={() => setRules(rules.filter((_, j) => j !== i))}
+                  >
+                    Remove rule
+                  </Button>
+                </fieldset>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rules.length >= 8}
+                  onClick={() => setRules([...rules, event()])}
+                >
+                  Add event rule
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rules.length >= 8}
+                  onClick={() => setRules([...rules, { property: "", op: "eq", value: "" }])}
+                >
+                  Add trait rule
+                </Button>
+              </div>
+            </>
+          )}
+          {error && <p role="alert">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>
+              Save cohort
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setEdit(undefined)}>
+              Cancel
+            </Button>
+            {edit && (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => void save(true)}
+              >
+                Delete cohort
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+    </ReportPanel>
   );
 }

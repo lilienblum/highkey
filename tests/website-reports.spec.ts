@@ -65,12 +65,13 @@ test("website entry tabs, typed row filters and a verified plain-English date/de
   await page.setViewportSize({ width: 390, height: 844 });
   await pages.getByRole("button", { name: "/start", exact: true }).click();
   await expect(page.getByRole("region", { name: "Applied filter" })).toContainText("/start");
-  await page.getByRole("button", { name: "Overview actions" }).click();
+  const describeFilter = page.getByRole("button", { name: "Describe a filter" });
+  await describeFilter.scrollIntoViewIfNeeded();
   await page.screenshot({
-    path: info.outputPath("overview-menu-mobile.png"),
+    path: info.outputPath("overview-actions-mobile.png"),
     animations: "disabled",
   });
-  await page.getByRole("menuitem", { name: "Describe a filter" }).click();
+  await describeFilter.click();
   await page.getByLabel("Filter phrase").fill("last 7 days, mobile only");
   await page.screenshot({ path: info.outputPath("describe-filter-mobile.png") });
   await page.getByRole("button", { name: "Apply filter", exact: true }).click();

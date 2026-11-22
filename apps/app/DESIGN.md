@@ -337,6 +337,8 @@ Thin borders define forms and seams. A stronger input stroke distinguishes edita
 
 ## Components
 
+Report headings group their action buttons with an 8px gap. When space runs out, the group wraps below the title and stays left-aligned. Report tools open in right-side sheets with a fixed heading and scrollable content; narrow screens use the full width.
+
 ### Buttons
 
 Compact pill actions with stable geometry. Primary buttons are glossy Surimi Orange: a vertical gradient from a lightened hover tone through primary to a deepened active tone, an inset lit top edge, a dark outer ring, and the dark primary foreground. Destructive actions use the same construction in Peach Red. Outline and secondary actions are dark sumi-ink pills with a lit top edge and a fine ring; ghost actions start transparent with supporting text; links use primary-colored text with a hover underline. Base UI triggers that render a Button (dialog, dropdown, collapsible, sidebar) keep the same treatment. All share the label weight (550).

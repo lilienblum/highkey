@@ -10,14 +10,7 @@ import { useOrganizationRole } from "./settings/settings-nav";
 import { Input } from "./ui/input";
 import { ValueSelect } from "./value-select";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTrigger,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
+import { ReportPanel } from "./report-panel";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { ErrorState } from "./shared";
 import { PageLoading } from "./loading";
@@ -88,18 +81,16 @@ export function AdvancedAnalysis({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>Analyze</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Explore analysis</DialogTitle>
-          <DialogDescription>
-            Compare steps, cohorts and conversion rates over the selected period.
-          </DialogDescription>
-        </DialogHeader>
-        {open && <AnalysisForm names={names} filters={filters} />}
-      </DialogContent>
-    </Dialog>
+    <ReportPanel
+      open={open}
+      onOpenChange={setOpen}
+      wide
+      label="Analyze"
+      title="Explore analysis"
+      description="Compare steps, cohorts and conversion rates over the selected period."
+    >
+      {open && <AnalysisForm names={names} filters={filters} />}
+    </ReportPanel>
   );
 }
 function AnalysisForm({ names, filters }: { names: string[]; filters: Spec["filters"] }) {

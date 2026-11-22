@@ -6,14 +6,7 @@ import { eventColors, type EventDefinition } from "@/lib/event-catalog";
 import { useOrganizationRole } from "./settings/settings-nav";
 import { SourceIcon, SourceIconPicker } from "./source-icon";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogHeader,
-  DialogTrigger,
-} from "./ui/dialog";
+import { ReportPanel } from "./report-panel";
 import { FieldGroup, Field, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
@@ -65,7 +58,14 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
     }
   };
   return (
-    <Dialog
+    <ReportPanel
+      label="Event catalog"
+      title={draft ? draft.name || "New event definition" : "Event catalog"}
+      description={
+        draft
+          ? "Describe how this event appears in the stream and reports."
+          : "Event descriptions and conversion goals for this project."
+      }
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
@@ -75,186 +75,173 @@ export function EventCatalog({ id, observed }: { id: string; observed: string[] 
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" />}>Event catalog</DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {draft ? draft.name || "New event definition" : "Event catalog"}
-          </DialogTitle>
-          <DialogDescription>
-            {draft
-              ? "Describe how this event appears in the stream and reports."
-              : "Event descriptions and conversion goals for this project."}
-          </DialogDescription>
-        </DialogHeader>
-        {catalog.error && (
-          <ErrorState message={catalog.error.message} retry={() => void catalog.refetch()} />
-        )}
-        {error && <ErrorState message={error} />}
-        {draft ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="catalog-name">Event name</FieldLabel>
-                <Input
-                  id="catalog-name"
-                  required
-                  maxLength={64}
-                  value={draft.rules ? draft.name.slice(1) : draft.name}
-                  onChange={(e) => set({ name: (draft.rules ? "@" : "") + e.target.value })}
-                />
-              </Field>
-              {draft.rules && (
-                <CustomEventRules
-                  rules={draft.rules}
-                  change={(rules) => set({ rules })}
-                  observed={observed}
-                />
-              )}
-              <Field>
-                <FieldLabel htmlFor="catalog-description">Description</FieldLabel>
-                <Input
-                  id="catalog-description"
-                  maxLength={512}
-                  value={draft.description}
-                  onChange={(e) => set({ description: e.target.value })}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="catalog-sentence">Sentence template</FieldLabel>
-                <Input
-                  id="catalog-sentence"
-                  placeholder="Order {order_id} shipped"
-                  maxLength={256}
-                  value={draft.sentence}
-                  onChange={(e) => set({ sentence: e.target.value })}
-                />
-              </Field>
-              <div className="flex gap-3 items-end">
-                <SourceIconPicker
-                  name={draft.name}
-                  value={draft.icon}
-                  onChange={(icon) => set({ icon })}
-                />
-                <Field>
-                  <FieldLabel htmlFor="catalog-color">Color</FieldLabel>
-                  <ValueSelect
-                    id="catalog-color"
-                    value={draft.color}
-                    options={eventColors.map((v) => [v, v])}
-                    onValueChange={(v) => set({ color: v as EventDefinition["color"] })}
-                  />
-                </Field>
-              </div>
-              <Field orientation="horizontal">
-                <Switch
-                  id="catalog-conversion"
-                  checked={draft.conversion}
-                  onCheckedChange={(conversion) => set({ conversion })}
-                />
-                <FieldLabel htmlFor="catalog-conversion">Count as a conversion</FieldLabel>
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={busy} type="submit">
-                  Save definition
-                </Button>
-                <Button variant="outline" type="button" onClick={() => setDraft(undefined)}>
-                  Cancel
-                </Button>
-                {byName.has(draft.name) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => void save(true)}
-                  >
-                    Remove definition
-                  </Button>
-                )}
-              </div>
-            </FieldGroup>
-          </form>
-        ) : (
-          <>
-            <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-              <TabsList aria-label="Catalog events" variant="line">
-                <TabsTrigger value="all">Events</TabsTrigger>
-                <TabsTrigger value="conversions">Conversions</TabsTrigger>
-              </TabsList>
-              <TabsContent value={tab}>
-                <ul className="divide-y">
-                  {list.map((name) => {
-                    const def = byName.get(name) ?? blank(name);
-                    return (
-                      <li className="flex flex-wrap gap-2 items-center py-2" key={name}>
-                        <span className={`event-ink-${def.color}`}>
-                          <SourceIcon name={name} icon={def.icon} />
-                        </span>
-                        <div className="flex-1 min-w-0 break-all">
-                          {name}
-                          {def.description && (
-                            <p className="text-muted-foreground text-xs">{def.description}</p>
-                          )}
-                        </div>
-                        {def.conversion && <small>Conversion</small>}
-                        {editable && (
-                          <Button
-                            variant="ghost"
-                            aria-label={`Edit ${name}`}
-                            onClick={() =>
-                              setDraft({
-                                ...def,
-                                ...(def.rules
-                                  ? {
-                                      rules: def.rules.map((r) => ({
-                                        ...r,
-                                        filters: r.filters.map((f) => ({
-                                          ...f,
-                                          value: JSON.stringify(f.value),
-                                        })),
-                                      })),
-                                    }
-                                  : {}),
-                              })
-                            }
-                          >
-                            Edit
-                          </Button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {!list.length && (
-                  <p>
-                    {tab === "conversions"
-                      ? "No events marked as conversions."
-                      : "No events in this selection."}
-                  </p>
-                )}
-              </TabsContent>
-            </Tabs>
-            {editable && (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setDraft(blank())}>
-                  New definition
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setDraft({ ...blank("@"), rules: [{ event: "", filters: [] }] })}
-                >
-                  New custom event
-                </Button>
-              </div>
+      {catalog.error && (
+        <ErrorState message={catalog.error.message} retry={() => void catalog.refetch()} />
+      )}
+      {error && <ErrorState message={error} />}
+      {draft ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="catalog-name">Event name</FieldLabel>
+              <Input
+                id="catalog-name"
+                required
+                maxLength={64}
+                value={draft.rules ? draft.name.slice(1) : draft.name}
+                onChange={(e) => set({ name: (draft.rules ? "@" : "") + e.target.value })}
+              />
+            </Field>
+            {draft.rules && (
+              <CustomEventRules
+                rules={draft.rules}
+                change={(rules) => set({ rules })}
+                observed={observed}
+              />
             )}
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            <Field>
+              <FieldLabel htmlFor="catalog-description">Description</FieldLabel>
+              <Input
+                id="catalog-description"
+                maxLength={512}
+                value={draft.description}
+                onChange={(e) => set({ description: e.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="catalog-sentence">Sentence template</FieldLabel>
+              <Input
+                id="catalog-sentence"
+                placeholder="Order {order_id} shipped"
+                maxLength={256}
+                value={draft.sentence}
+                onChange={(e) => set({ sentence: e.target.value })}
+              />
+            </Field>
+            <div className="flex gap-3 items-end">
+              <SourceIconPicker
+                name={draft.name}
+                value={draft.icon}
+                onChange={(icon) => set({ icon })}
+              />
+              <Field>
+                <FieldLabel htmlFor="catalog-color">Color</FieldLabel>
+                <ValueSelect
+                  id="catalog-color"
+                  value={draft.color}
+                  options={eventColors.map((v) => [v, v])}
+                  onValueChange={(v) => set({ color: v as EventDefinition["color"] })}
+                />
+              </Field>
+            </div>
+            <Field orientation="horizontal">
+              <Switch
+                id="catalog-conversion"
+                checked={draft.conversion}
+                onCheckedChange={(conversion) => set({ conversion })}
+              />
+              <FieldLabel htmlFor="catalog-conversion">Count as a conversion</FieldLabel>
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy} type="submit">
+                Save definition
+              </Button>
+              <Button variant="outline" type="button" onClick={() => setDraft(undefined)}>
+                Cancel
+              </Button>
+              {byName.has(draft.name) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => void save(true)}
+                >
+                  Remove definition
+                </Button>
+              )}
+            </div>
+          </FieldGroup>
+        </form>
+      ) : (
+        <>
+          <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
+            <TabsList aria-label="Catalog events" variant="line">
+              <TabsTrigger value="all">Events</TabsTrigger>
+              <TabsTrigger value="conversions">Conversions</TabsTrigger>
+            </TabsList>
+            <TabsContent value={tab}>
+              <ul className="divide-y">
+                {list.map((name) => {
+                  const def = byName.get(name) ?? blank(name);
+                  return (
+                    <li className="flex flex-wrap gap-2 items-center py-2" key={name}>
+                      <span className={`event-ink-${def.color}`}>
+                        <SourceIcon name={name} icon={def.icon} />
+                      </span>
+                      <div className="flex-1 min-w-0 break-all">
+                        {name}
+                        {def.description && (
+                          <p className="text-muted-foreground text-xs">{def.description}</p>
+                        )}
+                      </div>
+                      {def.conversion && <small>Conversion</small>}
+                      {editable && (
+                        <Button
+                          variant="ghost"
+                          aria-label={`Edit ${name}`}
+                          onClick={() =>
+                            setDraft({
+                              ...def,
+                              ...(def.rules
+                                ? {
+                                    rules: def.rules.map((r) => ({
+                                      ...r,
+                                      filters: r.filters.map((f) => ({
+                                        ...f,
+                                        value: JSON.stringify(f.value),
+                                      })),
+                                    })),
+                                  }
+                                : {}),
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {!list.length && (
+                <p>
+                  {tab === "conversions"
+                    ? "No events marked as conversions."
+                    : "No events in this selection."}
+                </p>
+              )}
+            </TabsContent>
+          </Tabs>
+          {editable && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setDraft(blank())}>
+                New definition
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setDraft({ ...blank("@"), rules: [{ event: "", filters: [] }] })}
+              >
+                New custom event
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </ReportPanel>
   );
 }

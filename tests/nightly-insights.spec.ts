@@ -63,8 +63,7 @@ test("a completed day produces the same referrer spike in Insights and on the ch
     to: new Date(start + day).toISOString(),
   });
   await page.goto(`/owner/${p.slug}?${range}`);
-  await page.getByRole("button", { name: "Overview actions" }).click();
-  await page.getByRole("menuitem", { name: "Significant changes", exact: true }).click();
+  await page.getByRole("button", { name: "Significant changes", exact: true }).click();
   const d = page.getByRole("dialog", { name: "Significant changes" });
   await expect(d.getByText("Referrer spike: release.example", { exact: true })).toBeVisible();
   await expect(d.getByText(/12 sessions vs 0 per day/)).toBeVisible();

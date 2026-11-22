@@ -46,7 +46,7 @@ Project/source/date context follows sidebar navigation. Each route owns its char
 
 ## Overview widgets
 
-The **Overview actions** menu (••• beside the project heading) opens **Activity patterns** for weekly activity and page flows, **Significant changes** for nightly comparisons across the project, and **Describe a filter** to apply a date or filter from a phrase.
+Beside the project heading, **Activity patterns**, **Significant changes**, and **Describe a filter** open right-side panels. Use them to explore weekly activity and page flows, review nightly comparisons across the project, or apply a date or filter from a phrase. Escape closes the panel and returns focus to its button.
 
 Overview starts with six small square metric tiles: **Active now**, **Events**, **Visitors**, **Installations**, **Success rate**, and **Avg. duration**. They form six, three, or two columns depending on available width.
 

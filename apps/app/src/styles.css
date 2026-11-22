@@ -1001,10 +1001,25 @@ p {
 }
 .page-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 22px;
+}
+.page-heading > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.page-header-actions:empty {
+  display: none;
 }
 /* Page titles and single measurements use Geist Pixel at its only weight; Geist carries the rest.
    An element default, so utilities on a title can size it. */
@@ -1609,7 +1624,7 @@ details[open] > .install-summary > svg {
   .page-heading p {
     font-size: 12px;
   }
-  .page-heading > [data-slot="dialog-trigger"] {
+  .page-header-actions > [data-slot="dialog-trigger"] {
     font-size: 12px;
     padding: 8px;
   }
@@ -2152,7 +2167,7 @@ details[open] > .install-summary > svg {
   .page-heading {
     flex-wrap: wrap;
   }
-  .page-heading > [data-slot="dialog-trigger"] {
+  .page-header-actions > [data-slot="dialog-trigger"] {
     font-size: 13px;
   }
   .page-heading p {
@@ -2659,12 +2674,6 @@ html:has([data-page="new-project"]) {
   min-height: 64px;
   flex-wrap: wrap;
   margin-bottom: 16px;
-}
-.page-content[data-page="overview"] > .page-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  overflow-wrap: anywhere;
 }
 .page-content > .workspace-toolbar {
   grid-row: 2;
